@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
-  ListMusic, Settings, ChevronDown, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon, Sparkles
+  ListMusic, Settings, ChevronDown, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon, Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react'
 // Đã sử dụng đúng đường dẫn logo của bạn
 import logoImg from '../../../resources/HoT_Chibi_Icon.png'
@@ -15,6 +15,14 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
+export interface EQBand {
+  id: string
+  frequency: number // Tần số (Hz): 20Hz - 20000Hz
+  gain: number      // Độ khuếch đại (dB): -20dB đến +20dB
+  type: BiquadFilterType // 'peaking' | 'lowshelf' | 'highshelf' | 'lowpass' | 'highpass'
+  q?: number        // Hệ số Q (Bandwidth)
+}
+
 export default function App() {
   // --- STATES GIAO DIỆN & THƯ VIỆN ---
   const [activeView, setActiveView] = useState<'songs' | 'playlists' | 'settings'>('songs')
@@ -22,6 +30,8 @@ export default function App() {
   const [libraryTracks, setLibraryTracks] = useState<any[]>([])
   const [playlists, setPlaylists] = useState<any[]>([])
   const [activePlaylist, setActivePlaylist] = useState<any | null>(null)
+  const [sortField, setSortField] = useState<string | null>(null)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   
   // --- STATES PLAYER & EQ ---
   const [currentTrack, setCurrentTrack] = useState<any | null>(null)
@@ -32,7 +42,13 @@ export default function App() {
   const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0)
   const [volume, setVolume] = useState(1)
   const [showEQ, setShowEQ] = useState(false)
-  const [eqGains, setEqGains] = useState({ 60: 0, 230: 0, 910: 0, 3600: 0, 14000: 0 })
+  const [eqBands, setEqBands] = useState<EQBand[]>([
+    { id: '1', frequency: 60, gain: 0, type: 'peaking', q: 1.4 },
+    { id: '2', frequency: 230, gain: 0, type: 'peaking', q: 1.4 },
+    { id: '3', frequency: 910, gain: 0, type: 'peaking', q: 1.4 },
+    { id: '4', frequency: 3600, gain: 0, type: 'peaking', q: 1.4 },
+    { id: '5', frequency: 14000, gain: 0, type: 'peaking', q: 1.4 },
+  ])
   const filtersRef = useRef<any>({})
 
   // --- STATES GOOGLE DRIVE (ĐÃ KHÔI PHỤC) ---
@@ -46,29 +62,58 @@ export default function App() {
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const filterNodesRef = useRef<BiquadFilterNode[]>([])
 
   // Khởi tạo Web Audio API cho EQ
+  // Re-chain audio filters khi danh sách eqBands thay đổi
+  // Hợp nhất khởi tạo AudioContext và Chuỗi Filter EQ
   useEffect(() => {
+    if (!audioRef.current) return
+
+    // 1. Tạo AudioContext nếu chưa có
     if (!audioCtxRef.current) {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext
-      audioCtxRef.current = new AudioContext()
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+      audioCtxRef.current = new AudioContextClass()
     }
-    if (audioRef.current && !sourceNodeRef.current && audioCtxRef.current) {
-      sourceNodeRef.current = audioCtxRef.current.createMediaElementSource(audioRef.current)
-      const bands = [60, 230, 910, 3600, 14000]
-      let prevNode: AudioNode = sourceNodeRef.current
-      bands.forEach(freq => {
-        const filter = audioCtxRef.current!.createBiquadFilter()
-        filter.type = 'peaking'
-        filter.frequency.value = freq
-        filter.gain.value = 0
-        prevNode.connect(filter)
-        prevNode = filter
-        filtersRef.current[freq] = filter 
-      })
-      prevNode.connect(audioCtxRef.current.destination)
+
+    const ctx = audioCtxRef.current
+
+    // 2. Tạo Source Node duy nhất 1 lần từ thẻ <audio>
+    if (!sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current)
+      } catch (e) {
+        console.error('Lỗi khởi tạo MediaElementSource:', e)
+      }
     }
-  }, [])
+
+    if (!sourceNodeRef.current) return
+
+    // 3. Ngắt kết nối tất cả các Node cũ để nối lại
+    sourceNodeRef.current.disconnect()
+    filterNodesRef.current.forEach(node => node.disconnect())
+    filterNodesRef.current = []
+
+    // 4. Sắp xếp các dải EQ theo tần số tăng dần
+    const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
+    let prevNode: AudioNode = sourceNodeRef.current
+
+    // 5. Nối chuỗi từng dải Filter
+    sortedBands.forEach((band) => {
+      const filter = ctx.createBiquadFilter()
+      filter.type = band.type || 'peaking'
+      filter.frequency.value = band.frequency
+      filter.gain.value = band.gain
+      filter.Q.value = band.q ?? 1.4
+
+      prevNode.connect(filter)
+      prevNode = filter
+      filterNodesRef.current.push(filter)
+    })
+
+    // 6. Nối Node cuối cùng ra loa (destination)
+    prevNode.connect(ctx.destination)
+  }, [eqBands]) // Tự động chạy lại khi thêm/xóa/sửa dải EQ
 
   // Nạp thư viện khi mở app
   const loadLibrary = async () => {
@@ -121,36 +166,113 @@ export default function App() {
     }
   }
 
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      if (sortOrder === 'asc') {
+        setSortOrder('desc') // Đổi sang giảm dần
+      } else {
+        setSortField(null)   // Bấm lần thứ 3 -> Bỏ sắp xếp (về mặc định)
+        setSortOrder('asc')
+      }
+    } else {
+      setSortField(field)
+      setSortOrder('asc')     // Chọn cột mới -> Mặc định tăng dần
+    }
+  }
+
+  const getSortedTracks = (tracks: any[]) => {
+    if (!sortField || !tracks) return tracks
+
+    return [...tracks].sort((a, b) => {
+      let valA = a[sortField] ?? ''
+      let valB = b[sortField] ?? ''
+
+      // Xử lý so sánh chuỗi (không phân biệt hoa/thường)
+      if (typeof valA === 'string') {
+        valA = valA.toLowerCase()
+        valB = (valB || '').toLowerCase()
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1
+      return 0
+    })
+  }
+
+  const getDisplayedTracks = () => {
+    const baseList = activeView === 'playlists' && activePlaylist ? activePlaylist.tracks : libraryTracks
+    const queue = isShuffle ? shuffledTracks : baseList
+    return getSortedTracks(queue)
+  }
+
   // --- LOGIC PLAYER VÀ ĐIỀU KHIỂN ---
   const getCurrentQueue = () => {
     const baseList = activeView === 'playlists' && activePlaylist ? activePlaylist.tracks : libraryTracks
     return isShuffle ? shuffledTracks : baseList
   }
 
-  const handlePlayTrack = (track: any) => {
+  const handlePlayTrack = async (track: any) => {
     setCurrentTrack(track)
     setIsPlaying(true)
+
+    // Khôi phục AudioContext ngay tại sự kiện click
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      await audioCtxRef.current.resume()
+    }
+  }
+
+  const handleEnded = () => {
+    if (repeatMode === 2) {
+      // Chế độ 2: Lặp lại duy nhất 1 bài hiện tại (Repeat One)
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0
+        audioRef.current.play().catch(e => console.error(e))
+      }
+    } else {
+      // Chế độ 0 & 1: Chuyển sang bài tiếp theo trong hàng đợi
+      handleNext()
+    }
   }
 
   const handleNext = () => {
     if (!currentTrack) return
     const queue = getCurrentQueue()
+    if (!queue || queue.length === 0) return
+
     const currentIndex = queue.findIndex(t => t.id === currentTrack.id)
     let nextIndex = currentIndex + 1
+
     if (nextIndex >= queue.length) {
-      if (repeatMode === 1) nextIndex = 0; else return
+      if (repeatMode === 1 || repeatMode === 2) {
+        // Lặp lại toàn bộ: Quay về bài đầu tiên
+        nextIndex = 0
+      } else {
+        // Tắt Repeat: Dừng phát nhạc khi hết danh sách
+        setIsPlaying(false)
+        return
+      }
     }
     handlePlayTrack(queue[nextIndex])
   }
 
   const handlePrev = () => {
     if (!currentTrack) return
-    if (currentTime > 3 && audioRef.current) { audioRef.current.currentTime = 0; return }
+    if (currentTime > 3 && audioRef.current) { 
+      audioRef.current.currentTime = 0
+      return 
+    }
     const queue = getCurrentQueue()
+    if (!queue || queue.length === 0) return
+
     const currentIndex = queue.findIndex(t => t.id === currentTrack.id)
     let prevIndex = currentIndex - 1
+
     if (prevIndex < 0) {
-      if (repeatMode === 1) prevIndex = queue.length - 1; else prevIndex = 0
+      if (repeatMode === 1 || repeatMode === 2) {
+        prevIndex = queue.length - 1
+      } else {
+        prevIndex = 0
+      }
     }
     handlePlayTrack(queue[prevIndex])
   }
@@ -168,9 +290,39 @@ export default function App() {
     if (audioRef.current) audioRef.current.volume = val
   }
 
-  const handleEQChange = (freq: number, value: number) => {
-    setEqGains(prev => ({ ...prev, [freq]: value }))
-    if (filtersRef.current[freq]) filtersRef.current[freq].gain.value = value
+  // Thêm 1 dải EQ mới
+  const handleAddBand = () => {
+    const newBand: EQBand = {
+      id: Date.now().toString(),
+      frequency: 1000, // Tần số mặc định 1kHz
+      gain: 0,
+      type: 'peaking',
+      q: 1.4,
+    }
+    setEqBands(prev => [...prev, newBand])
+  }
+
+  // Xóa 1 dải EQ
+  const handleDeleteBand = (id: string) => {
+    setEqBands(prev => prev.filter(b => b.id !== id))
+  }
+
+  // Cập nhật thuộc tính của 1 dải EQ (tần số, gain, loại filter)
+  const handleUpdateBand = (id: string, key: keyof EQBand, value: any) => {
+    setEqBands(prev =>
+      prev.map(band => (band.id === id ? { ...band, [key]: value } : band))
+    )
+  }
+
+  // Khôi phục EQ về mặc định (Flat)
+  const handleResetEQ = () => {
+    setEqBands([
+      { id: '1', frequency: 60, gain: 0, type: 'peaking', q: 1.4 },
+      { id: '2', frequency: 230, gain: 0, type: 'peaking', q: 1.4 },
+      { id: '3', frequency: 910, gain: 0, type: 'peaking', q: 1.4 },
+      { id: '4', frequency: 3600, gain: 0, type: 'peaking', q: 1.4 },
+      { id: '5', frequency: 14000, gain: 0, type: 'peaking', q: 1.4 },
+    ])
   }
 
   const handleLoadedMetadata = () => {
@@ -282,63 +434,150 @@ export default function App() {
   }
 
   // --- RENDERING UI CHÍNH ---
-  const renderTrackTable = (tracks: any[]) => (
-    <table className="w-full text-left text-sm">
-      <thead>
-        <tr className="text-zinc-500 border-b border-zinc-800/50">
-          <th className="pb-3 font-medium w-12 text-center">#</th>
-          <th className="pb-3 font-medium">TIÊU ĐỀ</th>
-          <th className="pb-3 font-medium">ALBUM</th>
-          <th className="pb-3 font-medium">ĐỊNH DẠNG</th>
-          <th className="pb-3 font-medium text-right pr-4">THỜI GIAN</th>
-        </tr>
-      </thead>
-      <tbody>
-        {tracks.map((track, index) => {
-          const isThisTrackPlaying = currentTrack?.id === track.id
-          return (
-            <tr key={track.id} onClick={() => handleRowClick(track)} className={`group border-b border-zinc-800/20 transition-colors cursor-pointer ${isThisTrackPlaying ? 'bg-white/10' : 'hover:bg-white/5'}`}>
-              <td className="py-4 text-center text-zinc-500 group-hover:text-white">
-                {isThisTrackPlaying && isPlaying ? <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse mx-auto" /> : index + 1}
-              </td>
-              <td className="py-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-zinc-800 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-                    {track.coverArt ? (
-                      <img src={track.coverArt} className="w-full h-full object-cover" />
-                    ) : (
-                      <img src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />
-                    )}
-                    {track.isCloud && (
-                      <div className="absolute top-0 right-0 bg-emerald-500/80 p-0.5 rounded-bl-md">
-                        <Cloud size={10} className="text-white" />
-                      </div>
-                    )}
+  const renderTrackTable = (tracks: any[]) => {
+    // 1. Lấy danh sách bài hát đã được sắp xếp
+    const sortedTracks = getSortedTracks(tracks)
+
+    return (
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className="text-zinc-500 border-b border-zinc-800/50 select-none">
+            {/* Cột STT (#) */}
+            <th 
+              onClick={() => handleSort('id')} 
+              className="pb-3 font-medium w-12 text-center cursor-pointer group hover:text-white transition"
+              title="Sắp xếp theo STT"
+            >
+              <div className="inline-flex items-center gap-1 justify-center">
+                <span>#</span>
+                {sortField === 'id' ? (
+                  sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />
+                ) : (
+                  <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </div>
+            </th>
+
+            {/* Cột TÊN BÀI HÁT */}
+            <th 
+              onClick={() => handleSort('title')} 
+              className="pb-3 font-medium cursor-pointer group hover:text-white transition"
+              title="Sắp xếp theo tên bài hát"
+            >
+              <div className="inline-flex items-center gap-1">
+                <span>TÊN BÀI HÁT</span>
+                {sortField === 'title' ? (
+                  sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />
+                ) : (
+                  <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </div>
+            </th>
+
+            {/* Cột ALBUM */}
+            <th 
+              onClick={() => handleSort('album')} 
+              className="pb-3 font-medium cursor-pointer group hover:text-white transition"
+              title="Sắp xếp theo Album"
+            >
+              <div className="inline-flex items-center gap-1">
+                <span>ALBUM</span>
+                {sortField === 'album' ? (
+                  sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />
+                ) : (
+                  <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </div>
+            </th>
+
+            {/* Cột ĐỊNH DẠNG */}
+            <th 
+              onClick={() => handleSort('isCloud')} 
+              className="pb-3 font-medium cursor-pointer group hover:text-white transition"
+              title="Sắp xếp theo định dạng"
+            >
+              <div className="inline-flex items-center gap-1">
+                <span>ĐỊNH DẠNG</span>
+                {sortField === 'isCloud' ? (
+                  sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />
+                ) : (
+                  <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </div>
+            </th>
+
+            {/* Cột THỜI GIAN */}
+            <th 
+              onClick={() => handleSort('duration')} 
+              className="pb-3 font-medium text-right pr-4 cursor-pointer group hover:text-white transition"
+              title="Sắp xếp theo thời lượng"
+            >
+              <div className="inline-flex items-center gap-1 justify-end">
+                <span>THỜI GIAN</span>
+                {sortField === 'duration' ? (
+                  sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />
+                ) : (
+                  <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* 2. Đổi tracks.map thành sortedTracks.map */}
+          {sortedTracks.map((track, index) => {
+            const isThisTrackPlaying = currentTrack?.id === track.id
+            return (
+              <tr key={track.id} onClick={() => handleRowClick(track)} className={`group border-b border-zinc-800/20 transition-colors cursor-pointer ${isThisTrackPlaying ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+                <td className="py-4 text-center text-zinc-500 group-hover:text-white">
+                  {isThisTrackPlaying && isPlaying ? <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse mx-auto" /> : index + 1}
+                </td>
+                <td className="py-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-zinc-800 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+                      {track.coverArt ? (
+                        <img src={track.coverArt} className="w-full h-full object-cover" />
+                      ) : (
+                        <img src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />
+                      )}
+                      {track.isCloud && (
+                        <div className="absolute top-0 right-0 bg-emerald-500/80 p-0.5 rounded-bl-md">
+                          <Cloud size={10} className="text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="truncate w-48 lg:w-64">
+                      <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-emerald-400' : 'text-white group-hover:text-emerald-400'}`}>{track.title}</p>
+                      <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
+                    </div>
                   </div>
-                  <div className="truncate w-48 lg:w-64">
-                    <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-emerald-400' : 'text-white group-hover:text-emerald-400'}`}>{track.title}</p>
-                    <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
-                  </div>
-                </div>
-              </td>
-              <td className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
-              <td className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}</span></td>
-              <td className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
+                </td>
+                <td className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
+                <td className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}</span></td>
+                <td className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    )
+  }
 
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-200 font-sans overflow-hidden relative">
-      <audio 
+      <audio
         ref={audioRef}
-        crossOrigin="anonymous"
-        src={currentTrack?.filePath}
+        src={
+          currentTrack
+            ? currentTrack.filePath
+              ? currentTrack.filePath.startsWith('http') || currentTrack.filePath.startsWith('file://')
+                ? currentTrack.filePath
+                : `file://${currentTrack.filePath}`
+              : currentTrack.url
+            : undefined
+        }
+        onEnded={handleEnded}
         onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
-        onEnded={handleNext}
         onLoadedMetadata={handleLoadedMetadata}
       />
 
@@ -449,7 +688,7 @@ export default function App() {
         <aside className="w-64 bg-zinc-900/40 border-r border-zinc-800/50 flex flex-col justify-between">
           <div className="p-6 space-y-8">
             <h1 className="text-2xl font-bold text-white tracking-wider flex items-center gap-2">
-              <img src={logoImg} alt="Logo" className="w-10 h-10 object-contain" /> 
+              <img src={logoImg} alt="Logo" className="w-8 h-8 object-contain" /> 
               MEI'S RADIO
             </h1>
             <nav className="space-y-6">
@@ -581,27 +820,115 @@ export default function App() {
       {/* PLAYER BAR */}
       <footer className="h-24 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between px-6 z-20 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
         {showEQ && (
-          <div className="absolute bottom-28 right-6 w-80 bg-zinc-800 border border-zinc-700 rounded-xl p-5 shadow-2xl origin-bottom-right animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-bold text-white">Equalizer (EQ)</h4>
-              <button onClick={() => {
-                setEqGains({ 60:0, 230:0, 910:0, 3600:0, 14000:0 })
-                Object.values(filtersRef.current).forEach((filter: any) => filter.gain.value = 0)
-              }} className="text-[10px] bg-zinc-700 px-2 py-1 rounded text-zinc-300 hover:text-white">Reset</button>
-            </div>
-            <div className="flex justify-between items-end h-32 px-2">
-              {[60, 230, 910, 3600, 14000].map(freq => (
-                <div key={freq} className="flex flex-col items-center gap-2">
-                  <input 
-                    type="range" min="-12" max="12" step="0.1"
-                    value={eqGains[freq as keyof typeof eqGains]}
-                    onChange={(e) => handleEQChange(freq, parseFloat(e.target.value))}
-                    className="w-1 h-24 appearance-none bg-zinc-700 rounded-full accent-emerald-500 hover:accent-emerald-400"
-                    style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
-                  />
-                  <span className="text-[10px] text-zinc-500 font-mono">{freq < 1000 ? freq : `${freq/1000}k`}</span>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
+              
+              {/* Header Modal */}
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">
+                <div className="flex items-center gap-2">
+                  <Sliders className="text-emerald-500" size={22} />
+                  <h2 className="text-lg font-bold text-white">Equalizer (EQ)</h2>
                 </div>
-              ))}
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleAddBand}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition"
+                  >
+                    <Plus size={16} /> Thêm dải tần
+                  </button>
+                  
+                  <button
+                    onClick={handleResetEQ}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"
+                  >
+                    <RotateCcw size={14} /> Reset
+                  </button>
+
+                  <button
+                    onClick={() => setShowEQ(false)}
+                    className="text-zinc-400 hover:text-white px-2 text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Nội dung danh sách các dải EQ */}
+              <div className="overflow-y-auto flex-1 pr-2 space-y-3">
+                {eqBands.length === 0 ? (
+                  <p className="text-center text-zinc-500 py-8">Chưa có dải tần nào. Hãy bấm "Thêm dải tần".</p>
+                ) : (
+                  eqBands
+                    .sort((a, b) => a.frequency - b.frequency)
+                    .map((band) => (
+                      <div
+                        key={band.id}
+                        className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-3 flex flex-wrap items-center gap-4 text-xs"
+                      >
+                        {/* 1. Nhập tần số (Hz) */}
+                        <div className="flex flex-col gap-1 w-28">
+                          <label className="text-zinc-400 font-mono">Tần số (Hz)</label>
+                          <input
+                            type="number"
+                            min="20"
+                            max="20000"
+                            value={band.frequency}
+                            onChange={(e) =>
+                              handleUpdateBand(band.id, 'frequency', Math.max(20, Math.min(20000, Number(e.target.value))))
+                            }
+                            className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        {/* 2. Chọn loại bộ lọc Filter Type */}
+                        <div className="flex flex-col gap-1 w-32">
+                          <label className="text-zinc-400">Loại bộ lọc</label>
+                          <select
+                            value={band.type}
+                            onChange={(e) =>
+                              handleUpdateBand(band.id, 'type', e.target.value as BiquadFilterType)
+                            }
+                            className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200 focus:outline-none focus:border-emerald-500"
+                          >
+                            <option value="peaking">Peaking</option>
+                            <option value="lowshelf">Low Shelf</option>
+                            <option value="highshelf">High Shelf</option>
+                            <option value="lowpass">Low Pass</option>
+                            <option value="highpass">High Pass</option>
+                          </select>
+                        </div>
+
+                        {/* 3. Thanh trượt Gain (dB) */}
+                        <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+                          <div className="flex justify-between text-zinc-400">
+                            <span>Mức khuếch đại (Gain)</span>
+                            <span className="font-mono text-emerald-400">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-20"
+                            max="20"
+                            step="0.5"
+                            value={band.gain}
+                            onChange={(e) => handleUpdateBand(band.id, 'gain', Number(e.target.value))}
+                            className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+                          />
+                        </div>
+
+                        {/* 4. Nút Xóa dải EQ */}
+                        <button
+                          onClick={() => handleDeleteBand(band.id)}
+                          className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3"
+                          title="Xóa dải EQ"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))
+                )}
+              </div>
+
             </div>
           </div>
         )}
