@@ -26,7 +26,8 @@
     "@tailwindcss/vite": "^4.3.3",
     "electron-updater": "^6.3.9",
     "lucide-react": "^1.28.0",
-    "music-metadata": "^11.14.0"
+    "music-metadata": "^11.14.0",
+    "node-id3": "^0.2.9"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
