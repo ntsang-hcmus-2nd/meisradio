@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* Bạn vẫn có thể giữ lại các CSS tùy chỉnh bên dưới nếu muốn */
+body {
+  background-color: #18181b; /* kẽm-900 */
+  color: white;
+  overflow: hidden;
+}
