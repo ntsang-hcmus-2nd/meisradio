@@ -130,6 +130,25 @@ export default function App() {
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const reqAnimRef = useRef<number>(0)
 
+  // MỚI: State quản lý Thông báo và Tiến độ tải
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({message: '', type: 'info', visible: false})
+  const [downloadProgress, setDownloadProgress] = useState<{current: number, total: number, fileName: string} | null>(null)
+
+  // Hàm gọi thông báo đồng nhất UI
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type, visible: true })
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000)
+  }
+
+  // Lắng nghe tiến độ tải từ Backend
+  useEffect(() => {
+    if ((window as any).api?.onDownloadProgress) {
+      (window as any).api.onDownloadProgress((data: any) => {
+        setDownloadProgress(data)
+      })
+    }
+  }, [])
+
   // Reset số lượng hiển thị về 25 khi có sự thay đổi view/dữ liệu
   useEffect(() => {
     setVisibleCount(25)
@@ -386,16 +405,27 @@ export default function App() {
 
   useEffect(() => { loadLibrary() }, [])
 
-  // --- NẠP ẢNH BÌA THÔNG MINH CHO BÀI ĐANG PHÁT ---
+  // --- NẠP ẢNH BÌA HD THÔNG MINH CHO BÀI ĐANG PHÁT ---
   useEffect(() => {
-    if (currentTrack && !currentTrack.isCloud && !currentTrack.coverArt) {
+    // MỚI: Biến cờ (flag) để theo dõi vòng đời của bài hát
+    let isCurrent = true 
+
+    if (currentTrack && !currentTrack.isCloud && currentTrack.coverArt?.includes('.thumbnails')) {
       // @ts-ignore
-      window.api.getTrackCover(currentTrack.id || currentTrack.filePath).then(cover => {
-        if (cover) {
-          // Gắn ảnh vừa lấy được vào track đang phát hiện tại
-          setCurrentTrack((prev: any) => ({ ...prev, coverArt: cover }))
+      window.api.getTrackCover(currentTrack.id || currentTrack.filePath).then(highResCover => {
+        // KIỂM TRA: Chỉ nhồi ảnh HD vào RAM nếu người dùng VẪN ĐANG nghe bài hát này.
+        // Nếu API trả kết quả về nhưng người dùng đã bấm Next sang bài khác, 
+        // chuỗi Base64 này sẽ bị từ chối và GC sẽ tiêu hủy nó lập tức để giải phóng RAM.
+        if (isCurrent && highResCover) {
+          setCurrentTrack((prev: any) => ({ ...prev, coverArt: highResCover }))
         }
       })
+    }
+
+    // MỚI: CLEANUP FUNCTION
+    // Hàm này sẽ tự động kích hoạt ngay khoảnh khắc bạn bấm chuyển bài (currentTrack.id thay đổi)
+    return () => {
+      isCurrent = false 
     }
   }, [currentTrack?.id])
 
@@ -772,26 +802,27 @@ export default function App() {
 
   const handleDriveDownload = async () => {
     if (!libraryPath) {
-      alert("Vui lòng vào Cài đặt để thiết lập Thư viện gốc trước khi tải!")
+      showToast("Vui lòng vào Cài đặt để thiết lập Thư viện gốc trước khi tải!", 'error')
       return
     }
     setIsDownloading(true)
+    setDownloadProgress({ current: 0, total: driveFiles.length, fileName: 'Chuẩn bị tải...' }) // Khởi tạo tiến trình
     try {
-      // MỚI: Bổ sung libraryTracks vào hàm
       // @ts-ignore
-      const result = await window.api.downloadMultipleFiles(driveFiles, libraryTracks)
+      const result = await window.api.downloadMultipleFiles(driveFiles, processedLibraryTracks)
       if (result.success) {
         if (result.tracks.length > 0) {
-          alert(`Tải thành công ${result.tracks.length} bài hát về Thư viện!\nChất lượng nguyên bản của tệp đã được giữ nguyên 100%.`)
+          showToast(`Đã tải xong ${result.tracks.length} bài hát về máy!`, 'success')
           loadLibrary()
         }
       } else {
-        alert('Lỗi hệ thống: ' + result.error)
+        showToast('Lỗi hệ thống: ' + result.error, 'error')
       }
     } catch (e) {
-      alert('Có lỗi xảy ra khi tải file!')
+      showToast('Có lỗi xảy ra khi tải file!', 'error')
     }
     setIsDownloading(false)
+    setDownloadProgress(null) // Reset tiến trình
   }
 
   const handleRowClick = (track: any, contextList?: any[]) => {
@@ -1233,6 +1264,45 @@ export default function App() {
     <div className="flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative transition-colors duration-1000" style={{ backgroundColor: themeColor }}>
       {/* Lớp nền gradient đè lên màu chủ đạo để làm tối */}
       <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
+      {/* ========================================= */}
+      {/* MỚI: TOAST NOTIFICATION ĐỒNG NHẤT UI */}
+      {/* ========================================= */}
+      {toast.visible && (
+        <div className="fixed top-10 right-10 z-[100] animate-fade-in flex items-center gap-3 bg-zinc-900 border border-zinc-700 shadow-2xl py-3 px-5 rounded-xl">
+          {toast.type === 'success' && <Sparkles size={18} className="text-emerald-400" />}
+          {toast.type === 'error' && <X size={18} className="text-red-400" />}
+          {toast.type === 'info' && <Cloud size={18} className="text-blue-400" />}
+          <span className="text-sm font-medium text-white">{toast.message}</span>
+        </div>
+      )}
+
+      {/* ========================================= */}
+      {/* MỚI: MODAL PROGRESS BAR KHI TẢI DRIVE */}
+      {/* ========================================= */}
+      {isDownloading && downloadProgress && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4 transition-opacity">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 w-[450px] shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
+            {/* Background phát sáng nhẹ */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-emerald-500/20 blur-[50px] rounded-full pointer-events-none" />
+            
+            <Cloud size={48} className="text-emerald-500 mb-6 animate-bounce relative z-10" />
+            <h2 className="text-2xl font-bold text-white mb-2 relative z-10">Đang tải dữ liệu</h2>
+            <p className="text-sm text-zinc-400 mb-8 truncate w-full relative z-10">{downloadProgress.fileName}</p>
+            
+            <div className="w-full bg-zinc-950 rounded-full h-2.5 mb-3 overflow-hidden border border-zinc-800 relative z-10">
+              <div 
+                className="bg-emerald-500 h-full rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                style={{ width: `${(downloadProgress.current / downloadProgress.total) * 100}%` }}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between w-full text-xs font-medium relative z-10">
+              <span className="text-emerald-400">{Math.round((downloadProgress.current / downloadProgress.total) * 100)}%</span>
+              <span className="text-zinc-500">{downloadProgress.current} / {downloadProgress.total} tệp</span>
+            </div>
+          </div>
+        </div>
+      )}
       <audio
         ref={audioRef}
         src={currentTrack ? (currentTrack.filePath?.startsWith('http') || currentTrack.filePath?.startsWith('file://') ? currentTrack.filePath : `file://${currentTrack.filePath}`) : undefined}

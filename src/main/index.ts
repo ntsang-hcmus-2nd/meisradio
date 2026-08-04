@@ -1,4 +1,5 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut, nativeImage } from 'electron'
+import crypto from 'crypto'
 import { join } from 'path'
 import * as path from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -143,29 +144,49 @@ app.whenReady().then(() => {
     const playlists: any[] = []
     const supportedExts = ['.mp3', '.flac', '.wav', '.m4a']
 
+    // MỚI: Khởi tạo thư mục ẩn để chứa ảnh Proxy (Thumbnail)
+    const thumbDir = join(rootPath, '.thumbnails')
+    if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir)
+
     for (const item of items) {
       const itemPath = join(rootPath, item)
       const stat = fs.statSync(itemPath)
 
-      if (stat.isDirectory()) {
+      if (stat.isDirectory() && item !== '.thumbnails') {
         const playlistTracks: any[] = []
         const subItems = fs.readdirSync(itemPath)
         for (const subItem of subItems) {
           if (supportedExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
             const trackPath = join(itemPath, subItem)
+            
+            // Xử lý Caching Ảnh Proxy
+            let coverUrl = null
+            const trackHash = crypto.createHash('md5').update(trackPath).digest('hex')
+            const thumbPath = join(thumbDir, `${trackHash}.jpg`)
+
+            if (fs.existsSync(thumbPath)) {
+              coverUrl = pathToFileURL(thumbPath).href
+            }
+
             try {
               const metadata = await mm.parseFile(trackPath)
-              let coverBase64 = null
-              if (metadata.common.picture && metadata.common.picture.length > 0) {
-                coverBase64 = null
+              
+              if (!coverUrl && metadata.common.picture && metadata.common.picture.length > 0) {
+                try {
+                  const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
+                  const resized = img.resize({ width: 128, height: 128, quality: 'good' })
+                  fs.writeFileSync(thumbPath, resized.toJPEG(80))
+                  coverUrl = pathToFileURL(thumbPath).href
+                } catch(e) {}
               }
+
               const trackData = {
                 id: trackPath, filePath: pathToFileURL(trackPath).href, 
                 title: metadata.common.title || subItem.replace(/\.[^/.]+$/, ""),
                 artist: metadata.common.artist || 'Unknown', album: metadata.common.album || 'Unknown',
                 duration: metadata.format.duration, format: metadata.format.container || subItem.split('.').pop()?.toUpperCase(),
                 bitrate: metadata.format.bitrate, sampleRate: metadata.format.sampleRate,
-                lossless: metadata.format.lossless, isCloud: false, coverArt: coverBase64,
+                lossless: metadata.format.lossless, isCloud: false, coverArt: coverUrl,
                 lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
               }
               playlistTracks.push(trackData)
@@ -189,18 +210,34 @@ app.whenReady().then(() => {
         }
         playlists.push({ name: item, path: itemPath, tracks: playlistTracks, thumbnail: thumbnailUrl })
       } else if (supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
+        
+        // Xử lý Caching Ảnh Proxy cho bài hát ở Thư viện gốc
+        let coverUrl = null
+        const trackHash = crypto.createHash('md5').update(itemPath).digest('hex')
+        const thumbPath = join(thumbDir, `${trackHash}.jpg`)
+
+        if (fs.existsSync(thumbPath)) {
+          coverUrl = pathToFileURL(thumbPath).href
+        }
+
         try {
           const metadata = await mm.parseFile(itemPath)
-          let coverBase64 = null
-          if (metadata.common.picture && metadata.common.picture.length > 0) {
-            coverBase64 = null
+          
+          if (!coverUrl && metadata.common.picture && metadata.common.picture.length > 0) {
+            try {
+              const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
+              const resized = img.resize({ width: 128, height: 128, quality: 'good' })
+              fs.writeFileSync(thumbPath, resized.toJPEG(80))
+              coverUrl = pathToFileURL(thumbPath).href
+            } catch(e) {}
           }
+
           tracks.push({
             id: itemPath, filePath: pathToFileURL(itemPath).href, 
             title: metadata.common.title || item.replace(/\.[^/.]+$/, ""),
             artist: metadata.common.artist || 'Unknown', album: metadata.common.album || 'Unknown',
             duration: metadata.format.duration, format: metadata.format.container || item.split('.').pop()?.toUpperCase(),
-            isCloud: false, coverArt: coverBase64, lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
+            isCloud: false, coverArt: coverUrl, lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
           })
         } catch (e) {
           tracks.push({ id: itemPath, filePath: pathToFileURL(itemPath).href, title: item, isCloud: false })
@@ -513,81 +550,122 @@ app.whenReady().then(() => {
     }
   })
 
-  // Tải hàng loạt file từ Drive
-  ipcMain.handle('music:downloadMultipleFiles', async (_, files: any[]) => {
+  // ==========================================
+  // TẢI HÀNG LOẠT TỪ CLOUD (CÓ CHECK TRÙNG LẶP & LỌC SỐ & TIẾN ĐỘ)
+  // ==========================================
+  ipcMain.handle('music:downloadMultipleFiles', async (event, files: any[], existingTracks: any[] = []) => {
     const rootPath = getConfig().libraryPath
     if (!rootPath || !fs.existsSync(rootPath)) return { success: false, error: 'Chưa cấu hình thư mục Thư viện trong Cài đặt!' }
     
-    const saveDir = rootPath
     const downloadedTracks: any[] = []
     
     try {
-      for (const file of files) {
-        const safeTitle = (file.title || 'track').replace(/[^a-z0-9\s]/gi, '_').trim()
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // Gửi tiến trình về giao diện
+        event.sender.send('download-progress', { 
+          current: i + 1, 
+          total: files.length, 
+          fileName: file.title || 'Đang tải...' 
+        })
+
+        const rawTitle = (file.title || 'track').replace(/^\d+[\s\.\-\_]*/, '').trim()
+        const safeTitle = rawTitle.replace(/[^a-zA-Z0-9\s\u00C0-\u1EF9]/g, '_').trim()
         const ext = file.format ? file.format.toLowerCase() : 'mp3'
-        const savePath = join(saveDir, `${safeTitle}.${ext}`)
+        const filename = `${safeTitle}.${ext}`
+        
+        const tempPath = join(rootPath, `temp_${Date.now()}_${filename}`)
+        let destPath = join(rootPath, filename)
         
         const response = await fetch(file.url)
         const arrayBuffer = await response.arrayBuffer()
-        const buffer = Buffer.from(arrayBuffer)
-        fs.writeFileSync(savePath, buffer)
+        fs.writeFileSync(tempPath, Buffer.from(arrayBuffer))
         
-        // Quét và nhúng metadata / tạo file .lrc tương ứng
-        try {
-          const metadata = await mm.parseFile(savePath)
-          let coverBase64 = null
+        let title = safeTitle
+        let artist = 'Unknown Artist'
+        let album = 'Unknown Album'
+        let metadata
 
-          if (ext === 'mp3') {
-            const tags: NodeID3.Tags = {
-              title: metadata.common.title || safeTitle,
-              artist: metadata.common.artist || 'Unknown Artist',
-              album: metadata.common.album || 'Unknown Album',
-            }
-            if (metadata.common.picture && metadata.common.picture.length > 0) {
-              tags.image = {
-                mime: metadata.common.picture[0].format,
-                imageBuffer: Buffer.from(metadata.common.picture[0].data)
+        try {
+          metadata = await mm.parseFile(tempPath)
+          // Trích xuất trọn vẹn dữ liệu lõi
+          if (metadata.common.title) title = metadata.common.title
+          if (metadata.common.artist) artist = metadata.common.artist
+          if (metadata.common.album) album = metadata.common.album
+        } catch (e) {}
+
+        // Lọc bỏ số thứ tự đứng trước Tên bài hát
+        title = title.replace(/^\d+[\s\.\-\_]*/, '').trim()
+
+        const duplicate = existingTracks.find(t => 
+          t.title && t.artist && 
+          t.title.toLowerCase() === title.toLowerCase() && 
+          t.artist.toLowerCase() === artist.toLowerCase()
+        )
+
+        let shouldKeep = true
+
+        if (duplicate) {
+          const choice = dialog.showMessageBoxSync({
+            type: 'question',
+            buttons: ['Thay thế bản cũ', 'Thêm bản riêng', 'Hủy bỏ'],
+            defaultId: 0,
+            cancelId: 2,
+            title: 'Phát hiện trùng lặp từ Cloud',
+            message: `Bản nhạc "${title}" của "${artist}" đã tồn tại trong thư viện.\nBạn muốn xử lý như thế nào đối với tệp đang tải?`
+          })
+
+          if (choice === 0) {
+            try {
+              if (fs.existsSync(duplicate.id) && duplicate.id !== destPath) {
+                fs.unlinkSync(duplicate.id)
+                const oldLrc = duplicate.id.replace(/\.[^/.]+$/, ".lrc")
+                if (fs.existsSync(oldLrc)) fs.unlinkSync(oldLrc)
               }
-              coverBase64 = null
-            }
-            NodeID3.update(tags, savePath)
+            } catch (e) {}
+          } else if (choice === 1) {
+            destPath = join(rootPath, `${safeTitle} (${Date.now()}).${ext}`)
           } else {
-            // Xử lý tạo file .lrc riêng cho các định dạng Lossless như FLAC/WAV
-            if (metadata.common.lyrics && metadata.common.lyrics.length > 0) {
-              const lyricText = typeof metadata.common.lyrics[0] === 'string' 
-                ? metadata.common.lyrics[0] 
-                : (metadata.common.lyrics[0] as any).text || ''
-              if (lyricText) {
-                const lrcPath = join(saveDir, `${safeTitle}.lrc`)
-                fs.writeFileSync(lrcPath, lyricText, 'utf-8')
-              }
+            shouldKeep = false
+          }
+        }
+
+        if (!shouldKeep) {
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
+          continue
+        }
+
+        if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
+        fs.renameSync(tempPath, destPath)
+
+        try {
+          if (ext === 'mp3') {
+            // Chỉ cập nhật các Tag đã được chuẩn hóa (Bảo toàn Album & Nghệ sĩ)
+            const tags: NodeID3.Tags = { title, artist, album }
+            
+            // Giữ lại thẻ ảnh trong file gốc (nhưng không nạp vào RAM)
+            if (metadata?.common.picture && metadata.common.picture.length > 0) {
+              tags.image = { mime: metadata.common.picture[0].format, imageBuffer: Buffer.from(metadata.common.picture[0].data) }
             }
-            if (metadata.common.picture && metadata.common.picture.length > 0) {
-              coverBase64 = null
+            NodeID3.update(tags, destPath)
+          } else {
+            if (metadata?.common.lyrics && metadata.common.lyrics.length > 0) {
+              const lyricText = typeof metadata.common.lyrics[0] === 'string' ? metadata.common.lyrics[0] : (metadata.common.lyrics[0] as any).text || ''
+              if (lyricText) fs.writeFileSync(join(rootPath, `${path.basename(destPath, `.${ext}`)}.lrc`), lyricText, 'utf-8')
             }
           }
 
-          downloadedTracks.push({
-            id: savePath,
-            filePath: pathToFileURL(savePath).href,
-            title: metadata.common.title || safeTitle,
-            artist: metadata.common.artist || 'Unknown Artist',
-            album: metadata.common.album || 'Unknown Album',
-            duration: metadata.format.duration,
-            format: metadata.format.container || ext,
-            bitrate: metadata.format.bitrate,
-            sampleRate: metadata.format.sampleRate,
-            lossless: metadata.format.lossless,
-            coverArt: coverBase64,
-            isCloud: false
-          })
-        } catch (metaErr) {
-          downloadedTracks.push({
-            ...file,
-            id: savePath,
-            filePath: pathToFileURL(savePath).href,
-            isCloud: false
-          })
+          const newTrackObj = {
+            id: destPath, filePath: pathToFileURL(destPath).href, title, artist,
+            album, duration: metadata?.format.duration || 0,
+            format: metadata?.format.container || ext.toUpperCase(), bitrate: metadata?.format.bitrate,
+            sampleRate: metadata?.format.sampleRate, lossless: metadata?.format.lossless, coverArt: null, isCloud: false
+          }
+          downloadedTracks.push(newTrackObj)
+          existingTracks.push(newTrackObj)
+        } catch (e) {
+          downloadedTracks.push({ ...file, id: destPath, filePath: pathToFileURL(destPath).href, isCloud: false })
         }
       }
       return { success: true, tracks: downloadedTracks }
@@ -595,6 +673,7 @@ app.whenReady().then(() => {
       return { success: false, error: err.message }
     }
   })
+  
   // Lấy ảnh bìa từ bài hát đầu tiên trong Playlist
   ipcMain.handle('music:extractPlaylistThumbnail', async (_, playlistName) => {
     const rootPath = getConfig().libraryPath
