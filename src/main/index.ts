@@ -983,9 +983,13 @@ app.whenReady().then(() => {
   ipcMain.handle('music:toggleMiniPlayer', (_, isMini: boolean) => {
     if (!mainWindow) return
     if (isMini) {
+      // MỚI: Bắt buộc thoát chế độ Toàn màn hình / Phóng to trước khi resize
+      if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false)
+      if (mainWindow.isMaximized()) mainWindow.unmaximize()
+      
       mainWindow.setContentSize(400, 120, true) // Đổi kích thước thành khung chữ nhật nhỏ
       mainWindow.setAlwaysOnTop(true, 'floating') // Luôn nổi trên các cửa sổ khác
-      mainWindow.setResizable(false)
+      mainWindow.setResizable(false) // Khóa kích thước
     } else {
       mainWindow.setAlwaysOnTop(false)
       mainWindow.setResizable(true)

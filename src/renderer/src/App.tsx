@@ -1120,53 +1120,7 @@ export default function App() {
   const renderTrackTable = (tracks: any[]) => {
     // Cắt danh sách để chỉ vẽ đúng số lượng giới hạn hiện tại
     const visibleTracks = tracks.slice(0, visibleCount)
-
-    // Nếu đang ở chế độ Mini Player -> Trả về giao diện siêu nhỏ gọn
-    if (isMiniPlayer) {
-      return (
-        <div className="h-screen w-screen bg-zinc-950/90 backdrop-blur-md overflow-hidden flex items-center p-3 border border-zinc-800" style={{ backgroundColor: themeColor }}>
-          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
-          
-          {/* Ảnh bìa */}
-          <div className="w-24 h-24 bg-zinc-800 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group">
-            {currentTrack?.coverArt ? (
-              <img src={currentTrack.coverArt} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>
-            )}
-            {/* Nút Phóng to lại */}
-            <button 
-              onClick={handleToggleMiniPlayer} 
-              className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition"
-              title="Trở về chế độ Đầy đủ"
-            >
-              <Maximize2 size={14} />
-            </button>
-          </div>
-
-          {/* Thông tin & Điều khiển */}
-          <div className="flex-1 ml-4 flex flex-col justify-center overflow-hidden">
-            <div className="truncate mb-2 pr-4">
-              <h4 className="text-sm font-bold text-white truncate">{currentTrack ? currentTrack.title : 'Meis Radio'}</h4>
-              <p className="text-xs text-zinc-400 truncate">{currentTrack ? currentTrack.artist : 'Sẵn sàng phát nhạc'}</p>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={18} /></button>
-              <button onClick={() => { if(currentTrack) setIsPlaying(!isPlaying) }} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition">
-                {isPlaying ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current translate-x-[1px]" />}
-              </button>
-              <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={18} /></button>
-            </div>
-          </div>
-
-          {/* Thẻ Audio ngầm */}
-          <audio ref={audioRef} src={currentTrack?.filePath} onEnded={() => { if (!crossfadeEnabled) handleNext() }} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} loop={repeatMode === 2} />
-        </div>
-      )
-    }
-
-    // ... BÊN DƯỚI LÀ LỆNH return ( CHÍNH GỐC CỦA BẠN ...
+    
     return (
       <table className="w-full text-left text-sm">
         <thead>
@@ -1295,6 +1249,51 @@ export default function App() {
           })}
         </tbody>
       </table>
+    )
+  }
+
+  // Nếu đang ở chế độ Mini Player -> Trả về giao diện siêu nhỏ gọn
+  if (isMiniPlayer) {
+    return (
+      <div className="h-screen w-screen bg-zinc-950/90 backdrop-blur-md overflow-hidden flex items-center p-3 border border-zinc-800" style={{ backgroundColor: themeColor }}>
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
+        
+        {/* Ảnh bìa */}
+        <div className="w-24 h-24 bg-zinc-800 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group">
+          {currentTrack?.coverArt ? (
+            <img src={currentTrack.coverArt} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>
+          )}
+          {/* Nút Phóng to lại */}
+          <button 
+            onClick={handleToggleMiniPlayer} 
+            className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition"
+            title="Trở về chế độ Đầy đủ"
+          >
+            <Maximize2 size={14} />
+          </button>
+        </div>
+
+        {/* Thông tin & Điều khiển */}
+        <div className="flex-1 ml-4 flex flex-col justify-center overflow-hidden">
+          <div className="truncate mb-2 pr-4">
+            <h4 className="text-sm font-bold text-white truncate">{currentTrack ? currentTrack.title : 'Meis Radio'}</h4>
+            <p className="text-xs text-zinc-400 truncate">{currentTrack ? currentTrack.artist : 'Sẵn sàng phát nhạc'}</p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={18} /></button>
+            <button onClick={() => { if(currentTrack) setIsPlaying(!isPlaying) }} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition">
+              {isPlaying ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current translate-x-[1px]" />}
+            </button>
+            <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={18} /></button>
+          </div>
+        </div>
+
+        {/* Thẻ Audio ngầm */}
+        <audio ref={audioRef} src={currentTrack?.filePath} onEnded={() => { if (!crossfadeEnabled) handleNext() }} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} loop={repeatMode === 2} />
+      </div>
     )
   }
 
