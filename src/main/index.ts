@@ -92,7 +92,7 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => mainWindow.show())
+  mainWindow.on('ready-to-show', () => mainWindow?.show())
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
@@ -160,7 +160,7 @@ app.whenReady().then(() => {
             const trackPath = join(itemPath, subItem)
             
             // Xử lý Caching Ảnh Proxy
-            let coverUrl = null
+            let coverUrl: string | null = null
             const trackHash = crypto.createHash('md5').update(trackPath).digest('hex')
             const thumbPath = join(thumbDir, `${trackHash}.jpg`)
 
@@ -199,7 +199,7 @@ app.whenReady().then(() => {
           }
         }
         
-        let thumbnailUrl = null
+        let thumbnailUrl: string | null = null
         const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
         for (const ext of possibleImageExts) {
           const imgPath = join(itemPath, `${item}${ext}`)
@@ -212,7 +212,7 @@ app.whenReady().then(() => {
       } else if (supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
         
         // Xử lý Caching Ảnh Proxy cho bài hát ở Thư viện gốc
-        let coverUrl = null
+        let coverUrl: string | null = null
         const trackHash = crypto.createHash('md5').update(itemPath).digest('hex')
         const thumbPath = join(thumbDir, `${trackHash}.jpg`)
 
@@ -392,7 +392,7 @@ app.whenReady().then(() => {
     
     const supportedExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.mp4']
     const audioFiles = files.filter(file => supportedExtensions.some(ext => file.toLowerCase().endsWith(ext)))
-    const tracks = []
+    const tracks: any[] = []
     
     for (const file of audioFiles) {
       const filePath = join(folderPath, file)
@@ -400,8 +400,7 @@ app.whenReady().then(() => {
         const metadata = await mm.parseFile(filePath)
         let coverBase64 = null
         if (metadata.common.picture && metadata.common.picture.length > 0) {
-          const picture = metadata.common.picture[0]
-          const buffer = Buffer.from(picture.data)
+          // const buffer = Buffer.from(picture.data)
           coverBase64 = null
         }
         tracks.push({
@@ -453,11 +452,16 @@ app.whenReady().then(() => {
           if (metadata.common.picture && metadata.common.picture.length > 0) {
             tags.image = {
               mime: metadata.common.picture[0].format,
+              type: { id: 3, name: 'front cover' },
+              description: 'Cover',
               imageBuffer: Buffer.from(metadata.common.picture[0].data)
             }
           }
-          if (metadata.common.lyrics && metadata.common.lyrics.length > 0) {
-            tags.unsynchronisedLyrics = { language: 'eng', text: metadata.common.lyrics[0] }
+          if (metadata?.common.lyrics && metadata.common.lyrics.length > 0) {
+            tags.unsynchronisedLyrics = { 
+              language: 'eng', 
+              text: String(metadata.common.lyrics[0]) // Ép kiểu chuỗi
+            }
           }
           NodeID3.update(tags, savePath)
         } else {
@@ -646,8 +650,13 @@ app.whenReady().then(() => {
             
             // Giữ lại thẻ ảnh trong file gốc (nhưng không nạp vào RAM)
             if (metadata?.common.picture && metadata.common.picture.length > 0) {
-              tags.image = { mime: metadata.common.picture[0].format, imageBuffer: Buffer.from(metadata.common.picture[0].data) }
+            tags.image = { 
+              mime: metadata.common.picture[0].format, 
+              type: { id: 3, name: 'front cover' },
+              description: 'Cover',
+              imageBuffer: Buffer.from(metadata.common.picture[0].data) 
             }
+          }
             NodeID3.update(tags, destPath)
           } else {
             if (metadata?.common.lyrics && metadata.common.lyrics.length > 0) {

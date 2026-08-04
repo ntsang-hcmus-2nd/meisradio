@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
-  ListMusic, Settings, ChevronDown, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon,
+  ListMusic, Settings, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon,
   Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown,
   Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw,
 } from 'lucide-react'
@@ -76,7 +76,6 @@ export default function App() {
   const [playQueue, setPlayQueue] = useState<any[]>([]) // Hàng đợi đang phát (bao gồm cả khi đã Shuffle)
   const [originalQueue, setOriginalQueue] = useState<any[]>([]) // Lưu lại hàng đợi gốc để khôi phục khi tắt Shuffle
   const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false) // Bật/tắt Sidebar danh sách phát
-  const [cloudActionContext, setCloudActionContext] = useState<any[]>([]) // Lưu context khi bấm Clou
   const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0)
   const [volume, setVolume] = useState(1)
   const [showEQ, setShowEQ] = useState(false)
@@ -88,7 +87,6 @@ export default function App() {
     { id: '4', frequency: 3600, gain: 0, type: 'peaking', q: 1.4 },
     { id: '5', frequency: 14000, gain: 0, type: 'peaking', q: 1.4 },
   ])
-  const filtersRef = useRef<any>({})
   const [prevVolume, setPrevVolume] = useState<number>(1)
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
   const [currentLyricIndex, setCurrentLyricIndex] = useState<number>(-1)
@@ -536,12 +534,6 @@ export default function App() {
     }
   }
 
-  const getDisplayedTracks = () => {
-    const baseList = activeView === 'playlists' && activePlaylist ? activePlaylist.tracks : libraryTracks
-    const queue = isShuffle ? shuffledTracks : baseList
-    return getSortedTracks(queue)
-  }
-
   // --- LOGIC PLAYER VÀ ĐIỀU KHIỂN ---
 
   const handlePlayTrack = async (track: any) => {
@@ -565,17 +557,6 @@ export default function App() {
     setIsPlaying(true)
     if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
       await audioCtxRef.current.resume()
-    }
-  }
-
-  const handleEnded = () => {
-    if (repeatMode === 2) {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0
-        audioRef.current.play().catch(e => console.error(e))
-      }
-    } else {
-      handleNext()
     }
   }
 
@@ -828,7 +809,6 @@ export default function App() {
   const handleRowClick = (track: any, contextList?: any[]) => {
     if (track.isCloud) {
       setCloudActionTrack(track)
-      if (contextList) setCloudActionContext(contextList)
     } else {
       if (contextList) {
         setOriginalQueue(contextList)
@@ -976,14 +956,6 @@ export default function App() {
       })
     }
   }, [currentLyricIndex])
-
-  // 6. Hàm nhảy đến thời gian khi bấm vào dòng lời bài hát
-  const handleLyricClick = (time: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = time
-      setCurrentTime(time)
-    }
-  }
 
   // 7. Effect: Quản lý Phím Space cục bộ (Local)
   useEffect(() => {
