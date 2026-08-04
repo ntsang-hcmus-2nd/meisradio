@@ -18,6 +18,12 @@ const api = {
   autoGeneratePlaylists: () => ipcRenderer.invoke('music:autoGeneratePlaylists'),
   readLrcFile: (filePath: string) => ipcRenderer.invoke('music:read-lyrics', filePath),
   extractPlaylistThumbnail: (playlistName: string) => ipcRenderer.invoke('music:extractPlaylistThumbnail', playlistName),
+  fetchMusixmatchLyrics: (title: string, artist: string) => ipcRenderer.invoke('music:fetchMusixmatchLyrics', title, artist),
+  importLocalFiles: (targetFolder?: string) => ipcRenderer.invoke('music:importLocalFiles', targetFolder),
+  onGlobalShortcut: (callback: (action: string) => void) => {
+    ipcRenderer.removeAllListeners('global-shortcut') // Dọn dẹp để tránh trùng lặp sự kiện
+    ipcRenderer.on('global-shortcut', (_event, action) => callback(action))
+  },
 }
 
 if (process.contextIsolated) {

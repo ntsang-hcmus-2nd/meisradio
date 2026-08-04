@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut } from 'electron'
 import { join } from 'path'
 import * as path from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -12,7 +12,31 @@ const CONFIG_PATH = join(app.getPath('userData'), 'music-config.json')
 
 function getConfig() {
   try {
-    if (fs.existsSync(CONFIG_PATH)) return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
+    if (fs.existsSync(CONFIG_PATH)) {
+      const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
+      
+      // Khôi phục (Giải mã) các API Key nếu hệ thống mã hóa khả dụng
+      if (app.isReady() && safeStorage.isEncryptionAvailable()) {
+        
+        // Giải mã Google Drive API Key
+        if (config.googleDriveApiKey && config.googleDriveApiKey.startsWith('ENC:')) {
+          try {
+            const buffer = Buffer.from(config.googleDriveApiKey.replace('ENC:', ''), 'base64')
+            config.googleDriveApiKey = safeStorage.decryptString(buffer)
+          } catch (e) { console.error('Lỗi giải mã Google Drive API Key', e) }
+        }
+
+        // Giải mã Musixmatch API Key (nếu bạn có dùng)
+        if (config.musixmatchApiKey && config.musixmatchApiKey.startsWith('ENC:')) {
+          try {
+            const buffer = Buffer.from(config.musixmatchApiKey.replace('ENC:', ''), 'base64')
+            config.musixmatchApiKey = safeStorage.decryptString(buffer)
+          } catch (e) { console.error('Lỗi giải mã Musixmatch API Key', e) }
+        }
+
+      }
+      return config
+    }
   } catch (e) {}
   return { 
     libraryPath: null, 
@@ -24,11 +48,37 @@ function getConfig() {
 }
 
 function saveConfig(data: any) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify({ ...getConfig(), ...data }, null, 2))
+  const currentConfig = getConfig()
+  const newConfig = { ...currentConfig, ...data }
+
+  // Mã hóa API Key trước khi ghi đè xuống file JSON
+  if (app.isReady() && safeStorage.isEncryptionAvailable()) {
+    
+    // Mã hóa Google Drive API Key
+    if (data.googleDriveApiKey && !data.googleDriveApiKey.startsWith('ENC:')) {
+      try {
+        const encryptedBuffer = safeStorage.encryptString(data.googleDriveApiKey)
+        newConfig.googleDriveApiKey = `ENC:${encryptedBuffer.toString('base64')}`
+      } catch (e) { console.error('Lỗi mã hóa Google Drive API Key', e) }
+    }
+
+    // Mã hóa Musixmatch API Key (nếu bạn có dùng)
+    if (data.musixmatchApiKey && !data.musixmatchApiKey.startsWith('ENC:')) {
+      try {
+        const encryptedBuffer = safeStorage.encryptString(data.musixmatchApiKey)
+        newConfig.musixmatchApiKey = `ENC:${encryptedBuffer.toString('base64')}`
+      } catch (e) { console.error('Lỗi mã hóa Musixmatch API Key', e) }
+    }
+
+  }
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2))
 }
 
+let mainWindow: BrowserWindow | null = null
+
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
@@ -396,19 +446,47 @@ app.whenReady().then(() => {
     }
   })
 
-  // Quét Google Drive (Dùng key ở .env)
+  // Quét Google Drive (Sử dụng API Key từ Cài đặt, hỗ trợ tải > 100 tệp)
   ipcMain.handle('music:fetchDriveFiles', async (_, folderId) => {
-    const apiKey = import.meta.env.VITE_GOOGLE_DRIVE_API_KEY
-    if (!apiKey) return { success: false, error: 'Chưa cấu hình API Key trong file .env!' }
+    const apiKey = getConfig().googleDriveApiKey
+    
+    if (!apiKey || apiKey.trim() === '') {
+      return { success: false, error: 'Chưa cấu hình API Key! Vui lòng vào Cài đặt để thêm khóa API Google Drive của bạn.' }
+    }
     
     try {
-      const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=files(id,name,mimeType)&key=${apiKey}`
-      const response = await fetch(url)
-      const data = await response.json()
+      let allFiles: any[] = []
+      let pageToken = ''
+      let hasNextPage = true
+
+      // Lặp liên tục để lấy toàn bộ danh sách tệp nếu có nhiều hơn 1000 tệp
+      while (hasNextPage) {
+        // Thêm pageSize=1000 và nextPageToken vào cấu trúc URL
+        let url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&pageSize=1000&fields=nextPageToken,files(id,name,mimeType)&key=${apiKey}`
+        
+        if (pageToken) {
+          url += `&pageToken=${pageToken}`
+        }
+
+        const response = await fetch(url)
+        const data = await response.json()
+        
+        if (data.error) return { success: false, error: data.error.message }
+        
+        if (data.files && data.files.length > 0) {
+          allFiles = allFiles.concat(data.files) // Gộp tệp mới vào mảng tổng
+        }
+
+        // Kiểm tra xem Google có báo còn trang tiếp theo không
+        if (data.nextPageToken) {
+          pageToken = data.nextPageToken
+        } else {
+          hasNextPage = false // Hết tệp để tải, dừng vòng lặp
+        }
+      }
       
-      if (data.error) return { success: false, error: data.error.message }
-      
-      const audioFiles = data.files.filter((f: any) => 
+      // Lọc ra các file âm thanh từ mảng tổng
+      const audioFiles = allFiles.filter((f: any) => 
         f.mimeType.startsWith('audio/') || 
         f.name.endsWith('.mp3') || f.name.endsWith('.flac') ||
         f.name.endsWith('.wav') || f.name.endsWith('.m4a')
@@ -428,6 +506,7 @@ app.whenReady().then(() => {
           coverArt: null
         }
       })
+      
       return { success: true, tracks }
     } catch (err: any) {
       return { success: false, error: err.message }
@@ -553,8 +632,183 @@ app.whenReady().then(() => {
     }
   })
 
+  // ==========================================
+  // TÍCH HỢP MUSIXMATCH API (DESKTOP BYPASS LẤY LRC 100%)
+  // ==========================================
+  
+  let mxmToken: string | null = null
+
+  // Header ngụy trang thành phần mềm Musixmatch Desktop thật
+  const mxmHeaders = {
+    'User-Agent': 'Musixmatch/3.14.4346-master-20200508',
+    'Accept': 'application/json'
+  }
+
+  async function getMusixmatchToken() {
+    if (mxmToken) return mxmToken
+    const url = 'https://apic-desktop.musixmatch.com/ws/1.1/token.get?app_id=web-desktop-app-v1.0'
+    try {
+      const res = await fetch(url, { headers: mxmHeaders })
+      const data = await res.json()
+      if (data.message.header.status_code === 200) {
+        mxmToken = data.message.body.user_token
+        return mxmToken
+      }
+    } catch (e) {
+      console.error("Lỗi lấy Token Musixmatch:", e)
+    }
+    return null
+  }
+
+  ipcMain.handle('music:fetchMusixmatchLyrics', async (_, title: string, artist: string) => {
+    try {
+      let token = await getMusixmatchToken()
+      if (!token) return { success: false, error: 'Không thể khởi tạo token Musixmatch' }
+
+      // 1. Tìm kiếm ID bài hát (Track ID)
+      const cleanTitle = title.replace(/\([^)]*\)/g, '').trim()
+      let searchUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artist)}&usertoken=${token}`
+      
+      let searchRes = await fetch(searchUrl, { headers: mxmHeaders })
+      let searchData = await searchRes.json()
+
+      // FIX 1: Tự động làm mới Token nếu bị Musixmatch báo hết hạn (Lỗi 401)
+      if (searchData.message?.header?.status_code === 401) {
+        mxmToken = null // Xóa token cũ
+        token = await getMusixmatchToken() // Xin lại token mới
+        searchUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artist)}&usertoken=${token}`
+        searchRes = await fetch(searchUrl, { headers: mxmHeaders })
+        searchData = await searchRes.json()
+      }
+
+      if (searchData.message?.header?.status_code !== 200 || !searchData.message?.body?.track_list || searchData.message.body.track_list.length === 0) {
+        return { success: false, error: 'Không tìm thấy bài hát trên hệ thống' }
+      }
+
+      const trackId = searchData.message.body.track_list[0].track.track_id
+
+      // FIX 2: Bổ sung &subtitle_format=lrc để ép Musixmatch trả về đúng định dạng chuẩn
+      const subtitleUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.subtitle.get?app_id=web-desktop-app-v1.0&track_id=${trackId}&subtitle_format=lrc&usertoken=${token}`
+      const subtitleRes = await fetch(subtitleUrl, { headers: mxmHeaders })
+      const subtitleData = await subtitleRes.json()
+
+      if (subtitleData.message?.header?.status_code === 200 && subtitleData.message?.body?.subtitle) {
+        return { success: true, lyrics: subtitleData.message.body.subtitle.subtitle_body, isSynced: true }
+      }
+
+      // 3. Nếu không có bản đồng bộ, lấy lời thô
+      const lyricsUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.lyrics.get?app_id=web-desktop-app-v1.0&track_id=${trackId}&usertoken=${token}`
+      const lyricsRes = await fetch(lyricsUrl, { headers: mxmHeaders })
+      const lyricsData = await lyricsRes.json()
+
+      if (lyricsData.message?.header?.status_code === 200 && lyricsData.message?.body?.lyrics) {
+        return { success: true, lyrics: lyricsData.message.body.lyrics.lyrics_body, isSynced: false }
+      }
+
+      return { success: false, error: 'Bài hát chưa được cập nhật lời' }
+    } catch (error: any) {
+      console.error("Lỗi API Musixmatch:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // ==========================================
+  // NHẬP FILE TỪ MÁY TÍNH / Ổ CỨNG RỜI
+  // ==========================================
+  ipcMain.handle('music:importLocalFiles', async (_, targetSubFolder?: string) => {
+    const rootPath = getConfig().libraryPath
+    if (!rootPath || !fs.existsSync(rootPath)) {
+      return { success: false, error: 'Chưa cấu hình thư mục Thư viện! Hãy vào Cài đặt để thiết lập.' }
+    }
+
+    // Nếu có truyền tên Playlist vào, chép vào thư mục Playlist, ngược lại chép vào Thư viện gốc
+    const destFolder = targetSubFolder ? join(rootPath, targetSubFolder) : rootPath
+    if (!fs.existsSync(destFolder)) fs.mkdirSync(destFolder)
+
+    // Mở hộp thoại chọn nhiều file nhạc
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Audio Files', extensions: ['mp3', 'flac', 'wav', 'm4a'] }]
+    })
+
+    if (canceled || filePaths.length === 0) return { success: false, canceled: true }
+
+    const importedTracks: any[] = []
+    
+    for (const sourcePath of filePaths) {
+      const fileName = path.basename(sourcePath)
+      const destPath = join(destFolder, fileName)
+
+      try {
+        // Tránh lỗi copy đè chính nó nếu người dùng chọn file đã nằm sẵn trong thư mục
+        if (sourcePath !== destPath) {
+          fs.copyFileSync(sourcePath, destPath)
+          
+          // Tự động tìm và copy luôn file lời bài hát (.lrc) trùng tên nếu có
+          const lrcSource = sourcePath.replace(/\.[^/.]+$/, ".lrc")
+          const lrcDest = destPath.replace(/\.[^/.]+$/, ".lrc")
+          if (fs.existsSync(lrcSource) && lrcSource !== lrcDest) {
+            fs.copyFileSync(lrcSource, lrcDest)
+          }
+        }
+
+        // Quét metadata của file mới vừa chép
+        const metadata = await mm.parseFile(destPath)
+        let coverBase64 = null
+        if (metadata.common.picture && metadata.common.picture.length > 0) {
+          coverBase64 = `data:${metadata.common.picture[0].format};base64,${Buffer.from(metadata.common.picture[0].data).toString('base64')}`
+        }
+
+        importedTracks.push({
+          id: destPath,
+          filePath: pathToFileURL(destPath).href,
+          title: metadata.common.title || fileName.replace(/\.[^/.]+$/, ""),
+          artist: metadata.common.artist || 'Unknown Artist',
+          album: metadata.common.album || 'Unknown Album',
+          duration: metadata.format.duration,
+          format: metadata.format.container || fileName.split('.').pop()?.toUpperCase(),
+          bitrate: metadata.format.bitrate,
+          sampleRate: metadata.format.sampleRate,
+          lossless: metadata.format.lossless,
+          coverArt: coverBase64,
+          isCloud: false
+        })
+      } catch (err) {
+        importedTracks.push({ id: destPath, filePath: pathToFileURL(destPath).href, title: fileName, isCloud: false })
+      }
+    }
+
+    return { success: true, tracks: importedTracks }
+  })
+
   // Khởi tạo cửa sổ
   createWindow()
+
+  // ==========================================
+  // ĐĂNG KÝ PHÍM TẮT TOÀN CỤC (GLOBAL SHORTCUTS)
+  // ==========================================
+  const sendShortcut = (action: string) => {
+    if (mainWindow) mainWindow.webContents.send('global-shortcut', action)
+  }
+
+  // 1. Phím tắt tổ hợp Ctrl
+  globalShortcut.register('CommandOrControl+Right', () => sendShortcut('next'))
+  globalShortcut.register('CommandOrControl+Left', () => sendShortcut('prev'))
+  globalShortcut.register('CommandOrControl+Up', () => sendShortcut('vol-up'))
+  globalShortcut.register('CommandOrControl+Down', () => sendShortcut('vol-down'))
+  
+  // Ctrl + Space để Play/Pause (Thay vì Next như cũ)
+  globalShortcut.register('CommandOrControl+Space', () => sendShortcut('play-pause'))
+
+  // 2. Nhận diện các phím Media chuyên dụng trên bàn phím
+  globalShortcut.register('MediaPlayPause', () => sendShortcut('play-pause'))
+  globalShortcut.register('MediaNextTrack', () => sendShortcut('next'))
+  globalShortcut.register('MediaPreviousTrack', () => sendShortcut('prev'))
+  
+  // Lưu ý: Đăng ký 2 phím Volume dưới đây sẽ chặn tính năng tăng/giảm âm lượng tổng của Windows/macOS,
+  // và chỉ tăng/giảm âm lượng bên trong thanh trượt của ứng dụng.
+  globalShortcut.register('VolumeUp', () => sendShortcut('vol-up'))
+  globalShortcut.register('VolumeDown', () => sendShortcut('vol-down'))
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -565,4 +819,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
 })
