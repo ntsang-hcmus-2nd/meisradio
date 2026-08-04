@@ -25,6 +25,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     ipcRenderer.removeAllListeners('global-shortcut') // Dọn dẹp để tránh trùng lặp sự kiện
     ipcRenderer.on('global-shortcut', (_event, action) => callback(action))
   },
+  getTrackCover: (filePath: string) => ipcRenderer.invoke('music:getTrackCover', filePath),
 }
 
 if (process.contextIsolated) {

@@ -273,7 +273,7 @@ export default function App() {
 
   // Vẽ Audio Visualizer (Sóng âm thanh nhảy theo nhạc)
   useEffect(() => {
-    if (!isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current) return
+    if (!isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
 
     const canvas = visualizerCanvasRef.current
     const ctx = canvas.getContext('2d')
@@ -385,6 +385,19 @@ export default function App() {
   }
 
   useEffect(() => { loadLibrary() }, [])
+
+  // --- NẠP ẢNH BÌA THÔNG MINH CHO BÀI ĐANG PHÁT ---
+  useEffect(() => {
+    if (currentTrack && !currentTrack.isCloud && !currentTrack.coverArt) {
+      // @ts-ignore
+      window.api.getTrackCover(currentTrack.id || currentTrack.filePath).then(cover => {
+        if (cover) {
+          // Gắn ảnh vừa lấy được vào track đang phát hiện tại
+          setCurrentTrack((prev: any) => ({ ...prev, coverArt: cover }))
+        }
+      })
+    }
+  }, [currentTrack?.id])
 
   // --- CÁC HÀM QUẢN LÝ THƯ VIỆN ---
   const handleSelectLibrary = async () => {
