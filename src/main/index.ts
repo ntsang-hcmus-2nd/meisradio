@@ -349,12 +349,18 @@ app.whenReady().then(() => {
     return tracks
   })
 
+  // ==========================================
+  // TẢI 1 FILE TỪ CLOUD (CÓ CHECK TRÙNG LẶP & LỌC SỐ)
+  // ==========================================
   ipcMain.handle('music:downloadCloudFile', async (_, url, filename, existingTracks: any[] = []) => {
     const rootPath = getConfig().libraryPath
     if (!rootPath || !fs.existsSync(rootPath)) return { success: false, error: 'Chưa cấu hình thư mục Thư viện trong Cài đặt!' }
     
-    const tempPath = join(rootPath, `temp_${Date.now()}_${filename}`)
-    let destPath = join(rootPath, filename)
+    // MỚI: Loại bỏ số thứ tự ở đầu tên file (nếu có)
+    let cleanFilename = filename.replace(/^\d+[\s\.\-\_]*/, '').trim()
+
+    const tempPath = join(rootPath, `temp_${Date.now()}_${cleanFilename}`)
+    let destPath = join(rootPath, cleanFilename)
     
     try {
       const response = await fetch(url)
@@ -362,15 +368,21 @@ app.whenReady().then(() => {
       const buffer = Buffer.from(arrayBuffer)
       fs.writeFileSync(tempPath, buffer)
 
-      let title = filename.replace(/\.[^/.]+$/, "")
+      let title = cleanFilename.replace(/\.[^/.]+$/, "")
       let artist = 'Unknown Artist'
+      let album = 'Unknown Album'
       let metadata
 
       try {
         metadata = await mm.parseFile(tempPath)
+        // MỚI: Trích xuất nguyên bản tên, nghệ sĩ và album từ file gốc nếu có
         if (metadata.common.title) title = metadata.common.title
         if (metadata.common.artist) artist = metadata.common.artist
+        if (metadata.common.album) album = metadata.common.album
       } catch (e) {}
+
+      // MỚI: Lọc bỏ số thứ tự ở đầu Tên bài hát (để làm sạch metadata)
+      title = title.replace(/^\d+[\s\.\-\_]*/, '').trim()
 
       const duplicate = existingTracks.find(t => 
         t.title && t.artist && 
@@ -397,8 +409,8 @@ app.whenReady().then(() => {
             }
           } catch (e) {}
         } else if (choice === 1) {
-          const ext = path.extname(filename)
-          const base = path.basename(filename, ext)
+          const ext = path.extname(cleanFilename)
+          const base = path.basename(cleanFilename, ext)
           destPath = join(rootPath, `${base} (${Date.now()})${ext}`)
         } else {
           fs.unlinkSync(tempPath)
@@ -412,9 +424,8 @@ app.whenReady().then(() => {
       try {
         const ext = destPath.toLowerCase().split('.').pop()
         if (ext === 'mp3') {
-          const tags: NodeID3.Tags = {
-            title: title, artist: artist, album: metadata?.common.album || 'Unknown Album',
-          }
+          // MỚI: Chỉ cập nhật các Tag đã được trích xuất (Bảo toàn Album & Nghệ sĩ gốc)
+          const tags: NodeID3.Tags = { title, artist, album }
           if (metadata?.common.picture && metadata.common.picture.length > 0) {
             tags.image = { mime: metadata.common.picture[0].format, imageBuffer: Buffer.from(metadata.common.picture[0].data) }
           }
@@ -438,6 +449,9 @@ app.whenReady().then(() => {
     }
   })
 
+  // ==========================================
+  // TẢI HÀNG LOẠT TỪ CLOUD (CÓ CHECK TRÙNG LẶP & LỌC SỐ)
+  // ==========================================
   ipcMain.handle('music:downloadMultipleFiles', async (_, files: any[], existingTracks: any[] = []) => {
     const rootPath = getConfig().libraryPath
     if (!rootPath || !fs.existsSync(rootPath)) return { success: false, error: 'Chưa cấu hình thư mục Thư viện trong Cài đặt!' }
@@ -446,7 +460,9 @@ app.whenReady().then(() => {
     
     try {
       for (const file of files) {
-        const safeTitle = (file.title || 'track').replace(/[^a-z0-9\s]/gi, '_').trim()
+        // MỚI: Bỏ số thứ tự ở đầu tên file, sau đó làm sạch ký tự (Giữ lại dấu Tiếng Việt)
+        const rawTitle = (file.title || 'track').replace(/^\d+[\s\.\-\_]*/, '').trim()
+        const safeTitle = rawTitle.replace(/[^a-zA-Z0-9\s\u00C0-\u1EF9]/g, '_').trim()
         const ext = file.format ? file.format.toLowerCase() : 'mp3'
         const filename = `${safeTitle}.${ext}`
         
@@ -459,13 +475,19 @@ app.whenReady().then(() => {
         
         let title = safeTitle
         let artist = 'Unknown Artist'
+        let album = 'Unknown Album'
         let metadata
 
         try {
           metadata = await mm.parseFile(tempPath)
+          // MỚI: Trích xuất trọn vẹn dữ liệu lõi
           if (metadata.common.title) title = metadata.common.title
           if (metadata.common.artist) artist = metadata.common.artist
+          if (metadata.common.album) album = metadata.common.album
         } catch (e) {}
+
+        // MỚI: Lọc bỏ số thứ tự đứng trước Tên bài hát
+        title = title.replace(/^\d+[\s\.\-\_]*/, '').trim()
 
         const duplicate = existingTracks.find(t => 
           t.title && t.artist && 
@@ -511,7 +533,8 @@ app.whenReady().then(() => {
         let coverBase64 = null
         try {
           if (ext === 'mp3') {
-            const tags: NodeID3.Tags = { title, artist, album: metadata?.common.album || 'Unknown Album' }
+            // MỚI: Chỉ cập nhật các Tag đã được chuẩn hóa (Bảo toàn Album & Nghệ sĩ)
+            const tags: NodeID3.Tags = { title, artist, album }
             if (metadata?.common.picture && metadata.common.picture.length > 0) {
               tags.image = { mime: metadata.common.picture[0].format, imageBuffer: Buffer.from(metadata.common.picture[0].data) }
               coverBase64 = `data:${metadata.common.picture[0].format};base64,${Buffer.from(metadata.common.picture[0].data).toString('base64')}`
@@ -529,7 +552,7 @@ app.whenReady().then(() => {
 
           const newTrackObj = {
             id: destPath, filePath: pathToFileURL(destPath).href, title, artist,
-            album: metadata?.common.album || 'Unknown Album', duration: metadata?.format.duration || 0,
+            album, duration: metadata?.format.duration || 0,
             format: metadata?.format.container || ext.toUpperCase(), bitrate: metadata?.format.bitrate,
             sampleRate: metadata?.format.sampleRate, lossless: metadata?.format.lossless, coverArt: coverBase64, isCloud: false
           }

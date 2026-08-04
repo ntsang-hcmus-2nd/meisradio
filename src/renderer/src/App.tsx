@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
   ListMusic, Settings, ChevronDown, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon,
   Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown,
-  Mic2, Maximize2, Minimize2, List, X, Activity,
+  Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw,
 } from 'lucide-react'
 // Đã sử dụng đúng đường dẫn logo của bạn
 import logoImg from '../../../resources/HoT_Chibi_Icon.png'
@@ -134,6 +134,16 @@ export default function App() {
   useEffect(() => {
     setVisibleCount(25)
   }, [activeView, activePlaylist, searchQuery, sortField, sortOrder])
+
+  // MỚI: State và Hàm xử lý sự kiện Làm mới (Reload)
+  const [isReloading, setIsReloading] = useState(false)
+  
+  const handleReloadLibrary = async () => {
+    setIsReloading(true)
+    await loadLibrary()
+    // Giữ hiệu ứng xoay trong 500ms để người dùng kịp nhận diện phản hồi hình ảnh
+    setTimeout(() => setIsReloading(false), 500)
+  }
 
   // Lấy danh sách thiết bị đầu ra âm thanh
   useEffect(() => {
@@ -1056,13 +1066,24 @@ export default function App() {
     )
   }
 
+  // BỘ NHỚ ĐỆM (CACHE) XỬ LÝ DANH SÁCH ---
+  // Cache danh sách Thư viện chính
+  const processedLibraryTracks = useMemo(() => {
+    const filtered = getFilteredTracks(libraryTracks)
+    return getSortedTracks(filtered)
+  }, [libraryTracks, searchQuery, sortField, sortOrder])
+
+  // Cache danh sách Playlist đang xem
+  const processedPlaylistTracks = useMemo(() => {
+    if (!activePlaylist) return []
+    const filtered = getFilteredTracks(activePlaylist.tracks)
+    return getSortedTracks(filtered)
+  }, [activePlaylist, searchQuery, sortField, sortOrder])
+
   // --- RENDERING UI CHÍNH ---
   const renderTrackTable = (tracks: any[]) => {
-    // Lấy danh sách bài hát đã được sắp xếp
-    const sortedTracks = getSortedTracks(tracks)
-
     // Cắt danh sách để chỉ vẽ đúng số lượng giới hạn hiện tại
-    const visibleTracks = sortedTracks.slice(0, visibleCount)
+    const visibleTracks = tracks.slice(0, visibleCount)
 
     return (
       <table className="w-full text-left text-sm">
@@ -1157,7 +1178,7 @@ export default function App() {
             return (
               <tr 
                 key={track.id} 
-                onClick={() => handleRowClick(track, sortedTracks)} 
+                onClick={() => handleRowClick(track, tracks)} 
                 className={`group border-b border-zinc-800/20 transition-colors cursor-pointer ${isThisTrackPlaying ? 'bg-white/10' : 'hover:bg-white/5'}`}
               >
                 <td className="py-4 text-center text-zinc-500 group-hover:text-white">
@@ -1364,11 +1385,9 @@ export default function App() {
                 value={searchInput}
                 onChange={(e) => {
                   setSearchInput(e.target.value)
-                  // Tự động xóa tìm kiếm nếu người dùng xóa hết chữ trong ô
                   if (e.target.value === '') setSearchQuery('')
                 }}
                 onKeyDown={(e) => {
-                  // Chỉ kích hoạt bộ lọc khi nhấn Enter
                   if (e.key === 'Enter') {
                     setSearchQuery(searchInput)
                   }
@@ -1377,6 +1396,17 @@ export default function App() {
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors" 
               />
             </div>
+            
+            {/* MỚI: NÚT LÀM MỚI (RELOAD) */}
+            <button 
+              onClick={handleReloadLibrary}
+              disabled={isReloading}
+              className={`flex items-center gap-2 px-4 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-emerald-500' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`}
+              title="Làm mới Thư viện"
+            >
+              <RefreshCw size={16} className={isReloading ? 'animate-spin' : ''} />
+              {isReloading ? 'Đang làm mới...' : 'Làm mới'}
+            </button>
           </header>
 
           {/* KHU VỰC BÊN DƯỚI HEADER (CHIA ĐÔI MÀN HÌNH) */}
@@ -1400,7 +1430,8 @@ export default function App() {
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-end gap-4">
                       <h2 className="text-3xl font-bold text-white">{searchQuery ? 'Kết quả tìm kiếm' : 'Danh sách bài hát'}</h2>
-                      <span className="text-zinc-500 text-sm mb-1">{getFilteredTracks(libraryTracks).length} bài hát</span>
+                      {/* Đổi getFilteredTracks thành processedLibraryTracks */}
+                      <span className="text-zinc-500 text-sm mb-1">{processedLibraryTracks.length} bài hát</span>
                     </div>
                     
                     <button 
@@ -1412,8 +1443,8 @@ export default function App() {
                   </div>
                   
                   {libraryPath ? (
-                    getFilteredTracks(libraryTracks).length > 0 ? (
-                      renderTrackTable(getFilteredTracks(libraryTracks))
+                    processedLibraryTracks.length > 0 ? (
+                      renderTrackTable(processedLibraryTracks)
                     ) : (
                       <p className="text-zinc-500 mt-10 text-center">Không tìm thấy bài hát nào khớp với "{searchQuery}".</p>
                     )
@@ -1627,11 +1658,11 @@ export default function App() {
                           </div>
                         )}
 
-                        {/* 2. DANH SÁCH CHI TIẾT BÀI HÁT */}
-                        {searchQuery && matchedTracks.length > 0 && (
+                        {/* 2. DANH SÁCH CHI TIẾT BÀI HÁT TÌM KIẾM TRONG PLAYLIST */}
+                        {searchQuery && processedLibraryTracks.length > 0 && (
                           <div>
                             <h3 className="text-xl font-bold text-white mb-6">Bài hát</h3>
-                            {renderTrackTable(matchedTracks)}
+                            {renderTrackTable(processedLibraryTracks)}
                           </div>
                         )}
 
@@ -1668,7 +1699,8 @@ export default function App() {
                       <Plus size={16} /> Thêm vào Playlist này
                     </button>
                   </div>
-                  {renderTrackTable(activePlaylist.tracks)}
+                  {/* Đổi activePlaylist.tracks thành processedPlaylistTracks */}
+                  {renderTrackTable(processedPlaylistTracks)}
                 </>
               )}
             </div>
