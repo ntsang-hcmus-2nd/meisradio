@@ -6,11 +6,13 @@ import {
   Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown,
   Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw, PictureInPicture2,
 } from 'lucide-react'
-// Đã sử dụng đúng đường dẫn logo của bạn
 import logoImg from '../../../resources/HoT_Chibi_Icon.png'
 import thumbnailHolder from '../../../resources/HoT_Chibi_Emoji.png'
 import { CustomNumberInput } from './components/CustomNumberInput'
 import { CustomSelect } from './components/CustomSelect'
+import { PlaylistRenameModal } from './components/modals/PlaylistRenameModal'
+import { CloudActionModal } from './components/modals/CloudActionModal'
+import { TagEditorModal } from './components/modals/TagEditorModal'
 
 const formatDuration = (seconds: number) => {
   if (!seconds || isNaN(seconds)) return '0:00'
@@ -1352,81 +1354,32 @@ export default function App() {
       />
 
       {/* MODAL CLOUD ACTION */}
-      {cloudActionTrack && (
-        <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-xl w-96 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">{cloudActionTrack.title}</h3>
-            <p className="text-zinc-400 text-sm mb-6">Đây là file lưu trên Cloud. Bạn muốn phát trực tiếp hay tải về máy để nghe Offline?</p>
-            <div className="space-y-3">
-              <button 
-                onClick={() => handleCloudAction('stream')}
-                className="w-full flex items-center justify-center gap-3 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 py-3 rounded-lg font-medium transition"
-              >
-                <Wifi size={18} /> Phát trực tiếp (Stream)
-              </button>
-              <button 
-                onClick={() => handleCloudAction('download')}
-                disabled={isDownloading}
-                className="w-full flex items-center justify-center gap-3 bg-zinc-800 text-white hover:bg-zinc-700 py-3 rounded-lg font-medium transition disabled:opacity-50"
-              >
-                {isDownloading ? <span className="animate-pulse">Đang tải...</span> : <><Download size={18} /> Lưu về máy (Download)</>}
-              </button>
-              <button onClick={() => setCloudActionTrack(null)} className="w-full text-zinc-500 hover:text-white py-2 mt-2 text-sm transition">Huỷ bỏ</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CloudActionModal
+        track={cloudActionTrack}
+        isDownloading={isDownloading}
+        onClose={() => setCloudActionTrack(null)}
+        onAction={handleCloudAction}
+      />
 
       {/* MODAL TAG EDITOR */}
-      {editingTrack && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-[600px] shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">Chỉnh sửa thông tin bài hát</h2>
-            <div className="flex gap-6">
-              <div className="w-1/3 flex flex-col gap-3 items-center">
-                <div className="w-32 h-32 bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700 flex items-center justify-center">
-                  {editImagePath ? <img src={`file://${editImagePath}`} className="w-full h-full object-cover" /> : 
-                   editingTrack.coverArt ? <img src={editingTrack.coverArt} className="w-full h-full object-cover" /> : <ImageIcon size={40} className="text-zinc-600"/>}
-                </div>
-                <button onClick={handleSelectTagImage} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-1.5 rounded-md">Đổi ảnh bìa</button>
-              </div>
-              <div className="w-2/3 space-y-4">
-                <div><label className="text-xs text-zinc-400">Tên bài hát</label><input type="text" value={editTags.title} onChange={e => setEditTags({...editTags, title: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm text-white" /></div>
-                <div><label className="text-xs text-zinc-400">Ca sĩ</label><input type="text" value={editTags.artist} onChange={e => setEditTags({...editTags, artist: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm text-white" /></div>
-                <div><label className="text-xs text-zinc-400">Album</label><input type="text" value={editTags.album} onChange={e => setEditTags({...editTags, album: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm text-white" /></div>
-              </div>
-            </div>
-            <div className="mt-4">
-              <label className="text-xs text-zinc-400">Lời bài hát (LRC Format)</label>
-              <textarea value={editTags.lyrics} onChange={e => setEditTags({...editTags, lyrics: e.target.value})} className="w-full h-32 bg-zinc-950 border border-zinc-700 rounded p-2 text-sm text-white font-mono" placeholder="[00:00.00] Lyrics..." />
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setEditingTrack(null)} className="px-4 py-2 text-zinc-400 hover:text-white">Hủy</button>
-              <button onClick={saveTags} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium">Lưu thay đổi</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TagEditorModal
+        track={editingTrack}
+        tags={editTags}
+        imagePath={editImagePath}
+        setTags={setEditTags}
+        onSelectImage={handleSelectTagImage}
+        onSave={saveTags}
+        onClose={() => setEditingTrack(null)}
+      />
 
-      {playlistRename.isOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-[400px] shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-4">Đổi tên Playlist</h2>
-            <input 
-              type="text" 
-              value={playlistRename.newName} 
-              onChange={e => setPlaylistRename({...playlistRename, newName: e.target.value})} 
-              className="w-full bg-zinc-950 border border-zinc-700 rounded p-3 text-sm text-white mb-6 focus:outline-none focus:border-emerald-500" 
-              placeholder="Nhập tên mới..." 
-              autoFocus
-            />
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setPlaylistRename({ isOpen: false, oldName: '', newName: '' })} className="px-4 py-2 text-zinc-400 hover:text-white transition">Hủy</button>
-              <button onClick={handleRenameSubmit} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition">Lưu tên mới</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL ĐỔI TÊN PLAYLIST */}
+      <PlaylistRenameModal
+        isOpen={playlistRename.isOpen}
+        newName={playlistRename.newName}
+        setNewName={(name) => setPlaylistRename({ ...playlistRename, newName: name })}
+        onCancel={() => setPlaylistRename({ isOpen: false, oldName: '', newName: '' })}
+        onSubmit={handleRenameSubmit}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         {/* SIDEBAR TABS */}
