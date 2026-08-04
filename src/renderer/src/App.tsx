@@ -4,7 +4,7 @@ import {
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
   ListMusic, Settings, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon,
   Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown,
-  Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw,
+  Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw, PictureInPicture2,
 } from 'lucide-react'
 // Đã sử dụng đúng đường dẫn logo của bạn
 import logoImg from '../../../resources/HoT_Chibi_Icon.png'
@@ -55,6 +55,12 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
 }
 
 export default function App() {
+
+  // --- STATES SYSTEM TRAY & MINI PLAYER ---
+  const [minimizeToTray, setMinimizeToTray] = useState(false)
+  const [closeToTray, setCloseToTray] = useState(false)
+  const [isMiniPlayer, setIsMiniPlayer] = useState(false)
+
   // --- STATES GIAO DIỆN & THƯ VIỆN ---
   const [activeView, setActiveView] = useState<'songs' | 'playlists' | 'settings' | 'drive'>('songs')
   const [libraryPath, setLibraryPath] = useState<string | null>(null)
@@ -209,6 +215,8 @@ export default function App() {
       if (cfg.driveLink) setDriveLink(cfg.driveLink) 
       if (cfg.selectedDeviceId) setSelectedDeviceId(cfg.selectedDeviceId)
       if (cfg.showVisualizer !== undefined) setShowVisualizer(cfg.showVisualizer)
+      if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
+      if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
       loadLibrary()
     })
   }, [])
@@ -225,8 +233,13 @@ export default function App() {
       driveLink,
       selectedDeviceId,
       showVisualizer,
+      minimizeToTray,
+      closeToTray,
     }) 
-  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer])
+    // Gửi tín hiệu sang Main Process ngay lập tức
+    // @ts-ignore
+    window.api.updateTrayConfig({ minimizeToTray, closeToTray })
+  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray])
 
   // Lấy màu chủ đạo
   useEffect(() => {
@@ -1096,11 +1109,64 @@ export default function App() {
     return getSortedTracks(filtered)
   }, [activePlaylist, searchQuery, sortField, sortOrder])
 
+  const handleToggleMiniPlayer = () => {
+    const nextState = !isMiniPlayer
+    setIsMiniPlayer(nextState)
+    // @ts-ignore
+    window.api.toggleMiniPlayer(nextState)
+  }
+
   // --- RENDERING UI CHÍNH ---
   const renderTrackTable = (tracks: any[]) => {
     // Cắt danh sách để chỉ vẽ đúng số lượng giới hạn hiện tại
     const visibleTracks = tracks.slice(0, visibleCount)
 
+    // Nếu đang ở chế độ Mini Player -> Trả về giao diện siêu nhỏ gọn
+    if (isMiniPlayer) {
+      return (
+        <div className="h-screen w-screen bg-zinc-950/90 backdrop-blur-md overflow-hidden flex items-center p-3 border border-zinc-800" style={{ backgroundColor: themeColor }}>
+          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
+          
+          {/* Ảnh bìa */}
+          <div className="w-24 h-24 bg-zinc-800 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group">
+            {currentTrack?.coverArt ? (
+              <img src={currentTrack.coverArt} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>
+            )}
+            {/* Nút Phóng to lại */}
+            <button 
+              onClick={handleToggleMiniPlayer} 
+              className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition"
+              title="Trở về chế độ Đầy đủ"
+            >
+              <Maximize2 size={14} />
+            </button>
+          </div>
+
+          {/* Thông tin & Điều khiển */}
+          <div className="flex-1 ml-4 flex flex-col justify-center overflow-hidden">
+            <div className="truncate mb-2 pr-4">
+              <h4 className="text-sm font-bold text-white truncate">{currentTrack ? currentTrack.title : 'Meis Radio'}</h4>
+              <p className="text-xs text-zinc-400 truncate">{currentTrack ? currentTrack.artist : 'Sẵn sàng phát nhạc'}</p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={18} /></button>
+              <button onClick={() => { if(currentTrack) setIsPlaying(!isPlaying) }} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition">
+                {isPlaying ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current translate-x-[1px]" />}
+              </button>
+              <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={18} /></button>
+            </div>
+          </div>
+
+          {/* Thẻ Audio ngầm */}
+          <audio ref={audioRef} src={currentTrack?.filePath} onEnded={() => { if (!crossfadeEnabled) handleNext() }} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} loop={repeatMode === 2} />
+        </div>
+      )
+    }
+
+    // ... BÊN DƯỚI LÀ LỆNH return ( CHÍNH GỐC CỦA BẠN ...
     return (
       <table className="w-full text-left text-sm">
         <thead>
@@ -1599,6 +1665,8 @@ export default function App() {
               {activeView === 'settings' && (
                 <div className="max-w-2xl">
                   <h2 className="text-3xl font-bold text-white mb-6">Cài đặt hệ thống</h2>
+                  
+                  {/* BẮT ĐẦU KHUNG NỀN XÁM */}
                   <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-xl space-y-6">
                     
                     {/* --- KHU VỰC 1: THƯ MỤC GỐC --- */}
@@ -1626,6 +1694,7 @@ export default function App() {
                         </div>
                       )}
                     </div>
+
                     {/* --- KHU VỰC 3: GOOGLE DRIVE API KEY --- */}
                     <div className="border-t border-zinc-800 pt-6 mt-6">
                       <h3 className="text-emerald-400 font-semibold mb-2">Google Drive API Key</h3>
@@ -1641,8 +1710,10 @@ export default function App() {
                       </div>
                       <p className="text-xs text-zinc-500 mt-2 italic">*Khóa của bạn sẽ được lưu an toàn trên máy tính cá nhân.</p>
                     </div>
-                  </div>
-                  {/* --- KHU VỰC 4: THIẾT BỊ ĐẦU RA --- */}
+                    
+                    {/* KHU VỰC 4 VÀ 5 ĐÃ ĐƯỢC ĐƯA VÀO BÊN TRONG KHUNG NỀN XÁM */}
+
+                    {/* --- KHU VỰC 4: THIẾT BỊ ĐẦU RA --- */}
                     <div className="border-t border-zinc-800 pt-6 mt-6">
                       <h3 className="text-emerald-400 font-semibold mb-2">Thiết bị âm thanh (Output Device)</h3>
                       <p className="text-sm text-zinc-400 mb-4">Chọn loa hoặc tai nghe để phát nhạc.</p>
@@ -1658,6 +1729,46 @@ export default function App() {
                         ))}
                       </select>
                     </div>
+
+                    {/* --- KHU VỰC 5: HÀNH VI CỬA SỔ & SYSTEM TRAY --- */}
+                    <div className="border-t border-zinc-800 pt-6 mt-6">
+                      <h3 className="text-emerald-400 font-semibold mb-2">Hành vi cửa sổ</h3>
+                      
+                      <div className="flex flex-col gap-4 mt-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-zinc-200 text-sm">Khi nhấn nút Thu nhỏ (Minimize)</p>
+                            <p className="text-xs text-zinc-500">Mặc định thu nhỏ xuống thanh Taskbar</p>
+                          </div>
+                          <select 
+                            value={minimizeToTray ? 'tray' : 'taskbar'} 
+                            onChange={(e) => setMinimizeToTray(e.target.value === 'tray')}
+                            className="bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500"
+                          >
+                            <option value="taskbar">Thu nhỏ xuống Taskbar</option>
+                            <option value="tray">Thu nhỏ xuống System Tray (Ẩn khỏi Taskbar)</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-zinc-200 text-sm">Khi nhấn nút Đóng (Close)</p>
+                            <p className="text-xs text-zinc-500">Tránh vô tình tắt nhạc khi đóng cửa sổ</p>
+                          </div>
+                          <select 
+                            value={closeToTray ? 'tray' : 'quit'} 
+                            onChange={(e) => setCloseToTray(e.target.value === 'tray')}
+                            className="bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500"
+                          >
+                            <option value="quit">Thoát hoàn toàn ứng dụng</option>
+                            <option value="tray">Thu nhỏ xuống System Tray (Chạy ngầm)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div> {/* KẾT THÚC KHUNG NỀN XÁM TẠI ĐÂY */}
+
                 </div>
               )}
 
@@ -1989,6 +2100,14 @@ export default function App() {
         </div>
         
         <div className="flex items-center justify-end gap-4 w-1/3 text-zinc-400">
+          {/* NÚT BẬT/TẮT TRÌNH PHÁT THU NHỎ */}
+          <button 
+            onClick={handleToggleMiniPlayer} 
+            className="transition hover:text-white text-zinc-400"
+            title="Trình phát thu nhỏ (Mini Player)"
+          >
+            <PictureInPicture2 size={18} />
+          </button>
           {/* NÚT BẬT/TẮT SÓNG ÂM VISUALIZER */}
           <button 
             onClick={() => setShowVisualizer(!showVisualizer)} 

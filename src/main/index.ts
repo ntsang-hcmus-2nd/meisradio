@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut, nativeImage, Tray, Menu } from 'electron'
 import crypto from 'crypto'
 import { join } from 'path'
 import * as path from 'path'
@@ -10,6 +10,12 @@ import { pathToFileURL } from 'url'
 import NodeID3 from 'node-id3'
 // Cấu hình lưu trữ đường dẫn thư viện
 const CONFIG_PATH = join(app.getPath('userData'), 'music-config.json')
+
+// Cấu hình tray và minimize
+let tray: Tray | null = null
+let isQuitting = false // Cờ đánh dấu khi người dùng thực sự muốn thoát ứng dụng
+let closeToTray = false
+let minimizeToTray = false
 
 function getConfig() {
   try {
@@ -89,6 +95,27 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       webSecurity: false
+    }
+  })
+  
+  // Đọc cấu hình khi khởi tạo cửa sổ
+  const config = getConfig()
+  closeToTray = config.closeToTray ?? false
+  minimizeToTray = config.minimizeToTray ?? false
+
+  // MỚI: Bắt sự kiện khi bấm nút Thu nhỏ (Minimize - Dấu trừ)
+  mainWindow.on('minimize', (event) => {
+    if (minimizeToTray) {
+      event.preventDefault()
+      mainWindow?.hide() // Ẩn khỏi Taskbar, chỉ hiện ở System Tray
+    }
+  })
+
+  // MỚI: Bắt sự kiện khi bấm nút Đóng (Close - Dấu X)
+  mainWindow.on('close', (event) => {
+    if (!isQuitting && closeToTray) {
+      event.preventDefault()
+      mainWindow?.hide()
     }
   })
 
@@ -917,6 +944,55 @@ app.whenReady().then(() => {
   globalShortcut.register('VolumeUp', () => sendShortcut('vol-up'))
   globalShortcut.register('VolumeDown', () => sendShortcut('vol-down'))
 
+  // ==========================================
+  // KHỞI TẠO SYSTEM TRAY (KHAY HỆ THỐNG)
+  // ==========================================
+  tray = new Tray(icon)
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Hiển thị Meis Radio', click: () => { mainWindow?.show(); mainWindow?.restore(); } },
+    { type: 'separator' },
+    { label: 'Phát / Tạm dừng', click: () => sendShortcut('play-pause') },
+    { label: 'Bài tiếp theo', click: () => sendShortcut('next') },
+    { label: 'Bài trước đó', click: () => sendShortcut('prev') },
+    { type: 'separator' },
+    { 
+      label: 'Thoát hoàn toàn', 
+      click: () => { 
+        isQuitting = true; 
+        app.quit(); 
+      } 
+    }
+  ])
+  tray.setToolTip('Meis Radio')
+  tray.setContextMenu(contextMenu)
+  
+  // Click đúp vào icon ở Tray để mở nhanh app
+  tray.on('double-click', () => {
+    mainWindow?.show()
+    mainWindow?.restore()
+  })
+
+  // ==========================================
+  // API CẬP NHẬT TRAY & MINI PLAYER
+  // ==========================================
+  ipcMain.handle('music:updateTrayConfig', (_, c) => {
+    closeToTray = c.closeToTray
+    minimizeToTray = c.minimizeToTray
+  })
+
+  ipcMain.handle('music:toggleMiniPlayer', (_, isMini: boolean) => {
+    if (!mainWindow) return
+    if (isMini) {
+      mainWindow.setContentSize(400, 120, true) // Đổi kích thước thành khung chữ nhật nhỏ
+      mainWindow.setAlwaysOnTop(true, 'floating') // Luôn nổi trên các cửa sổ khác
+      mainWindow.setResizable(false)
+    } else {
+      mainWindow.setAlwaysOnTop(false)
+      mainWindow.setResizable(true)
+      mainWindow.setContentSize(1200, 800, true) // Trả về kích thước gốc
+      mainWindow.center()
+    }
+  })
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

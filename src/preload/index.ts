@@ -30,6 +30,8 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     ipcRenderer.removeAllListeners('download-progress')
     ipcRenderer.on('download-progress', (_event, data) => callback(data))
   },
+  updateTrayConfig: (config: any) => ipcRenderer.invoke('music:updateTrayConfig', config),
+  toggleMiniPlayer: (isMini: boolean) => ipcRenderer.invoke('music:toggleMiniPlayer', isMini),
 }
 
 if (process.contextIsolated) {
