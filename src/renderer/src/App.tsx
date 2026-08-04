@@ -9,6 +9,8 @@ import {
 // Đã sử dụng đúng đường dẫn logo của bạn
 import logoImg from '../../../resources/HoT_Chibi_Icon.png'
 import thumbnailHolder from '../../../resources/HoT_Chibi_Emoji.png'
+import { CustomNumberInput } from './components/CustomNumberInput'
+import { CustomSelect } from './components/CustomSelect'
 
 const formatDuration = (seconds: number) => {
   if (!seconds || isNaN(seconds)) return '0:00'
@@ -1688,7 +1690,11 @@ export default function App() {
                       {crossfadeEnabled && (
                         <div className="mt-4 flex items-center gap-4">
                           <span className="text-zinc-400 text-sm">Thời gian làm mờ:</span>
-                          <input type="number" min="1" max="10" value={crossfadeDuration} onChange={e => setCrossfadeDuration(Number(e.target.value))} className="w-16 bg-zinc-950 border border-zinc-700 rounded p-1 text-center text-white" />
+                          <CustomNumberInput 
+                            min={1} max={10} 
+                            value={crossfadeDuration} 
+                            onChange={setCrossfadeDuration} 
+                          />
                           <span className="text-zinc-400 text-sm">giây</span>
                         </div>
                       )}
@@ -1716,17 +1722,14 @@ export default function App() {
                     <div className="border-t border-zinc-800 pt-6 mt-6">
                       <h3 className="text-emerald-400 font-semibold mb-2">Thiết bị âm thanh (Output Device)</h3>
                       <p className="text-sm text-zinc-400 mb-4">Chọn loa hoặc tai nghe để phát nhạc.</p>
-                      <select
+                      <CustomSelect
                         value={selectedDeviceId}
-                        onChange={(e) => setSelectedDeviceId(e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500 transition-colors"
-                      >
-                        {audioDevices.map(device => (
-                          <option key={device.deviceId} value={device.deviceId}>
-                            {device.label || (device.deviceId === 'default' ? 'Thiết bị mặc định của hệ thống' : `Thiết bị ${device.deviceId.slice(0, 8)}...`)}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setSelectedDeviceId}
+                        options={audioDevices.map(device => ({
+                          value: device.deviceId,
+                          label: device.label || (device.deviceId === 'default' ? 'Thiết bị mặc định của hệ thống' : `Thiết bị ${device.deviceId.slice(0, 8)}...`)
+                        }))}
+                      />
                     </div>
 
                     {/* --- KHU VỰC 5: HÀNH VI CỬA SỔ & SYSTEM TRAY --- */}
@@ -1739,14 +1742,16 @@ export default function App() {
                             <p className="text-zinc-200 text-sm">Khi nhấn nút Thu nhỏ (Minimize)</p>
                             <p className="text-xs text-zinc-500">Mặc định thu nhỏ xuống thanh Taskbar</p>
                           </div>
-                          <select 
-                            value={minimizeToTray ? 'tray' : 'taskbar'} 
-                            onChange={(e) => setMinimizeToTray(e.target.value === 'tray')}
-                            className="bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500"
-                          >
-                            <option value="taskbar">Thu nhỏ xuống Taskbar</option>
-                            <option value="tray">Thu nhỏ xuống System Tray (Ẩn khỏi Taskbar)</option>
-                          </select>
+                          <div className="w-72">
+                            <CustomSelect
+                              value={minimizeToTray ? 'tray' : 'taskbar'}
+                              onChange={(val) => setMinimizeToTray(val === 'tray')}
+                              options={[
+                                { value: 'taskbar', label: 'Thu nhỏ xuống Taskbar' },
+                                { value: 'tray', label: 'Thu nhỏ xuống System Tray' }
+                              ]}
+                            />
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between">
@@ -1754,14 +1759,16 @@ export default function App() {
                             <p className="text-zinc-200 text-sm">Khi nhấn nút Đóng (Close)</p>
                             <p className="text-xs text-zinc-500">Tránh vô tình tắt nhạc khi đóng cửa sổ</p>
                           </div>
-                          <select 
-                            value={closeToTray ? 'tray' : 'quit'} 
-                            onChange={(e) => setCloseToTray(e.target.value === 'tray')}
-                            className="bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500"
-                          >
-                            <option value="quit">Thoát hoàn toàn ứng dụng</option>
-                            <option value="tray">Thu nhỏ xuống System Tray (Chạy ngầm)</option>
-                          </select>
+                          <div className="w-72">
+                            <CustomSelect
+                              value={closeToTray ? 'tray' : 'quit'}
+                              onChange={(val) => setCloseToTray(val === 'tray')}
+                              options={[
+                                { value: 'quit', label: 'Thoát hoàn toàn ứng dụng' },
+                                { value: 'tray', label: 'Thu nhỏ xuống System Tray' }
+                              ]}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1997,19 +2004,27 @@ export default function App() {
                       <div key={band.id} className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-3 flex flex-wrap items-center gap-4 text-xs">
                         {/* 1. Nhập tần số (Hz) */}
                         <div className="flex flex-col gap-1 w-28">
-                          <label className="text-zinc-400 font-mono">Tần số (Hz)</label>
-                          <input type="number" min="20" max="20000" value={band.frequency} onChange={(e) => handleUpdateBand(band.id, 'frequency', Math.max(20, Math.min(20000, Number(e.target.value))))} className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500" />
+                          <label className="text-zinc-400 font-mono text-xs">Tần số (Hz)</label>
+                          <CustomNumberInput 
+                            min={20} max={20000} step={10} 
+                            value={band.frequency} 
+                            onChange={(val) => handleUpdateBand(band.id, 'frequency', val)} 
+                          />
                         </div>
                         {/* 2. Chọn loại bộ lọc Filter Type */}
-                        <div className="flex flex-col gap-1 w-32">
-                          <label className="text-zinc-400">Loại bộ lọc</label>
-                          <select value={band.type} onChange={(e) => handleUpdateBand(band.id, 'type', e.target.value as BiquadFilterType)} className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200 focus:outline-none focus:border-emerald-500">
-                            <option value="peaking">Peaking</option>
-                            <option value="lowshelf">Low Shelf</option>
-                            <option value="highshelf">High Shelf</option>
-                            <option value="lowpass">Low Pass</option>
-                            <option value="highpass">High Pass</option>
-                          </select>
+                        <div className="flex flex-col gap-1 w-36">
+                          <label className="text-zinc-400 text-xs">Loại bộ lọc</label>
+                          <CustomSelect
+                            value={band.type}
+                            onChange={(val) => handleUpdateBand(band.id, 'type', val)}
+                            options={[
+                              { value: 'peaking', label: 'Peaking' },
+                              { value: 'lowshelf', label: 'Low Shelf' },
+                              { value: 'highshelf', label: 'High Shelf' },
+                              { value: 'lowpass', label: 'Low Pass' },
+                              { value: 'highpass', label: 'High Pass' }
+                            ]}
+                          />
                         </div>
                         {/* 3. Thanh trượt Gain (dB) */}
                         <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
