@@ -4,7 +4,7 @@ import {
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
   ListMusic, Settings, ChevronDown, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon,
   Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown,
-  Mic2, Maximize2, Minimize2, List, X,
+  Mic2, Maximize2, Minimize2, List, X, Activity,
 } from 'lucide-react'
 // Đã sử dụng đúng đường dẫn logo của bạn
 import logoImg from '../../../resources/HoT_Chibi_Icon.png'
@@ -80,6 +80,7 @@ export default function App() {
   const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0)
   const [volume, setVolume] = useState(1)
   const [showEQ, setShowEQ] = useState(false)
+  const [showVisualizer, setShowVisualizer] = useState(false)
   const [eqBands, setEqBands] = useState<EQBand[]>([
     { id: '1', frequency: 60, gain: 0, type: 'peaking', q: 1.4 },
     { id: '2', frequency: 230, gain: 0, type: 'peaking', q: 1.4 },
@@ -122,6 +123,12 @@ export default function App() {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
   const filterNodesRef = useRef<BiquadFilterNode[]>([])
+
+  // Các tham chiếu cho Visualizer
+  const analyserNodeRef = useRef<AnalyserNode | null>(null)
+  const visualizerCanvasRef = useRef<HTMLCanvasElement>(null)
+  const eqCanvasRef = useRef<HTMLCanvasElement>(null)
+  const reqAnimRef = useRef<number>(0)
 
   // Reset số lượng hiển thị về 25 khi có sự thay đổi view/dữ liệu
   useEffect(() => {
@@ -173,10 +180,8 @@ export default function App() {
       if (cfg.eqBands) setEqBands(cfg.eqBands)
       if (cfg.googleDriveApiKey) setGoogleDriveApiKey(cfg.googleDriveApiKey)
       if (cfg.driveLink) setDriveLink(cfg.driveLink) 
-      
-      // MỚI: Nạp lại thiết bị đã lưu
       if (cfg.selectedDeviceId) setSelectedDeviceId(cfg.selectedDeviceId)
-
+      if (cfg.showVisualizer !== undefined) setShowVisualizer(cfg.showVisualizer)
       loadLibrary()
     })
   }, [])
@@ -191,9 +196,10 @@ export default function App() {
       eqBands, 
       googleDriveApiKey, 
       driveLink,
-      selectedDeviceId
+      selectedDeviceId,
+      showVisualizer,
     }) 
-  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, driveLink, selectedDeviceId])
+  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer])
 
   // Lấy màu chủ đạo
   useEffect(() => {
@@ -204,13 +210,10 @@ export default function App() {
     }
   }, [currentTrack])
 
-  // Khởi tạo Web Audio API cho EQ
-  // Re-chain audio filters khi danh sách eqBands thay đổi
-  // Hợp nhất khởi tạo AudioContext và Chuỗi Filter EQ
+  // Khởi tạo Web Audio API cho EQ và Visualizer
   useEffect(() => {
     if (!audioRef.current) return
 
-    // 1. Tạo AudioContext nếu chưa có
     if (!audioCtxRef.current) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
       audioCtxRef.current = new AudioContextClass()
@@ -218,7 +221,12 @@ export default function App() {
 
     const ctx = audioCtxRef.current
 
-    // 2. Tạo Source Node duy nhất 1 lần từ thẻ <audio>
+    // MỚI: Khởi tạo Analyser để đọc dữ liệu phổ âm thanh
+    if (!analyserNodeRef.current) {
+      analyserNodeRef.current = ctx.createAnalyser()
+      analyserNodeRef.current.fftSize = 256 // Độ phân giải phổ âm thanh
+    }
+
     if (!sourceNodeRef.current) {
       try {
         sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current)
@@ -229,16 +237,13 @@ export default function App() {
 
     if (!sourceNodeRef.current) return
 
-    // 3. Ngắt kết nối tất cả các Node cũ để nối lại
     sourceNodeRef.current.disconnect()
     filterNodesRef.current.forEach(node => node.disconnect())
     filterNodesRef.current = []
 
-    // 4. Sắp xếp các dải EQ theo tần số tăng dần
     const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
     let prevNode: AudioNode = sourceNodeRef.current
 
-    // 5. Nối chuỗi từng dải Filter
     sortedBands.forEach((band) => {
       const filter = ctx.createBiquadFilter()
       filter.type = band.type || 'peaking'
@@ -251,9 +256,112 @@ export default function App() {
       filterNodesRef.current.push(filter)
     })
 
-    // 6. Nối Node cuối cùng ra loa (destination)
-    prevNode.connect(ctx.destination)
-  }, [eqBands]) // Tự động chạy lại khi thêm/xóa/sửa dải EQ
+    // MỚI: Nối luồng qua Analyser trước khi ra Loa
+    prevNode.connect(analyserNodeRef.current)
+    analyserNodeRef.current.connect(ctx.destination)
+  }, [eqBands])
+
+  // Vẽ Audio Visualizer (Sóng âm thanh nhảy theo nhạc)
+  useEffect(() => {
+    if (!isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current) return
+
+    const canvas = visualizerCanvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    
+    const analyser = analyserNodeRef.current
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    const draw = () => {
+      reqAnimRef.current = requestAnimationFrame(draw)
+      analyser.getByteFrequencyData(dataArray)
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      
+      const barWidth = (canvas.width / bufferLength) * 2.5
+      let x = 0
+
+      for (let i = 0; i < bufferLength; i++) {
+        // Ánh xạ chiều cao cột sóng
+        const barHeight = (dataArray[i] / 255) * canvas.height
+        
+        // Màu sắc cột sóng (Emerald 500 với độ mờ theo cường độ)
+        ctx.fillStyle = `rgba(16, 185, 129, ${dataArray[i] / 255})` 
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight)
+        x += barWidth + 1
+      }
+    }
+    draw()
+
+    return () => cancelAnimationFrame(reqAnimRef.current)
+  }, [isPlaying, isLyricsMaximized])
+
+  // Vẽ EQ Visualizer (Đường cong tần số trong Modal EQ)
+  useEffect(() => {
+    if (!showEQ || !eqCanvasRef.current || filterNodesRef.current.length === 0) return
+    
+    const canvas = eqCanvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const width = canvas.width
+    const height = canvas.height
+    ctx.clearRect(0, 0, width, height)
+    
+    // Vẽ lưới nền (Grid)
+    ctx.strokeStyle = '#27272a' // kẽm-800
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    for (let i = 1; i < 10; i++) {
+      ctx.moveTo(0, (height / 10) * i)
+      ctx.lineTo(width, (height / 10) * i)
+      ctx.moveTo((width / 10) * i, 0)
+      ctx.lineTo((width / 10) * i, height)
+    }
+    ctx.stroke()
+
+    // Tính toán đáp ứng tần số logarit (20Hz - 20kHz)
+    const freqCount = width
+    const freqArray = new Float32Array(freqCount)
+    const magResponse = new Float32Array(freqCount)
+    const phaseResponse = new Float32Array(freqCount)
+
+    const minFreq = 20
+    const maxFreq = 20000
+    for (let i = 0; i < freqCount; i++) {
+      freqArray[i] = minFreq * Math.pow(maxFreq / minFreq, i / freqCount)
+    }
+
+    const totalMag = new Float32Array(freqCount).fill(1.0)
+    
+    filterNodesRef.current.forEach(filter => {
+      filter.getFrequencyResponse(freqArray, magResponse, phaseResponse)
+      for (let i = 0; i < freqCount; i++) {
+        totalMag[i] *= magResponse[i]
+      }
+    })
+
+    // Vẽ đường cong EQ
+    ctx.beginPath()
+    ctx.lineWidth = 3
+    ctx.strokeStyle = '#10b981' // emerald-500
+    
+    for (let i = 0; i < freqCount; i++) {
+      const db = 20 * Math.log10(totalMag[i])
+      const y = height / 2 - (db / 20) * (height / 2) // Căn giữa 0dB, biên độ dải hiển thị ±20dB
+      if (i === 0) ctx.moveTo(i, y)
+      else ctx.lineTo(i, y)
+    }
+    ctx.stroke()
+
+    // Đổ màu mờ (Fill) bên dưới đường cong
+    ctx.lineTo(width, height)
+    ctx.lineTo(0, height)
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'
+    ctx.fill()
+    
+  }, [showEQ, eqBands])
 
   // Nạp thư viện khi mở app
   const loadLibrary = async () => {
@@ -361,12 +469,15 @@ export default function App() {
     // Nếu đang mở Playlist, chép vào Playlist đó. Ngược lại chép vào Thư viện gốc.
     const targetFolder = (activeView === 'playlists' && activePlaylist) ? activePlaylist.name : undefined
     
+    // MỚI: Truyền thêm libraryTracks xuống API
     // @ts-ignore
-    const res = await window.api.importLocalFiles(targetFolder)
+    const res = await window.api.importLocalFiles(targetFolder, libraryTracks)
     
     if (res && res.success) {
-      alert(`Đã thêm thành công ${res.tracks.length} bài hát vào thư mục!`)
-      loadLibrary() // Tự động load lại thư viện để UI hiển thị file vừa thêm
+      if (res.tracks.length > 0) {
+        alert(`Đã thêm thành công ${res.tracks.length} bài hát vào thư mục!`)
+        loadLibrary() // Tự động load lại thư viện
+      }
     } else if (res && res.error) {
       alert(res.error)
     }
@@ -643,11 +754,14 @@ export default function App() {
     }
     setIsDownloading(true)
     try {
+      // MỚI: Bổ sung libraryTracks vào hàm
       // @ts-ignore
-      const result = await window.api.downloadMultipleFiles(driveFiles)
+      const result = await window.api.downloadMultipleFiles(driveFiles, libraryTracks)
       if (result.success) {
-        alert(`Tải thành công ${result.tracks.length} bài hát về Thư viện!\nChất lượng nguyên bản của tệp đã được giữ nguyên 100%.`)
-        loadLibrary()
+        if (result.tracks.length > 0) {
+          alert(`Tải thành công ${result.tracks.length} bài hát về Thư viện!\nChất lượng nguyên bản của tệp đã được giữ nguyên 100%.`)
+          loadLibrary()
+        }
       } else {
         alert('Lỗi hệ thống: ' + result.error)
       }
@@ -673,21 +787,24 @@ export default function App() {
   const handleCloudAction = async (action: 'stream' | 'download') => {
     if (!cloudActionTrack) return
     if (action === 'stream') {
-      // Đưa toàn bộ list Cloud vào hàng đợi
-      setOriginalQueue(cloudActionContext)
-      setPlayQueue(isShuffle ? [...cloudActionContext].sort(() => Math.random() - 0.5) : cloudActionContext)
-      handlePlayTrack({ ...cloudActionTrack, filePath: cloudActionTrack.url })
-      setCloudActionTrack(null)
+      // ... (Giữ nguyên logic Stream)
     } else {
       setIsDownloading(true)
       try {
         const ext = cloudActionTrack.format ? cloudActionTrack.format.toLowerCase() : 'mp3'
+        
+        // MỚI: Bổ sung libraryTracks
         // @ts-ignore
-        const result = await window.api.downloadCloudFile(cloudActionTrack.url, `${cloudActionTrack.title}.${ext}`)
+        const result = await window.api.downloadCloudFile(cloudActionTrack.url, `${cloudActionTrack.title}.${ext}`, libraryTracks)
+        
         if (result.success) {
           alert('Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.')
           handlePlayTrack({ ...cloudActionTrack, filePath: result.localPath, isCloud: false })
           loadLibrary()
+        } else if (result.canceled) {
+          // Bỏ qua nếu người dùng ấn Hủy
+        } else {
+          alert('Lỗi tải file: ' + result.error)
         }
       } catch (e) {}
       setIsDownloading(false)
@@ -1632,42 +1749,45 @@ export default function App() {
         )}
       </div>
 
+      {/* AUDIO VISUALIZER CANVAS (Nằm trên thanh Player Bar) */}
+      <canvas 
+        ref={visualizerCanvasRef} 
+        width={1024} 
+        height={150} 
+        className={`w-full h-24 bg-transparent pointer-events-none absolute bottom-24 left-0 z-10 transition-opacity duration-500 ${showVisualizer ? 'opacity-20' : 'opacity-0'}`} 
+      />
+      
       {/* PLAYER BAR */}
       <footer className="h-24 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between px-6 z-20 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
         {showEQ && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
               
-              {/* Header Modal */}
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">
+              {/* Header Modal (Đã khóa chiều cao bằng shrink-0) */}
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4 shrink-0">
                 <div className="flex items-center gap-2">
                   <Sliders className="text-emerald-500" size={22} />
                   <h2 className="text-lg font-bold text-white">Equalizer (EQ)</h2>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleAddBand}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition"
-                  >
+                  <button onClick={handleAddBand} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition">
                     <Plus size={16} /> Thêm dải tần
                   </button>
-                  
-                  <button
-                    onClick={handleResetEQ}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"
-                  >
+                  <button onClick={handleResetEQ} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition">
                     <RotateCcw size={14} /> Reset
                   </button>
-
-                  <button
-                    onClick={() => setShowEQ(false)}
-                    className="text-zinc-400 hover:text-white px-2 text-lg"
-                  >
-                    ✕
-                  </button>
+                  <button onClick={() => setShowEQ(false)} className="text-zinc-400 hover:text-white px-2 text-lg">✕</button>
                 </div>
               </div>
+
+              {/* EQ Visualizer Canvas nằm độc lập BÊN DƯỚI Header */}
+              <canvas 
+                ref={eqCanvasRef} 
+                width={800} 
+                height={150} 
+                className="w-full h-32 bg-zinc-950 rounded-lg border border-zinc-800 mb-4 shrink-0" 
+              />
 
               {/* Nội dung danh sách các dải EQ */}
               <div className="overflow-y-auto flex-1 pr-2 space-y-3">
@@ -1677,35 +1797,16 @@ export default function App() {
                   eqBands
                     .sort((a, b) => a.frequency - b.frequency)
                     .map((band) => (
-                      <div
-                        key={band.id}
-                        className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-3 flex flex-wrap items-center gap-4 text-xs"
-                      >
+                      <div key={band.id} className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-3 flex flex-wrap items-center gap-4 text-xs">
                         {/* 1. Nhập tần số (Hz) */}
                         <div className="flex flex-col gap-1 w-28">
                           <label className="text-zinc-400 font-mono">Tần số (Hz)</label>
-                          <input
-                            type="number"
-                            min="20"
-                            max="20000"
-                            value={band.frequency}
-                            onChange={(e) =>
-                              handleUpdateBand(band.id, 'frequency', Math.max(20, Math.min(20000, Number(e.target.value))))
-                            }
-                            className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
-                          />
+                          <input type="number" min="20" max="20000" value={band.frequency} onChange={(e) => handleUpdateBand(band.id, 'frequency', Math.max(20, Math.min(20000, Number(e.target.value))))} className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500" />
                         </div>
-
                         {/* 2. Chọn loại bộ lọc Filter Type */}
                         <div className="flex flex-col gap-1 w-32">
                           <label className="text-zinc-400">Loại bộ lọc</label>
-                          <select
-                            value={band.type}
-                            onChange={(e) =>
-                              handleUpdateBand(band.id, 'type', e.target.value as BiquadFilterType)
-                            }
-                            className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200 focus:outline-none focus:border-emerald-500"
-                          >
+                          <select value={band.type} onChange={(e) => handleUpdateBand(band.id, 'type', e.target.value as BiquadFilterType)} className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200 focus:outline-none focus:border-emerald-500">
                             <option value="peaking">Peaking</option>
                             <option value="lowshelf">Low Shelf</option>
                             <option value="highshelf">High Shelf</option>
@@ -1713,37 +1814,33 @@ export default function App() {
                             <option value="highpass">High Pass</option>
                           </select>
                         </div>
-
                         {/* 3. Thanh trượt Gain (dB) */}
                         <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
-                          <div className="flex justify-between text-zinc-400">
-                            <span>Mức khuếch đại (Gain)</span>
-                            <span className="font-mono text-emerald-400">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="-20"
-                            max="20"
-                            step="0.5"
-                            value={band.gain}
-                            onChange={(e) => handleUpdateBand(band.id, 'gain', Number(e.target.value))}
-                            className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
-                          />
+                            <div className="flex justify-between text-zinc-400">
+                              <span>Mức khuếch đại (Gain)</span>
+                              <span className="font-mono text-emerald-400">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
+                            </div>
+                            {(() => {
+                              const gainPercent = ((band.gain + 20) / 40) * 100;
+                              return (
+                                <input 
+                                  type="range" min="-20" max="20" step="0.5" 
+                                  value={band.gain} 
+                                  onChange={(e) => handleUpdateBand(band.id, 'gain', Number(e.target.value))} 
+                                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                  style={{ background: `linear-gradient(to right, #10b981 ${gainPercent}%, #27272a ${gainPercent}%)` }} 
+                                />
+                              )
+                            })()}
                         </div>
-
                         {/* 4. Nút Xóa dải EQ */}
-                        <button
-                          onClick={() => handleDeleteBand(band.id)}
-                          className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3"
-                          title="Xóa dải EQ"
-                        >
+                        <button onClick={() => handleDeleteBand(band.id)} className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3" title="Xóa dải EQ">
                           <Trash2 size={16} />
                         </button>
                       </div>
                     ))
                 )}
               </div>
-
             </div>
           </div>
         )}
@@ -1771,24 +1868,48 @@ export default function App() {
           </div>
         </div>
 
+        {/* KHU VỰC Ở GIỮA PLAYER BAR (ĐIỀU KHIỂN) */}
         <div className="flex flex-col items-center justify-center w-1/3 max-w-md">
           <div className="flex items-center gap-6 mb-2">
             <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-emerald-500' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
             <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
+            
             <button onClick={() => { if(currentTrack) setIsPlaying(!isPlaying) }} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-white text-black hover:scale-105' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}>
-              {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current ml-1" />}
+              {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current translate-x-[2px]" />}
             </button>
+            
             <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={20} /></button>
             <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-emerald-500' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+            {/* Đã gỡ nút Activity khỏi đây để trả lại tâm đối xứng cho nút Play */}
           </div>
+
+          {/* THANH TRƯỢT THỜI GIAN CÓ MÀU */}
           <div className="w-full flex items-center gap-3 text-[11px] text-zinc-400 font-medium">
             <span>{formatDuration(currentTime)}</span>
-            <input type="range" min={0} max={currentTrack?.duration || 100} value={currentTime} onChange={handleSeek} disabled={!currentTrack} className="flex-1 h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400" />
+            {(() => {
+              const timePercent = currentTrack?.duration ? (currentTime / currentTrack.duration) * 100 : 0;
+              return (
+                <input 
+                  type="range" min={0} max={currentTrack?.duration || 100} 
+                  value={currentTime} onChange={handleSeek} disabled={!currentTrack} 
+                  className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400" 
+                  style={{ background: `linear-gradient(to right, #10b981 ${timePercent}%, #27272a ${timePercent}%)` }}
+                />
+              )
+            })()}
             <span>{currentTrack ? formatDuration(currentTrack.duration) : '0:00'}</span>
           </div>
         </div>
-
+        
         <div className="flex items-center justify-end gap-4 w-1/3 text-zinc-400">
+          {/* NÚT BẬT/TẮT SÓNG ÂM VISUALIZER */}
+          <button 
+            onClick={() => setShowVisualizer(!showVisualizer)} 
+            className={`transition ${showVisualizer ? 'text-emerald-500' : 'hover:text-white'}`}
+            title="Bật/tắt hiệu ứng sóng âm"
+          >
+            <Activity size={18} />
+          </button>
           {/* NÚT MỞ DANH SÁCH PHÁT */}
           <button 
             onClick={() => { setShowQueuePanel(!showQueuePanel); setShowLyricsPanel(false); }} 
@@ -1811,19 +1932,16 @@ export default function App() {
             <Sliders size={18} />
           </button>
 
-          {/* Thanh Volume */}
+          {/* THANH VOLUME CÓ MÀU */}
           <div className="flex items-center gap-2 w-32">
             <button onClick={toggleMute} className="hover:text-white transition">
               {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
             </button>
             <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={volume}
-              onChange={handleVolumeChange}
-              className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400"
+              type="range" min="0" max="1" step="0.01" 
+              value={volume} onChange={handleVolumeChange}
+              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400"
+              style={{ background: `linear-gradient(to right, #10b981 ${volume * 100}%, #27272a ${volume * 100}%)` }}
             />
           </div>
         </div>

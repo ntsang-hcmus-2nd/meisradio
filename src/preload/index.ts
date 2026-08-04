@@ -9,7 +9,8 @@ const api = {
   selectImageFile: () => ipcRenderer.invoke('music:selectImageFile'),
 
   openMusicFolder: () => ipcRenderer.invoke('music:openFolder'),
-  downloadCloudFile: (url: string, filename: string) => ipcRenderer.invoke('music:downloadCloudFile', url, filename),
+downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ipcRenderer.invoke('music:downloadCloudFile', url, filename, existingTracks),
+  downloadMultipleFiles: (files: any[], existingTracks?: any[]) => ipcRenderer.invoke('music:downloadMultipleFiles', files, existingTracks),
   fetchDriveFiles: (folderId: string) => ipcRenderer.invoke('music:fetchDriveFiles', folderId),
   setLibraryFolder: () => ipcRenderer.invoke('music:setLibraryFolder'),
   getLibrary: () => ipcRenderer.invoke('music:getLibrary'),
@@ -19,7 +20,7 @@ const api = {
   readLrcFile: (filePath: string) => ipcRenderer.invoke('music:read-lyrics', filePath),
   extractPlaylistThumbnail: (playlistName: string) => ipcRenderer.invoke('music:extractPlaylistThumbnail', playlistName),
   fetchMusixmatchLyrics: (title: string, artist: string) => ipcRenderer.invoke('music:fetchMusixmatchLyrics', title, artist),
-  importLocalFiles: (targetFolder?: string) => ipcRenderer.invoke('music:importLocalFiles', targetFolder),
+  importLocalFiles: (targetFolder?: string, existingTracks?: any[]) => ipcRenderer.invoke('music:importLocalFiles', targetFolder, existingTracks),
   onGlobalShortcut: (callback: (action: string) => void) => {
     ipcRenderer.removeAllListeners('global-shortcut') // Dọn dẹp để tránh trùng lặp sự kiện
     ipcRenderer.on('global-shortcut', (_event, action) => callback(action))
