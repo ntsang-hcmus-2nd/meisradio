@@ -9,7 +9,10 @@ import * as mm from 'music-metadata'
 import { pathToFileURL } from 'url'
 import NodeID3 from 'node-id3'
 // Cấu hình lưu trữ đường dẫn thư viện
-const CONFIG_PATH = join(app.getPath('userData'), 'music-config.json')
+// Cấu hình lưu trữ đường dẫn thư viện (Lưu cạnh file .exe khi build, lưu ở AppData khi Dev)
+const CONFIG_PATH = is.dev 
+  ? join(app.getPath('userData'), 'music-config.json') 
+  : join(path.dirname(app.getPath('exe')), 'music-config.json')
 
 // Bật tính năng thu gom rác chủ động và giới hạn dung lượng không gian bộ nhớ cũ
 app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
