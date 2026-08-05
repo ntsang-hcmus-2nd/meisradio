@@ -1391,6 +1391,7 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Kết quả / Danh sách file đã tìm thấy */}
                   <div className="flex-1 flex flex-col bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-6 min-h-[300px]">
                     {driveFiles.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
@@ -1399,31 +1400,50 @@ export default function App() {
                         <p className="text-sm mt-1">Vui lòng dán liên kết và nhấn quét để lấy danh sách từ Cloud.</p>
                       </div>
                     ) : (
-                      <>
-                        <div className="flex items-center justify-between mb-4 pb-4 border-b border-zinc-800/50">
-                          <h3 className="font-bold text-white">Đã tìm thấy {driveFiles.length} tệp âm thanh</h3>
-                          <div className="flex gap-3">
-                            <button onClick={handleDriveStream} className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-4 py-2 rounded-lg text-sm font-medium transition">
-                              <Wifi size={16} /> Stream tất cả
-                            </button>
-                            <button onClick={handleDriveDownload} disabled={isDownloading} className="flex items-center gap-2 bg-zinc-800 text-white hover:bg-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
-                              {isDownloading ? <span className="animate-pulse">Đang xử lý...</span> : <><Download size={16} /> Tải về Thư viện (Lossless)</>}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="space-y-2 overflow-y-auto pr-2">
-                          {driveFiles.map((f, i) => (
-                            <div key={i} className="flex items-center gap-4 p-3 bg-zinc-900/40 hover:bg-zinc-800/80 rounded-lg border border-zinc-800/50 transition">
-                              <div className="w-10 h-10 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0 text-emerald-500"><ListMusic size={18} /></div>
-                              <div className="flex-1 truncate">
-                                <p className="font-semibold text-white truncate text-sm">{f.title}</p>
-                                <p className="text-xs text-zinc-500 mt-0.5">Định dạng gốc: <span className="text-emerald-500/80 uppercase">{f.format}</span></p>
+                      (() => {
+                        // Lọc file Drive theo từ khóa tìm kiếm trên Header
+                        const lowerQuery = searchQuery.toLowerCase()
+                        const filteredDriveFiles = searchQuery 
+                          ? driveFiles.filter(f => f.title.toLowerCase().includes(lowerQuery)) 
+                          : driveFiles
+
+                        return (
+                          <>
+                            <div className="flex items-center justify-between mb-4 pb-4 border-b border-zinc-800/50">
+                              <h3 className="font-bold text-white">
+                                {searchQuery 
+                                  ? `Tìm thấy ${filteredDriveFiles.length} kết quả cho "${searchQuery}"` 
+                                  : `Đã tìm thấy ${driveFiles.length} tệp âm thanh`}
+                              </h3>
+                              <div className="flex gap-3">
+                                <button onClick={handleDriveStream} className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-4 py-2 rounded-lg text-sm font-medium transition">
+                                  <Wifi size={16} /> Stream tất cả
+                                </button>
+                                <button onClick={handleDriveDownload} disabled={isDownloading} className="flex items-center gap-2 bg-zinc-800 text-white hover:bg-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
+                                  {isDownloading ? <span className="animate-pulse">Đang xử lý...</span> : <><Download size={16} /> Tải về Thư viện (Lossless)</>}
+                                </button>
                               </div>
-                              <button onClick={() => setCloudActionTrack(f)} className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-zinc-300 font-medium transition">Tùy chọn</button>
                             </div>
-                          ))}
-                        </div>
-                      </>
+                            
+                            <div className="space-y-2 overflow-y-auto pr-2">
+                              {filteredDriveFiles.length === 0 ? (
+                                <p className="text-zinc-500 text-center mt-10">Không tìm thấy bài hát nào khớp với "{searchQuery}".</p>
+                              ) : (
+                                filteredDriveFiles.map((f, i) => (
+                                  <div key={i} className="flex items-center gap-4 p-3 bg-zinc-900/40 hover:bg-zinc-800/80 rounded-lg border border-zinc-800/50 transition">
+                                    <div className="w-10 h-10 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0 text-emerald-500"><ListMusic size={18} /></div>
+                                    <div className="flex-1 truncate">
+                                      <p className="font-semibold text-white truncate text-sm">{f.title}</p>
+                                      <p className="text-xs text-zinc-500 mt-0.5">Định dạng gốc: <span className="text-emerald-500/80 uppercase">{f.format}</span></p>
+                                    </div>
+                                    <button onClick={() => setCloudActionTrack(f)} className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-zinc-300 font-medium transition">Tùy chọn</button>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </>
+                        )
+                      })()
                     )}
                   </div>
                 </div>
