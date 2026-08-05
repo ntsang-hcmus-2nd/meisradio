@@ -1209,20 +1209,30 @@ export default function App() {
         </div>
       )}
 
+      {/* ========================================= */}
+      {/* MỚI: PROGRESS BAR DẠNG TOAST (NỔI GÓC PHẢI) */}
+      {/* ========================================= */}
       {isDownloading && downloadProgress && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4 transition-opacity">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 w-[450px] shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-emerald-500/20 blur-[50px] rounded-full pointer-events-none" />
-            <Cloud size={48} className="text-emerald-500 mb-6 animate-bounce relative z-10" />
-            <h2 className="text-2xl font-bold text-white mb-2 relative z-10">Đang tải dữ liệu</h2>
-            <p className="text-sm text-zinc-400 mb-8 truncate w-full relative z-10">{downloadProgress.fileName}</p>
-            <div className="w-full bg-zinc-950 rounded-full h-2.5 mb-3 overflow-hidden border border-zinc-800 relative z-10">
-              <div className="bg-emerald-500 h-full rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]" style={{ width: `${(downloadProgress.current / downloadProgress.total) * 100}%` }} />
-            </div>
-            <div className="flex items-center justify-between w-full text-xs font-medium relative z-10">
-              <span className="text-emerald-400">{Math.round((downloadProgress.current / downloadProgress.total) * 100)}%</span>
-              <span className="text-zinc-500">{downloadProgress.current} / {downloadProgress.total} tệp</span>
-            </div>
+        <div className="fixed bottom-28 right-8 z-[90] bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl p-5 w-80 shadow-2xl flex flex-col animate-fade-in pointer-events-none">
+          <div className="flex items-center gap-3 mb-2">
+            <Cloud size={20} className="text-emerald-500 animate-pulse" />
+            <h3 className="text-sm font-bold text-white">Đang tải xuống...</h3>
+          </div>
+          
+          <p className="text-xs text-zinc-400 mb-4 truncate w-full" title={downloadProgress.fileName}>
+            {downloadProgress.fileName}
+          </p>
+          
+          <div className="w-full bg-zinc-950 rounded-full h-1.5 mb-2 overflow-hidden border border-zinc-800">
+            <div 
+              className="bg-emerald-500 h-full transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+              style={{ width: `${(downloadProgress.current / downloadProgress.total) * 100}%` }}
+            />
+          </div>
+          
+          <div className="flex items-center justify-between w-full text-[10px] font-medium">
+            <span className="text-emerald-400">{Math.round((downloadProgress.current / downloadProgress.total) * 100)}%</span>
+            <span className="text-zinc-500">{downloadProgress.current} / {downloadProgress.total} tệp</span>
           </div>
         </div>
       )}

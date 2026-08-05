@@ -604,8 +604,12 @@ app.whenReady().then(() => {
           fileName: file.title || 'Đang tải...' 
         })
 
-        const rawTitle = (file.title || 'track').replace(/^\d+[\s\.\-\_]*/, '').trim()
-        const safeTitle = rawTitle.replace(/[^a-zA-Z0-9\s\u00C0-\u1EF9]/g, '_').trim()
+        // Lấy tên gốc và XÓA số thứ tự cộng với dấu phân cách ở đầu (vd: "01. acb@123" -> "acb@123")
+        // Lưu ý: Dùng dấu + ở cuối Regex để tránh xóa nhầm các bài hát có tên bắt đầu bằng số (vd: "1989")
+        let originalTitle = (file.title || 'track').replace(/^\d+[\s\.\-\_]+/, '').trim()
+        
+        // Lọc bỏ ký tự cấm của hệ điều hành để làm tên file, nhưng vẫn giữ lại các ký tự đặc biệt hợp lệ (@, #, $)
+        const safeTitle = originalTitle.replace(/[<>:"\/\\|?*]/g, '_').trim()
         const ext = file.format ? file.format.toLowerCase() : 'mp3'
         const filename = `${safeTitle}.${ext}`
         
@@ -616,7 +620,7 @@ app.whenReady().then(() => {
         const arrayBuffer = await response.arrayBuffer()
         fs.writeFileSync(tempPath, Buffer.from(arrayBuffer))
         
-        let title = safeTitle
+        let title = originalTitle
         let artist = 'Unknown Artist'
         let album = 'Unknown Album'
         let metadata
@@ -624,13 +628,15 @@ app.whenReady().then(() => {
         try {
           metadata = await mm.parseFile(tempPath)
           // Trích xuất trọn vẹn dữ liệu lõi
-          if (metadata.common.title) title = metadata.common.title
+          if (metadata.common.title) {
+            // Áp dụng lại Regex an toàn (+) để đảm bảo nếu thẻ tag nội bộ có dính số thứ tự thì cũng bị xóa an toàn
+            title = metadata.common.title.replace(/^\d+[\s\.\-\_]+/, '').trim()
+          }
           if (metadata.common.artist) artist = metadata.common.artist
           if (metadata.common.album) album = metadata.common.album
         } catch (e) {}
 
-        // Lọc bỏ số thứ tự đứng trước Tên bài hát
-        title = title.replace(/^\d+[\s\.\-\_]*/, '').trim()
+        // LƯU Ý: ĐÃ XÓA HOÀN TOÀN DÒNG `title = title.replace...` CŨ TẠI ĐÂY
 
         const duplicate = existingTracks.find(t => 
           t.title && t.artist && 
