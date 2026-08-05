@@ -32,6 +32,8 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   },
   updateTrayConfig: (config: any) => ipcRenderer.invoke('music:updateTrayConfig', config),
   toggleMiniPlayer: (isMini: boolean) => ipcRenderer.invoke('music:toggleMiniPlayer', isMini),
+  createPlaylist: (playlistName: string) => ipcRenderer.invoke('music:createPlaylist', playlistName),
+  addTrackToPlaylist: (playlistName: string, trackPath: string) => ipcRenderer.invoke('music:addTrackToPlaylist', playlistName, trackPath),
 }
 
 if (process.contextIsolated) {

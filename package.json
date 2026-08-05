@@ -1,6 +1,7 @@
 {
   "name": "meisradio",
-  "version": "1.0.0",
+  "productName": "Mei's Radio",
+  "version": "0.1.0",
   "description": "A self-developed media player",
   "main": "./out/main/index.js",
   "author": "subzerofroze",

@@ -88,6 +88,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: "MEI'S RADIO",
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -104,7 +105,8 @@ function createWindow(): void {
   minimizeToTray = config.minimizeToTray ?? false
 
   // MỚI: Bắt sự kiện khi bấm nút Thu nhỏ (Minimize - Dấu trừ)
-  mainWindow.on('minimize', (event) => {
+  // @ts-ignore
+  mainWindow.on('minimize', (event: Electron.Event) => {
     if (minimizeToTray) {
       event.preventDefault()
       mainWindow?.hide() // Ẩn khỏi Taskbar, chỉ hiện ở System Tray
@@ -112,7 +114,7 @@ function createWindow(): void {
   })
 
   // MỚI: Bắt sự kiện khi bấm nút Đóng (Close - Dấu X)
-  mainWindow.on('close', (event) => {
+  mainWindow.on('close', (event: Electron.Event) => {
     if (!isQuitting && closeToTray) {
       event.preventDefault()
       mainWindow?.hide()
@@ -318,12 +320,13 @@ app.whenReady().then(() => {
     let movedCount = 0
     for (const item of items) {
       const itemPath = join(rootPath, item)
+      if (!fs.existsSync(itemPath)) continue
       if (fs.statSync(itemPath).isFile() && supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
         try {
           const metadata = await mm.parseFile(itemPath)
           const albumName = metadata.common.album
           if (albumName && albumName.trim() !== '') {
-            const safeAlbumName = albumName.replace(/[^a-zA-Z0-9 \u00C0-\u1EF9]/g, '').trim()
+            const safeAlbumName = albumName.replace(/[<>:"\/\\|?*]/g, '').trim()
             const albumDirPath = join(rootPath, safeAlbumName)
             if (!fs.existsSync(albumDirPath)) fs.mkdirSync(albumDirPath)
             if (metadata.common.picture && metadata.common.picture.length > 0) {
@@ -913,6 +916,72 @@ app.whenReady().then(() => {
       }
     } catch (e) {}
     return null
+  })
+
+  // ==========================================
+  // HỆ THỐNG TẠO PLAYLIST THỦ CÔNG
+  // ==========================================
+
+  // 1. Tạo playlist thủ công mới
+  ipcMain.handle('music:createPlaylist', async (_, playlistName) => {
+    const rootPath = getConfig().libraryPath
+    if (!rootPath || !fs.existsSync(rootPath)) return { success: false, error: 'Chưa cấu hình thư mục thư viện!' }
+    
+    const safeName = playlistName.replace(/[<>:"\/\\|?*]/g, '').trim()
+    if (!safeName) return { success: false, error: 'Tên playlist không hợp lệ!' }
+
+    const dirPath = join(rootPath, safeName)
+    if (fs.existsSync(dirPath)) {
+      return { success: false, error: 'Playlist đã tồn tại!' }
+    }
+
+    try {
+      fs.mkdirSync(dirPath, { recursive: true })
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 2. Thêm bài hát vào playlist mà KHÔNG nhân bản file vật lý (Dùng Hard Link)
+  // Thêm bài hát vào playlist bằng cơ chế Hard Link (Tối ưu 100% không gian, không sao chép)
+  ipcMain.handle('music:addTrackToPlaylist', async (_, playlistName, trackPath) => {
+    const rootPath = getConfig().libraryPath
+    if (!rootPath) return { success: false, error: 'Chưa cấu hình thư viện!' }
+
+    let rawPath = trackPath.replace(/^file:\/\/\/?/, '')
+    if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
+
+    if (!fs.existsSync(rawPath)) return { success: false, error: 'File nguồn không tồn tại!' }
+
+    const playlistDir = join(rootPath, playlistName)
+    if (!fs.existsSync(playlistDir)) fs.mkdirSync(playlistDir, { recursive: true })
+
+    const fileName = path.basename(rawPath)
+    const destPath = join(playlistDir, fileName)
+
+    // Nếu tệp đã tồn tại trong thư mục playlist thì bỏ qua, không làm gì thêm
+    if (fs.existsSync(destPath)) {
+      return { success: true, note: 'Bài hát đã có trong playlist này rồi!' }
+    }
+
+    try {
+      // BẮT BUỘC TẠO HARD LINK: Trỏ chung một vùng nhớ vật lý, không tốn thêm dung lượng
+      fs.linkSync(rawPath, destPath)
+
+      // Liên kết luôn file lời bài hát (.lrc) đi kèm nếu có (cũng dùng Hard Link)
+      const lrcSource = rawPath.replace(/\.[^/.]+$/, '.lrc')
+      const lrcDest = destPath.replace(/\.[^/.]+$/, '.lrc')
+      if (fs.existsSync(lrcSource) && !fs.existsSync(lrcDest)) {
+        try { 
+          fs.linkSync(lrcSource, lrcDest) 
+        } catch (e) {}
+      }
+
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
   })
 
   // Khởi tạo cửa sổ
