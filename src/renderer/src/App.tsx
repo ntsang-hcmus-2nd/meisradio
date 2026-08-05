@@ -140,6 +140,7 @@ export default function App() {
   // Lyrics States
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
   const [currentLyricIndex, setCurrentLyricIndex] = useState<number>(-1)
+  const [originalCover, setOriginalCover] = useState<string | null>(null)
 
   // Tag Editor & Renaming States
   const [editingTrack, setEditingTrack] = useState<any | null>(null)
@@ -677,6 +678,21 @@ export default function App() {
     navigator.mediaDevices.addEventListener('devicechange', getDevices)
     return () => navigator.mediaDevices.removeEventListener('devicechange', getDevices)
   }, [])
+
+  // Fetch Original High-Res Cover for Fullscreen Lyrics
+  useEffect(() => {
+    // Chỉ tải ảnh gốc vào RAM nếu đang mở Fullscreen và không ở chế độ Lite
+    if (!isLyricsMaximized || liteMode || !currentTrack || currentTrack.isCloud) {
+      setOriginalCover(null)
+      return
+    }
+    let isCurrent = true
+    // @ts-ignore
+    window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath).then(cover => {
+      if (isCurrent && cover) setOriginalCover(cover)
+    })
+    return () => { isCurrent = false }
+  }, [isLyricsMaximized, currentTrack?.id, liteMode])
 
   // Apply device change
   useEffect(() => {
@@ -1471,7 +1487,32 @@ export default function App() {
                       <h3 className="text-emerald-400 font-semibold mb-2">Crossfade (Chuyển bài mượt mà)</h3>
                       <div className="flex items-center justify-between">
                         <span className="text-zinc-300 text-sm">Bật hiệu ứng Crossfade</span>
-                        <input type="checkbox" checked={crossfadeEnabled} onChange={e => setCrossfadeEnabled(e.target.checked)} className="w-5 h-5 accent-emerald-500 cursor-pointer" />
+                        <input 
+                          type="checkbox" 
+                          checked={liteMode} 
+                          onChange={e => {
+                            const isLite = e.target.checked
+                            setLiteMode(isLite)
+                            
+                            if (isLite) {
+                              // 1. Tắt ngay các hiệu ứng đồ họa
+                              setShowVisualizer(false)
+                              setShowLyricsPanel(false)
+                              setIsLyricsMaximized(false)
+                              
+                              // 2. Ép hệ thống gọi Garbage Collection dọn sạch RAM ngay lập tức
+                              // @ts-ignore
+                              if (window.api && window.api.forceGC) {
+                                // Dùng setTimeout nhỏ để giao diện kịp chuyển trạng thái xong mới dọn rác
+                                setTimeout(() => {
+                                  // @ts-ignore
+                                  window.api.forceGC()
+                                }, 100)
+                              }
+                            }
+                          }} 
+                          className="w-5 h-5 accent-emerald-500 cursor-pointer" 
+                        />
                       </div>
                       {crossfadeEnabled && (
                         <div className="mt-4 flex items-center gap-4">
@@ -1688,7 +1729,13 @@ export default function App() {
             <button onClick={() => setIsLyricsMaximized(false)} className="absolute top-8 right-8 text-zinc-400 hover:text-white bg-zinc-800 p-3 rounded-full"><Minimize2 size={24}/></button>
             <div className="flex-1 flex items-center justify-center p-12">
               <div className="w-1/2 flex flex-col items-center justify-center gap-6">
-                <div className="w-80 h-80 bg-zinc-800 rounded-2xl shadow-2xl overflow-hidden">{(!liteMode && currentTrack?.coverArt) ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={60} className="m-auto mt-32 text-zinc-600" />}</div>
+                <div className="w-80 h-80 bg-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
+                  {(!liteMode && (originalCover || currentTrack?.coverArt)) ? (
+                    <img src={originalCover || currentTrack.coverArt} className="w-full h-full object-cover" />
+                  ) : (
+                    <ListMusic size={60} className="m-auto mt-32 text-zinc-600" />
+                  )}
+                </div>
                 <div className="text-center"><h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2><p className="text-emerald-400 text-lg">{currentTrack?.artist}</p></div>
               </div>
               <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">

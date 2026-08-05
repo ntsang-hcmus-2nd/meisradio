@@ -1,7 +1,7 @@
 {
   "name": "meisradio",
   "productName": "Mei's Radio",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "A self-developed media player",
   "main": "./out/main/index.js",
   "author": "subzerofroze",
@@ -77,6 +77,10 @@
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     },
     "mac": {
       "icon": "resources/icon.icns"

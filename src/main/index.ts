@@ -920,6 +920,24 @@ app.whenReady().then(() => {
   })
 
   // ==========================================
+  // API TRÍCH XUẤT ẢNH BÌA CHẤT LƯỢNG GỐC CHO LYRICS
+  // ==========================================
+  ipcMain.handle('music:getOriginalTrackCover', async (_, filePath: string) => {
+    try {
+      if (filePath.startsWith('http')) return null
+      let rawPath = filePath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
+
+      const metadata = await mm.parseFile(rawPath)
+      // Lấy trực tiếp ảnh Base64 chất lượng cao từ metadata mà không qua giảm dung lượng
+      if (metadata.common.picture && metadata.common.picture.length > 0) {
+        return `data:${metadata.common.picture[0].format};base64,${Buffer.from(metadata.common.picture[0].data).toString('base64')}`
+      }
+    } catch (e) {}
+    return null
+  })
+
+  // ==========================================
   // HỆ THỐNG TẠO PLAYLIST THỦ CÔNG
   // ==========================================
 
@@ -982,6 +1000,16 @@ app.whenReady().then(() => {
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e.message }
+    }
+  })
+
+  // ==========================================
+  // API TỐI ƯU HÓA HỆ THỐNG
+  // ==========================================
+  ipcMain.handle('music:forceGC', () => {
+    // Kích hoạt dọn rác thủ công giải phóng RAM
+    if (typeof global.gc === 'function') {
+      global.gc()
     }
   })
 

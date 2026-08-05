@@ -26,6 +26,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     ipcRenderer.on('global-shortcut', (_event, action) => callback(action))
   },
   getTrackCover: (filePath: string) => ipcRenderer.invoke('music:getTrackCover', filePath),
+  getOriginalTrackCover: (filePath: string) => ipcRenderer.invoke('music:getOriginalTrackCover', filePath),
   onDownloadProgress: (callback: (data: any) => void) => {
     ipcRenderer.removeAllListeners('download-progress')
     ipcRenderer.on('download-progress', (_event, data) => callback(data))
@@ -34,6 +35,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   toggleMiniPlayer: (isMini: boolean) => ipcRenderer.invoke('music:toggleMiniPlayer', isMini),
   createPlaylist: (playlistName: string) => ipcRenderer.invoke('music:createPlaylist', playlistName),
   addTrackToPlaylist: (playlistName: string, trackPath: string) => ipcRenderer.invoke('music:addTrackToPlaylist', playlistName, trackPath),
+  forceGC: () => ipcRenderer.invoke('music:forceGC'),
 }
 
 if (process.contextIsolated) {
