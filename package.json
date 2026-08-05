@@ -57,6 +57,7 @@
   "build": {
     "appId": "com.subzerofroze.meisradio",
     "productName": "Mei's Radio",
+    "compression": "maximum",
     "asar": true,
     "files": [
       "out/**/*", 
