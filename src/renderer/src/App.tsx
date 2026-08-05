@@ -5,6 +5,7 @@ import {
   ListMusic, Settings, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon,
   Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown,
   Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw, PictureInPicture2,
+  Home, ArrowLeft,
 } from 'lucide-react'
 // Đã sử dụng đúng đường dẫn logo của bạn
 import logoImg from '../../../resources/HoT_Chibi_Icon.png'
@@ -83,11 +84,24 @@ export default function App() {
   // 2. STATES
   // ==========================================
 
+  // State cho Dashboard
+  const [dashboardData, setDashboardData] = useState<any[]>([])
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false)
+  const [isYtmLoggedIn, setIsYtmLoggedIn] = useState(false)
+  const [activeAlbum, setActiveAlbum] = useState<{ title: string, tracks: any[] } | null>(null)
+  const [isAlbumLoading, setIsAlbumLoading] = useState(false)
+  const preloadedRef = useRef<string | null>(null) // Đánh dấu ID đã được preload
+
   // Lite Mode State
   const [liteMode, setLiteMode] = useState(false)
+
+  // State mới cho Online Streaming
+  const [onlineSearchQuery, setOnlineSearchQuery] = useState('')
+  const [onlineResults, setOnlineResults] = useState<any[]>([])
+  const [isSearchingOnline, setIsSearchingOnline] = useState(false)
   
   // UI & General App States
-  const [activeView, setActiveView] = useState<'songs' | 'playlists' | 'settings' | 'drive'>('songs')
+  const [activeView, setActiveView] = useState<'home' | 'songs' | 'playlists' | 'settings' | 'drive' | 'online'>('home')
   const [themeColor, setThemeColor] = useState('rgba(39, 39, 42, 0)')
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({message: '', type: 'info', visible: false})
   const [isReloading, setIsReloading] = useState(false)
@@ -165,6 +179,71 @@ export default function App() {
   // ==========================================
   // 3. UTILITIES & HANDLERS
   // ==========================================
+
+  // --- Dashboard ---
+  const fetchDashboard = async () => {
+    setIsDashboardLoading(true)
+    // @ts-ignore
+    const res = await window.api.getHomeDashboard()
+    if (res.success) {
+      setDashboardData(res.data)
+      setIsYtmLoggedIn(true)
+    } else {
+      // MỚI: Hiển thị lỗi rõ ràng thay vì im lặng ẩn Dashboard
+      console.error("Lỗi Dashboard:", res.error)
+      alert("Lỗi tải dữ liệu YouTube Music: " + res.error)
+      setIsYtmLoggedIn(false)
+    }
+    setIsDashboardLoading(false)
+  }
+
+  const handleYtmLogin = async () => {
+    // @ts-ignore
+    const res = await window.api.ytmLogin()
+    if (res.success) {
+      showToast('Đăng nhập thành công!', 'success')
+      fetchDashboard()
+    } else {
+      alert(res.error)
+    }
+  }
+
+  const handleDashboardItemClick = async (item: any) => {
+    if (item.videoId) {
+      // Nếu là Bài hát -> Chuyển thành Track Object và Play ngay lập tức
+      const track = {
+        id: `yt-${item.videoId}`, originalId: item.videoId,
+        title: item.title, artist: item.subtitle, album: 'YouTube Music', duration: 0,
+        format: 'STREAM', isCloud: true, isOnline: true, platform: 'youtube',
+        coverArt: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[item.thumbnails.length - 1].url : null
+      };
+      
+      setOriginalQueue([track]);
+      setPlayQueue([track]);
+      
+      // Lấy Stream URL qua Local Buffer Server
+      // @ts-ignore
+      const res = await window.api.getStreamUrl(track);
+      if (res.success && res.url) {
+        handlePlayTrack({ ...track, filePath: res.url });
+      } else {
+        alert('Lỗi lấy luồng nhạc.');
+      }
+    } else if (item.playlistId) {
+      // Nếu là Album/Playlist -> Mở giao diện Danh sách
+      setActiveAlbum({ title: item.title, tracks: [] });
+      setIsAlbumLoading(true);
+      // @ts-ignore
+      const res = await window.api.getYtmPlaylist(item.playlistId);
+      if (res.success) {
+        setActiveAlbum({ title: item.title, tracks: res.tracks });
+      } else {
+        alert(res.error);
+        setActiveAlbum(null);
+      }
+      setIsAlbumLoading(false);
+    }
+  }
 
   // --- UI Utilities ---
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -735,6 +814,10 @@ export default function App() {
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
       if (cfg.liteMode !== undefined) setLiteMode(cfg.liteMode) // MỚI
+      if (cfg.ytCookie) {
+        setIsYtmLoggedIn(true)
+        fetchDashboard()
+      }
       loadLibrary()
     })
   }, [])
@@ -1006,30 +1089,47 @@ export default function App() {
     loadLyrics()
   }, [currentTrack])
 
-  // Sync Lyrics with Time (Tối ưu hóa chạy ngầm qua Event Listener)
+  // Sync Lyrics & Preload Buffer Next Track
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
 
-    const handleLyricsSync = () => {
-      if (lyrics.length === 0) {
-        if (currentLyricIndex !== -1) setCurrentLyricIndex(-1)
-        return
+    const handleTimeUpdate = () => {
+      // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Giữ nguyên) ---
+      if (lyrics.length > 0) {
+        const visualTime = audio.currentTime + 0.3
+        const index = lyrics.findIndex((line, i) => {
+          const nextLine = lyrics[i + 1]
+          if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
+          return visualTime >= line.time
+        })
+        if (index !== currentLyricIndex) setCurrentLyricIndex(index)
+      } else if (currentLyricIndex !== -1) {
+        setCurrentLyricIndex(-1)
       }
-      const visualTime = audio.currentTime + 0.3
-      const index = lyrics.findIndex((line, i) => {
-        const nextLine = lyrics[i + 1]
-        if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
-        return visualTime >= line.time
-      })
-      if (index !== currentLyricIndex) {
-        setCurrentLyricIndex(index)
+
+      // --- LOGIC 2: PRELOAD BUFFER BÀI TIẾP THEO ---
+      // Nếu chỉ còn 15 giây là hết bài, chuẩn bị tải bài kế tiếp
+      if (audio.duration && (audio.duration - audio.currentTime < 15) && playQueue.length > 0) {
+        const currentIndex = playQueue.findIndex(t => t.id === currentTrack?.id);
+        let nextIndex = currentIndex + 1;
+        if (nextIndex >= playQueue.length) nextIndex = (repeatMode > 0) ? 0 : -1;
+
+        if (nextIndex !== -1) {
+          const nextTrack = playQueue[nextIndex];
+          // Nếu bài tiếp theo là nhạc Online và chưa được preload
+          if (nextTrack.isOnline && nextTrack.originalId && preloadedRef.current !== nextTrack.originalId) {
+            preloadedRef.current = nextTrack.originalId;
+            // @ts-ignore
+            window.api.preloadStream(nextTrack.originalId); // Gọi Backend ngầm bóc tách URL trước
+          }
+        }
       }
     }
 
-    audio.addEventListener('timeupdate', handleLyricsSync)
-    return () => audio.removeEventListener('timeupdate', handleLyricsSync)
-  }, [lyrics, currentLyricIndex])
+    audio.addEventListener('timeupdate', handleTimeUpdate)
+    return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
+  }, [lyrics, currentLyricIndex, playQueue, currentTrack, repeatMode])
 
   // Scroll Active Lyric
   useEffect(() => {
@@ -1311,11 +1411,17 @@ export default function App() {
               <div>
                 <p className="text-xs font-semibold text-zinc-500 tracking-widest uppercase mb-3">Thư viện</p>
                 <ul className="space-y-2">
+                  <li onClick={() => { setActiveView('home'); setSearchQuery(''); setSearchInput(''); }} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'home' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                    <Home size={18} /> Trang chủ
+                  </li>
                   <li onClick={() => { setActiveView('songs'); setSearchQuery(''); setSearchInput(''); }} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'songs' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`}>
                     <Library size={18} /> Danh sách bài hát
                   </li>
                   <li onClick={() => { setActiveView('playlists'); setActivePlaylist(null); setSearchQuery(''); setSearchInput(''); }} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'playlists' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`}>
                     <ListMusic size={18} /> Playlist của tôi
+                  </li>
+                  <li onClick={() => { setActiveView('online'); setSearchQuery(''); setSearchInput(''); }} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'online' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-400 hover:text-white'}`}>
+                    <Wifi size={18} /> Stream Trực tuyến
                   </li>
                 </ul>
               </div>
@@ -1363,7 +1469,70 @@ export default function App() {
             
             {/* CỘT TRÁI: DATA VIEW */}
             <div key={activeView} className={`${liteMode ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-              
+              {/* VIEW: TRANG CHỦ DASHBOARD */}
+              {/* VIEW: TRANG CHỦ DASHBOARD */}
+              {activeView === 'home' && (
+                <div className="flex flex-col h-full">
+                  {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST --- */}
+                  {activeAlbum ? (
+                    <div className="flex flex-col h-full animate-fade-in">
+                      <div className="flex items-center gap-4 mb-8">
+                        <button onClick={() => setActiveAlbum(null)} className="p-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition">
+                          <ArrowLeft size={20}/>
+                        </button>
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-1">Danh sách phát</p>
+                          <h2 className="text-3xl font-extrabold text-white">{activeAlbum.title}</h2>
+                        </div>
+                      </div>
+                      
+                      {isAlbumLoading ? (
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                           <Activity size={40} className="text-emerald-500 mb-4 animate-bounce" />
+                           <p className="text-emerald-500 animate-pulse font-medium">Đang trích xuất bài hát từ YouTube Music...</p>
+                        </div>
+                      ) : (
+                        renderTrackTable(activeAlbum.tracks)
+                      )}
+                    </div>
+                  ) : (
+                    /* --- NẾU LÀ MÀN HÌNH DASHBOARD GỐC --- */
+                    <>
+                      <div className="flex items-center justify-between mb-8">
+                        <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                          <Home size={32} className="text-emerald-400" /> Dành cho bạn
+                        </h2>
+                      </div>
+                      <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
+                        {dashboardData.map((section, index) => (
+                          <div key={index}>
+                            <h3 className="text-xl font-bold text-white mb-4">{section.title}</h3>
+                            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
+                              {section.contents.map((item: any, i: number) => (
+                                <div key={i} className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer" onClick={() => handleDashboardItemClick(item)}>
+                                  <div className="w-40 h-40 bg-zinc-800 rounded-xl mb-3 overflow-hidden relative shadow-lg">
+                                    {item.thumbnails && item.thumbnails.length > 0 ? (
+                                      <img src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                    ) : (
+                                      <ListMusic size={40} className="m-auto mt-16 text-zinc-600" />
+                                    )}
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <Play size={32} className="text-white fill-current shadow-2xl" />
+                                    </div>
+                                  </div>
+                                  <p className="font-semibold text-sm text-white truncate">{item.title}</p>
+                                  <p className="text-xs text-zinc-500 truncate mt-1">{item.subtitle}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* VIEW: BÀI HÁT */}
               {activeView === 'songs' && (
                 <>
@@ -1386,6 +1555,98 @@ export default function App() {
                     </div>
                   )}
                 </>
+              )}
+
+              {/* VIEW: ONLINE STREAMING */}
+              {activeView === 'online' && (
+                <div className="flex flex-col h-full max-w-5xl">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                      <Wifi size={32} className="text-emerald-400" /> Khám phá & Stream YouTube
+                    </h2>
+                  </div>
+                  
+                  <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-xl mb-6 shadow-lg">
+                    <div className="flex gap-3 items-center">
+                      <div className="relative flex-1">
+                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <input 
+                          type="text" 
+                          value={onlineSearchQuery} 
+                          onChange={(e) => setOnlineSearchQuery(e.target.value)} 
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && onlineSearchQuery) {
+                              setIsSearchingOnline(true);
+                              // @ts-ignore
+                              window.api.searchOnline(onlineSearchQuery).then(res => {
+                                if (res.success) setOnlineResults(res.tracks)
+                                else alert(res.error)
+                                setIsSearchingOnline(false)
+                              })
+                            }
+                          }}
+                          placeholder="Nhập tên bài hát hoặc dán trực tiếp link YouTube / YT Music..." 
+                          className="w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KẾT QUẢ TÌM KIẾM ONLINE */}
+                  <div className="flex-1 flex flex-col bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-6 overflow-y-auto">
+                    {isSearchingOnline ? (
+                      <p className="text-zinc-500 text-center mt-10 animate-pulse">Đang kết nối API tìm kiếm...</p>
+                    ) : onlineResults.length === 0 ? (
+                      <p className="text-zinc-500 text-center mt-10">Hãy nhập tên bài hát để bắt đầu tìm kiếm.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {onlineResults.map((track, i) => (
+                          <div key={i} className="flex items-center gap-4 p-3 bg-zinc-900/40 hover:bg-zinc-800/80 rounded-lg border border-zinc-800/50 transition">
+                            <div className="w-12 h-12 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
+                              {track.coverArt ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={18} className="text-zinc-500" />}
+                            </div>
+                            <div className="flex-1 truncate">
+                              <p className="font-semibold text-white truncate text-sm">{track.title}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{track.artist}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={async () => {
+                                  // @ts-ignore
+                                  const res = await window.api.getStreamUrl(track)
+                                  if (res.success && res.url) {
+                                    handlePlayTrack({ ...track, filePath: res.url })
+                                  } else {
+                                    alert('Lỗi stream: ' + res.error)
+                                  }
+                                }} 
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs text-white font-medium flex items-center gap-1 transition"
+                              >
+                                <Play size={14}/> Phát ngay
+                              </button>
+                              <button 
+                                onClick={async () => {
+                                  alert('Đang yêu cầu tải xuống từ Server...')
+                                  // @ts-ignore
+                                  const res = await window.api.downloadOnline(track)
+                                  if (res.success) {
+                                    showToast('Tải hoàn tất chất lượng cao! Đã chèn Metadata.', 'success')
+                                    loadLibrary()
+                                  } else {
+                                    alert('Lỗi: ' + res.error)
+                                  }
+                                }} 
+                                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs text-zinc-300 font-medium transition"
+                              >
+                                Tải & Lưu
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* VIEW: GOOGLE DRIVE */}
@@ -1672,6 +1933,8 @@ export default function App() {
                   {renderTrackTable(processedPlaylistTracks)}
                 </>
               )}
+
+
             </div>
             
             {/* CỘT PHẢI: LỜI BÀI HÁT (SPLIT VIEW) */}
