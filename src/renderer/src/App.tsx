@@ -909,6 +909,11 @@ export default function App() {
   useEffect(() => {
     if (audioRef.current && audioCtxRef.current) {
       if (isPlaying) {
+        // Đánh thức lại AudioContext khi bấm Play
+        if (audioCtxRef.current.state === 'suspended') {
+          audioCtxRef.current.resume()
+        }
+        
         audioRef.current.play().catch(e => console.error(e))
         if (crossfadeEnabled) {
           audioRef.current.volume = 0
@@ -924,7 +929,13 @@ export default function App() {
         } else {
           audioRef.current.volume = volume
         }
-      } else audioRef.current.pause()
+      } else {
+        audioRef.current.pause()
+        // ĐÓNG BĂNG toàn bộ xử lý âm thanh (EQ, Visualizer) khi dừng nhạc
+        if (audioCtxRef.current.state === 'running') {
+          audioCtxRef.current.suspend()
+        }
+      }
     }
   }, [isPlaying, currentTrack])
 

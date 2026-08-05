@@ -11,6 +11,11 @@ import NodeID3 from 'node-id3'
 // Cấu hình lưu trữ đường dẫn thư viện
 const CONFIG_PATH = join(app.getPath('userData'), 'music-config.json')
 
+// Bật tính năng thu gom rác chủ động và giới hạn dung lượng không gian bộ nhớ cũ
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
+// Tối ưu hóa GPU Rasterization để tiết kiệm VRAM/RAM đồ họa
+app.commandLine.appendSwitch('enable-zero-copy');
+
 // Cấu hình tray và minimize
 let tray: Tray | null = null
 let isQuitting = false // Cờ đánh dấu khi người dùng thực sự muốn thoát ứng dụng
@@ -217,7 +222,6 @@ app.whenReady().then(() => {
                 duration: metadata.format.duration, format: metadata.format.container || subItem.split('.').pop()?.toUpperCase(),
                 bitrate: metadata.format.bitrate, sampleRate: metadata.format.sampleRate,
                 lossless: metadata.format.lossless, isCloud: false, coverArt: coverUrl,
-                lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
               }
               playlistTracks.push(trackData)
               tracks.push(trackData)
