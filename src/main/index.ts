@@ -50,7 +50,8 @@ function getConfig() {
     crossfadeEnabled: false, 
     crossfadeDuration: 3, 
     volume: 1, 
-    eqBands: null 
+    eqBands: null,
+    liteMode: false // MỚI: Thêm mặc định cho Lite Mode
   }
 }
 
@@ -878,19 +879,37 @@ app.whenReady().then(() => {
   })
 
   // ==========================================
-  // API TRÍCH XUẤT ẢNH BÌA ĐƠN LẺ
+  // API TRÍCH XUẤT ẢNH BÌA ĐƠN LẺ (ĐÃ TỐI ƯU BASE64)
   // ==========================================
   ipcMain.handle('music:getTrackCover', async (_, filePath: string) => {
     try {
-      // Lọc bỏ file của Google Drive (vì không đọc được ID3 nội bộ)
       if (filePath.startsWith('http')) return null
 
       let rawPath = filePath.replace(/^file:\/\/\/?/, '')
       if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
 
+      // 1. Khởi tạo thư mục proxy ảnh
+      const rootPath = getConfig().libraryPath
+      if (!rootPath) return null
+      const thumbDir = join(rootPath, '.thumbnails')
+      if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir)
+
+      // 2. Băm tên file để làm ID ảnh cache
+      const trackHash = crypto.createHash('md5').update(rawPath).digest('hex')
+      const thumbPath = join(thumbDir, `${trackHash}.jpg`)
+
+      // 3. Nếu ảnh đã cache trước đó, lập tức trả về Local URL để giải phóng RAM
+      if (fs.existsSync(thumbPath)) {
+        return pathToFileURL(thumbPath).href
+      }
+
+      // 4. Nếu chưa có, trích xuất, giảm dung lượng và lưu xuống ổ cứng
       const metadata = await mm.parseFile(rawPath)
       if (metadata.common.picture && metadata.common.picture.length > 0) {
-        return `data:${metadata.common.picture[0].format};base64,${Buffer.from(metadata.common.picture[0].data).toString('base64')}`
+        const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
+        const resized = img.resize({ width: 500, quality: 'good' })
+        fs.writeFileSync(thumbPath, resized.toJPEG(80))
+        return pathToFileURL(thumbPath).href
       }
     } catch (e) {}
     return null

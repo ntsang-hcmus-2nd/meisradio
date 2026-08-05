@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
@@ -16,6 +16,8 @@ import { CloudActionModal } from './components/modals/CloudActionModal'
 import { TagEditorModal } from './components/modals/TagEditorModal'
 import { CreatePlaylistModal } from './components/modals/CreatePlaylistModal'
 import { AddSongsModal } from './components/modals/AddSongsModal'
+import { PlayerProgressBar } from './components/PlayerProgressBar'
+import { TableVirtuoso } from 'react-virtuoso'
 
 // --- HELPER FUNCTIONS & INTERFACES (OUTSIDE COMPONENT) ---
 const formatDuration = (seconds: number) => {
@@ -80,13 +82,15 @@ export default function App() {
   // ==========================================
   // 2. STATES
   // ==========================================
+
+  // Lite Mode State
+  const [liteMode, setLiteMode] = useState(false)
   
   // UI & General App States
   const [activeView, setActiveView] = useState<'songs' | 'playlists' | 'settings' | 'drive'>('songs')
   const [themeColor, setThemeColor] = useState('rgba(39, 39, 42, 0)')
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({message: '', type: 'info', visible: false})
   const [isReloading, setIsReloading] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(25)
 
   // Library & Search States
   const [libraryPath, setLibraryPath] = useState<string | null>(null)
@@ -101,7 +105,6 @@ export default function App() {
   // Player & Queue States
   const [currentTrack, setCurrentTrack] = useState<any | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
   const [isShuffle, setIsShuffle] = useState(false)
   const [playQueue, setPlayQueue] = useState<any[]>([])
   const [originalQueue, setOriginalQueue] = useState<any[]>([])
@@ -364,7 +367,7 @@ export default function App() {
 
   const handlePrev = () => {
     if (!currentTrack) return
-    if (currentTime > 3 && audioRef.current) { 
+    if (audioRef.current && audioRef.current.currentTime > 3) { 
       audioRef.current.currentTime = 0
       return 
     }
@@ -378,24 +381,6 @@ export default function App() {
       else prevIndex = 0
     }
     handlePlayTrack(playQueue[prevIndex])
-  }
-
-  const handleTimeUpdate = () => {
-    if (!audioRef.current || !currentTrack) return
-    const cTime = audioRef.current.currentTime
-    setCurrentTime(cTime)
-    
-    if (crossfadeEnabled && currentTrack.duration > 0 && repeatMode !== 2) {
-      if (currentTrack.duration - cTime <= crossfadeDuration && currentTrack.duration - cTime > crossfadeDuration - 0.5) {
-        handleNext()
-      }
-    }
-  }
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = Number(e.target.value)
-    if (audioRef.current) audioRef.current.currentTime = time
-    setCurrentTime(time)
   }
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -677,11 +662,6 @@ export default function App() {
   // 5. EFFECTS
   // ==========================================
 
-  // Reset visible counts when views change
-  useEffect(() => {
-    setVisibleCount(25)
-  }, [activeView, activePlaylist, searchQuery, sortField, sortOrder])
-
   // Get audio output devices
   useEffect(() => {
     const getDevices = async () => {
@@ -738,6 +718,7 @@ export default function App() {
       if (cfg.showVisualizer !== undefined) setShowVisualizer(cfg.showVisualizer)
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
+      if (cfg.liteMode !== undefined) setLiteMode(cfg.liteMode) // MỚI
       loadLibrary()
     })
   }, [])
@@ -747,20 +728,24 @@ export default function App() {
     // @ts-ignore
     window.api.saveConfig({ 
       volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, 
-      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray,
+      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode // MỚI
     }) 
     // @ts-ignore
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
-  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray])
+  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode])
 
   // Dominant Color
   useEffect(() => {
+    if (liteMode) {
+      setThemeColor('rgba(24, 24, 27, 1)') // Trả về màu tĩnh (Zinc-900) không đổi nền
+      return
+    }
     if (currentTrack?.coverArt) {
       getDominantColor(currentTrack.coverArt, setThemeColor)
     } else {
       setThemeColor('rgba(39, 39, 42, 0)')
     }
-  }, [currentTrack])
+  }, [currentTrack, liteMode]) // Thêm liteMode vào dependency
 
   // Audio Context & EQ Setup
   useEffect(() => {
@@ -813,7 +798,7 @@ export default function App() {
 
   // Visualizer Animation
   useEffect(() => {
-    if (!isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
+    if (liteMode || !isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
 
     const canvas = visualizerCanvasRef.current
     const ctx = canvas.getContext('2d')
@@ -907,6 +892,7 @@ export default function App() {
 
   // Track Cover Loading
   useEffect(() => {
+    if (liteMode) return
     let isCurrent = true 
     if (currentTrack && !currentTrack.isCloud && currentTrack.coverArt?.includes('.thumbnails')) {
       // @ts-ignore
@@ -944,7 +930,7 @@ export default function App() {
 
   // Load Lyrics
   useEffect(() => {
-    if (!currentTrack) {
+    if (liteMode || !currentTrack) {
       setLyrics([])
       return
     }
@@ -993,20 +979,30 @@ export default function App() {
     loadLyrics()
   }, [currentTrack])
 
-  // Sync Lyrics with Time
+  // Sync Lyrics with Time (Tối ưu hóa chạy ngầm qua Event Listener)
   useEffect(() => {
-    if (lyrics.length === 0) {
-      setCurrentLyricIndex(-1)
-      return
+    const audio = audioRef.current
+    if (!audio) return
+
+    const handleLyricsSync = () => {
+      if (lyrics.length === 0) {
+        if (currentLyricIndex !== -1) setCurrentLyricIndex(-1)
+        return
+      }
+      const visualTime = audio.currentTime + 0.3
+      const index = lyrics.findIndex((line, i) => {
+        const nextLine = lyrics[i + 1]
+        if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
+        return visualTime >= line.time
+      })
+      if (index !== currentLyricIndex) {
+        setCurrentLyricIndex(index)
+      }
     }
-    const visualTime = currentTime + 0.3
-    const index = lyrics.findIndex((line, i) => {
-      const nextLine = lyrics[i + 1]
-      if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
-      return visualTime >= line.time
-    })
-    setCurrentLyricIndex(index)
-  }, [currentTime, lyrics])
+
+    audio.addEventListener('timeupdate', handleLyricsSync)
+    return () => audio.removeEventListener('timeupdate', handleLyricsSync)
+  }, [lyrics, currentLyricIndex])
 
   // Scroll Active Lyric
   useEffect(() => {
@@ -1053,14 +1049,12 @@ export default function App() {
             if (audioRef.current) {
               const newTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + 5)
               audioRef.current.currentTime = newTime
-              setCurrentTime(newTime)
             }
             break;
           case 'seek-backward':
             if (audioRef.current) {
               const newTime = Math.max(0, audioRef.current.currentTime - 5)
               audioRef.current.currentTime = newTime
-              setCurrentTime(newTime)
             }
             break;
         }
@@ -1072,63 +1066,66 @@ export default function App() {
   // ==========================================
   // 6. RENDERERS
   // ==========================================
+  // ==========================================
+  // 6. RENDERERS (VIRTUALIZED TABLE)
+  // ==========================================
   const renderTrackTable = (tracks: any[]) => {
-    const visibleTracks = tracks.slice(0, visibleCount)
-    
     return (
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="text-zinc-500 border-b border-zinc-800/50 select-none">
-            {/* Cột STT (#) */}
-            <th onClick={() => handleSort('id')} className="pb-3 font-medium w-12 text-center cursor-pointer group hover:text-white transition" title="Sắp xếp theo STT">
-              <div className="inline-flex items-center gap-1 justify-center">
-                <span>#</span>
-                {sortField === 'id' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
-              </div>
-            </th>
-            {/* Cột TÊN BÀI HÁT */}
-            <th onClick={() => handleSort('title')} className="pb-3 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo tên bài hát">
-              <div className="inline-flex items-center gap-1">
-                <span>TÊN BÀI HÁT</span>
-                {sortField === 'title' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
-              </div>
-            </th>
-            {/* Cột ALBUM */}
-            <th onClick={() => handleSort('album')} className="pb-3 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo Album">
-              <div className="inline-flex items-center gap-1">
-                <span>ALBUM</span>
-                {sortField === 'album' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
-              </div>
-            </th>
-            {/* Cột ĐỊNH DẠNG */}
-            <th onClick={() => handleSort('isCloud')} className="pb-3 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo định dạng">
-              <div className="inline-flex items-center gap-1">
-                <span>ĐỊNH DẠNG</span>
-                {sortField === 'isCloud' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
-              </div>
-            </th>
-            {/* Cột THỜI GIAN */}
-            <th onClick={() => handleSort('duration')} className="pb-3 font-medium text-right pr-4 cursor-pointer group hover:text-white transition" title="Sắp xếp theo thời lượng">
-              <div className="inline-flex items-center gap-1 justify-end">
-                <span>THỜI GIAN</span>
-                {sortField === 'duration' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
-              </div>
-            </th>
-            <th className="pb-3 font-medium text-center">THAO TÁC</th>
-          </tr>
-        </thead>
-        <tbody>
-          {visibleTracks.map((track, index) => {
+      <div className="flex-1 flex flex-col min-h-0 bg-zinc-900/20 rounded-lg border border-zinc-800/50 overflow-hidden">
+        <TableVirtuoso
+          style={{ height: '100%', width: '100%' }}
+          data={tracks}
+          components={{
+            Table: ({ style, ...props }) => <table {...props} className="w-full text-left text-sm" style={{ ...style, borderCollapse: 'collapse' }} />,
+            TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref} />),
+            TableRow: (props) => <tr {...props} className="group border-b border-zinc-800/20 transition-colors cursor-pointer hover:bg-white/5" />
+          }}
+          fixedHeaderContent={() => (
+            <tr className="text-zinc-500 border-b border-zinc-800/50 select-none bg-zinc-900 shadow-sm">
+              <th onClick={() => handleSort('id')} className="pb-3 pt-4 font-medium w-12 text-center cursor-pointer group hover:text-white transition" title="Sắp xếp theo STT">
+                <div className="inline-flex items-center gap-1 justify-center">
+                  <span>#</span>
+                  {sortField === 'id' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                </div>
+              </th>
+              <th onClick={() => handleSort('title')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo tên bài hát">
+                <div className="inline-flex items-center gap-1">
+                  <span>TÊN BÀI HÁT</span>
+                  {sortField === 'title' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                </div>
+              </th>
+              <th onClick={() => handleSort('album')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo Album">
+                <div className="inline-flex items-center gap-1">
+                  <span>ALBUM</span>
+                  {sortField === 'album' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                </div>
+              </th>
+              <th onClick={() => handleSort('isCloud')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo định dạng">
+                <div className="inline-flex items-center gap-1">
+                  <span>ĐỊNH DẠNG</span>
+                  {sortField === 'isCloud' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                </div>
+              </th>
+              <th onClick={() => handleSort('duration')} className="pb-3 pt-4 font-medium text-right pr-4 cursor-pointer group hover:text-white transition" title="Sắp xếp theo thời lượng">
+                <div className="inline-flex items-center gap-1 justify-end">
+                  <span>THỜI GIAN</span>
+                  {sortField === 'duration' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                </div>
+              </th>
+              <th className="pb-3 pt-4 font-medium text-center">THAO TÁC</th>
+            </tr>
+          )}
+          itemContent={(index, track) => {
             const isThisTrackPlaying = currentTrack?.id === track.id
             return (
-              <tr key={track.id} onClick={() => handleRowClick(track, tracks)} className={`group border-b border-zinc-800/20 transition-colors cursor-pointer ${isThisTrackPlaying ? 'bg-white/10' : 'hover:bg-white/5'}`}>
-                <td className="py-4 text-center text-zinc-500 group-hover:text-white">
+              <>
+                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-center text-zinc-500 group-hover:text-white">
                   {isThisTrackPlaying && isPlaying ? <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse mx-auto" /> : index + 1}
                 </td>
-                <td className="py-4">
+                <td onClick={() => handleRowClick(track, tracks)} className="py-4">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-zinc-800 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-                      {track.coverArt ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <img src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
+                      {(!liteMode && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <img src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
                       {track.isCloud && <div className="absolute top-0 right-0 bg-emerald-500/80 p-0.5 rounded-bl-md"><Cloud size={10} className="text-white" /></div>}
                     </div>
                     <div className="truncate w-48 lg:w-64">
@@ -1137,15 +1134,15 @@ export default function App() {
                     </div>
                   </div>
                 </td>
-                <td className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
-                <td className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}</span></td>
-                <td className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
+                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
+                <td onClick={() => handleRowClick(track, tracks)} className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}</span></td>
+                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
                 <td className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
-              </tr>
+              </>
             )
-          })}
-        </tbody>
-      </table>
+          }}
+        />
+      </div>
     )
   }
 
@@ -1161,7 +1158,6 @@ export default function App() {
         ref={audioRef}
         src={currentTrack ? (currentTrack.filePath?.startsWith('http') || currentTrack.filePath?.startsWith('file://') ? currentTrack.filePath : `file://${currentTrack.filePath}`) : undefined}
         onEnded={() => { if (!crossfadeEnabled) handleNext() }}
-        onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         loop={repeatMode === 2}
       />
@@ -1170,10 +1166,10 @@ export default function App() {
       {isMiniPlayer ? (
         // --- GIAO DIỆN MINI PLAYER ---
         <div className="h-screen w-screen bg-zinc-950/90 backdrop-blur-md overflow-hidden flex items-center p-3 border border-zinc-800" style={{ backgroundColor: themeColor }}>
-          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
+          {!liteMode && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
           
           <div className="w-24 h-24 bg-zinc-800 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group">
-            {currentTrack?.coverArt ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>}
+            {(!liteMode && currentTrack?.coverArt) ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>}
             <button onClick={handleToggleMiniPlayer} className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Trở về chế độ Đầy đủ">
               <Maximize2 size={14} />
             </button>
@@ -1196,8 +1192,8 @@ export default function App() {
         </div>
       ) : (
         // --- GIAO DIỆN CHÍNH (FULL SCREEN) ---
-        <div className="flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative transition-colors duration-1000" style={{ backgroundColor: themeColor }}>
-      <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
+        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${liteMode ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: themeColor }}>
+      {!liteMode && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
 
       {/* OVERLAYS & MODALS */}
       {toast.visible && (
@@ -1339,10 +1335,7 @@ export default function App() {
           <div className="flex-1 flex overflow-hidden">
             
             {/* CỘT TRÁI: DATA VIEW */}
-            <div key={activeView} className="animate-fade-in flex-1 flex flex-col overflow-y-auto p-8 relative" onScroll={(e) => {
-                const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
-                if (scrollHeight - scrollTop <= clientHeight + 100) setVisibleCount(prev => prev + 25)
-              }}>
+            <div key={activeView} className={`${liteMode ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
               
               {/* VIEW: BÀI HÁT */}
               {activeView === 'songs' && (
@@ -1517,6 +1510,30 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+
+                    <div className="border-t border-zinc-800 pt-6 mt-6">
+                      <h3 className="text-emerald-400 font-semibold mb-2">Chế độ Lite (Tiết kiệm tài nguyên)</h3>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-zinc-300 text-sm block">Bật chế độ Lite</span>
+                          <span className="text-zinc-500 text-xs">Vô hiệu hóa ảnh bìa, lời bài hát, hiệu ứng sóng âm và chuyển màu nền.</span>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={liteMode} 
+                          onChange={e => {
+                            const isLite = e.target.checked
+                            setLiteMode(isLite)
+                            if (isLite) {
+                              setShowVisualizer(false)
+                              setShowLyricsPanel(false)
+                              setIsLyricsMaximized(false)
+                            }
+                          }} 
+                          className="w-5 h-5 accent-emerald-500 cursor-pointer" 
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1552,7 +1569,7 @@ export default function App() {
                               {matchedPlaylists.map(pl => (
                                 <div key={pl.name} className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-800/50 hover:bg-zinc-800/50 transition group cursor-pointer" onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}>
                                   <div className="aspect-square bg-zinc-800 rounded-lg mb-4 overflow-hidden relative">
-                                    {pl.thumbnail ? <img src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                                    {(!liteMode && pl.thumbnail) ? <img src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                                     <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Chọn ảnh từ máy tính"><ImageIcon size={16}/></button>
                                     <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Lấy ảnh từ bài hát đầu tiên"><Sparkles size={16}/></button>
                                   </div>
@@ -1582,7 +1599,7 @@ export default function App() {
                   <div className="flex items-end justify-between mb-8">
                     <div className="flex items-end gap-6">
                       <div className="w-40 h-40 bg-zinc-800 rounded-xl overflow-hidden shadow-2xl relative group">
-                        {activePlaylist.thumbnail ? <img src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={48} /></div>}
+                        {(!liteMode && activePlaylist.thumbnail) ? <img src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                       </div>
                       <div>
                         <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-2">Playlist</p>
@@ -1615,7 +1632,7 @@ export default function App() {
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
                   {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-10">Không có lời bài hát.</p> : lyrics.map((line, index) => {
                     const isActive = index === currentLyricIndex
-                    return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time; setCurrentTime(line.time)}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-emerald-400 text-xl' : 'text-zinc-500 text-sm hover:text-zinc-300'}`}>{line.text}</p>
+                    return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-emerald-400 text-xl' : 'text-zinc-500 text-sm hover:text-zinc-300'}`}>{line.text}</p>
                   })}
                 </div>
               </div>
@@ -1637,7 +1654,7 @@ export default function App() {
                       return (
                         <div key={index} onClick={() => handlePlayTrack(track)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${isActive ? 'bg-emerald-500/20 border border-emerald-500/30' : 'hover:bg-zinc-800/50 border border-transparent'}`}>
                           <div className="w-10 h-10 bg-zinc-800 rounded flex-shrink-0 overflow-hidden relative flex items-center justify-center">
-                             {track.coverArt ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={16} className="text-zinc-500" />}
+                             {(!liteMode && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={16} className="text-zinc-500" />}
                              {isActive && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" /></div>}
                           </div>
                           <div className="truncate flex-1">
@@ -1660,13 +1677,13 @@ export default function App() {
             <button onClick={() => setIsLyricsMaximized(false)} className="absolute top-8 right-8 text-zinc-400 hover:text-white bg-zinc-800 p-3 rounded-full"><Minimize2 size={24}/></button>
             <div className="flex-1 flex items-center justify-center p-12">
               <div className="w-1/2 flex flex-col items-center justify-center gap-6">
-                <div className="w-80 h-80 bg-zinc-800 rounded-2xl shadow-2xl overflow-hidden">{currentTrack?.coverArt ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={60} className="m-auto mt-32 text-zinc-600" />}</div>
+                <div className="w-80 h-80 bg-zinc-800 rounded-2xl shadow-2xl overflow-hidden">{(!liteMode && currentTrack?.coverArt) ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={60} className="m-auto mt-32 text-zinc-600" />}</div>
                 <div className="text-center"><h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2><p className="text-emerald-400 text-lg">{currentTrack?.artist}</p></div>
               </div>
               <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">
                  {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-32 text-xl">Không có lời bài hát.</p> : lyrics.map((line, index) => {
                   const isActive = index === currentLyricIndex
-                  return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time; setCurrentTime(line.time)}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-emerald-400 text-3xl scale-105' : 'text-zinc-500 text-xl hover:text-zinc-300 opacity-50'}`}>{line.text}</p>
+                  return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-emerald-400 text-3xl scale-105' : 'text-zinc-500 text-xl hover:text-zinc-300 opacity-50'}`}>{line.text}</p>
                 })}
               </div>
             </div>
@@ -1735,7 +1752,7 @@ export default function App() {
 
         <div className="flex items-center gap-4 w-1/3">
           <div className="w-14 h-14 bg-zinc-800 rounded-md shadow-lg overflow-hidden flex-shrink-0">
-            {currentTrack?.coverArt ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
+            {(!liteMode && currentTrack?.coverArt) ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
           </div>
           <div className="truncate">
             <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : 'Chưa có bài hát'}</h4>
@@ -1759,18 +1776,21 @@ export default function App() {
             <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={20} /></button>
             <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-emerald-500' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
           </div>
-          <div className="w-full flex items-center gap-3 text-[11px] text-zinc-400 font-medium">
-            <span>{formatDuration(currentTime)}</span>
-            <input type="range" min={0} max={currentTrack?.duration || 100} value={currentTime} onChange={handleSeek} disabled={!currentTrack} className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400" style={{ background: `linear-gradient(to right, #10b981 ${currentTrack?.duration ? (currentTime / currentTrack.duration) * 100 : 0}%, #27272a ${currentTrack?.duration ? (currentTime / currentTrack.duration) * 100 : 0}%)` }} />
-            <span>{currentTrack ? formatDuration(currentTrack.duration) : '0:00'}</span>
-          </div>
+          <PlayerProgressBar 
+            audioRef={audioRef} 
+            currentTrack={currentTrack} 
+            crossfadeEnabled={crossfadeEnabled} 
+            crossfadeDuration={crossfadeDuration} 
+            repeatMode={repeatMode} 
+            onNext={handleNext} 
+          />
         </div>
         
         <div className="flex items-center justify-end gap-4 w-1/3 text-zinc-400">
           <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title="Trình phát thu nhỏ (Mini Player)"><PictureInPicture2 size={18} /></button>
-          <button onClick={() => setShowVisualizer(!showVisualizer)} className={`transition ${showVisualizer ? 'text-emerald-500' : 'hover:text-white'}`} title="Bật/tắt hiệu ứng sóng âm"><Activity size={18} /></button>
+          <button onClick={() => setShowVisualizer(!showVisualizer)} disabled={liteMode} className={`transition ${liteMode ? 'opacity-30 cursor-not-allowed' : (showVisualizer ? 'text-emerald-500' : 'hover:text-white')}`} title="Bật/tắt hiệu ứng sóng âm"><Activity size={18} /></button>
           <button onClick={() => { setShowQueuePanel(!showQueuePanel); setShowLyricsPanel(false); }} className={`transition ${showQueuePanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Danh sách đang phát"><List size={18} /></button>
-          <button onClick={() => setShowLyricsPanel(!showLyricsPanel)} className={`transition ${showLyricsPanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Lời bài hát"><Mic2 size={18} /></button>
+          <button onClick={() => setShowLyricsPanel(!showLyricsPanel)} disabled={liteMode} className={`transition ${liteMode ? 'opacity-30 cursor-not-allowed' : (showLyricsPanel ? 'text-emerald-500' : 'hover:text-white')}`} title="Lời bài hát"><Mic2 size={18} /></button>
           <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-emerald-500' : 'hover:text-white'}`} title="Bộ chỉnh âm (Equalizer)"><Sliders size={18} /></button>
 
           <div className="flex items-center gap-2 w-32">
