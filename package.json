@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
-    "@electron-toolkit/utils": "^4.0.0",
+    
     "@tailwindcss/vite": "^4.3.3",
     "electron-updater": "^6.3.9",
     "lucide-react": "^1.28.0",
@@ -33,6 +33,7 @@
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@electron-toolkit/utils": "^4.0.0",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
@@ -57,6 +58,16 @@
     "appId": "com.subzerofroze.meisradio",
     "productName": "Mei's Radio",
     "asar": true,
+    "files": [
+      "out/**/*", 
+      "resources/**/*", 
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!src",
+      "!.git"
+    ],
     "directories": {
       "output": "dist"
     },
