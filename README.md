@@ -1,8 +1,8 @@
 # Mei's Radio
 
-A self-developed media player
-I built this to have a media player with the intention of: having simple Spotify-like UI yet still have enhanced features and moderate resource management
-Currently in development stage
+A self-developed media player  
+I built this to have a media player with the intention of: having simple Spotify-like UI yet still have enhanced features and moderate resource management  
+Currently in development stage  
 
 ## Features
 
