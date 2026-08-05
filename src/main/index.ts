@@ -636,44 +636,16 @@ app.whenReady().then(() => {
           if (metadata.common.album) album = metadata.common.album
         } catch (e) {}
 
-        // LƯU Ý: ĐÃ XÓA HOÀN TOÀN DÒNG `title = title.replace...` CŨ TẠI ĐÂY
-
         const duplicate = existingTracks.find(t => 
           t.title && t.artist && 
           t.title.toLowerCase() === title.toLowerCase() && 
           t.artist.toLowerCase() === artist.toLowerCase()
         )
 
-        let shouldKeep = true
-
+        // Tự động bỏ qua tệp nếu phát hiện trùng lặp (không hiện thông báo hỏi)
         if (duplicate) {
-          const choice = dialog.showMessageBoxSync({
-            type: 'question',
-            buttons: ['Thay thế bản cũ', 'Thêm bản riêng', 'Hủy bỏ'],
-            defaultId: 0,
-            cancelId: 2,
-            title: 'Phát hiện trùng lặp từ Cloud',
-            message: `Bản nhạc "${title}" của "${artist}" đã tồn tại trong thư viện.\nBạn muốn xử lý như thế nào đối với tệp đang tải?`
-          })
-
-          if (choice === 0) {
-            try {
-              if (fs.existsSync(duplicate.id) && duplicate.id !== destPath) {
-                fs.unlinkSync(duplicate.id)
-                const oldLrc = duplicate.id.replace(/\.[^/.]+$/, ".lrc")
-                if (fs.existsSync(oldLrc)) fs.unlinkSync(oldLrc)
-              }
-            } catch (e) {}
-          } else if (choice === 1) {
-            destPath = join(rootPath, `${safeTitle} (${Date.now()}).${ext}`)
-          } else {
-            shouldKeep = false
-          }
-        }
-
-        if (!shouldKeep) {
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
-          continue
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath) // Xóa file tạm vừa tải về
+          continue // Bỏ qua tệp này và chuyển sang tệp tiếp theo ngay lập tức
         }
 
         if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
