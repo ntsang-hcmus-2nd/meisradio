@@ -36,6 +36,13 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   createPlaylist: (playlistName: string) => ipcRenderer.invoke('music:createPlaylist', playlistName),
   addTrackToPlaylist: (playlistName: string, trackPath: string) => ipcRenderer.invoke('music:addTrackToPlaylist', playlistName, trackPath),
   forceGC: () => ipcRenderer.invoke('music:forceGC'),
+  searchOnline: (query: string) => ipcRenderer.invoke('music:searchOnline', query),
+  getStreamUrl: (track: any) => ipcRenderer.invoke('music:getStreamUrl', track),
+  downloadOnline: (track: any) => ipcRenderer.invoke('music:downloadOnline', track),
+  ytmLogin: () => ipcRenderer.invoke('music:ytmLogin'),
+  getHomeDashboard: () => ipcRenderer.invoke('music:getHomeDashboard'),
+  getYtmPlaylist: (playlistId: string) => ipcRenderer.invoke('music:getYtmPlaylist', playlistId),
+  preloadStream: (targetId: string) => ipcRenderer.invoke('music:preloadStream', targetId),
 }
 
 if (process.contextIsolated) {
