@@ -1352,7 +1352,7 @@ app.whenReady().then(() => {
            // Lấy ID định danh
            const navEndpoint = renderer.navigationEndpoint || renderer.title?.runs?.[0]?.navigationEndpoint;
            const videoId = navEndpoint?.watchEndpoint?.videoId;
-           const playlistId = navEndpoint?.watchEndpoint?.playlistId || navEndpoint?.browseEndpoint?.browseId;
+           const playlistId = navEndpoint?.browseEndpoint?.browseId || navEndpoint?.watchEndpoint?.playlistId;
            
            // Lấy tên nghệ sĩ / Phụ đề
            const subtitleRuns = renderer.subtitle?.runs || [];
@@ -1385,10 +1385,16 @@ app.whenReady().then(() => {
   ipcMain.handle('music:getYtmPlaylist', async (_, playlistId: string) => {
     const config = getConfig()
     try {
+      // Bổ sung tiền tố VL để API nhận diện đúng định dạng danh sách phát
+      let targetId = playlistId;
+      if (targetId.startsWith('PL') || targetId.startsWith('RD') || targetId.startsWith('OL')) {
+        targetId = 'VL' + targetId;
+      }
+
       const url = 'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false';
       const payload = {
         context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20240108.01.00', hl: 'vi', gl: 'VN' } },
-        browseId: playlistId
+        browseId: targetId
       };
       
       const headers: any = {
@@ -1402,17 +1408,41 @@ app.whenReady().then(() => {
       const data = response.data;
 
       const tracks: any[] = [];
-      const contents = data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicPlaylistShelfRenderer?.contents || [];
+      let contents: any[] = [];
+
+      // Quét ở cả 2 nhánh (Desktop / Mobile Layout) để đảm bảo không lọt dữ liệu
+      const twoColumn = data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents || [];
+      const singleColumn = data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+      const sections = [...twoColumn, ...singleColumn];
+
+      for (const section of sections) {
+        if (section.musicPlaylistShelfRenderer) {
+          contents = section.musicPlaylistShelfRenderer.contents;
+          break;
+        }
+        if (section.musicShelfRenderer) {
+          contents = section.musicShelfRenderer.contents;
+          break;
+        }
+      }
 
       for (const item of contents) {
         const renderer = item.musicResponsiveListItemRenderer;
         if (!renderer) continue;
 
-        const videoId = renderer.playlistItemData?.videoId || renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+        // Quét ID bài hát qua nhiều vị trí bảo mật ngầm của Google
+        const videoId = renderer.playlistItemData?.videoId 
+                     || renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId
+                     || renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+                     
         if (!videoId) continue;
 
-        const title = renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.text || 'Unknown';
-        const artist = renderer.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.map((r:any) => r.text).join('') || 'YouTube';
+        const titleRuns = renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs;
+        const title = titleRuns ? titleRuns.map((r:any) => r.text).join('') : 'Unknown';
+        
+        const artistRuns = renderer.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs;
+        const artist = artistRuns ? artistRuns.map((r:any) => r.text).join('') : 'YouTube';
+        
         const thumbnails = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
 
         tracks.push({
@@ -1421,7 +1451,7 @@ app.whenReady().then(() => {
           title: title,
           artist: artist,
           album: 'YouTube Music',
-          duration: 0, // Sẽ tự cập nhật khi load vào thẻ audio
+          duration: 0,
           format: 'STREAM',
           isCloud: true,
           isOnline: true,
