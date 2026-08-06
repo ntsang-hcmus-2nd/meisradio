@@ -180,6 +180,20 @@ export default function App() {
   // 3. UTILITIES & HANDLERS
   // ==========================================
 
+  // Thêm log kiểm tra lệch Sample Rate
+  useEffect(() => {
+    if (audioCtxRef.current && currentTrack) {
+      const ctxRate = audioCtxRef.current.sampleRate;
+      const fileRate = currentTrack.sampleRate;
+
+      console.log(`[Audio Check] AudioContext Rate: ${ctxRate}Hz | File Rate: ${fileRate}Hz`);
+      
+      if (fileRate && ctxRate !== fileRate) {
+        console.warn(`[Warning] Đang xảy ra Resampling từ ${fileRate}Hz sang ${ctxRate}Hz!`);
+      }
+    }
+  }, [currentTrack]);
+
   // --- Dashboard ---
   const fetchDashboard = async () => {
     setIsDashboardLoading(true)
@@ -210,7 +224,6 @@ export default function App() {
 
   const handleDashboardItemClick = async (item: any) => {
     if (item.videoId) {
-      // Nếu là Bài hát -> Chuyển thành Track Object và Play ngay lập tức
       const track = {
         id: `yt-${item.videoId}`, originalId: item.videoId,
         title: item.title, artist: item.subtitle, album: 'YouTube Music', duration: 0,
@@ -218,14 +231,17 @@ export default function App() {
         coverArt: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[item.thumbnails.length - 1].url : null
       };
       
+      // HIỂN THỊ NGAY LÊN PLAYER BAR (Ép giao diện cập nhật tức thì)
+      setCurrentTrack({ ...track, filePath: '' }); 
       setOriginalQueue([track]);
       setPlayQueue([track]);
       
-      // Lấy Stream URL qua Local Buffer Server
       // @ts-ignore
       const res = await window.api.getStreamUrl(track);
       if (res.success && res.url) {
         handlePlayTrack({ ...track, filePath: res.url });
+        // @ts-ignore
+        window.api.logWatchHistory(track.originalId); // Hàm lưu lịch sử nghe nhạc (Sẽ làm ở Bước 2)
       } else {
         alert('Lỗi lấy luồng nhạc.');
       }
@@ -242,6 +258,69 @@ export default function App() {
         setActiveAlbum(null);
       }
       setIsAlbumLoading(false);
+    }
+  }
+
+  const handleDashboardItemDownload = async (item: any) => {
+    if (item.videoId) {
+      // 1. TẢI 1 BÀI HÁT ĐƠN LẺ
+      const track = {
+        originalId: item.videoId,
+        title: item.title,
+        artist: item.subtitle,
+        album: item.subtitle || 'Singles', // Lấy Subtitle (thường là tên ca sĩ) làm thư mục phân loại tạm
+      };
+      
+      setIsDownloading(true);
+      setDownloadProgress({ current: 0, total: 1, fileName: `Đang tải: ${item.title}` });
+      
+      // @ts-ignore
+      const res = await window.api.downloadOnline(track);
+      
+      setIsDownloading(false);
+      setDownloadProgress(null);
+      
+      if (res.success) { 
+        showToast(`Đã tải xong "${item.title}"!`, 'success'); 
+        loadLibrary(); 
+      } else if (!res.canceled) { 
+        alert('Lỗi tải xuống: ' + res.error); 
+      }
+
+    } else if (item.playlistId) {
+      // 2. TẢI TOÀN BỘ ALBUM / PLAYLIST
+      const confirmDownload = confirm(`Bạn có muốn tải toàn bộ bài hát trong "${item.title}" không? (Quá trình này sẽ tốn chút thời gian)`);
+      if (!confirmDownload) return;
+      
+      setIsDownloading(true);
+      setDownloadProgress({ current: 0, total: 0, fileName: 'Đang trích xuất dữ liệu Album...' });
+      
+      // Lấy danh sách track trong Album
+      // @ts-ignore
+      const res = await window.api.getYtmPlaylist(item.playlistId);
+      if (res.success && res.tracks) {
+         const tracks = res.tracks;
+         let successCount = 0;
+         
+         for (let i = 0; i < tracks.length; i++) {
+            setDownloadProgress({ current: i + 1, total: tracks.length, fileName: tracks[i].title });
+            
+            // Ép tên Album cho bài hát để gom chung vào 1 thư mục
+            const trackToDl = { ...tracks[i], album: item.title };
+            
+            // @ts-ignore
+            const dlRes = await window.api.downloadOnline(trackToDl);
+            if (dlRes.success) successCount++;
+         }
+         
+         showToast(`Đã tải hoàn tất ${successCount}/${tracks.length} bài hát của Album!`, 'success');
+         loadLibrary();
+      } else {
+         alert('Lỗi lấy danh sách Album: ' + res.error);
+      }
+      
+      setIsDownloading(false);
+      setDownloadProgress(null);
     }
   }
 
@@ -513,7 +592,30 @@ export default function App() {
     window.api.toggleMiniPlayer(nextState)
   }
 
-  const handleRowClick = (track: any, contextList?: any[]) => {
+  const handleRowClick = async (track: any, contextList?: any[]) => {
+    if (track.isOnline || track.platform === 'youtube') {
+      if (contextList) {
+        setOriginalQueue(contextList)
+        setPlayQueue(isShuffle ? [...contextList].sort(() => Math.random() - 0.5) : contextList)
+      }
+      
+      showToast('Đang kết nối luồng phát...', 'info')
+      // HIỂN THỊ NGAY LÊN PLAYER BAR
+      setCurrentTrack({ ...track, filePath: '' });
+      
+      // @ts-ignore
+      const res = await window.api.getStreamUrl(track)
+      if (res.success && res.url) {
+        handlePlayTrack({ ...track, filePath: res.url })
+        // @ts-ignore
+        window.api.logWatchHistory(track.originalId); // Ghi nhận lịch sử
+      } else {
+        alert('Lỗi stream: ' + res.error)
+      }
+      return
+    }
+
+    // Các file lưu trên Google Drive (Cloud truyền thống) vẫn giữ nguyên popup lựa chọn
     if (track.isCloud) {
       setCloudActionTrack(track)
     } else {
@@ -1411,7 +1513,13 @@ export default function App() {
               <div>
                 <p className="text-xs font-semibold text-zinc-500 tracking-widest uppercase mb-3">Thư viện</p>
                 <ul className="space-y-2">
-                  <li onClick={() => { setActiveView('home'); setSearchQuery(''); setSearchInput(''); }} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'home' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                  <li onClick={() => { 
+                    setActiveView('home'); 
+                    setSearchQuery(''); 
+                    setSearchInput(''); 
+                    setActiveAlbum(null);
+                    fetchDashboard(); // Tự động load lại gợi ý gốc
+                  }} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'home' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`}>
                     <Home size={18} /> Trang chủ
                   </li>
                   <li onClick={() => { setActiveView('songs'); setSearchQuery(''); setSearchInput(''); }} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'songs' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white'}`}>
@@ -1452,9 +1560,57 @@ export default function App() {
               <input 
                 type="text" 
                 value={searchInput}
-                onChange={(e) => { setSearchInput(e.target.value); if (e.target.value === '') setSearchQuery(''); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') setSearchQuery(searchInput); }}
-                placeholder="Tìm kiếm bài hát, nghệ sĩ..." 
+                onChange={(e) => { 
+                  setSearchInput(e.target.value); 
+                  // Xóa trắng ô tìm kiếm sẽ khôi phục lại dữ liệu ban đầu tùy theo Tab đang hiển thị
+                  if (e.target.value === '') {
+                    setSearchQuery('');
+                    if (activeView === 'online') setOnlineSearchQuery('');
+                    if (activeView === 'home') fetchDashboard(); // Tự động load lại gợi ý trang chủ
+                  } 
+                }}
+                onKeyDown={(e) => { 
+                  if (e.key === 'Enter' && searchInput.trim() !== '') {
+                    if (activeView === 'home') {
+                      // HIỆU ỨNG 1: Tìm kiếm trực tiếp trên Dashboard mà không bị nhảy tab
+                      setIsDashboardLoading(true);
+                      // @ts-ignore
+                      window.api.searchOnline(searchInput).then(res => {
+                        if (res.success) {
+                          // Ép kiểu dữ liệu trả về thành định dạng mảng (Carousel) của Dashboard
+                          setDashboardData([{
+                            title: `Kết quả tìm kiếm cho "${searchInput}"`,
+                            contents: res.tracks.map((t: any) => ({
+                              title: t.title,
+                              subtitle: t.artist,
+                              videoId: t.originalId,
+                              thumbnails: t.coverArt ? [{ url: t.coverArt }] : []
+                            }))
+                          }]);
+                        } else {
+                          alert('Lỗi tìm kiếm: ' + res.error);
+                        }
+                        setIsDashboardLoading(false);
+                      });
+                    } else if (activeView === 'online') {
+                      // HIỆU ỨNG 2: Đang ở tab Stream trực tuyến
+                      setActiveView('online');
+                      setOnlineSearchQuery(searchInput);
+                      setIsSearchingOnline(true);
+                      
+                      // @ts-ignore
+                      window.api.searchOnline(searchInput).then(res => {
+                        if (res.success) setOnlineResults(res.tracks)
+                        else alert('Lỗi tìm kiếm: ' + res.error)
+                        setIsSearchingOnline(false)
+                      });
+                    } else {
+                      // HIỆU ỨNG 3: Đang ở các tab Thư viện, tiến hành lọc Local
+                      setSearchQuery(searchInput); 
+                    }
+                  } 
+                }}
+                placeholder={activeView === 'home' || activeView === 'online' ? "Tìm kiếm nhạc trên YouTube / YT Music..." : "Tìm bài hát, nghệ sĩ trong máy..."} 
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors" 
               />
             </div>
@@ -1469,7 +1625,6 @@ export default function App() {
             
             {/* CỘT TRÁI: DATA VIEW */}
             <div key={activeView} className={`${liteMode ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-              {/* VIEW: TRANG CHỦ DASHBOARD */}
               {/* VIEW: TRANG CHỦ DASHBOARD */}
               {activeView === 'home' && (
                 <div className="flex flex-col h-full">
@@ -1500,7 +1655,17 @@ export default function App() {
                     <>
                       <div className="flex items-center justify-between mb-8">
                         <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-                          <Home size={32} className="text-emerald-400" /> Dành cho bạn
+                          <Home 
+                            size={32} 
+                            className="text-emerald-400 cursor-pointer hover:scale-110 hover:text-emerald-300 transition-all" 
+                            title="Làm mới Trang chủ" 
+                            onClick={() => {
+                              setSearchInput('');
+                              setSearchQuery('');
+                              fetchDashboard();
+                            }}
+                          /> 
+                          Dành cho bạn
                         </h2>
                       </div>
                       <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
@@ -1516,8 +1681,14 @@ export default function App() {
                                     ) : (
                                       <ListMusic size={40} className="m-auto mt-16 text-zinc-600" />
                                     )}
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                      <Play size={32} className="text-white fill-current shadow-2xl" />
+                                    {/* MỚI: Thêm lớp phủ mờ có 2 nút Play và Download */}
+                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                      <button onClick={(e) => { e.stopPropagation(); handleDashboardItemClick(item); }} className="w-12 h-12 flex items-center justify-center bg-white text-black rounded-full hover:scale-110 transition shadow-2xl" title={item.videoId ? "Phát ngay" : "Mở Album"}>
+                                        <Play size={24} className="fill-current ml-1" />
+                                      </button>
+                                      <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-zinc-800/90 text-white rounded-full hover:bg-emerald-500 hover:scale-110 transition shadow-2xl" title="Tải xuống thư viện">
+                                        <Download size={18} />
+                                      </button>
                                     </div>
                                   </div>
                                   <p className="font-semibold text-sm text-white truncate">{item.title}</p>

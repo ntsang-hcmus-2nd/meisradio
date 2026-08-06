@@ -43,6 +43,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   getHomeDashboard: () => ipcRenderer.invoke('music:getHomeDashboard'),
   getYtmPlaylist: (playlistId: string) => ipcRenderer.invoke('music:getYtmPlaylist', playlistId),
   preloadStream: (targetId: string) => ipcRenderer.invoke('music:preloadStream', targetId),
+  logWatchHistory: (videoId: string) => ipcRenderer.invoke('music:logWatchHistory', videoId),
 }
 
 if (process.contextIsolated) {

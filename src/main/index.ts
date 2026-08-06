@@ -1203,13 +1203,41 @@ app.whenReady().then(() => {
     }
   })
 
-  // 3. API: Tải nhạc bằng yt-dlp
+  // 3. API: Tải nhạc bằng yt-dlp (Có phân loại Album và Check trùng lặp)
   ipcMain.handle('music:downloadOnline', async (_, track: any) => {
-    const rootPath = getConfig().libraryPath
-    if (!rootPath) return { success: false, error: 'Chưa cấu hình Thư mục thư viện' }
+    const rootPath = getConfig().libraryPath;
+    if (!rootPath) return { success: false, error: 'Chưa cấu hình Thư mục thư viện' };
     
-    const safeTitle = track.title.replace(/[<>:"\/\\|?*]/g, '_').trim()
-    const destPath = join(rootPath, `${safeTitle}.mp3`)
+    // Tạo thư mục Album (Nếu không có tên Album thì lưu vào thư mục Singles)
+    const safeAlbum = (track.album || 'Singles').replace(/[<>:"\/\\|?*]/g, '_').trim();
+    const albumPath = join(rootPath, safeAlbum);
+    if (!fs.existsSync(albumPath)) {
+      fs.mkdirSync(albumPath, { recursive: true });
+    }
+
+    const safeTitle = (track.title || 'Unknown').replace(/[<>:"\/\\|?*]/g, '_').trim();
+    let destPath = join(albumPath, `${safeTitle}.mp3`);
+    
+    // Kiểm tra trùng lặp và hiện Hộp thoại (Dialog)
+    if (fs.existsSync(destPath)) {
+      const { response } = dialog.showMessageBoxSync(mainWindow!, {
+        type: 'question',
+        buttons: ['Thay thế', 'Lưu thành tệp mới', 'Hủy'],
+        defaultId: 0,
+        cancelId: 2,
+        title: 'Tệp đã tồn tại',
+        message: `Bài hát "${safeTitle}" đã có sẵn trong thư mục "${safeAlbum}". Bạn muốn làm gì?`
+      });
+      
+      if (response === 2) return { success: false, canceled: true }; // Người dùng chọn Hủy
+      if (response === 1) {
+        // Lưu thành tệp mới (Thêm ID thời gian)
+        destPath = join(albumPath, `${safeTitle}_${Date.now()}.mp3`);
+      } else {
+        // Thay thế (Xóa file cũ trước khi ghi file mới)
+        fs.unlinkSync(destPath);
+      }
+    }
     
     try {
       await ytdlp(track.originalId, {
@@ -1219,10 +1247,10 @@ app.whenReady().then(() => {
         output: destPath,
         embedMetadata: true,
         embedThumbnail: true
-      })
-      return { success: true, localPath: pathToFileURL(destPath).href }
+      });
+      return { success: true, localPath: pathToFileURL(destPath).href };
     } catch (e: any) {
-      return { success: false, error: e.message }
+      return { success: false, error: e.message };
     }
   })
 
@@ -1486,6 +1514,37 @@ app.whenReady().then(() => {
       return { success: true };
     } catch (e) {
       return { success: false };
+    }
+  })
+
+  // 5. API: Ghi nhận lịch sử nghe nhạc để YouTube học Recommendations
+  ipcMain.handle('music:logWatchHistory', async (_, videoId: string) => {
+    const config = getConfig()
+    if (!config.ytCookie) return { success: false }
+
+    try {
+      const url = 'https://music.youtube.com/youtubei/v1/player?prettyPrint=false';
+      const payload = {
+        context: {
+          client: { clientName: 'WEB_REMIX', clientVersion: '1.20240108.01.00', hl: 'vi', gl: 'VN' }
+        },
+        videoId: videoId
+      };
+      const headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Origin': 'https://music.youtube.com',
+        'Cookie': config.ytCookie
+      };
+
+      // Gửi request đến Endpoint "Player" của Google. 
+      // Dù ta không dùng luồng video ở đây, nhưng việc gọi API này kèm Cookie 
+      // sẽ ngay lập tức ghi nhận 1 lượt "Đã xem/Đã nghe" vào tài khoản Google của bạn.
+      await axios.post(url, payload, { headers });
+      
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
     }
   })
 
