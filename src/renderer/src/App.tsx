@@ -231,22 +231,10 @@ export default function App() {
         coverArt: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[item.thumbnails.length - 1].url : null
       };
       
-      // HIỂN THỊ NGAY LÊN PLAYER BAR (Ép giao diện cập nhật tức thì)
-      setCurrentTrack({ ...track, filePath: '' }); 
-      setOriginalQueue([track]);
-      setPlayQueue([track]);
+      // SỬ DỤNG HÀM MỚI Ở ĐÂY
+      playAndGenerateRadio(track);
       
-      // @ts-ignore
-      const res = await window.api.getStreamUrl(track);
-      if (res.success && res.url) {
-        handlePlayTrack({ ...track, filePath: res.url });
-        // @ts-ignore
-        window.api.logWatchHistory(track.originalId); // Hàm lưu lịch sử nghe nhạc (Sẽ làm ở Bước 2)
-      } else {
-        alert('Lỗi lấy luồng nhạc.');
-      }
     } else if (item.playlistId) {
-      // Nếu là Album/Playlist -> Mở giao diện Danh sách
       setActiveAlbum({ title: item.title, tracks: [] });
       setIsAlbumLoading(true);
       // @ts-ignore
@@ -259,6 +247,40 @@ export default function App() {
       }
       setIsAlbumLoading(false);
     }
+  }
+
+  // Hàm mới: Bắt đầu phát 1 bài hát Online đơn lẻ và tự động gọi API lấy danh sách gợi ý
+  const playAndGenerateRadio = (track: any) => {
+    // 1. Đặt bài hát hiện tại vào hàng đợi
+    setOriginalQueue([track]);
+    setPlayQueue([track]);
+    
+    // 2. Phát nhạc ngay lập tức
+    handlePlayTrack(track);
+
+    // 3. Gọi ngầm API lấy danh sách "Tiếp theo"
+    // @ts-ignore
+    window.api.getUpNext(track.originalId).then((res: any) => {
+      if (res.success && res.tracks.length > 0) {
+        // Lọc bỏ bài hát đầu tiên nếu nó trùng với bài đang phát
+        const nextTracks = res.tracks.filter((t: any) => t.originalId !== track.originalId);
+        
+        // Bơm nhạc vào Hàng đợi một cách an toàn
+        setPlayQueue(prev => {
+          if (prev.length === 1 && prev[0].originalId === track.originalId) {
+            return [...prev, ...nextTracks];
+          }
+          return prev;
+        });
+        
+        setOriginalQueue(prev => {
+          if (prev.length === 1 && prev[0].originalId === track.originalId) {
+            return [...prev, ...nextTracks];
+          }
+          return prev;
+        });
+      }
+    });
   }
 
   const handleDashboardItemDownload = async (item: any) => {
@@ -499,10 +521,27 @@ export default function App() {
       }, 50)
     }
 
-    setCurrentTrack(track)
-    setIsPlaying(true)
+    let trackToPlay = { ...track };
+
+    // TỰ ĐỘNG: Phân giải URL cho nhạc Online nếu chưa có
+    if ((trackToPlay.isOnline || trackToPlay.platform === 'youtube') && (!trackToPlay.filePath || !trackToPlay.filePath.startsWith('http://127.0.0.1'))) {
+      showToast('Đang kết nối luồng phát...', 'info');
+      // @ts-ignore
+      const res = await window.api.getStreamUrl(trackToPlay);
+      if (res.success && res.url) {
+        trackToPlay.filePath = res.url;
+        // @ts-ignore
+        if (window.api.logWatchHistory) window.api.logWatchHistory(trackToPlay.originalId);
+      } else {
+        alert('Lỗi lấy luồng nhạc: ' + res.error);
+        return;
+      }
+    }
+
+    setCurrentTrack(trackToPlay);
+    setIsPlaying(true);
     if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-      await audioCtxRef.current.resume()
+      await audioCtxRef.current.resume();
     }
   }
 
@@ -593,37 +632,14 @@ export default function App() {
   }
 
   const handleRowClick = async (track: any, contextList?: any[]) => {
-    if (track.isOnline || track.platform === 'youtube') {
-      if (contextList) {
-        setOriginalQueue(contextList)
-        setPlayQueue(isShuffle ? [...contextList].sort(() => Math.random() - 0.5) : contextList)
-      }
-      
-      showToast('Đang kết nối luồng phát...', 'info')
-      // HIỂN THỊ NGAY LÊN PLAYER BAR
-      setCurrentTrack({ ...track, filePath: '' });
-      
-      // @ts-ignore
-      const res = await window.api.getStreamUrl(track)
-      if (res.success && res.url) {
-        handlePlayTrack({ ...track, filePath: res.url })
-        // @ts-ignore
-        window.api.logWatchHistory(track.originalId); // Ghi nhận lịch sử
-      } else {
-        alert('Lỗi stream: ' + res.error)
-      }
-      return
+    if (contextList) {
+      setOriginalQueue(contextList);
+      setPlayQueue(isShuffle ? [...contextList].sort(() => Math.random() - 0.5) : contextList);
     }
-
-    // Các file lưu trên Google Drive (Cloud truyền thống) vẫn giữ nguyên popup lựa chọn
-    if (track.isCloud) {
-      setCloudActionTrack(track)
+    if (track.isCloud && !track.isOnline) {
+      setCloudActionTrack(track);
     } else {
-      if (contextList) {
-        setOriginalQueue(contextList)
-        setPlayQueue(isShuffle ? [...contextList].sort(() => Math.random() - 0.5) : contextList)
-      }
-      handlePlayTrack(track)
+      handlePlayTrack(track); // Gọi thẳng, hệ thống sẽ tự phân giải
     }
   }
 
@@ -1669,35 +1685,72 @@ export default function App() {
                         </h2>
                       </div>
                       <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
-                        {dashboardData.map((section, index) => (
-                          <div key={index}>
-                            <h3 className="text-xl font-bold text-white mb-4">{section.title}</h3>
-                            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
-                              {section.contents.map((item: any, i: number) => (
-                                <div key={i} className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer" onClick={() => handleDashboardItemClick(item)}>
-                                  <div className="w-40 h-40 bg-zinc-800 rounded-xl mb-3 overflow-hidden relative shadow-lg">
-                                    {item.thumbnails && item.thumbnails.length > 0 ? (
-                                      <img src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                                    ) : (
-                                      <ListMusic size={40} className="m-auto mt-16 text-zinc-600" />
-                                    )}
-                                    {/* MỚI: Thêm lớp phủ mờ có 2 nút Play và Download */}
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                      <button onClick={(e) => { e.stopPropagation(); handleDashboardItemClick(item); }} className="w-12 h-12 flex items-center justify-center bg-white text-black rounded-full hover:scale-110 transition shadow-2xl" title={item.videoId ? "Phát ngay" : "Mở Album"}>
-                                        <Play size={24} className="fill-current ml-1" />
-                                      </button>
-                                      <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-zinc-800/90 text-white rounded-full hover:bg-emerald-500 hover:scale-110 transition shadow-2xl" title="Tải xuống thư viện">
-                                        <Download size={18} />
-                                      </button>
+                        {dashboardData.map((section, index) => {
+                          const isListSection = section.contents.some((t: any) => t.style === 'LIST');
+
+                          return (
+                            <div key={index}>
+                              <h3 className="text-xl font-bold text-white mb-4">{section.title}</h3>
+                              
+                              {/* Phân nhánh cấu trúc lưới (Grid 4 hàng ngang) hoặc Cuộn thẻ (Flex) */}
+                              <div className={`overflow-x-auto pb-4 scrollbar-hide snap-x ${isListSection ? 'grid grid-rows-4 grid-flow-col gap-x-6 gap-y-3' : 'flex gap-4'}`}>
+                                {section.contents.map((item: any, i: number) => {
+                                  
+                                  // --- GIAO DIỆN KIỂU LIST (Dành cho Bài hát thịnh hành) ---
+                                  if (item.style === 'LIST') {
+                                    return (
+                                      <div key={i} className="flex items-center gap-3 w-96 snap-start group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition" onClick={() => handleDashboardItemClick(item)}>
+                                        <div className="w-12 h-12 bg-zinc-800 rounded flex-shrink-0 relative overflow-hidden shadow-md">
+                                          {item.thumbnails && item.thumbnails.length > 0 ? (
+                                            <img src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                          ) : (
+                                            <ListMusic size={16} className="m-auto mt-4 text-zinc-600" />
+                                          )}
+                                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Play size={18} className="text-white fill-current ml-0.5" />
+                                          </div>
+                                        </div>
+                                        <div className="flex-1 truncate">
+                                          <p className="font-semibold text-sm text-white truncate group-hover:text-emerald-400 transition">{item.title}</p>
+                                          <p className="text-xs text-zinc-500 truncate mt-0.5">{item.subtitle}</p>
+                                        </div>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-full transition" title="Tải xuống thư viện">
+                                          <Download size={14} />
+                                        </button>
+                                      </div>
+                                    )
+                                  }
+
+                                  // --- GIAO DIỆN KIỂU CARD (Dành cho Video/Album) ---
+                                  return (
+                                    <div key={i} className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer" onClick={() => handleDashboardItemClick(item)}>
+                                      <div className="w-40 h-40 bg-zinc-800 rounded-xl mb-3 overflow-hidden relative shadow-lg">
+                                        {item.thumbnails && item.thumbnails.length > 0 ? (
+                                          <img src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                        ) : (
+                                          <ListMusic size={40} className="m-auto mt-16 text-zinc-600" />
+                                        )}
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                          <button 
+                                            onClick={() => playAndGenerateRadio(track)} 
+                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs text-white font-medium flex items-center gap-1 transition"
+                                          >
+                                            <Play size={14}/> Phát ngay
+                                          </button>
+                                          <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-zinc-800/90 text-white rounded-full hover:bg-emerald-500 hover:scale-110 transition shadow-2xl" title="Tải xuống thư viện">
+                                            <Download size={18} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <p className="font-semibold text-sm text-white truncate">{item.title}</p>
+                                      <p className="text-xs text-zinc-500 truncate mt-1">{item.subtitle}</p>
                                     </div>
-                                  </div>
-                                  <p className="font-semibold text-sm text-white truncate">{item.title}</p>
-                                  <p className="text-xs text-zinc-500 truncate mt-1">{item.subtitle}</p>
-                                </div>
-                              ))}
+                                  )
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </>
                   )}

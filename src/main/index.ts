@@ -1258,6 +1258,17 @@ app.whenReady().then(() => {
   // HỆ THỐNG YOUTUBE MUSIC DASHBOARD & BẢO MẬT
   // ==========================================
 
+  // Hàm phụ trợ: Tạo chữ ký xác thực (SAPISIDHASH) để Google nhận diện đúng tài khoản
+  function generateSapisidHash(cookieStr: string) {
+    const match = cookieStr.match(/SAPISID=([^;]+)/);
+    if (!match) return null;
+    const sapisid = match[1];
+    const time = Math.floor(Date.now() / 1000);
+    const origin = 'https://music.youtube.com';
+    const hash = crypto.createHash('sha1').update(`${time} ${sapisid} ${origin}`).digest('hex');
+    return `SAPISIDHASH ${time}_${hash}`;
+  }
+
   // 1. API: Mở cửa sổ đăng nhập bảo mật và trích xuất Cookie
   ipcMain.handle('music:ytmLogin', async () => {
     return new Promise((resolve) => {
@@ -1324,28 +1335,26 @@ app.whenReady().then(() => {
 
     try {
       const url = 'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false';
-      
-      // Payload định danh thiết bị là trình duyệt web YouTube Music
       const payload = {
         context: {
-          client: {
-            clientName: 'WEB_REMIX', // WEB_REMIX là mã định danh của YT Music
-            clientVersion: '1.20240108.01.00',
-            hl: 'vi', // Ngôn ngữ Tiếng Việt
-            gl: 'VN'  // Vị trí Việt Nam
-          }
+          client: { clientName: 'WEB_REMIX', clientVersion: '1.20240108.01.00', hl: 'vi', gl: 'VN' }
         },
-        browseId: 'FEmusic_home' // Yêu cầu trả về trang chủ Dashboard
+        browseId: 'FEmusic_home' 
       };
       
-      const headers = {
+      const headers: any = {
         'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Origin': 'https://music.youtube.com',
-        'Cookie': config.ytCookie // Truyền Cookie bạn đã dán vào đây
       };
 
-      // Gửi request thẳng đến máy chủ Google
+      // MỚI: Bơm chữ ký điện tử để "Mở khóa" các danh mục cá nhân hóa
+      if (config.ytCookie) {
+        headers['Cookie'] = config.ytCookie;
+        const authHash = generateSapisidHash(config.ytCookie);
+        if (authHash) headers['Authorization'] = authHash;
+      }
+
       const response = await axios.post(url, payload, { headers });
       const data = response.data;
       
@@ -1356,44 +1365,55 @@ app.whenReady().then(() => {
       
       const sectionList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
       
-      // Bóc tách dữ liệu JSON phức tạp của Google thành mảng đơn giản cho Frontend
-      for (const section of sectionList) {
-        const carousel = section.musicCarouselShelfRenderer;
+      for (let section of sectionList) {
+        // MỚI: Giải nén cấu trúc nếu nó bị bọc trong itemSectionRenderer
+        if (section.itemSectionRenderer?.contents) {
+          section = section.itemSectionRenderer.contents[0];
+        }
+
+        const carousel = section.musicCarouselShelfRenderer || section.musicImmersiveCarouselShelfRenderer || section.musicShelfRenderer;
         if (!carousel) continue;
         
-        const titleRuns = carousel.header?.musicCarouselShelfBasicHeaderRenderer?.title?.runs;
-        const title = titleRuns ? titleRuns[0].text : 'Gợi ý cho bạn';
+        const header = carousel.header?.musicCarouselShelfBasicHeaderRenderer || carousel.header?.musicImmersiveCarouselShelfBasicHeaderRenderer;
+        const titleRuns = header?.title?.runs;
+        const title = titleRuns ? titleRuns.map((r: any) => r.text).join('') : 'Gợi ý cho bạn';
         
         const items: any[] = [];
         for (const item of carousel.contents || []) {
-           const renderer = item.musicTwoRowItemRenderer || item.musicResponsiveListItemRenderer;
+           let renderer = item.musicTwoRowItemRenderer;
+           let style = 'CARD';
+           
+           if (!renderer) {
+             renderer = item.musicResponsiveListItemRenderer;
+             style = 'LIST';
+           }
            if (!renderer) continue;
            
-           // Lấy tên bài hát/playlist
-           const itemTitleRuns = renderer.title?.runs || [];
+           const itemTitleRuns = renderer.title?.runs || renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
            const itemTitle = itemTitleRuns.map((r: any) => r.text).join('');
            
-           // Lấy ảnh bìa
            const thumbnails = renderer.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails 
                            || renderer.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
            
-           // Lấy ID định danh
-           const navEndpoint = renderer.navigationEndpoint || renderer.title?.runs?.[0]?.navigationEndpoint;
+           const navEndpoint = renderer.navigationEndpoint 
+                            || renderer.title?.runs?.[0]?.navigationEndpoint
+                            || renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint
+                            || renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint;
+
            const videoId = navEndpoint?.watchEndpoint?.videoId;
            const playlistId = navEndpoint?.browseEndpoint?.browseId || navEndpoint?.watchEndpoint?.playlistId;
            
-           // Lấy tên nghệ sĩ / Phụ đề
-           const subtitleRuns = renderer.subtitle?.runs || [];
+           const subtitleRuns = renderer.subtitle?.runs || renderer.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
            const subtitle = subtitleRuns.map((r: any) => r.text).join('');
            
-           // Chỉ lấy những mục có ID hợp lệ để phát nhạc
            if (itemTitle && (videoId || playlistId)) {
              items.push({
                title: itemTitle,
                subtitle: subtitle,
                videoId: videoId,
                playlistId: playlistId,
-               thumbnails: thumbnails
+               thumbnails: thumbnails,
+               style: style 
              });
            }
         }
@@ -1413,7 +1433,6 @@ app.whenReady().then(() => {
   ipcMain.handle('music:getYtmPlaylist', async (_, playlistId: string) => {
     const config = getConfig()
     try {
-      // Bổ sung tiền tố VL để API nhận diện đúng định dạng danh sách phát
       let targetId = playlistId;
       if (targetId.startsWith('PL') || targetId.startsWith('RD') || targetId.startsWith('OL')) {
         targetId = 'VL' + targetId;
@@ -1430,7 +1449,12 @@ app.whenReady().then(() => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Origin': 'https://music.youtube.com',
       };
-      if (config.ytCookie) headers['Cookie'] = config.ytCookie;
+
+      if (config.ytCookie) {
+        headers['Cookie'] = config.ytCookie;
+        const authHash = generateSapisidHash(config.ytCookie);
+        if (authHash) headers['Authorization'] = authHash;
+      }
 
       const response = await axios.post(url, payload, { headers });
       const data = response.data;
@@ -1438,7 +1462,6 @@ app.whenReady().then(() => {
       const tracks: any[] = [];
       let contents: any[] = [];
 
-      // Quét ở cả 2 nhánh (Desktop / Mobile Layout) để đảm bảo không lọt dữ liệu
       const twoColumn = data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents || [];
       const singleColumn = data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
       const sections = [...twoColumn, ...singleColumn];
@@ -1458,7 +1481,6 @@ app.whenReady().then(() => {
         const renderer = item.musicResponsiveListItemRenderer;
         if (!renderer) continue;
 
-        // Quét ID bài hát qua nhiều vị trí bảo mật ngầm của Google
         const videoId = renderer.playlistItemData?.videoId 
                      || renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId
                      || renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
@@ -1496,25 +1518,14 @@ app.whenReady().then(() => {
 
   // 4. API: Preload Buffer - Giải mã URL trước khi phát để triệt tiêu độ trễ
   ipcMain.handle('music:preloadStream', async (_, targetId: string) => {
-    // Nếu URL đã được giải mã và lưu sẵn trong Cache thì bỏ qua
     if (streamUrlCache.has(targetId) && streamUrlCache.get(targetId)!.expires > Date.now()) {
       return { success: true };
     }
-    
     try {
-      // Gọi yt-dlp để bóc tách URL ngầm
-      const info = await ytdlp(targetId, {
-        dumpSingleJson: true,
-        format: 'bestaudio/best', 
-        noWarnings: true,
-      }) as any;
-      
-      // Lưu vào Cache nội bộ
+      const info = await ytdlp(targetId, { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true }) as any;
       streamUrlCache.set(targetId, { url: info.url, expires: Date.now() + 3600000 });
       return { success: true };
-    } catch (e) {
-      return { success: false };
-    }
+    } catch (e) { return { success: false }; }
   })
 
   // 5. API: Ghi nhận lịch sử nghe nhạc để YouTube học Recommendations
@@ -1530,19 +1541,87 @@ app.whenReady().then(() => {
         },
         videoId: videoId
       };
-      const headers = {
+      const headers: any = {
         'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Origin': 'https://music.youtube.com',
-        'Cookie': config.ytCookie
       };
 
-      // Gửi request đến Endpoint "Player" của Google. 
-      // Dù ta không dùng luồng video ở đây, nhưng việc gọi API này kèm Cookie 
-      // sẽ ngay lập tức ghi nhận 1 lượt "Đã xem/Đã nghe" vào tài khoản Google của bạn.
+      if (config.ytCookie) {
+        headers['Cookie'] = config.ytCookie;
+        const authHash = generateSapisidHash(config.ytCookie);
+        if (authHash) headers['Authorization'] = authHash;
+      }
+
       await axios.post(url, payload, { headers });
-      
       return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  })
+
+  // 6. API: Lấy danh sách phát tiếp theo (Up Next / Radio Gợi ý)
+  ipcMain.handle('music:getUpNext', async (_, videoId: string) => {
+    const config = getConfig()
+    try {
+      const url = 'https://music.youtube.com/youtubei/v1/next?prettyPrint=false';
+      const payload = {
+        context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20240108.01.00', hl: 'vi', gl: 'VN' } },
+        videoId: videoId,
+        // QUAN TRỌNG: Gắn tiền tố RDAMVM để yêu cầu Google tự tạo một Radio Mix vô tận
+        playlistId: `RDAMVM${videoId}` 
+      };
+
+      const headers: any = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Origin': 'https://music.youtube.com',
+      };
+
+      // Đính kèm chữ ký bảo mật để lấy đúng gu âm nhạc của bạn
+      if (config.ytCookie) {
+        headers['Cookie'] = config.ytCookie;
+        const authHash = generateSapisidHash(config.ytCookie);
+        if (authHash) headers['Authorization'] = authHash;
+      }
+
+      const response = await axios.post(url, payload, { headers });
+      const data = response.data;
+
+      const tracks: any[] = [];
+      const tabs = data?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs;
+      
+      // Bóc tách Tab đầu tiên (Tab "Tiếp theo")
+      const tabContent = tabs?.[0]?.tabRenderer?.content;
+      
+      // Quét thông minh: Cấu trúc có thể bọc trong musicQueueRenderer hoặc playlistPanelRenderer tùy tài khoản
+      const contents = tabContent?.musicQueueRenderer?.content?.playlistPanelRenderer?.contents 
+                    || tabContent?.playlistPanelRenderer?.contents 
+                    || [];
+
+      for (const item of contents) {
+        const renderer = item.playlistPanelVideoRenderer;
+        if (!renderer || !renderer.videoId) continue;
+
+        const title = renderer.title?.runs?.[0]?.text || 'Unknown';
+        const artist = renderer.longBylineText?.runs?.map((r:any) => r.text).join('') || 'YouTube';
+        const thumbnails = renderer.thumbnail?.thumbnails || [];
+
+        tracks.push({
+          id: `yt-${renderer.videoId}`,
+          originalId: renderer.videoId,
+          title: title,
+          artist: artist,
+          album: 'YouTube Music',
+          duration: 0,
+          format: 'STREAM',
+          isCloud: true,
+          isOnline: true,
+          platform: 'youtube',
+          coverArt: thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : null
+        });
+      }
+      return { success: true, tracks };
     } catch (e: any) {
       return { success: false, error: e.message };
     }
