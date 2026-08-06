@@ -88,8 +88,6 @@ export default function App() {
 
   // State cho Dashboard
   const [dashboardData, setDashboardData] = useState<any[]>([])
-  const [isDashboardLoading, setIsDashboardLoading] = useState(false)
-  const [isYtmLoggedIn, setIsYtmLoggedIn] = useState(false)
   const [activeAlbum, setActiveAlbum] = useState<{ title: string, tracks: any[] } | null>(null)
   const [isAlbumLoading, setIsAlbumLoading] = useState(false)
   const preloadedRef = useRef<string | null>(null) // Đánh dấu ID đã được preload
@@ -199,19 +197,14 @@ export default function App() {
 
   // --- Dashboard ---
   const fetchDashboard = async () => {
-    setIsDashboardLoading(true)
     // @ts-ignore
     const res = await window.api.getHomeDashboard()
     if (res.success) {
       setDashboardData(res.data)
-      setIsYtmLoggedIn(true)
     } else {
-      // MỚI: Hiển thị lỗi rõ ràng thay vì im lặng ẩn Dashboard
       console.error("Lỗi Dashboard:", res.error)
       alert("Lỗi tải dữ liệu YouTube Music: " + res.error)
-      setIsYtmLoggedIn(false)
     }
-    setIsDashboardLoading(false)
   }
 
   const handleYtmLogin = async () => {
@@ -221,7 +214,7 @@ export default function App() {
       showToast('Đăng nhập thành công!', 'success')
       fetchDashboard()
     } else {
-      alert(res.error)
+      alert('Lỗi đăng nhập: ' + res.error)
     }
   }
 
@@ -942,7 +935,6 @@ export default function App() {
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
       if (cfg.liteMode !== undefined) setLiteMode(cfg.liteMode) // MỚI
       if (cfg.ytCookie) {
-        setIsYtmLoggedIn(true)
         fetchDashboard()
       }
       loadLibrary()
@@ -1008,7 +1000,7 @@ export default function App() {
       // Nạp luồng từ thẻ Audio vào Web Audio API
       if (!sourceNodeRef.current) {
         try {
-          sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current)
+          sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current!)
         } catch (e) {
           return // Tránh lỗi khởi tạo trùng Source
         }
@@ -1696,7 +1688,6 @@ export default function App() {
                   if (e.key === 'Enter' && searchInput.trim() !== '') {
                     if (activeView === 'home') {
                       // HIỆU ỨNG 1: Tìm kiếm trực tiếp trên Dashboard mà không bị nhảy tab
-                      setIsDashboardLoading(true);
                       // @ts-ignore
                       window.api.searchOnline(searchInput).then(res => {
                         if (res.success) {
@@ -1713,7 +1704,6 @@ export default function App() {
                         } else {
                           alert('Lỗi tìm kiếm: ' + res.error);
                         }
-                        setIsDashboardLoading(false);
                       });
                     } else if (activeView === 'online') {
                       // HIỆU ỨNG 2: Đang ở tab Stream trực tuyến
@@ -1778,24 +1768,38 @@ export default function App() {
                     <>
                       <div className="flex items-center justify-between mb-8">
                         <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-                          <Home 
-                            size={32} 
-                            className="text-emerald-400 cursor-pointer hover:scale-110 hover:text-emerald-300 transition-all" 
-                            title="Làm mới Trang chủ" 
+                          <button 
                             onClick={() => {
                               setSearchInput('');
                               setSearchQuery('');
                               fetchDashboard();
                             }}
-                          /> 
+                            title="Làm mới Trang chủ"
+                            className="focus:outline-none flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
+                          >
+                            <Home size={32} className="text-emerald-400 hover:text-emerald-300" />
+                          </button>
                           Dành cho bạn
                         </h2>
+
+                        {/* NÚT ĐĂNG NHẬP / LÀM MỚI COOKIE */}
+                        <button onClick={handleYtmLogin} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-emerald-500/20">
+                          <Cloud size={18} /> Đăng nhập / Đồng bộ YouTube
+                        </button>
                       </div>
                       <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
-                        {dashboardData.map((section, index) => {
-                          const isListSection = section.contents.some((t: any) => t.style === 'LIST');
+                        {/* THÔNG BÁO KHI CHƯA ĐĂNG NHẬP (TRỐNG DỮ LIỆU) */}
+                        {dashboardData.length === 0 ? (
+                           <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
+                             <ListMusic size={56} className="mb-4 opacity-20" />
+                             <p className="text-lg">Chưa có dữ liệu đề xuất</p>
+                             <p className="text-sm mt-1">Vui lòng nhấn nút Đồng bộ ở góc trên để nạp danh sách nhạc từ YouTube Music.</p>
+                           </div>
+                        ) : (
+                          dashboardData.map((section, index) => {
+                            const isListSection = section.contents.some((t: any) => t.style === 'LIST');
 
-                          return (
+                            return (
                             <div key={index}>
                               <h3 className="text-xl font-bold text-white mb-4">{section.title}</h3>
                               
@@ -1839,7 +1843,7 @@ export default function App() {
                                         )}
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                           <button 
-                                            onClick={() => playAndGenerateRadio(track)} 
+                                            onClick={(e) => { e.stopPropagation(); handleDashboardItemClick(item); }} 
                                             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs text-white font-medium flex items-center gap-1 transition"
                                           >
                                             <Play size={14}/> Phát ngay
@@ -1857,7 +1861,7 @@ export default function App() {
                               </div>
                             </div>
                           )
-                        })}
+                        }))}
                       </div>
                     </>
                   )}

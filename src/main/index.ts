@@ -1062,7 +1062,10 @@ app.whenReady().then(() => {
     const parsedUrl = new URL(req.url || '', `http://${req.headers.host}`);
     if (parsedUrl.pathname === '/play') {
       const targetId = parsedUrl.searchParams.get('id');
-      if (!targetId) return res.writeHead(400).end('Thiếu ID bài hát');
+      if (!targetId) {
+        res.writeHead(400).end('Thiếu ID bài hát');
+        return;
+      }
 
       try {
         let directUrl = '';
@@ -1188,11 +1191,10 @@ app.whenReady().then(() => {
       const output = await ytdlp(targetQuery, {
         dumpSingleJson: true,
         noWarnings: true,
-        noCallHome: true,
         noCheckCertificate: true,
         noPlaylist: true,
-        flatPlaylist: true, // SỬA Ở ĐÂY: Đổi từ extractFlat sang flatPlaylist
-      }) as any;
+        flatPlaylist: true,
+      } as any) as any;
       
       const results = output.entries ? output.entries : [output];
 
@@ -1254,7 +1256,7 @@ app.whenReady().then(() => {
     
     // Kiểm tra trùng lặp và hiện Hộp thoại (Dialog)
     if (fs.existsSync(destPath)) {
-      const { response } = dialog.showMessageBoxSync(mainWindow!, {
+      const response = dialog.showMessageBoxSync(mainWindow!, {
         type: 'question',
         buttons: ['Thay thế', 'Lưu thành tệp mới', 'Hủy'],
         defaultId: 0,
@@ -1281,7 +1283,7 @@ app.whenReady().then(() => {
         output: destPath,
         embedMetadata: true,
         embedThumbnail: true
-      });
+      } as any);
       return { success: true, localPath: pathToFileURL(destPath).href };
     } catch (e: any) {
       return { success: false, error: e.message };
@@ -1333,7 +1335,7 @@ app.whenReady().then(() => {
       authWindow.loadURL('https://accounts.google.com/ServiceLogin?continue=https://music.youtube.com/')
 
       // Tự động đóng cửa sổ popup khi Google chuyển hướng về lại trang chủ
-      authWindow.webContents.on('did-navigate', (event, url) => {
+      authWindow.webContents.on('did-navigate', (_event, url) => {
         if (url === 'https://music.youtube.com/' || url.startsWith('https://music.youtube.com/?')) {
           setTimeout(() => {
             if (!authWindow.isDestroyed()) {
