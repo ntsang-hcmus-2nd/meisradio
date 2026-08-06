@@ -63,6 +63,9 @@
     "productName": "Mei's Radio",
     "compression": "maximum",
     "asar": true,
+    "asarUnpack": [
+      "**/node_modules/yt-dlp-exec/bin/*"
+    ],
     "files": [
       "out/**/*",
       "resources/**/*",
