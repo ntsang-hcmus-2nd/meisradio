@@ -79,6 +79,8 @@ export default function App() {
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const reqAnimRef = useRef<number>(0)
   const activeLyricRef = useRef<HTMLParagraphElement | null>(null)
+  const spectrogramCanvasRef = useRef<HTMLCanvasElement>(null)
+  const reqAnimSpectrogramRef = useRef<number>(0)
 
   // ==========================================
   // 2. STATES
@@ -141,6 +143,7 @@ export default function App() {
   const [isLyricsMaximized, setIsLyricsMaximized] = useState<boolean>(false)
 
   // Audio Devices & EQ States
+  const [isEqEnabled, setIsEqEnabled] = useState(false)
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('default')
   const [eqBands, setEqBands] = useState<EQBand[]>([
@@ -855,6 +858,11 @@ export default function App() {
     return getSortedTracks(filtered)
   }, [activePlaylist, searchQuery, sortField, sortOrder])
 
+  // Lấy Sample Rate chuẩn của bài hát hiện tại (Mặc định 44100Hz nếu không rõ)
+  const currentSampleRate = currentTrack?.sampleRate && currentTrack.sampleRate >= 8000 && currentTrack.sampleRate <= 192000 
+    ? currentTrack.sampleRate 
+    : 44100;
+
 
   // ==========================================
   // 5. EFFECTS
@@ -925,6 +933,7 @@ export default function App() {
       if (cfg.crossfadeEnabled !== undefined) setCrossfadeEnabled(cfg.crossfadeEnabled)
       if (cfg.crossfadeDuration !== undefined) setCrossfadeDuration(cfg.crossfadeDuration)
       if (cfg.eqBands) setEqBands(cfg.eqBands)
+      if (cfg.isEqEnabled !== undefined) setIsEqEnabled(cfg.isEqEnabled)
       if (cfg.googleDriveApiKey) setGoogleDriveApiKey(cfg.googleDriveApiKey)
       if (cfg.driveLink) setDriveLink(cfg.driveLink) 
       if (cfg.selectedDeviceId) setSelectedDeviceId(cfg.selectedDeviceId)
@@ -944,12 +953,12 @@ export default function App() {
   useEffect(() => {
     // @ts-ignore
     window.api.saveConfig({ 
-      volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, 
-      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode // MỚI
+      volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, // Thêm isEqEnabled
+      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode 
     }) 
     // @ts-ignore
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
-  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode])
+  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode])
 
   // Dominant Color
   useEffect(() => {
@@ -964,54 +973,77 @@ export default function App() {
     }
   }, [currentTrack, liteMode]) // Thêm liteMode vào dependency
 
-  // Audio Context & EQ Setup
+  // Audio Context & Cấu trúc luồng Bit-perfect
   useEffect(() => {
     if (!audioRef.current) return
 
-    if (!audioCtxRef.current) {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-      audioCtxRef.current = new AudioContextClass()
-    }
-
-    const ctx = audioCtxRef.current
-
-    if (!analyserNodeRef.current) {
-      analyserNodeRef.current = ctx.createAnalyser()
-      analyserNodeRef.current.fftSize = 256
-    }
-
-    if (!sourceNodeRef.current) {
-      try {
-        sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current)
-      } catch (e) {
-        console.error('Lỗi khởi tạo MediaElementSource:', e)
+    const setupAudio = async () => {
+      // 1. Phá hủy Context cũ nếu Sample Rate bị thay đổi để chống nội suy (Resampling)
+      if (audioCtxRef.current && audioCtxRef.current.sampleRate !== currentSampleRate) {
+        console.log(`[Audio] Chuyển đổi Sample Rate phần cứng: -> ${currentSampleRate}Hz`);
+        await audioCtxRef.current.close()
+        audioCtxRef.current = null
+        sourceNodeRef.current = null
+        analyserNodeRef.current = null
       }
+
+      // 2. Khởi tạo Context mới với tần số gốc
+      if (!audioCtxRef.current) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+        try {
+          audioCtxRef.current = new AudioContextClass({ sampleRate: currentSampleRate })
+        } catch (e) {
+          audioCtxRef.current = new AudioContextClass() // Fallback nếu OS không hỗ trợ mức rate này
+        }
+      }
+
+      const ctx = audioCtxRef.current
+
+      // Tăng FFT Size lên 2048 để Spectrogram phân tích mượt mà
+      if (!analyserNodeRef.current) {
+        analyserNodeRef.current = ctx.createAnalyser()
+        analyserNodeRef.current.fftSize = 2048 
+      }
+
+      // Nạp luồng từ thẻ Audio vào Web Audio API
+      if (!sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current)
+        } catch (e) {
+          return // Tránh lỗi khởi tạo trùng Source
+        }
+      }
+
+      // Reset các node kết nối cũ
+      sourceNodeRef.current.disconnect()
+      filterNodesRef.current.forEach(node => node.disconnect())
+      filterNodesRef.current = []
+
+      let prevNode: AudioNode = sourceNodeRef.current
+
+      // 3. BIT-PERFECT: Bỏ qua toàn bộ EQ Node nếu người dùng tắt EQ
+      if (isEqEnabled) {
+        const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
+        sortedBands.forEach((band) => {
+          const filter = ctx.createBiquadFilter()
+          filter.type = band.type || 'peaking'
+          filter.frequency.value = band.frequency
+          filter.gain.value = band.gain
+          filter.Q.value = band.q ?? 1.4
+
+          prevNode.connect(filter)
+          prevNode = filter
+          filterNodesRef.current.push(filter)
+        })
+      }
+
+      // Dẫn luồng ra đích cuối cùng
+      prevNode.connect(analyserNodeRef.current)
+      analyserNodeRef.current.connect(ctx.destination)
     }
 
-    if (!sourceNodeRef.current) return
-
-    sourceNodeRef.current.disconnect()
-    filterNodesRef.current.forEach(node => node.disconnect())
-    filterNodesRef.current = []
-
-    const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
-    let prevNode: AudioNode = sourceNodeRef.current
-
-    sortedBands.forEach((band) => {
-      const filter = ctx.createBiquadFilter()
-      filter.type = band.type || 'peaking'
-      filter.frequency.value = band.frequency
-      filter.gain.value = band.gain
-      filter.Q.value = band.q ?? 1.4
-
-      prevNode.connect(filter)
-      prevNode = filter
-      filterNodesRef.current.push(filter)
-    })
-
-    prevNode.connect(analyserNodeRef.current)
-    analyserNodeRef.current.connect(ctx.destination)
-  }, [eqBands])
+    setupAudio()
+  }, [eqBands, isEqEnabled, currentSampleRate])
 
   // Visualizer Animation
   useEffect(() => {
@@ -1045,6 +1077,55 @@ export default function App() {
 
     return () => cancelAnimationFrame(reqAnimRef.current)
   }, [isPlaying, isLyricsMaximized, showVisualizer])
+
+  // Spectrogram Animation (Chỉ chạy trong Cài đặt)
+  useEffect(() => {
+    if (activeView !== 'settings' || !spectrogramCanvasRef.current || !analyserNodeRef.current) return
+
+    const canvas = spectrogramCanvasRef.current
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return
+    
+    const analyser = analyserNodeRef.current
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    // Dùng 1 canvas ẩn để dịch chuyển hình ảnh tạo hiệu ứng thác nước (waterfall) liên tục
+    const tempCanvas = document.createElement('canvas')
+    tempCanvas.width = canvas.width
+    tempCanvas.height = canvas.height
+    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })
+
+    const draw = () => {
+      reqAnimSpectrogramRef.current = requestAnimationFrame(draw)
+      if (!isPlaying) return
+
+      analyser.getByteFrequencyData(dataArray)
+
+      if (tempCtx) {
+        tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height)
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(tempCanvas, -2, 0) // Dịch sang trái 2 pixel để cuộn ảnh mượt mà
+
+      // Vẽ cột tần số mới vào rìa phải
+      for (let i = 0; i < bufferLength; i++) {
+        const value = dataArray[i]
+        // Focus hiển thị 60% dải băng thông (Loại bỏ các dải âm thanh siêu thanh ít dùng)
+        const y = canvas.height - (i / (bufferLength * 0.6)) * canvas.height
+        if (y < 0) continue
+
+        // Biểu đồ nhiệt (Heatmap): Đen (0) -> Xanh dương/Lục -> Vàng -> Đỏ (255)
+        const hue = (1 - value / 255) * 240 
+        ctx.fillStyle = value === 0 ? '#000000' : `hsl(${hue}, 100%, 50%)`
+        ctx.fillRect(canvas.width - 2, y, 2, 2)
+      }
+    }
+    draw()
+
+    return () => cancelAnimationFrame(reqAnimSpectrogramRef.current)
+  }, [isPlaying, activeView])
 
   // EQ Curve Drawing
   useEffect(() => {
@@ -1400,6 +1481,7 @@ export default function App() {
     <>
       {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG ĐỂ KHÔNG BAO GIỜ BỊ RESET */}
       <audio
+        key={currentSampleRate} // MỚI: Tự động remount khi Sample Rate thay đổi
         ref={audioRef}
         src={currentTrack ? (currentTrack.filePath?.startsWith('http') || currentTrack.filePath?.startsWith('file://') ? currentTrack.filePath : `file://${currentTrack.filePath}`) : undefined}
         onEnded={() => { if (!crossfadeEnabled) handleNext() }}
@@ -2009,6 +2091,21 @@ export default function App() {
                     </div>
 
                     <div className="border-t border-zinc-800 pt-6 mt-6">
+                      <h3 className="text-emerald-400 font-semibold mb-2">Trình phân tích phổ (Spectrogram)</h3>
+                      <p className="text-sm text-zinc-400 mb-4">Theo dõi biểu đồ thác nước tần số (Waterfall) thời gian thực của bản nhạc hiện tại. Khuyến nghị phát nhạc Chất lượng cao (Lossless) để kiểm tra dải cắt tần (Frequency Cutoff).</p>
+                      <div className="bg-black border border-zinc-800 rounded-xl overflow-hidden relative" style={{ height: '300px' }}>
+                        <canvas ref={spectrogramCanvasRef} width={1024} height={300} className="w-full h-full" />
+                        {!isPlaying && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                            <span className="text-zinc-400 text-sm font-medium">Đang tạm dừng - Vui lòng phát nhạc để phân tích âm thanh</span>
+                          </div>
+                        )}
+                        <div className="absolute left-2 top-2 text-[10px] text-zinc-500 font-mono tracking-widest">FREQ (Hz)</div>
+                        <div className="absolute right-2 bottom-2 text-[10px] text-zinc-500 font-mono tracking-widest">TIME ➔</div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-zinc-800 pt-6 mt-6">
                       <h3 className="text-emerald-400 font-semibold mb-2">Google Drive API Key</h3>
                       <p className="text-sm text-zinc-400 mb-4">Nhập khóa API của bạn để sử dụng tính năng tải nhạc từ Cloud.</p>
                       <div className="flex gap-3 items-center">
@@ -2251,6 +2348,16 @@ export default function App() {
                   <Sliders className="text-emerald-500" size={22} />
                   <h2 className="text-lg font-bold text-white">Equalizer (EQ)</h2>
                 </div>
+                {/* Nút bật tắt EQ Bit-perfect */}
+                  <label className="flex items-center gap-2 cursor-pointer ml-4 bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-emerald-500">
+                    <span className="text-zinc-300 text-sm font-medium">Bật EQ</span>
+                    <input 
+                      type="checkbox" 
+                      checked={isEqEnabled} 
+                      onChange={e => setIsEqEnabled(e.target.checked)} 
+                      className="w-4 h-4 accent-emerald-500 cursor-pointer" 
+                    />
+                  </label>
                 <div className="flex items-center gap-2">
                   <button onClick={handleAddBand} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition"><Plus size={16} /> Thêm dải tần</button>
                   <button onClick={handleResetEQ} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"><RotateCcw size={14} /> Reset</button>
