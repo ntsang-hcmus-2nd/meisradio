@@ -1100,14 +1100,42 @@ app.whenReady().then(() => {
               // Giả lập trình duyệt Chrome để không bị YouTube đánh dấu spam (Lỗi 403)
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
-            responseType: 'stream'
+            responseType: 'stream',
+            decompress: false
           });
         } catch (axiosErr: any) {
-          // Nếu URL hết hạn dẫn đến lỗi 403, lập tức xóa Cache để lần sau lấy lại URL mới
+          // CƠ CHẾ MỚI: Tự động phục hồi khi Google khóa Link (Lỗi 403 Forbidden)
           if (axiosErr.response && axiosErr.response.status === 403) {
+            console.log(`[Stream Server] URL hết hạn, đang tự động phân giải lại cho bài hát: ${targetId}`);
+            
+            // Xóa URL lỗi khỏi bộ nhớ tạm
             streamUrlCache.delete(targetId);
+            
+            // Yêu cầu phân giải lại một URL mới tinh từ yt-dlp
+            const newInfo = await ytdlp(targetId, {
+              dumpSingleJson: true,
+              format: 'bestaudio/best', 
+              noWarnings: true,
+            }) as any;
+            
+            const newDirectUrl = newInfo.url;
+            streamUrlCache.set(targetId, { url: newDirectUrl, expires: Date.now() + 3600000 });
+            
+            // Thử kết nối lại một lần nữa với URL mới
+            proxyRes = await axios({
+              method: 'GET',
+              url: newDirectUrl,
+              headers: {
+                ...requestHeaders,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+              },
+              responseType: 'stream',
+              decompress: false
+            });
+          } else {
+            // Nếu là lỗi khác (như mất mạng thực sự), ném lỗi ra ngoài
+            throw axiosErr;
           }
-          throw axiosErr;
         }
 
         // 4. Trả Header phân mảnh (206 Partial Content) về lại Frontend
@@ -1124,13 +1152,19 @@ app.whenReady().then(() => {
         // 5. BƠM (PIPE) luồng âm thanh thẳng vào thẻ HTML5 Audio liên tục
         proxyRes.data.pipe(res);
 
-        // Hủy luồng tải ngầm nếu người dùng bấm chuyển bài hát khác
-        req.on('close', () => {
-          proxyRes.data.destroy(); 
+        // BẢO HIỂM 1: Dọn dẹp và đóng luồng an toàn khi Google ngắt mạng
+        // Điều này giúp trình duyệt nhận ra dữ liệu bị thiếu và tự động gửi yêu cầu lấy phần còn lại
+        proxyRes.data.on('error', (err: any) => {
+          console.log('[Buffer Server] Google ngắt luồng tải:', err.message);
+          if (!res.headersSent) res.writeHead(500);
+          res.end(); 
         });
 
+        res.on('error', () => proxyRes.data.destroy());
+        req.on('close', () => proxyRes.data.destroy());
+
       } catch (e) {
-        res.writeHead(500).end();
+        if (!res.headersSent) res.writeHead(500).end();
       }
     }
   });

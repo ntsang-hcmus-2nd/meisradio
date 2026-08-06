@@ -1479,13 +1479,38 @@ export default function App() {
   // Giao diện chính (Full Screen)
  return (
     <>
-      {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG ĐỂ KHÔNG BAO GIỜ BỊ RESET */}
+      {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG VÀ ÉP THAY ĐỔI SAMPLE RATE */}
       <audio
-        key={currentSampleRate} // MỚI: Tự động remount khi Sample Rate thay đổi
+        key={currentSampleRate} // Tự động remount khi Sample Rate thay đổi
         ref={audioRef}
+        crossOrigin="anonymous" // QUAN TRỌNG: Ổn định luồng CORS cho Web Audio API
         src={currentTrack ? (currentTrack.filePath?.startsWith('http') || currentTrack.filePath?.startsWith('file://') ? currentTrack.filePath : `file://${currentTrack.filePath}`) : undefined}
-        onEnded={() => { if (!crossfadeEnabled) handleNext() }}
+        onEnded={() => { 
+          const audio = audioRef.current;
+          // BẢO HIỂM 2 (CHỐNG ĐỨT LUỒNG NGẦM):
+          // Nếu bài hát kết thúc giả (còn dư > 2 giây) do rớt mạng, tự động tải và nối lại đúng thời điểm đó!
+          if (audio && audio.duration && (audio.duration - audio.currentTime > 2)) {
+            console.warn('[Player] Phát hiện đứt luồng mạng, tự động nối lại...');
+            const time = audio.currentTime;
+            audio.load();
+            audio.currentTime = time;
+            audio.play();
+            return;
+          }
+          if (!crossfadeEnabled) handleNext() 
+        }}
         onLoadedMetadata={handleLoadedMetadata}
+        onError={() => {
+          // BẢO HIỂM 3 (CHỐNG TREO THẺ AUDIO):
+          const audio = audioRef.current;
+          if (audio && currentTrack) {
+            console.warn('[Player] Trình phát báo lỗi kết nối, tự động phục hồi...');
+            const time = audio.currentTime;
+            audio.load();
+            audio.currentTime = time;
+            audio.play();
+          }
+        }}
         loop={repeatMode === 2}
       />
 
