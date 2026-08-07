@@ -224,7 +224,8 @@ export default function App() {
         id: `yt-${item.videoId}`, originalId: item.videoId,
         title: item.title, artist: item.subtitle, album: 'YouTube Music', duration: 0,
         format: 'STREAM', isCloud: true, isOnline: true, platform: 'youtube',
-        coverArt: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[item.thumbnails.length - 1].url : null
+        coverArt: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : null,
+        coverArtHighRes: item.coverArtHighRes || null
       };
       
       // SỬ DỤNG HÀM MỚI Ở ĐÂY
@@ -879,17 +880,24 @@ export default function App() {
 
   // Fetch Original High-Res Cover for Fullscreen Lyrics
   useEffect(() => {
-    // Chỉ tải ảnh gốc vào RAM nếu đang mở Fullscreen và không ở chế độ Lite
-    if (!isLyricsMaximized || liteMode || !currentTrack || currentTrack.isCloud) {
+    if (!isLyricsMaximized || liteMode || !currentTrack) {
       setOriginalCover(null)
       return
     }
-    let isCurrent = true
-    // @ts-ignore
-    window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath).then(cover => {
-      if (isCurrent && cover) setOriginalCover(cover)
-    })
-    return () => { isCurrent = false }
+    // Tải tăng cường: Nếu là nhạc Online, nạp thẳng URL ảnh cực nét ẩn
+    if (currentTrack.isOnline) {
+      setOriginalCover(currentTrack.coverArtHighRes || currentTrack.coverArt)
+    } 
+    else if (!currentTrack.isCloud && currentTrack.coverArt?.includes('.thumbnails')) {
+      let isCurrent = true
+      // @ts-ignore
+      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath).then(cover => {
+        if (isCurrent && cover) setOriginalCover(cover)
+      })
+      return () => { isCurrent = false }
+    } else {
+      setOriginalCover(currentTrack.coverArt)
+    }
   }, [isLyricsMaximized, currentTrack?.id, liteMode])
 
   // Apply device change
@@ -1443,7 +1451,7 @@ export default function App() {
                 <td onClick={() => handleRowClick(track, tracks)} className="py-4">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-zinc-800 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-                      {(!liteMode && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <img src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
+                      {(!liteMode && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <img loading="lazy" src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
                       {track.isCloud && <div className="absolute top-0 right-0 bg-emerald-500/80 p-0.5 rounded-bl-md"><Cloud size={10} className="text-white" /></div>}
                     </div>
                     <div className="truncate w-48 lg:w-64">
@@ -1513,7 +1521,7 @@ export default function App() {
           {!liteMode && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
           
           <div className="w-24 h-24 bg-zinc-800 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group">
-            {(!liteMode && currentTrack?.coverArt) ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>}
+            {(!liteMode && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>}
             <button onClick={handleToggleMiniPlayer} className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Trở về chế độ Đầy đủ">
               <Maximize2 size={14} />
             </button>
@@ -1621,7 +1629,7 @@ export default function App() {
         <aside className="w-64 bg-zinc-900/40 border-r border-zinc-800/50 flex flex-col justify-between">
           <div className="p-6 space-y-8">
             <h1 className="text-2xl font-bold text-white tracking-wider flex items-center gap-2">
-              <img src={logoImg} alt="Logo" className="w-8 h-8 object-contain" /> 
+              <img loading="lazy" src={logoImg} alt="Logo" className="w-8 h-8 object-contain" /> 
               MEI'S RADIO
             </h1>
             <nav className="space-y-6">
@@ -1813,7 +1821,7 @@ export default function App() {
                                       <div key={i} className="flex items-center gap-3 w-96 snap-start group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition" onClick={() => handleDashboardItemClick(item)}>
                                         <div className="w-12 h-12 bg-zinc-800 rounded flex-shrink-0 relative overflow-hidden shadow-md">
                                           {item.thumbnails && item.thumbnails.length > 0 ? (
-                                            <img src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                            <img loading="lazy" src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                                           ) : (
                                             <ListMusic size={16} className="m-auto mt-4 text-zinc-600" />
                                           )}
@@ -1837,7 +1845,7 @@ export default function App() {
                                     <div key={i} className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer" onClick={() => handleDashboardItemClick(item)}>
                                       <div className="w-40 h-40 bg-zinc-800 rounded-xl mb-3 overflow-hidden relative shadow-lg">
                                         {item.thumbnails && item.thumbnails.length > 0 ? (
-                                          <img src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                          <img loading="lazy" src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                                         ) : (
                                           <ListMusic size={40} className="m-auto mt-16 text-zinc-600" />
                                         )}
@@ -1938,7 +1946,7 @@ export default function App() {
                         {onlineResults.map((track, i) => (
                           <div key={i} className="flex items-center gap-4 p-3 bg-zinc-900/40 hover:bg-zinc-800/80 rounded-lg border border-zinc-800/50 transition">
                             <div className="w-12 h-12 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
-                              {track.coverArt ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={18} className="text-zinc-500" />}
+                              {track.coverArt ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={18} className="text-zinc-500" />}
                             </div>
                             <div className="flex-1 truncate">
                               <p className="font-semibold text-white truncate text-sm">{track.title}</p>
@@ -2232,7 +2240,7 @@ export default function App() {
                               {matchedPlaylists.map(pl => (
                                 <div key={pl.name} className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-800/50 hover:bg-zinc-800/50 transition group cursor-pointer" onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}>
                                   <div className="aspect-square bg-zinc-800 rounded-lg mb-4 overflow-hidden relative">
-                                    {(!liteMode && pl.thumbnail) ? <img src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                                    {(!liteMode && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                                     <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Chọn ảnh từ máy tính"><ImageIcon size={16}/></button>
                                     <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Lấy ảnh từ bài hát đầu tiên"><Sparkles size={16}/></button>
                                   </div>
@@ -2262,7 +2270,7 @@ export default function App() {
                   <div className="flex items-end justify-between mb-8">
                     <div className="flex items-end gap-6">
                       <div className="w-40 h-40 bg-zinc-800 rounded-xl overflow-hidden shadow-2xl relative group">
-                        {(!liteMode && activePlaylist.thumbnail) ? <img src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                        {(!liteMode && activePlaylist.thumbnail) ? <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                       </div>
                       <div>
                         <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-2">Playlist</p>
@@ -2319,7 +2327,7 @@ export default function App() {
                       return (
                         <div key={index} onClick={() => handlePlayTrack(track)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${isActive ? 'bg-emerald-500/20 border border-emerald-500/30' : 'hover:bg-zinc-800/50 border border-transparent'}`}>
                           <div className="w-10 h-10 bg-zinc-800 rounded flex-shrink-0 overflow-hidden relative flex items-center justify-center">
-                             {(!liteMode && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={16} className="text-zinc-500" />}
+                             {(!liteMode && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={16} className="text-zinc-500" />}
                              {isActive && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" /></div>}
                           </div>
                           <div className="truncate flex-1">
@@ -2344,7 +2352,7 @@ export default function App() {
               <div className="w-1/2 flex flex-col items-center justify-center gap-6">
                 <div className="w-80 h-80 bg-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
                   {(!liteMode && (originalCover || currentTrack?.coverArt)) ? (
-                    <img src={originalCover || currentTrack.coverArt} className="w-full h-full object-cover" />
+                    <img loading="lazy" src={originalCover || currentTrack.coverArt} className="w-full h-full object-cover" />
                   ) : (
                     <ListMusic size={60} className="m-auto mt-32 text-zinc-600" />
                   )}
@@ -2433,7 +2441,7 @@ export default function App() {
 
         <div className="flex items-center gap-4 w-1/3">
           <div className="w-14 h-14 bg-zinc-800 rounded-md shadow-lg overflow-hidden flex-shrink-0">
-            {(!liteMode && currentTrack?.coverArt) ? <img src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
+            {(!liteMode && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
           </div>
           <div className="truncate">
             <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : 'Chưa có bài hát'}</h4>

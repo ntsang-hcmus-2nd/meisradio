@@ -8,24 +8,42 @@ import fs from 'fs'
 import * as mm from 'music-metadata'
 import { pathToFileURL } from 'url'
 import NodeID3 from 'node-id3'
-import ytdlp from 'yt-dlp-exec'
+import ytdlpDefault, { create } from 'yt-dlp-exec' // Đã sửa lỗi import yt-dlp
 import axios from 'axios'
 import http from 'http'
-// crypto đã có sẵn từ node
-// Cấu hình lưu trữ đường dẫn thư viện
-// Cấu hình lưu trữ đường dẫn thư viện (Lưu cạnh file .exe khi build, lưu ở AppData khi Dev)
-const CONFIG_PATH = is.dev 
-  ? join(app.getPath('userData'), 'music-config.json') 
-  : join(path.dirname(app.getPath('exe')), 'music-config.json')
 
-// Bật tính năng thu gom rác chủ động và giới hạn dung lượng không gian bộ nhớ cũ
+// 1. QUẢN LÝ THƯ MỤC DỮ LIỆU ĐỘC LẬP (Chống lỗi cấm ghi ổ đĩa khi Build)
+const DATA_FOLDER = is.dev 
+  ? app.getPath('userData') 
+  : join(path.dirname(app.getPath('exe')), 'MeisRadioData');
+
+if (!fs.existsSync(DATA_FOLDER)) {
+  try { fs.mkdirSync(DATA_FOLDER, { recursive: true }); } catch (err) { }
+}
+
+const IMAGE_CACHE_DIR = join(DATA_FOLDER, '.image_cache');
+if (!fs.existsSync(IMAGE_CACHE_DIR)) {
+  try { fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true }); } catch (err) { }
+}
+
+const CONFIG_PATH = join(DATA_FOLDER, 'music-config.json');
+
+// 2. KHỞI TẠO YT-DLP AN TOÀN (Chống lỗi không tìm thấy file .exe trong app.asar)
+const ytdlp = is.dev 
+  ? ytdlpDefault 
+  : create(join(
+      app.getAppPath().replace('app.asar', 'app.asar.unpacked'),
+      'node_modules',
+      'yt-dlp-exec',
+      'bin',
+      process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+    ));
+
 app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
-// Tối ưu hóa GPU Rasterization để tiết kiệm VRAM/RAM đồ họa
 app.commandLine.appendSwitch('enable-zero-copy');
 
-// Cấu hình tray và minimize
 let tray: Tray | null = null
-let isQuitting = false // Cờ đánh dấu khi người dùng thực sự muốn thoát ứng dụng
+let isQuitting = false 
 let closeToTray = false
 let minimizeToTray = false
 
@@ -33,46 +51,21 @@ function getConfig() {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
-      
-      // Khôi phục (Giải mã) các API Key nếu hệ thống mã hóa khả dụng
       if (app.isReady() && safeStorage.isEncryptionAvailable()) {
-        
-        // Giải mã Google Drive API Key
         if (config.googleDriveApiKey && config.googleDriveApiKey.startsWith('ENC:')) {
-          try {
-            const buffer = Buffer.from(config.googleDriveApiKey.replace('ENC:', ''), 'base64')
-            config.googleDriveApiKey = safeStorage.decryptString(buffer)
-          } catch (e) { console.error('Lỗi giải mã Google Drive API Key', e) }
+          try { config.googleDriveApiKey = safeStorage.decryptString(Buffer.from(config.googleDriveApiKey.replace('ENC:', ''), 'base64')) } catch (e) { }
         }
-
-        // Giải mã Musixmatch API Key (nếu bạn có dùng)
         if (config.musixmatchApiKey && config.musixmatchApiKey.startsWith('ENC:')) {
-          try {
-            const buffer = Buffer.from(config.musixmatchApiKey.replace('ENC:', ''), 'base64')
-            config.musixmatchApiKey = safeStorage.decryptString(buffer)
-          } catch (e) { console.error('Lỗi giải mã Musixmatch API Key', e) }
+          try { config.musixmatchApiKey = safeStorage.decryptString(Buffer.from(config.musixmatchApiKey.replace('ENC:', ''), 'base64')) } catch (e) { }
         }
-
-        // Giải mã YouTube Music Cookie
         if (config.ytCookie && config.ytCookie.startsWith('ENC:')) {
-          try {
-            const buffer = Buffer.from(config.ytCookie.replace('ENC:', ''), 'base64')
-            config.ytCookie = safeStorage.decryptString(buffer)
-          } catch (e) { console.error('Lỗi giải mã YT Cookie', e) }
+          try { config.ytCookie = safeStorage.decryptString(Buffer.from(config.ytCookie.replace('ENC:', ''), 'base64')) } catch (e) { }
         }
-
       }
       return config
     }
   } catch (e) {}
-  return { 
-    libraryPath: null, 
-    crossfadeEnabled: false, 
-    crossfadeDuration: 3, 
-    volume: 1, 
-    eqBands: null,
-    liteMode: false // MỚI: Thêm mặc định cho Lite Mode
-  }
+  return { libraryPath: null, crossfadeEnabled: false, crossfadeDuration: 3, volume: 1, eqBands: null, liteMode: false }
 }
 
 function saveConfig(data: any) {
@@ -1050,132 +1043,99 @@ app.whenReady().then(() => {
   })
 
   // ==========================================
-  // HỆ THỐNG LOCAL BUFFER SERVER (TỐI ƯU STREAM TỨC THÌ)
+  // HỆ THỐNG LOCAL BUFFER SERVER & PROXY CACHE ẢNH
   // ==========================================
   let streamPort = 0;
   const streamUrlCache = new Map<string, { url: string, expires: number }>();
 
+  function getProxyImageUrl(url: string | null | undefined, id: string) {
+    if (!url || !streamPort) return url || null;
+    return `http://127.0.0.1:${streamPort}/image?url=${encodeURIComponent(url)}&id=${id}`;
+  }
+
+  function extractCovers(thumbnails: any[], fallbackId: string) {
+    if (!thumbnails || thumbnails.length === 0) return { coverArt: null, coverArtHighRes: null };
+    const medIndex = thumbnails.length > 1 ? 1 : 0;
+    const medUrl = thumbnails[medIndex].url;
+    const highUrl = thumbnails[thumbnails.length - 1].url.split('=w')[0];
+    return {
+      coverArt: getProxyImageUrl(medUrl, `med_${fallbackId}`),
+      coverArtHighRes: getProxyImageUrl(highUrl, `high_${fallbackId}`)
+    };
+  }
+
   const streamServer = http.createServer(async (req, res) => {
-    // Bật CORS để cho phép thẻ HTML5 Audio giao tiếp cục bộ
     res.setHeader('Access-Control-Allow-Origin', '*');
-    
     const parsedUrl = new URL(req.url || '', `http://${req.headers.host}`);
+    
+    // --- LUỒNG 1: TRUYỀN TẢI NHẠC ---
     if (parsedUrl.pathname === '/play') {
       const targetId = parsedUrl.searchParams.get('id');
-      if (!targetId) {
-        res.writeHead(400).end('Thiếu ID bài hát');
-        return;
-      }
+      if (!targetId) { res.writeHead(400).end('Thiếu ID bài hát'); return; }
 
       try {
         let directUrl = '';
-        
-        // 1. CƠ CHẾ CACHE: Giúp tua nhạc (Seek) mượt mà 0ms không độ trễ
         const cached = streamUrlCache.get(targetId);
-        if (cached && cached.expires > Date.now()) {
-          directUrl = cached.url;
-        } else {
-          // Phân giải URL trực tiếp nếu chưa có trong cache
-          const info = await ytdlp(targetId, {
-            dumpSingleJson: true,
-            format: 'bestaudio/best', 
-            noWarnings: true,
-          }) as any;
+        if (cached && cached.expires > Date.now()) directUrl = cached.url;
+        else {
+          const info = await ytdlp(targetId, { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true } as any) as any;
           directUrl = info.url;
-          // Cache URL nguyên bản trong 1 giờ (Tránh YouTube block IP)
           streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 });
         }
 
-        // 2. Chuyển tiếp (Proxy) Range Header để cho phép trình duyệt tua thời gian
         const requestHeaders: any = {};
-        if (req.headers.range) {
-          requestHeaders['Range'] = req.headers.range;
-        }
+        if (req.headers.range) requestHeaders['Range'] = req.headers.range;
 
-        // 3. Mở luồng kết nối đệm (Buffer Stream) với YouTube
         let proxyRes;
         try {
-          proxyRes = await axios({
-            method: 'GET',
-            url: directUrl,
-            headers: {
-              ...requestHeaders,
-              // Giả lập trình duyệt Chrome để không bị YouTube đánh dấu spam (Lỗi 403)
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            },
-            responseType: 'stream',
-            decompress: false
-          });
+          proxyRes = await axios({ method: 'GET', url: directUrl, headers: { ...requestHeaders, 'User-Agent': 'Mozilla/5.0' }, responseType: 'stream', decompress: false });
         } catch (axiosErr: any) {
-          // CƠ CHẾ MỚI: Tự động phục hồi khi Google khóa Link (Lỗi 403 Forbidden)
           if (axiosErr.response && axiosErr.response.status === 403) {
-            console.log(`[Stream Server] URL hết hạn, đang tự động phân giải lại cho bài hát: ${targetId}`);
-            
-            // Xóa URL lỗi khỏi bộ nhớ tạm
             streamUrlCache.delete(targetId);
-            
-            // Yêu cầu phân giải lại một URL mới tinh từ yt-dlp
-            const newInfo = await ytdlp(targetId, {
-              dumpSingleJson: true,
-              format: 'bestaudio/best', 
-              noWarnings: true,
-            }) as any;
-            
-            const newDirectUrl = newInfo.url;
-            streamUrlCache.set(targetId, { url: newDirectUrl, expires: Date.now() + 3600000 });
-            
-            // Thử kết nối lại một lần nữa với URL mới
-            proxyRes = await axios({
-              method: 'GET',
-              url: newDirectUrl,
-              headers: {
-                ...requestHeaders,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-              },
-              responseType: 'stream',
-              decompress: false
-            });
-          } else {
-            // Nếu là lỗi khác (như mất mạng thực sự), ném lỗi ra ngoài
-            throw axiosErr;
-          }
+            const newInfo = await ytdlp(targetId, { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true } as any) as any;
+            streamUrlCache.set(targetId, { url: newInfo.url, expires: Date.now() + 3600000 });
+            proxyRes = await axios({ method: 'GET', url: newInfo.url, headers: { ...requestHeaders, 'User-Agent': 'Mozilla/5.0' }, responseType: 'stream', decompress: false });
+          } else throw axiosErr;
         }
 
-        // 4. Trả Header phân mảnh (206 Partial Content) về lại Frontend
-        const responseHeaders: any = {
-          'Content-Type': proxyRes.headers['content-type'],
-          'Accept-Ranges': proxyRes.headers['accept-ranges'] || 'bytes',
-          'Cache-Control': 'no-cache'
-        };
+        const responseHeaders: any = { 'Content-Type': proxyRes.headers['content-type'], 'Accept-Ranges': proxyRes.headers['accept-ranges'] || 'bytes', 'Cache-Control': 'no-cache' };
         if (proxyRes.headers['content-length']) responseHeaders['Content-Length'] = proxyRes.headers['content-length'];
         if (proxyRes.headers['content-range']) responseHeaders['Content-Range'] = proxyRes.headers['content-range'];
 
         res.writeHead(proxyRes.status, responseHeaders);
-
-        // 5. BƠM (PIPE) luồng âm thanh thẳng vào thẻ HTML5 Audio liên tục
         proxyRes.data.pipe(res);
-
-        // BẢO HIỂM 1: Dọn dẹp và đóng luồng an toàn khi Google ngắt mạng
-        // Điều này giúp trình duyệt nhận ra dữ liệu bị thiếu và tự động gửi yêu cầu lấy phần còn lại
-        proxyRes.data.on('error', (err: any) => {
-          console.log('[Buffer Server] Google ngắt luồng tải:', err.message);
-          if (!res.headersSent) res.writeHead(500);
-          res.end(); 
-        });
-
+        proxyRes.data.on('error', () => { if (!res.headersSent) res.writeHead(500); res.end(); });
         res.on('error', () => proxyRes.data.destroy());
         req.on('close', () => proxyRes.data.destroy());
+      } catch (e) { if (!res.headersSent) res.writeHead(500).end(); }
+    } 
+    // --- LUỒNG 2: PROXY TẢI ẢNH BÌA ---
+    else if (parsedUrl.pathname === '/image') {
+      const targetUrl = parsedUrl.searchParams.get('url');
+      const targetId = parsedUrl.searchParams.get('id');
+      if (!targetUrl) { res.writeHead(400).end('Thiếu URL'); return; }
 
-      } catch (e) {
-        if (!res.headersSent) res.writeHead(500).end();
+      const safeId = targetId ? targetId.replace(/[^a-zA-Z0-9_-]/g, '') : crypto.createHash('md5').update(targetUrl).digest('hex');
+      const cachedImgPath = join(IMAGE_CACHE_DIR, `${safeId}.jpg`);
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+
+      if (fs.existsSync(cachedImgPath)) {
+        res.setHeader('Content-Type', 'image/jpeg');
+        fs.createReadStream(cachedImgPath).pipe(res);
+        return;
       }
+
+      try {
+        const imgRes = await axios({ method: 'GET', url: targetUrl, responseType: 'stream', decompress: false });
+        res.setHeader('Content-Type', imgRes.headers['content-type'] || 'image/jpeg');
+        const fileStream = fs.createWriteStream(cachedImgPath);
+        imgRes.data.pipe(fileStream);
+        imgRes.data.pipe(res);
+      } catch (e) { if (!res.headersSent) res.writeHead(500).end(); }
     }
   });
 
-  // Chạy server trên một cổng tự do ngẫu nhiên
-  streamServer.listen(0, '127.0.0.1', () => {
-    streamPort = (streamServer.address() as any).port;
-  });
+  streamServer.listen(0, '127.0.0.1', () => { streamPort = (streamServer.address() as any).port; });
 
   // ==========================================
   // HỆ THỐNG ONLINE STREAMING (CHỈ YOUTUBE / YT MUSIC)
@@ -1200,23 +1160,14 @@ app.whenReady().then(() => {
 
       return {
         success: true,
-        tracks: results.map((track: any) => ({
-          id: `yt-${track.id}`,
-          originalId: track.id,
-          title: track.title,
-          artist: track.channel || track.uploader || 'YouTube',
-          album: 'YouTube Music',
-          duration: track.duration || 0,
-          format: 'STREAM',
-          isCloud: true,
-          isOnline: true,
-          platform: 'youtube',
-          coverArt: track.thumbnails && track.thumbnails.length > 0 
-                    ? track.thumbnails[track.thumbnails.length - 1].url 
-                    : (track.thumbnail || null),
-          // Khi dùng extractFlat, track.url có thể bị khuyết, nên sử dụng URL tiêu chuẩn
-          url: track.url || track.webpage_url || `https://www.youtube.com/watch?v=${track.id}`
-        }))
+        tracks: results.map((track: any) => {
+          const covers = extractCovers(track.thumbnails || (track.thumbnail ? [{url: track.thumbnail}] : []), track.id);
+          return {
+            id: `yt-${track.id}`, originalId: track.id, title: track.title, artist: track.channel || track.uploader || 'YouTube',
+            album: 'YouTube Music', duration: track.duration || 0, format: 'STREAM', isCloud: true, isOnline: true, platform: 'youtube',
+            coverArt: covers.coverArt, coverArtHighRes: covers.coverArtHighRes, url: track.url || track.webpage_url || `https://www.youtube.com/watch?v=${track.id}`
+          };
+        })
       }
     } catch (e: any) {
       return { success: false, error: e.message }
@@ -1443,13 +1394,11 @@ app.whenReady().then(() => {
            const subtitle = subtitleRuns.map((r: any) => r.text).join('');
            
            if (itemTitle && (videoId || playlistId)) {
+             const itemFallbackId = videoId || playlistId || crypto.createHash('md5').update(itemTitle).digest('hex');
+             const covers = extractCovers(thumbnails, itemFallbackId);
              items.push({
-               title: itemTitle,
-               subtitle: subtitle,
-               videoId: videoId,
-               playlistId: playlistId,
-               thumbnails: thumbnails,
-               style: style 
+               title: itemTitle, subtitle: subtitle, videoId: videoId, playlistId: playlistId,
+               thumbnails: covers.coverArt ? [{ url: covers.coverArt }] : [], coverArtHighRes: covers.coverArtHighRes, style: style 
              });
            }
         }
@@ -1531,18 +1480,11 @@ app.whenReady().then(() => {
         
         const thumbnails = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
 
+        const covers = extractCovers(thumbnails, videoId); // Dùng renderer.videoId cho getUpNext
         tracks.push({
-          id: `yt-${videoId}`,
-          originalId: videoId,
-          title: title,
-          artist: artist,
-          album: 'YouTube Music',
-          duration: 0,
-          format: 'STREAM',
-          isCloud: true,
-          isOnline: true,
-          platform: 'youtube',
-          coverArt: thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : null
+          id: `yt-${videoId}`, originalId: videoId, title: title, artist: artist, album: 'YouTube Music',
+          duration: 0, format: 'STREAM', isCloud: true, isOnline: true, platform: 'youtube',
+          coverArt: covers.coverArt, coverArtHighRes: covers.coverArtHighRes
         });
       }
 
@@ -1643,18 +1585,11 @@ app.whenReady().then(() => {
         const artist = renderer.longBylineText?.runs?.map((r:any) => r.text).join('') || 'YouTube';
         const thumbnails = renderer.thumbnail?.thumbnails || [];
 
+        const covers = extractCovers(thumbnails, videoId); // Dùng renderer.videoId cho getUpNext
         tracks.push({
-          id: `yt-${renderer.videoId}`,
-          originalId: renderer.videoId,
-          title: title,
-          artist: artist,
-          album: 'YouTube Music',
-          duration: 0,
-          format: 'STREAM',
-          isCloud: true,
-          isOnline: true,
-          platform: 'youtube',
-          coverArt: thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : null
+          id: `yt-${videoId}`, originalId: videoId, title: title, artist: artist, album: 'YouTube Music',
+          duration: 0, format: 'STREAM', isCloud: true, isOnline: true, platform: 'youtube',
+          coverArt: covers.coverArt, coverArtHighRes: covers.coverArtHighRes
         });
       }
       return { success: true, tracks };
