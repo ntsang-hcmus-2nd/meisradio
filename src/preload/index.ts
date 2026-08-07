@@ -41,7 +41,11 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   downloadOnline: (track: any) => ipcRenderer.invoke('music:downloadOnline', track),
   ytmLogin: () => ipcRenderer.invoke('music:ytmLogin'),
   getHomeDashboard: () => ipcRenderer.invoke('music:getHomeDashboard'),
+  logWatchHistory: (videoId: string) => ipcRenderer.invoke('music:logWatchHistory', videoId),
+  getUpNext: (videoId: string) => ipcRenderer.invoke('music:getUpNext', videoId),
+  // Chèn vào cuối danh sách các hàm API
   getYtmPlaylist: (playlistId: string) => ipcRenderer.invoke('music:getYtmPlaylist', playlistId),
+  getYtmArtist: (artistId: string) => ipcRenderer.invoke('music:getYtmArtist', artistId), // <-- DÒNG MỚI NÀY
   preloadStream: (targetId: string) => ipcRenderer.invoke('music:preloadStream', targetId),
 }
 

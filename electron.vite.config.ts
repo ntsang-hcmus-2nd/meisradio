@@ -7,6 +7,9 @@ export default defineConfig({
   main: {
     build: {
       minify: true, // Bật thu nhỏ code
+      rollupOptions: {
+        external: ['yt-dlp-exec']
+      }
     }
   },
   preload: {
