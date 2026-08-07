@@ -215,7 +215,8 @@ export default function App() {
   }
 
   const handleDashboardItemClick = async (item: any) => {
-    if (item.videoId) {
+    if (item.videoId && !item.isArtist) { 
+      // XỬ LÝ PHÁT NHẠC
       const track = {
         id: `yt-${item.videoId}`, originalId: item.videoId,
         title: item.title, artist: item.subtitle, album: 'YouTube Music', duration: 0,
@@ -223,21 +224,26 @@ export default function App() {
         coverArt: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : null,
         coverArtHighRes: item.coverArtHighRes || null
       };
-      
-      // SỬ DỤNG HÀM MỚI Ở ĐÂY
       playAndGenerateRadio(track);
       
+    } else if (item.isArtist) {
+      // XỬ LÝ MỞ TRANG NGHỆ SĨ
+      setActiveAlbum({ title: item.title, tracks: [] });
+      setIsAlbumLoading(true);
+      // @ts-ignore
+      const res = await window.api.getYtmArtist(item.playlistId);
+      if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks });
+      else { alert(res.error); setActiveAlbum(null); }
+      setIsAlbumLoading(false);
+
     } else if (item.playlistId) {
+      // XỬ LÝ MỞ ALBUM/PLAYLIST
       setActiveAlbum({ title: item.title, tracks: [] });
       setIsAlbumLoading(true);
       // @ts-ignore
       const res = await window.api.getYtmPlaylist(item.playlistId);
-      if (res.success) {
-        setActiveAlbum({ title: item.title, tracks: res.tracks });
-      } else {
-        alert(res.error);
-        setActiveAlbum(null);
-      }
+      if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks });
+      else { alert(res.error); setActiveAlbum(null); }
       setIsAlbumLoading(false);
     }
   }
@@ -1655,26 +1661,22 @@ export default function App() {
                 onKeyDown={(e) => { 
                   if (e.key === 'Enter' && searchInput.trim() !== '') {
                     if (activeView === 'home') {
-                      // HIỆU ỨNG 1: Tìm kiếm trực tiếp trên Dashboard mà không bị nhảy tab
                       // @ts-ignore
                       window.api.searchOnline(searchInput).then(res => {
                         if (res.success) {
-                          // Ép kiểu dữ liệu trả về thành định dạng mảng (Carousel) của Dashboard
-                          setDashboardData([{
-                            title: `Kết quả tìm kiếm cho "${searchInput}"`,
-                            contents: res.tracks.map((t: any) => ({
-                              title: t.title,
-                              subtitle: t.artist,
-                              videoId: t.originalId,
-                              thumbnails: t.coverArt ? [{ url: t.coverArt }] : []
-                            }))
-                          }]);
+                          if (res.isUrl) {
+                            // Mở Playlist hoặc Phát bài hát từ Link
+                            if (res.type === 'playlist') setActiveAlbum({ title: res.title, tracks: res.tracks });
+                            else if (res.type === 'song') playAndGenerateRadio(res.track);
+                          } else {
+                            // Hiển thị giao diện danh mục như Trang chủ
+                            setDashboardData(res.data);
+                          }
                         } else {
                           alert('Lỗi tìm kiếm: ' + res.error);
                         }
                       });
                     } else {
-                      // HIỆU ỨNG 3: Đang ở các tab Thư viện, tiến hành lọc Local
                       setSearchQuery(searchInput); 
                     }
                   } 
@@ -1781,9 +1783,11 @@ export default function App() {
                                           <p className="font-semibold text-sm text-white truncate group-hover:text-emerald-400 transition">{item.title}</p>
                                           <p className="text-xs text-zinc-500 truncate mt-0.5">{item.subtitle}</p>
                                         </div>
-                                        <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-full transition" title="Tải xuống thư viện">
-                                          <Download size={14} />
-                                        </button>
+                                        {!item.isArtist && (
+                                          <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-full transition" title="Tải xuống thư viện">
+                                            <Download size={14} />
+                                          </button>
+                                        )}
                                       </div>
                                     )
                                   }
@@ -1804,9 +1808,11 @@ export default function App() {
                                           >
                                             <Play size={14}/> Phát ngay
                                           </button>
-                                          <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-zinc-800/90 text-white rounded-full hover:bg-emerald-500 hover:scale-110 transition shadow-2xl" title="Tải xuống thư viện">
-                                            <Download size={18} />
-                                          </button>
+                                          {!item.isArtist && (
+                                            <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-zinc-800/90 text-white rounded-full hover:bg-emerald-500 hover:scale-110 transition shadow-2xl" title="Tải xuống thư viện">
+                                              <Download size={18} />
+                                            </button>
+                                          )}
                                         </div>
                                       </div>
                                       <p className="font-semibold text-sm text-white truncate">{item.title}</p>
@@ -1986,15 +1992,37 @@ export default function App() {
                     <div className="border-t border-zinc-800 pt-6 mt-6">
                       <h3 className="text-emerald-400 font-semibold mb-2">Trình phân tích phổ (Spectrogram)</h3>
                       <p className="text-sm text-zinc-400 mb-4">Theo dõi biểu đồ thác nước tần số (Waterfall) thời gian thực của bản nhạc hiện tại. Khuyến nghị phát nhạc Chất lượng cao (Lossless) để kiểm tra dải cắt tần (Frequency Cutoff).</p>
-                      <div className="bg-black border border-zinc-800 rounded-xl overflow-hidden relative" style={{ height: '300px' }}>
-                        <canvas ref={spectrogramCanvasRef} width={1024} height={300} className="w-full h-full" />
+                      
+                      <div className="bg-black border border-zinc-800 rounded-xl overflow-hidden relative flex flex-col" style={{ height: '300px' }}>
+                        
+                        {/* LỚP PHỦ TRỤC Y: HIỂN THỊ TẦN SỐ (Hz) */}
+                        <div className="absolute top-0 left-0 bottom-6 w-12 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[10px] text-zinc-400 font-mono text-center z-10 pointer-events-none">
+                          <span>15k</span>
+                          <span>10k</span>
+                          <span>5k</span>
+                          <span>1k</span>
+                          <span>0Hz</span>
+                        </div>
+
+                        {/* LỚP PHỦ TRỤC X: HIỂN THỊ THỜI GIAN (Giây) */}
+                        <div className="absolute bottom-0 left-12 right-0 h-6 bg-zinc-950/90 border-t border-zinc-800 flex items-center justify-between px-4 text-[10px] text-zinc-400 font-mono z-10 pointer-events-none">
+                          <span>-10s</span>
+                          <span>-7.5s</span>
+                          <span>-5s</span>
+                          <span>-2.5s</span>
+                          <span className="text-emerald-500 font-bold">Hiện tại (0s)</span>
+                        </div>
+
+                        {/* CANVAS VẼ PHỔ (Lùi vào để nhường chỗ cho Trục X/Y) */}
+                        <div className="absolute top-0 left-12 right-0 bottom-6 z-0">
+                          <canvas ref={spectrogramCanvasRef} width={1024} height={276} className="w-full h-full" />
+                        </div>
+
                         {!isPlaying && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                             <span className="text-zinc-400 text-sm font-medium">Đang tạm dừng - Vui lòng phát nhạc để phân tích âm thanh</span>
                           </div>
                         )}
-                        <div className="absolute left-2 top-2 text-[10px] text-zinc-500 font-mono tracking-widest">FREQ (Hz)</div>
-                        <div className="absolute right-2 bottom-2 text-[10px] text-zinc-500 font-mono tracking-widest">TIME ➔</div>
                       </div>
                     </div>
 

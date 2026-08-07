@@ -27,44 +27,105 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
   ])
 
   // Vẽ biểu đồ sóng EQ
+  // Vẽ biểu đồ sóng EQ và Trục X/Y
   useEffect(() => {
     if (!showEQ || !eqCanvasRef.current || filterNodesRef.current.length === 0) return
     const canvas = eqCanvasRef.current
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const width = canvas.width; const height = canvas.height
-    ctx.clearRect(0, 0, width, height)
-    ctx.strokeStyle = '#27272a'; ctx.lineWidth = 1; ctx.beginPath()
-    for (let i = 1; i < 10; i++) {
-      ctx.moveTo(0, (height / 10) * i); ctx.lineTo(width, (height / 10) * i)
-      ctx.moveTo((width / 10) * i, 0); ctx.lineTo((width / 10) * i, height)
-    }
-    ctx.stroke()
-
-    const freqCount = width
-    const freqArray = new Float32Array(freqCount)
-    const magResponse = new Float32Array(freqCount)
-    const phaseResponse = new Float32Array(freqCount)
-
-    const minFreq = 20; const maxFreq = 20000
-    for (let i = 0; i < freqCount; i++) freqArray[i] = minFreq * Math.pow(maxFreq / minFreq, i / freqCount)
+    const width = canvas.width; 
+    const height = canvas.height;
     
-    const totalMag = new Float32Array(freqCount).fill(1.0)
-    filterNodesRef.current.forEach(filter => {
-      filter.getFrequencyResponse(freqArray, magResponse, phaseResponse)
-      for (let i = 0; i < freqCount; i++) totalMag[i] *= magResponse[i]
-    })
+    // Tạo vùng đệm (Padding) để lấy chỗ vẽ hệ trục
+    const paddingLeft = 35;
+    const paddingBottom = 20;
+    const drawWidth = width - paddingLeft;
+    const drawHeight = height - paddingBottom;
 
-    ctx.beginPath(); ctx.lineWidth = 3; ctx.strokeStyle = '#10b981' 
-    for (let i = 0; i < freqCount; i++) {
-      const db = 20 * Math.log10(totalMag[i])
-      const y = height / 2 - (db / 20) * (height / 2) 
-      if (i === 0) ctx.moveTo(i, y); else ctx.lineTo(i, y)
+    ctx.clearRect(0, 0, width, height)
+    ctx.font = '10px "Inter", sans-serif'
+
+    // --- 1. VẼ TRỤC Y (ĐỘ LỢI: -20dB đến +20dB) ---
+    const dbMarks = [20, 10, 0, -10, -20];
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    
+    dbMarks.forEach(db => {
+      const y = (drawHeight / 2) - (db / 20) * (drawHeight / 2);
+      
+      // Kẻ lưới ngang
+      ctx.beginPath(); 
+      ctx.strokeStyle = db === 0 ? '#52525b' : '#27272a'; // Nổi bật mốc 0dB
+      ctx.lineWidth = db === 0 ? 1.5 : 1;
+      ctx.moveTo(paddingLeft, y); 
+      ctx.lineTo(width, y); 
+      ctx.stroke();
+      
+      // Viết chữ
+      ctx.fillStyle = '#71717a';
+      ctx.fillText(`${db > 0 ? '+' : ''}${db}`, paddingLeft - 5, y);
+    });
+
+    // --- 2. VẼ TRỤC X (TẦN SỐ: 20Hz - 20000Hz theo thang Logarithmic) ---
+    const minFreq = 20; const maxFreq = 20000;
+    const hzMarks = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+    
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    hzMarks.forEach(hz => {
+      const x = paddingLeft + drawWidth * (Math.log(hz / minFreq) / Math.log(maxFreq / minFreq));
+      
+      // Kẻ lưới dọc
+      ctx.beginPath(); 
+      ctx.strokeStyle = '#27272a';
+      ctx.lineWidth = 1;
+      ctx.moveTo(x, 0); 
+      ctx.lineTo(x, drawHeight); 
+      ctx.stroke();
+      
+      // Viết chữ
+      ctx.fillStyle = '#71717a';
+      const label = hz >= 1000 ? `${hz/1000}k` : `${hz}`;
+      ctx.fillText(label, x, drawHeight + 5);
+    });
+
+    // --- 3. VẼ ĐƯỜNG CONG ÂM THANH EQ ---
+    const freqArray = new Float32Array(drawWidth);
+    const magResponse = new Float32Array(drawWidth);
+    const phaseResponse = new Float32Array(drawWidth);
+
+    for (let i = 0; i < drawWidth; i++) {
+      freqArray[i] = minFreq * Math.pow(maxFreq / minFreq, i / drawWidth);
     }
-    ctx.stroke()
-    ctx.lineTo(width, height); ctx.lineTo(0, height)
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)'; ctx.fill()
+    
+    const totalMag = new Float32Array(drawWidth).fill(1.0);
+    filterNodesRef.current.forEach(filter => {
+      filter.getFrequencyResponse(freqArray, magResponse, phaseResponse);
+      for (let i = 0; i < drawWidth; i++) totalMag[i] *= magResponse[i];
+    });
+
+    ctx.beginPath(); 
+    ctx.lineWidth = 3; 
+    ctx.strokeStyle = isEqEnabled ? '#10b981' : '#52525b'; 
+    
+    for (let i = 0; i < drawWidth; i++) {
+      const db = 20 * Math.log10(totalMag[i]);
+      const clampedDb = Math.max(-20, Math.min(20, db)); // Giới hạn sóng không tràn viền
+      const y = (drawHeight / 2) - (clampedDb / 20) * (drawHeight / 2);
+      
+      if (i === 0) ctx.moveTo(paddingLeft + i, y); 
+      else ctx.lineTo(paddingLeft + i, y);
+    }
+    ctx.stroke();
+
+    // Fill màu Gradient phía dưới
+    ctx.lineTo(width, drawHeight); 
+    ctx.lineTo(paddingLeft, drawHeight);
+    ctx.fillStyle = isEqEnabled ? 'rgba(16, 185, 129, 0.1)' : 'rgba(82, 82, 91, 0.1)'; 
+    ctx.fill();
+
   }, [showEQ, eqBands, isEqEnabled])
 
   if (!showEQ) return null
