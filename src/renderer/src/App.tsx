@@ -1006,7 +1006,12 @@ export default function App() {
       }
 
       sourceNodeRef.current.disconnect()
-      filterNodesRef.current.forEach(node => node.disconnect())
+      filterNodesRef.current.forEach(node => {
+        node.disconnect()
+        // Giải phóng thêm tham chiếu cấp thấp
+        node.frequency.cancelScheduledValues(0) 
+        node.gain.cancelScheduledValues(0)
+      })
       filterNodesRef.current = []
 
       let prevNode: AudioNode = sourceNodeRef.current
@@ -1083,46 +1088,49 @@ export default function App() {
     if (activeView !== 'settings' || !spectrogramCanvasRef.current || !analyserNodeRef.current) return
 
     const canvas = spectrogramCanvasRef.current
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    const ctx = canvas.getContext('2d', { willReadFrequently: true }) // Flag hỗ trợ tăng tốc đọc bộ nhớ đệm
     if (!ctx) return
     
     const analyser = analyserNodeRef.current
     const bufferLength = analyser.frequencyBinCount
     const dataArray = new Uint8Array(bufferLength)
 
-    // Dùng 1 canvas ẩn để dịch chuyển hình ảnh tạo hiệu ứng thác nước (waterfall) liên tục
     const tempCanvas = document.createElement('canvas')
     tempCanvas.width = canvas.width
     tempCanvas.height = canvas.height
     const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })
 
-    const draw = () => {
+    // TỐI ƯU HÓA TÀI NGUYÊN: Giới hạn ở mức 30 FPS
+    let lastDrawTime = performance.now();
+    const fpsInterval = 1000 / 30;
+
+    const draw = (now: number) => {
       reqAnimSpectrogramRef.current = requestAnimationFrame(draw)
+      
+      const elapsed = now - lastDrawTime;
+      if (elapsed < fpsInterval) return; // Bỏ qua nhịp vẽ nếu chưa đủ chu kỳ 30fps
+      lastDrawTime = now - (elapsed % fpsInterval);
+
       if (!isPlaying) return
 
       analyser.getByteFrequencyData(dataArray)
 
-      if (tempCtx) {
-        tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height)
-      }
-
+      if (tempCtx) tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height)
+      
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(tempCanvas, -2, 0) // Dịch sang trái 2 pixel để cuộn ảnh mượt mà
+      ctx.drawImage(tempCanvas, -2, 0) 
 
-      // Vẽ cột tần số mới vào rìa phải
       for (let i = 0; i < bufferLength; i++) {
         const value = dataArray[i]
-        // Focus hiển thị 60% dải băng thông (Loại bỏ các dải âm thanh siêu thanh ít dùng)
         const y = canvas.height - (i / (bufferLength * 0.6)) * canvas.height
         if (y < 0) continue
 
-        // Biểu đồ nhiệt (Heatmap): Đen (0) -> Xanh dương/Lục -> Vàng -> Đỏ (255)
         const hue = (1 - value / 255) * 240 
         ctx.fillStyle = value === 0 ? '#000000' : `hsl(${hue}, 100%, 50%)`
         ctx.fillRect(canvas.width - 2, y, 2, 2)
       }
     }
-    draw()
+    reqAnimSpectrogramRef.current = requestAnimationFrame(draw)
 
     return () => cancelAnimationFrame(reqAnimSpectrogramRef.current)
   }, [isPlaying, activeView])

@@ -49,6 +49,10 @@ app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256')
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('disable-http-cache');
 
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-hardware-overlays');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+
 let tray: Tray | null = null
 let isQuitting = false 
 let closeToTray = false
