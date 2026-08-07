@@ -12,6 +12,12 @@ import ytdlpDefault, { create } from 'yt-dlp-exec' // Đã sửa lỗi import yt
 import axios from 'axios'
 import http from 'http'
 
+// FFmpeg directories
+
+const ffmpegDir = is.dev 
+  ? join(app.getAppPath(), 'resources', 'bin')
+  : join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'resources', 'bin');
+
 // 1. QUẢN LÝ THƯ MỤC DỮ LIỆU ĐỘC LẬP (Chống lỗi cấm ghi ổ đĩa khi Build)
 const DATA_FOLDER = is.dev 
   ? app.getPath('userData') 
@@ -41,6 +47,7 @@ const ytdlp = is.dev
 
 app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
 app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('disable-http-cache');
 
 let tray: Tray | null = null
 let isQuitting = false 
@@ -1074,11 +1081,22 @@ app.whenReady().then(() => {
       if (!targetId) { res.writeHead(400).end('Thiếu ID bài hát'); return; }
 
       try {
+        // Phân giải URL trực tiếp nếu chưa có trong cache
         let directUrl = '';
         const cached = streamUrlCache.get(targetId);
         if (cached && cached.expires > Date.now()) directUrl = cached.url;
         else {
-          const info = await ytdlp(targetId, { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true } as any) as any;
+          const config = getConfig();
+          const ytOptions: any = { 
+            dumpSingleJson: true, 
+            format: 'bestaudio/best', 
+            noWarnings: true,
+            extractorArgs: 'youtube:player-client=android' // Bổ sung API Android
+          };
+          // Bơm Cookie
+          if (config.ytCookie) ytOptions.addHeader = [`Cookie: ${config.ytCookie}`];
+
+          const info = await ytdlp(targetId, ytOptions as any) as any;
           directUrl = info.url;
           streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 });
         }
@@ -1092,7 +1110,13 @@ app.whenReady().then(() => {
         } catch (axiosErr: any) {
           if (axiosErr.response && axiosErr.response.status === 403) {
             streamUrlCache.delete(targetId);
-            const newInfo = await ytdlp(targetId, { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true } as any) as any;
+            
+            // Cập nhật ytOptions cho luồng Retry
+            const config = getConfig();
+            const ytOptions: any = { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true, extractorArgs: 'youtube:player-client=android' };
+            if (config.ytCookie) ytOptions.addHeader = [`Cookie: ${config.ytCookie}`];
+
+            const newInfo = await ytdlp(targetId, ytOptions as any) as any;
             streamUrlCache.set(targetId, { url: newInfo.url, expires: Date.now() + 3600000 });
             proxyRes = await axios({ method: 'GET', url: newInfo.url, headers: { ...requestHeaders, 'User-Agent': 'Mozilla/5.0' }, responseType: 'stream', decompress: false });
           } else throw axiosErr;
@@ -1233,7 +1257,9 @@ app.whenReady().then(() => {
         audioQuality: 0,
         output: destPath,
         embedMetadata: true,
-        embedThumbnail: true
+        embedThumbnail: true,
+        extractorArgs: 'youtube:player-client=android', // <-- KHÔI PHỤC LẠI API ANDROID
+        ffmpegLocation: ffmpegDir 
       } as any);
       return { success: true, localPath: pathToFileURL(destPath).href };
     } catch (e: any) {
@@ -1500,7 +1526,16 @@ app.whenReady().then(() => {
       return { success: true };
     }
     try {
-      const info = await ytdlp(targetId, { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true }) as any;
+      const config = getConfig();
+      const ytOptions: any = { 
+        dumpSingleJson: true, 
+        format: 'bestaudio/best', 
+        noWarnings: true, 
+        extractorArgs: 'youtube:player-client=android' 
+      };
+      if (config.ytCookie) ytOptions.addHeader = [`Cookie: ${config.ytCookie}`];
+
+      const info = await ytdlp(targetId, ytOptions as any) as any;
       streamUrlCache.set(targetId, { url: info.url, expires: Date.now() + 3600000 });
       return { success: true };
     } catch (e) { return { success: false }; }
