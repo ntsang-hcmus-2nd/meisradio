@@ -8,7 +8,7 @@ const formatDuration = (seconds: number) => {
 }
 
 interface PlayerProgressBarProps {
-  audioRef: React.RefObject<HTMLAudioElement | null> // Thêm | null vào đây
+  audioRef: React.RefObject<HTMLAudioElement | null>
   currentTrack: any
   crossfadeEnabled: boolean
   crossfadeDuration: number
@@ -20,16 +20,19 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
   audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext
 }) => {
   const [currentTime, setCurrentTime] = useState(0)
+  const [isDragging, setIsDragging] = useState(false) // Trạng thái kéo chuột
 
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
 
     const handleTimeUpdate = () => {
+      // TỐI ƯU HÓA: Ngưng cập nhật UI từ Audio nếu người dùng đang dùng tay kéo thanh trượt
+      if (isDragging) return; 
+
       const cTime = audio.currentTime
       setCurrentTime(cTime)
       
-      // Xử lý Crossfade ngay bên trong component nhỏ này
       if (crossfadeEnabled && currentTrack && currentTrack.duration > 0 && repeatMode !== 2) {
         if (currentTrack.duration - cTime <= crossfadeDuration && currentTrack.duration - cTime > crossfadeDuration - 0.5) {
           onNext()
@@ -39,12 +42,19 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
     audio.addEventListener('timeupdate', handleTimeUpdate)
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext])
+  }, [audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext, isDragging])
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = Number(e.target.value)
-    if (audioRef.current) audioRef.current.currentTime = time
-    setCurrentTime(time)
+  // Chỉ cập nhật giao diện thanh trượt (Không gọi API / Tua nhạc)
+  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentTime(Number(e.target.value))
+  }
+
+  // Áp dụng lệnh Tua nhạc thực tế khi THẢ CHUỘT ra
+  const handleSeekCommit = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = currentTime
+    }
+    setIsDragging(false)
   }
 
   const duration = currentTrack?.duration || 100
@@ -55,7 +65,13 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       <span>{formatDuration(currentTime)}</span>
       <input 
         type="range" min={0} max={duration} 
-        value={currentTime} onChange={handleSeek} disabled={!currentTrack} 
+        value={currentTime} 
+        onChange={handleSeekChange} 
+        onMouseDown={() => setIsDragging(true)}
+        onMouseUp={handleSeekCommit}
+        onTouchStart={() => setIsDragging(true)}
+        onTouchEnd={handleSeekCommit}
+        disabled={!currentTrack} 
         className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400" 
         style={{ background: `linear-gradient(to right, #10b981 ${timePercent}%, #27272a ${timePercent}%)` }} 
       />

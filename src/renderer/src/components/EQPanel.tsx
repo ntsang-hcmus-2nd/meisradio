@@ -131,7 +131,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
   if (!showEQ) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4 shrink-0">
           <div className="flex items-center gap-2"><Sliders className="text-emerald-500" size={22} /><h2 className="text-lg font-bold text-white">Equalizer (EQ)</h2></div>
@@ -160,7 +160,25 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
                 </div>
                 <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
                   <div className="flex justify-between text-zinc-400"><span>Gain</span><span className="font-mono text-emerald-400">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span></div>
-                  <input type="range" min="-20" max="20" step="0.5" value={band.gain} onChange={(e) => handleUpdateBand(band.id, 'gain', Number(e.target.value))} className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500" style={{ background: `linear-gradient(to right, #10b981 ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)` }} />
+                  <input 
+                    type="range" min="-20" max="20" step="0.5" 
+                    defaultValue={band.gain} 
+                    onChange={(e) => {
+                      // TỐI ƯU HÓA: Đẩy tham số thẳng vào Node Audio phần cứng, ngắt kết nối với React
+                      const val = Number(e.target.value);
+                      e.target.style.background = `linear-gradient(to right, #10b981 ${((val + 20) / 40) * 100}%, #27272a ${((val + 20) / 40) * 100}%)`;
+                      e.target.previousElementSibling!.children[1].textContent = `${val > 0 ? '+' : ''}${val} dB`; // Cập nhật mác Text
+                      
+                      if (filterNodesRef && filterNodesRef.current) {
+                        const nodeIndex = eqBands.findIndex(b => b.id === band.id);
+                        if (filterNodesRef.current[nodeIndex]) filterNodesRef.current[nodeIndex].gain.value = val;
+                      }
+                    }} 
+                    onMouseUp={(e) => handleUpdateBand(band.id, 'gain', Number((e.target as HTMLInputElement).value))}
+                    onTouchEnd={(e) => handleUpdateBand(band.id, 'gain', Number((e.target as HTMLInputElement).value))}
+                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500" 
+                    style={{ background: `linear-gradient(to right, #10b981 ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)` }} 
+                  />
                 </div>
                 <button onClick={() => handleDeleteBand(band.id)} className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3"><Trash2 size={16} /></button>
               </div>

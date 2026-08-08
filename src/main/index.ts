@@ -48,7 +48,7 @@ const ytdlp = is.dev
 app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('disable-http-cache');
-
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-hardware-overlays');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
@@ -76,7 +76,10 @@ function getConfig() {
       return config
     }
   } catch (e) {}
-  return { libraryPath: null, crossfadeEnabled: false, crossfadeDuration: 3, volume: 1, eqBands: null, liteMode: false }
+  return { 
+    libraryPath: null, crossfadeEnabled: false, crossfadeDuration: 3, 
+    volume: 1, eqBands: null, appMode: 'default' // <-- Thay liteMode bằng appMode
+  }
 }
 
 function saveConfig(data: any) {
@@ -1246,9 +1249,14 @@ app.whenReady().then(() => {
             return { success: true, isUrl: true, type: 'song', track };
         }
       } 
-      // XỬ LÝ TÌM KIẾM TRẢ VỀ PHÂN LOẠI (Nghệ sĩ, Bài hát, Playlist)
+      /// XỬ LÝ TÌM KIẾM TRẢ VỀ PHÂN LOẠI (Nghệ sĩ, Bài hát, Playlist)
       else {
-        const config = getConfig()
+        const config = getConfig();
+        
+        // 1. CHUẨN BỊ LUỒNG 1: yt-dlp lấy 20 bài hát độ chính xác cao
+        const ytdlpPromise = ytdlp(`ytsearch20:${query}`, { dumpSingleJson: true, noWarnings: true, flatPlaylist: true } as any);
+
+        // 2. CHUẨN BỊ LUỒNG 2: YouTube Music API lấy Playlist, Album, Nghệ sĩ
         const url = 'https://music.youtube.com/youtubei/v1/search?prettyPrint=false';
         const payload = {
           context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20240108.01.00', hl: 'vi', gl: 'VN' } },
@@ -1265,52 +1273,18 @@ app.whenReady().then(() => {
           const authHash = generateSapisidHash(config.ytCookie);
           if (authHash) headers['Authorization'] = authHash;
         }
+        const ytmPromise = axios.post(url, payload, { headers });
 
-        const response = await axios.post(url, payload, { headers });
-        const data = response.data;
-        const tabs = data?.contents?.tabbedSearchResultsRenderer?.tabs || [];
-        const sectionList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+        // TỐI ƯU HÓA: Chạy 2 luồng song song cùng lúc, thời gian phản hồi bằng đúng với luồng chậm nhất
+        const [ytdlpResponse, ytmResponse] = await Promise.allSettled([ytdlpPromise, ytmPromise]);
 
         const sections: any[] = [];
         const seenTitles = new Set(); // BỘ LỌC CHỐNG TRÙNG LẶP
 
-        for (let section of sectionList) {
-           if (section.itemSectionRenderer?.contents) section = section.itemSectionRenderer.contents[0];
-           
-           const shelf = section.musicShelfRenderer || section.musicCardShelfRenderer || section.musicCarouselShelfRenderer;
-           if (!shelf) continue;
-
-           const titleRuns = shelf.title?.runs || shelf.header?.musicCardShelfHeaderBasicRenderer?.title?.runs || [];
-           const title = titleRuns.map((r: any) => r.text).join('') || 'Kết quả';
-           
-           if (seenTitles.has(title)) continue;
-
-           const items: any[] = [];
-           // Quét các danh sách kết quả (List/Card)
-           for (const item of shelf.contents || []) {
-               const parsed = parseYtmItem(item);
-               if (parsed) items.push(parsed);
-           }
-           
-           // Quét riêng trường hợp Thẻ nổi bật (Top Result) không có mảng contents
-           if (items.length === 0 && section.musicCardShelfRenderer) {
-              const parsedCard = parseYtmItem({ musicResponsiveListItemRenderer: section.musicCardShelfRenderer });
-              if (parsedCard) items.push(parsedCard);
-           }
-           
-           if (items.length > 0) {
-               seenTitles.add(title);
-               sections.push({ title, contents: items });
-           }
-        }
-        
-        // KIỂM TRA PHƯƠNG ÁN B: Nếu Google từ chối trả về phân loại, dùng ngay Lõi yt-dlp để bóc tách 15 bài hát
-        if (sections.length > 0) {
-            return { success: true, isUrl: false, data: sections };
-        } else {
-            const output = await ytdlp(`ytsearch15:${query}`, { dumpSingleJson: true, noWarnings: true, flatPlaylist: true } as any) as any;
+        // --- XỬ LÝ KẾT QUẢ LUỒNG 1 (Đưa 20 bài hát lên đỉnh) ---
+        if (ytdlpResponse.status === 'fulfilled') {
+            const output = ytdlpResponse.value as any;
             const results = output.entries ? output.entries : [output];
-            
             const tracks = results.map((track: any) => {
               const covers = extractCovers(track.thumbnails || (track.thumbnail ? [{url: track.thumbnail}] : []), track.id);
               return {
@@ -1326,10 +1300,49 @@ app.whenReady().then(() => {
             });
             
             if (tracks.length > 0) {
-                return { success: true, isUrl: false, data: [{ title: 'Kết quả tìm kiếm', contents: tracks }] };
+                seenTitles.add('bài hát');
+                sections.push({ title: 'Bài hát (Mở rộng)', contents: tracks });
             }
-            return { success: true, isUrl: false, data: [] };
         }
+
+        // --- XỬ LÝ KẾT QUẢ LUỒNG 2 (Nạp các Playlist, Nghệ sĩ phía dưới) ---
+        if (ytmResponse.status === 'fulfilled') {
+            const data = ytmResponse.value.data;
+            const tabs = data?.contents?.tabbedSearchResultsRenderer?.tabs || [];
+            const sectionList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+
+            for (let section of sectionList) {
+               if (section.itemSectionRenderer?.contents) section = section.itemSectionRenderer.contents[0];
+               
+               const shelf = section.musicShelfRenderer || section.musicCardShelfRenderer || section.musicCarouselShelfRenderer;
+               if (!shelf) continue;
+
+               const titleRuns = shelf.title?.runs || shelf.header?.musicCardShelfHeaderBasicRenderer?.title?.runs || [];
+               const title = titleRuns.map((r: any) => r.text).join('') || `Kết quả ${sections.length + 1}`;
+               
+               // Bỏ qua mục "Bài hát" gốc của YTM (vì đã có 20 bài của yt-dlp xịn hơn)
+               if (title.toLowerCase().includes('bài hát') || title.toLowerCase() === 'songs') continue;
+               if (seenTitles.has(title)) continue;
+
+               const items: any[] = [];
+               for (const item of shelf.contents || []) {
+                   const parsed = parseYtmItem(item);
+                   if (parsed) items.push(parsed);
+               }
+               
+               if (items.length === 0 && section.musicCardShelfRenderer) {
+                  const parsedCard = parseYtmItem({ musicResponsiveListItemRenderer: section.musicCardShelfRenderer });
+                  if (parsedCard) items.push(parsedCard);
+               }
+               
+               if (items.length > 0) {
+                   seenTitles.add(title);
+                   sections.push({ title, contents: items });
+               }
+            }
+        }
+
+        return { success: true, isUrl: false, data: sections };
       }
     } catch (e: any) {
       return { success: false, error: e.message }

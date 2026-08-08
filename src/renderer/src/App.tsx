@@ -29,6 +29,33 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
+// --- WEBGL HELPER FUNCTIONS ---
+const compileShader = (gl: WebGLRenderingContext, type: number, source: string) => {
+  const shader = gl.createShader(type);
+  if (!shader) return null;
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error('WebGL Shader Error:', gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+};
+
+const createWebGLProgram = (gl: WebGLRenderingContext, vsSource: string, fsSource: string) => {
+  const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vsSource);
+  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+  if (!vertexShader || !fragmentShader) return null;
+  const program = gl.createProgram();
+  if (!program) return null;
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+  return program;
+};
+
 export interface EQBand {
   id: string
   frequency: number // Tần số (Hz): 20Hz - 20000Hz
@@ -66,6 +93,46 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
   img.src = imageSrc
 }
 
+const VirtuosoComponents = {
+  Table: ({ style, ...props }: any) => <table {...props} className="w-full text-left text-sm" style={{ ...style, borderCollapse: 'collapse' }} />,
+  TableHead: React.forwardRef((props: any, ref: any) => <thead {...props} ref={ref} />),
+  TableRow: (props: any) => <tr {...props} className="group border-b border-zinc-800/20 transition-colors cursor-pointer hover:bg-white/5" />
+};
+
+// TỐI ƯU HÓA: Ghi nhớ từng dòng bài hát, ngăn React vẽ lại toàn bộ bảng khi thao tác
+const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, openTagEditor }: any) => {
+  return (
+    <>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-center text-zinc-500 group-hover:text-white">
+        {isThisTrackPlaying && isPlaying ? <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse mx-auto" /> : index + 1}
+      </td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-zinc-800 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+            {/* TỐI ƯU HÓA: Xóa bỏ loading="lazy" vì Virtuoso đã tự động Lazy Load, kết hợp cả 2 sẽ gây spike CPU */}
+            {(!isLite && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <img src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
+            {track.isCloud && <div className="absolute top-0 right-0 bg-emerald-500/80 p-0.5 rounded-bl-md"><Cloud size={10} className="text-white" /></div>}
+          </div>
+          <div className="truncate w-48 lg:w-64">
+            <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-emerald-400' : 'text-white group-hover:text-emerald-400'}`}>{track.title}</p>
+            <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
+          </div>
+        </div>
+      </td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}</span></td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
+      <td className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
+    </>
+  )
+}, (prevProps, nextProps) => {
+  // So sánh thông minh: Chỉ render lại đúng bài hát đang phát hoặc đổi chế độ Lite
+  return prevProps.isThisTrackPlaying === nextProps.isThisTrackPlaying && 
+         prevProps.isPlaying === nextProps.isPlaying && 
+         prevProps.isLite === nextProps.isLite &&
+         prevProps.track.id === nextProps.track.id;
+});
+
 export default function App() {
 
   // ==========================================
@@ -93,8 +160,10 @@ export default function App() {
   const [isAlbumLoading, setIsAlbumLoading] = useState(false)
   const preloadedRef = useRef<string | null>(null) // Đánh dấu ID đã được preload
 
-  // Lite Mode State
-  const [liteMode, setLiteMode] = useState(false)
+  // State Chế độ hiệu suất
+  const [appMode, setAppMode] = useState<'default' | 'lite' | 'core'>('default')
+  const isLite = appMode === 'lite' || appMode === 'core' // Dùng chung cho việc tắt ảnh bìa, màu sắc
+  const isCore = appMode === 'core' // Chỉ định cắt luồng mảng Audio và UI mạng
   
   // UI & General App States
   const [activeView, setActiveView] = useState<'home' | 'songs' | 'playlists' | 'settings' | 'drive'>('home')
@@ -140,6 +209,10 @@ export default function App() {
   const [isEqEnabled, setIsEqEnabled] = useState(false)
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('default')
+  const selectedDeviceRef = useRef<string>('default');
+  useEffect(() => { 
+    selectedDeviceRef.current = selectedDeviceId; 
+  }, [selectedDeviceId]);
   const [eqBands, setEqBands] = useState<EQBand[]>([
     { id: '1', frequency: 60, gain: 0, type: 'peaking', q: 1.4 },
     { id: '2', frequency: 230, gain: 0, type: 'peaking', q: 1.4 },
@@ -892,7 +965,7 @@ export default function App() {
 
   // Fetch Original High-Res Cover for Fullscreen Lyrics
   useEffect(() => {
-    if (!isLyricsMaximized || liteMode || !currentTrack) {
+    if (!isLyricsMaximized || isLite || !currentTrack) {
       setOriginalCover(null)
       return
     }
@@ -910,17 +983,19 @@ export default function App() {
     } else {
       setOriginalCover(currentTrack.coverArt)
     }
-  }, [isLyricsMaximized, currentTrack?.id, liteMode])
+  }, [isLyricsMaximized, currentTrack?.id, isLite])
 
   // Apply device change
   useEffect(() => {
     const applyDevice = async () => {
       try {
+        // TỐI ƯU HÓA: Chromium yêu cầu dùng chuỗi rỗng '' cho thiết bị mặc định
+        const targetId = selectedDeviceId === 'default' ? '' : selectedDeviceId;
         if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
-          await (audioRef.current as any).setSinkId(selectedDeviceId)
+          await (audioRef.current as any).setSinkId(targetId)
         }
         if (audioCtxRef.current && typeof (audioCtxRef.current as any).setSinkId === 'function') {
-          await (audioCtxRef.current as any).setSinkId(selectedDeviceId)
+          await (audioCtxRef.current as any).setSinkId(targetId)
         }
       } catch (error) {
         console.error("Lỗi khi chuyển đổi thiết bị âm thanh:", error)
@@ -953,7 +1028,8 @@ export default function App() {
       if (cfg.showVisualizer !== undefined) setShowVisualizer(cfg.showVisualizer)
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
-      if (cfg.liteMode !== undefined) setLiteMode(cfg.liteMode) // MỚI
+      if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
+      else if (cfg.liteMode !== undefined) setAppMode(cfg.liteMode ? 'lite' : 'default') // Fallback cấu hình cũ
       if (cfg.ytCookie) {
         fetchDashboard()
       }
@@ -966,15 +1042,15 @@ export default function App() {
     // @ts-ignore
     window.api.saveConfig({ 
       volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, // Thêm isEqEnabled
-      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode 
+      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode 
     }) 
     // @ts-ignore
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
-  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode])
+  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode])
 
   // Dominant Color
   useEffect(() => {
-    if (liteMode) {
+    if (isLite) {
       setThemeColor('rgba(24, 24, 27, 1)') // Trả về màu tĩnh (Zinc-900) không đổi nền
       return
     }
@@ -983,7 +1059,7 @@ export default function App() {
     } else {
       setThemeColor('rgba(39, 39, 42, 0)')
     }
-  }, [currentTrack, liteMode]) // Thêm liteMode vào dependency
+  }, [currentTrack, isLite]) // Thêm isLite vào dependency
 
   // Audio Context & Cấu trúc luồng Bit-perfect
   // EFFECT 1: CHỈ KHỞI TẠO LẠI BỘ LỌC KHI ĐỔI BÀI HOẶC BẬT/TẮT EQ (Tiết kiệm CPU)
@@ -998,6 +1074,12 @@ export default function App() {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
         try { audioCtxRef.current = new AudioContextClass({ sampleRate: currentSampleRate }) } 
         catch (e) { audioCtxRef.current = new AudioContextClass() }
+        
+        // THÊM ĐOẠN NÀY: Bơm lại thiết bị đầu ra cho Context mới ngay khi nó vừa được tái tạo
+        const targetId = selectedDeviceRef.current === 'default' ? '' : selectedDeviceRef.current;
+        if (typeof (audioCtxRef.current as any).setSinkId === 'function') {
+          (audioCtxRef.current as any).setSinkId(targetId).catch(console.error);
+        }
       }
       const ctx = audioCtxRef.current
       if (!analyserNodeRef.current) { analyserNodeRef.current = ctx.createAnalyser(); analyserNodeRef.current.fftSize = 2048 }
@@ -1015,7 +1097,7 @@ export default function App() {
       filterNodesRef.current = []
 
       let prevNode: AudioNode = sourceNodeRef.current
-      if (isEqEnabled) {
+      if (isEqEnabled && !isCore) {
         const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
         sortedBands.forEach((band) => {
           const filter = ctx.createBiquadFilter()
@@ -1050,89 +1132,210 @@ export default function App() {
     })
   }, [eqBands, isEqEnabled])
 
-  // Visualizer Animation
+  // Visualizer Animation (GPU WebGL)
   useEffect(() => {
-    if (liteMode || !isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
+    if (isLite || !isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
 
     const canvas = visualizerCanvasRef.current
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    
-    const analyser = analyserNodeRef.current
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
+    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false })
+    if (!gl) return
 
-    const draw = () => {
-      reqAnimRef.current = requestAnimationFrame(draw)
-      analyser.getByteFrequencyData(dataArray)
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      
-      const barWidth = (canvas.width / bufferLength) * 2.5
-      let x = 0
-
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * canvas.height
-        ctx.fillStyle = `rgba(16, 185, 129, ${dataArray[i] / 255})` 
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight)
-        x += barWidth + 1
+    // VERTEX SHADER: Xác định khung hình Canvas
+    const vsSource = `
+      attribute vec2 a_position;
+      varying vec2 v_uv;
+      void main() {
+        v_uv = a_position * 0.5 + 0.5;
+        gl_Position = vec4(a_position, 0.0, 1.0);
       }
+    `;
+
+    // FRAGMENT SHADER: Dựng các cột sóng bằng phần cứng
+    const fsSource = `
+      precision mediump float;
+      varying vec2 v_uv;
+      uniform sampler2D u_audioData;
+      void main() {
+        float bands = 128.0; // Số lượng cột sóng
+        float bandX = floor(v_uv.x * bands) / bands;
+        
+        // Tạo khoảng cách (gap) giữa các cột
+        if (fract(v_uv.x * bands) > 0.75) {
+           gl_FragColor = vec4(0.0);
+           return;
+        }
+        
+        // Đọc dữ liệu âm thanh
+        float val = texture2D(u_audioData, vec2(bandX, 0.5)).r;
+        
+        // Vẽ màu xanh Emerald
+        if (v_uv.y < val) {
+          gl_FragColor = vec4(16.0/255.0, 185.0/255.0, 129.0/255.0, val);
+        } else {
+          gl_FragColor = vec4(0.0);
+        }
+      }
+    `;
+
+    const program = createWebGLProgram(gl, vsSource, fsSource);
+    if (!program) return;
+    gl.useProgram(program);
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const positionLoc = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(positionLoc);
+    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    const analyser = analyserNodeRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    let lastDrawTime = performance.now();
+    const fpsInterval = 1000 / 30; // 30 FPS
+
+    const draw = (now: number) => {
+      reqAnimRef.current = requestAnimationFrame(draw);
+      
+      const elapsed = now - lastDrawTime;
+      if (elapsed < fpsInterval) return;
+      lastDrawTime = now - (elapsed % fpsInterval);
+
+      analyser.getByteFrequencyData(dataArray);
+
+      // Đẩy mảng âm thanh vào Texture WebGL
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, bufferLength, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, dataArray);
+
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
-    draw()
+    reqAnimRef.current = requestAnimationFrame(draw);
 
-    return () => cancelAnimationFrame(reqAnimRef.current)
-  }, [isPlaying, isLyricsMaximized, showVisualizer])
+    return () => {
+      cancelAnimationFrame(reqAnimRef.current);
+      gl.deleteProgram(program);
+      gl.deleteTexture(texture);
+      gl.deleteBuffer(positionBuffer);
+    }
+  }, [isPlaying, isLite, showVisualizer])
 
-  // Spectrogram Animation (Chỉ chạy trong Cài đặt)
+  // Spectrogram Animation (GPU WebGL Waterfall)
   useEffect(() => {
     if (activeView !== 'settings' || !spectrogramCanvasRef.current || !analyserNodeRef.current) return
 
     const canvas = spectrogramCanvasRef.current
-    const ctx = canvas.getContext('2d', { willReadFrequently: true }) // Flag hỗ trợ tăng tốc đọc bộ nhớ đệm
-    if (!ctx) return
+    const gl = canvas.getContext('webgl', { alpha: false })
+    if (!gl) return
+
+    // SỬA LỖI TẠI ĐÂY: Tắt tính năng đệm 4-byte mặc định, đọc dữ liệu theo khối 1-byte
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+
+    const vsSource = `
+      attribute vec2 a_position;
+      varying vec2 v_uv;
+      void main() {
+        v_uv = a_position * 0.5 + 0.5;
+        gl_Position = vec4(a_position, 0.0, 1.0);
+      }
+    `;
+
+    // FRAGMENT SHADER: Vẽ bản đồ nhiệt, tự động cuộn (Scroll) theo thời gian
+    const fsSource = `
+      precision mediump float;
+      varying vec2 v_uv;
+      uniform sampler2D u_history;
+      uniform float u_offset;
+      
+      vec3 hsl2rgb(vec3 c) {
+          vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0);
+          return c.z + c.y * (rgb-0.5)*(1.0-abs(2.0*c.z-1.0));
+      }
+
+      void main() {
+          float x = fract(u_offset + v_uv.x);
+          float y = v_uv.y * 0.6; 
+          
+          float val = texture2D(u_history, vec2(x, y)).r;
+          
+          if (val == 0.0) {
+             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+          } else {
+             float hue = (1.0 - val) * 240.0 / 360.0;
+             gl_FragColor = vec4(hsl2rgb(vec3(hue, 1.0, 0.5)), 1.0);
+          }
+      }
+    `;
+
+    const program = createWebGLProgram(gl, vsSource, fsSource);
+    if (!program) return;
+    gl.useProgram(program);
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const positionLoc = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(positionLoc);
+    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+    // Kéo cấu hình Node ra trước để làm chuẩn kích thước cho Texture
+    const analyser = analyserNodeRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    // SỬA LỖI TẠI ĐÂY: Ép chiều cao Texture khớp tuyệt đối với độ dài mảng dữ liệu (bufferLength)
+    const textureWidth = 1024;
+    const textureHeight = bufferLength; 
     
-    const analyser = analyserNodeRef.current
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, textureWidth, textureHeight, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); 
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-    const tempCanvas = document.createElement('canvas')
-    tempCanvas.width = canvas.width
-    tempCanvas.height = canvas.height
-    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })
-
-    // TỐI ƯU HÓA TÀI NGUYÊN: Giới hạn ở mức 30 FPS
+    const offsetLoc = gl.getUniformLocation(program, 'u_offset');
+    
     let lastDrawTime = performance.now();
-    const fpsInterval = 1000 / 30;
+    const fpsInterval = 1000 / 30; // 30 FPS
+    let currentColumn = 0;
 
     const draw = (now: number) => {
-      reqAnimSpectrogramRef.current = requestAnimationFrame(draw)
-      
+      reqAnimSpectrogramRef.current = requestAnimationFrame(draw);
+      if (!isPlaying) return;
+
       const elapsed = now - lastDrawTime;
-      if (elapsed < fpsInterval) return; // Bỏ qua nhịp vẽ nếu chưa đủ chu kỳ 30fps
+      if (elapsed < fpsInterval) return;
       lastDrawTime = now - (elapsed % fpsInterval);
 
-      if (!isPlaying) return
+      analyser.getByteFrequencyData(dataArray);
 
-      analyser.getByteFrequencyData(dataArray)
+      // CẬP NHẬT GPU: Upload mảng dữ liệu an toàn vào đúng cột đang quét
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, currentColumn, 0, 1, bufferLength, gl.LUMINANCE, gl.UNSIGNED_BYTE, dataArray);
 
-      if (tempCtx) tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height)
-      
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(tempCanvas, -2, 0) 
+      currentColumn = (currentColumn + 1) % textureWidth;
+      const offset = currentColumn / textureWidth;
 
-      for (let i = 0; i < bufferLength; i++) {
-        const value = dataArray[i]
-        const y = canvas.height - (i / (bufferLength * 0.6)) * canvas.height
-        if (y < 0) continue
-
-        const hue = (1 - value / 255) * 240 
-        ctx.fillStyle = value === 0 ? '#000000' : `hsl(${hue}, 100%, 50%)`
-        ctx.fillRect(canvas.width - 2, y, 2, 2)
-      }
+      gl.uniform1f(offsetLoc, offset);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
-    reqAnimSpectrogramRef.current = requestAnimationFrame(draw)
+    reqAnimSpectrogramRef.current = requestAnimationFrame(draw);
 
-    return () => cancelAnimationFrame(reqAnimSpectrogramRef.current)
+    return () => {
+      cancelAnimationFrame(reqAnimSpectrogramRef.current);
+      gl.deleteProgram(program);
+      gl.deleteTexture(texture);
+      gl.deleteBuffer(positionBuffer);
+    }
   }, [isPlaying, activeView])
 
   // EQ Curve Drawing
@@ -1198,7 +1401,7 @@ export default function App() {
 
   // Track Cover Loading
   useEffect(() => {
-    if (liteMode) return
+    if (isLite) return
     let isCurrent = true 
     if (currentTrack && !currentTrack.isCloud && currentTrack.coverArt?.includes('.thumbnails')) {
       // @ts-ignore
@@ -1247,7 +1450,7 @@ export default function App() {
 
   // Load Lyrics
   useEffect(() => {
-    if (liteMode || !currentTrack) {
+    if (isLite || !currentTrack) {
       setLyrics([])
       return
     }
@@ -1409,11 +1612,7 @@ export default function App() {
         <TableVirtuoso
           style={{ height: '100%', width: '100%' }}
           data={tracks}
-          components={{
-            Table: ({ style, ...props }) => <table {...props} className="w-full text-left text-sm" style={{ ...style, borderCollapse: 'collapse' }} />,
-            TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref} />),
-            TableRow: (props) => <tr {...props} className="group border-b border-zinc-800/20 transition-colors cursor-pointer hover:bg-white/5" />
-          }}
+          components={VirtuosoComponents}
           fixedHeaderContent={() => (
             <tr className="text-zinc-500 border-b border-zinc-800/50 select-none bg-zinc-900 shadow-sm">
               <th onClick={() => handleSort('id')} className="pb-3 pt-4 font-medium w-12 text-center cursor-pointer group hover:text-white transition" title="Sắp xếp theo STT">
@@ -1449,32 +1648,18 @@ export default function App() {
               <th className="pb-3 pt-4 font-medium text-center">THAO TÁC</th>
             </tr>
           )}
-          itemContent={(index, track) => {
-            const isThisTrackPlaying = currentTrack?.id === track.id
-            return (
-              <>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-center text-zinc-500 group-hover:text-white">
-                  {isThisTrackPlaying && isPlaying ? <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse mx-auto" /> : index + 1}
-                </td>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-zinc-800 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-                      {(!liteMode && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <img loading="lazy" src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
-                      {track.isCloud && <div className="absolute top-0 right-0 bg-emerald-500/80 p-0.5 rounded-bl-md"><Cloud size={10} className="text-white" /></div>}
-                    </div>
-                    <div className="truncate w-48 lg:w-64">
-                      <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-emerald-400' : 'text-white group-hover:text-emerald-400'}`}>{track.title}</p>
-                      <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
-                    </div>
-                  </div>
-                </td>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}</span></td>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
-                <td className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
-              </>
-            )
-          }}
+          itemContent={(index, track) => (
+            <TrackRow 
+              track={track} 
+              index={index} 
+              isThisTrackPlaying={currentTrack?.id === track.id}
+              isPlaying={isPlaying}
+              isLite={isLite}
+              handleRowClick={handleRowClick}
+              tracks={tracks}
+              openTagEditor={openTagEditor}
+            />
+          )}
         />
       </div>
     )
@@ -1533,10 +1718,10 @@ export default function App() {
       {isMiniPlayer ? (
         // --- GIAO DIỆN MINI PLAYER ---
         <div className="h-screen w-screen bg-zinc-950/90 backdrop-blur-md overflow-hidden flex items-center p-3 border border-zinc-800" style={{ backgroundColor: themeColor }}>
-          {!liteMode && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
+          {!isLite && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
           
           <div className="w-24 h-24 bg-zinc-800 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group">
-            {(!liteMode && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>}
+            {(!isLite && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>}
             <button onClick={handleToggleMiniPlayer} className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Trở về chế độ Đầy đủ">
               <Maximize2 size={14} />
             </button>
@@ -1559,8 +1744,8 @@ export default function App() {
         </div>
       ) : (
         // --- GIAO DIỆN CHÍNH (FULL SCREEN) ---
-        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${liteMode ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: themeColor }}>
-      {!liteMode && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
+        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: themeColor }}>
+      {!isLite && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
 
       {/* OVERLAYS & MODALS */}
       {toast.visible && (
@@ -1647,6 +1832,7 @@ export default function App() {
         setSearchQuery={setSearchQuery} setSearchInput={setSearchInput}
         setActiveAlbum={setActiveAlbum} setActivePlaylist={setActivePlaylist}
         fetchDashboard={fetchDashboard}
+        isCore={isCore}
       />
 
         {/* NỘI DUNG CHÍNH (ĐỔI THEO TAB) */}
@@ -1703,7 +1889,7 @@ export default function App() {
           <div className="flex-1 flex overflow-hidden">
             
             {/* CỘT TRÁI: DATA VIEW */}
-            <div key={activeView} className={`${liteMode ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+            <div key={activeView} className={`${isLite ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
               {/* VIEW: TRANG CHỦ DASHBOARD */}
               {activeView === 'home' && (
                 <div className="flex flex-col h-full">
@@ -1963,10 +2149,10 @@ export default function App() {
                         <span className="text-zinc-300 text-sm">Bật hiệu ứng Crossfade</span>
                         <input 
                           type="checkbox" 
-                          checked={liteMode} 
+                          checked={isLite} 
                           onChange={e => {
                             const isLite = e.target.checked
-                            setLiteMode(isLite)
+                            setisLite(isLite)
                             
                             if (isLite) {
                               // 1. Tắt ngay các hiệu ứng đồ họa
@@ -2075,25 +2261,32 @@ export default function App() {
                     </div>
 
                     <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Chế độ Lite (Tiết kiệm tài nguyên)</h3>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-zinc-300 text-sm block">Bật chế độ Lite</span>
-                          <span className="text-zinc-500 text-xs">Vô hiệu hóa ảnh bìa, lời bài hát, hiệu ứng sóng âm và chuyển màu nền.</span>
-                        </div>
-                        <input 
-                          type="checkbox" 
-                          checked={liteMode} 
-                          onChange={e => {
-                            const isLite = e.target.checked
-                            setLiteMode(isLite)
-                            if (isLite) {
+                      <h3 className="text-emerald-400 font-semibold mb-2">Chế độ hoạt động (Hiệu suất)</h3>
+                      <p className="text-sm text-zinc-400 mb-4">Điều chỉnh mức độ tiêu thụ tài nguyên của ứng dụng để phù hợp với cấu hình máy.</p>
+                      <div className="w-full">
+                        <CustomSelect 
+                          value={appMode} 
+                          onChange={(val) => {
+                            setAppMode(val as any)
+                            if (val === 'lite' || val === 'core') {
                               setShowVisualizer(false)
                               setShowLyricsPanel(false)
                               setIsLyricsMaximized(false)
+                              if (val === 'core') {
+                                setShowEQ(false)
+                                // Tự động đóng tab mạng nếu đang xem
+                                if (activeView === 'home' || activeView === 'online' || activeView === 'drive') setActiveView('songs')
+                              }
+                              // Ép thu gom rác ngay lập tức
+                              // @ts-ignore
+                              if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
                             }
                           }} 
-                          className="w-5 h-5 accent-emerald-500 cursor-pointer" 
+                          options={[
+                            { value: 'default', label: 'Tiêu chuẩn' }, 
+                            { value: 'lite', label: 'Tiết kiệm' },
+                            { value: 'core', label: 'Cốt lõi' }
+                          ]} 
                         />
                       </div>
                     </div>
@@ -2132,7 +2325,7 @@ export default function App() {
                               {matchedPlaylists.map(pl => (
                                 <div key={pl.name} className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-800/50 hover:bg-zinc-800/50 transition group cursor-pointer" onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}>
                                   <div className="aspect-square bg-zinc-800 rounded-lg mb-4 overflow-hidden relative">
-                                    {(!liteMode && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                                    {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                                     <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Chọn ảnh từ máy tính"><ImageIcon size={16}/></button>
                                     <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Lấy ảnh từ bài hát đầu tiên"><Sparkles size={16}/></button>
                                   </div>
@@ -2162,7 +2355,7 @@ export default function App() {
                   <div className="flex items-end justify-between mb-8">
                     <div className="flex items-end gap-6">
                       <div className="w-40 h-40 bg-zinc-800 rounded-xl overflow-hidden shadow-2xl relative group">
-                        {(!liteMode && activePlaylist.thumbnail) ? <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                        {(!isLite && activePlaylist.thumbnail) ? <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                       </div>
                       <div>
                         <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-2">Playlist</p>
@@ -2219,7 +2412,7 @@ export default function App() {
                       return (
                         <div key={index} onClick={() => handlePlayTrack(track)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${isActive ? 'bg-emerald-500/20 border border-emerald-500/30' : 'hover:bg-zinc-800/50 border border-transparent'}`}>
                           <div className="w-10 h-10 bg-zinc-800 rounded flex-shrink-0 overflow-hidden relative flex items-center justify-center">
-                             {(!liteMode && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={16} className="text-zinc-500" />}
+                             {(!isLite && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={16} className="text-zinc-500" />}
                              {isActive && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" /></div>}
                           </div>
                           <div className="truncate flex-1">
@@ -2243,7 +2436,7 @@ export default function App() {
             <div className="flex-1 flex items-center justify-center p-12">
               <div className="w-1/2 flex flex-col items-center justify-center gap-6">
                 <div className="w-80 h-80 bg-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
-                  {(!liteMode && (originalCover || currentTrack?.coverArt)) ? (
+                  {(!isLite && (originalCover || currentTrack?.coverArt)) ? (
                     <img loading="lazy" src={originalCover || currentTrack.coverArt} className="w-full h-full object-cover" />
                   ) : (
                     <ListMusic size={60} className="m-auto mt-32 text-zinc-600" />
@@ -2263,7 +2456,7 @@ export default function App() {
       </div>
 
       {/* VISUALIZER CANVAS */}
-      {!liteMode && showVisualizer && (
+      {!isLite && showVisualizer && (
         <canvas ref={visualizerCanvasRef} width={1024} height={150} className={`w-full h-24 bg-transparent pointer-events-none absolute bottom-24 left-0 z-10 transition-opacity duration-500 opacity-20`} />
       )}
       
@@ -2335,7 +2528,7 @@ export default function App() {
 
         <div className="flex items-center gap-4 w-1/3">
           <div className="w-14 h-14 bg-zinc-800 rounded-md shadow-lg overflow-hidden flex-shrink-0">
-            {(!liteMode && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
+            {(!isLite && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
           </div>
           <div className="truncate">
             <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : 'Chưa có bài hát'}</h4>
@@ -2370,19 +2563,37 @@ export default function App() {
         </div>
         
         <div className="flex items-center justify-end gap-4 w-1/3 text-zinc-400">
-          {!liteMode && (
+          {!isCore && (
             <>
-              <button onClick={() => setShowVisualizer(!showVisualizer)} className={`transition ${showVisualizer ? 'text-emerald-500' : 'hover:text-white'}`} title="Bật/tắt hiệu ứng sóng âm"><Activity size={18} /></button>
-              <button onClick={() => setShowLyricsPanel(!showLyricsPanel)} className={`transition ${showLyricsPanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Lời bài hát"><Mic2 size={18} /></button>
+              {!isLite && (
+                <>
+                  <button onClick={() => setShowVisualizer(!showVisualizer)} className={`transition ${showVisualizer ? 'text-emerald-500' : 'hover:text-white'}`} title="Bật/tắt hiệu ứng sóng âm"><Activity size={18} /></button>
+                  <button onClick={() => setShowLyricsPanel(!showLyricsPanel)} className={`transition ${showLyricsPanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Lời bài hát"><Mic2 size={18} /></button>
+                </>
+              )}
+              <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title="Trình phát thu nhỏ (Mini Player)"><PictureInPicture2 size={18} /></button>
+              <button onClick={() => { setShowQueuePanel(!showQueuePanel); setShowLyricsPanel(false); }} className={`transition ${showQueuePanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Danh sách đang phát"><List size={18} /></button>
+              <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-emerald-500' : 'hover:text-white'}`} title="Bộ chỉnh âm (Equalizer)"><Sliders size={18} /></button>
             </>
           )}
-          <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title="Trình phát thu nhỏ (Mini Player)"><PictureInPicture2 size={18} /></button>
-          <button onClick={() => { setShowQueuePanel(!showQueuePanel); setShowLyricsPanel(false); }} className={`transition ${showQueuePanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Danh sách đang phát"><List size={18} /></button>
-          <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-emerald-500' : 'hover:text-white'}`} title="Bộ chỉnh âm (Equalizer)"><Sliders size={18} /></button>
 
+          {/* Thanh chỉnh âm lượng luôn giữ lại */}
           <div className="flex items-center gap-2 w-32">
             <button onClick={toggleMute} className="hover:text-white transition">{volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
-            <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400" style={{ background: `linear-gradient(to right, #10b981 ${volume * 100}%, #27272a ${volume * 100}%)` }} />
+            <input 
+              type="range" min="0" max="1" step="0.01" 
+              defaultValue={volume} 
+              onChange={(e) => {
+                // TỐI ƯU HÓA: Cập nhật âm thanh phần cứng trực tiếp, KHÔNG gọi setVolume để tránh render
+                const val = parseFloat(e.target.value);
+                if (audioRef.current) audioRef.current.volume = val;
+                e.target.style.background = `linear-gradient(to right, #10b981 ${val * 100}%, #27272a ${val * 100}%)`;
+              }}
+              onMouseUp={(e) => setVolume(parseFloat((e.target as HTMLInputElement).value))}
+              onTouchEnd={(e) => setVolume(parseFloat((e.target as HTMLInputElement).value))}
+              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400" 
+              style={{ background: `linear-gradient(to right, #10b981 ${volume * 100}%, #27272a ${volume * 100}%)` }} 
+            />
           </div>
         </div>
         {/* EQ MODAL ĐỘC LẬP */}
