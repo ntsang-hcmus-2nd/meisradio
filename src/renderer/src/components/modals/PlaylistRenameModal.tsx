@@ -21,13 +21,13 @@ export const PlaylistRenameModal: React.FC<PlaylistRenameModalProps> = ({
           type="text" 
           value={newName} 
           onChange={e => setNewName(e.target.value)} 
-          className="w-full bg-zinc-950 border border-zinc-700 rounded p-3 text-sm text-white mb-6 focus:outline-none focus:border-emerald-500" 
+          className="w-full bg-zinc-950 border border-zinc-700 rounded p-3 text-sm text-white mb-6 focus:outline-none focus:border-theme-10" 
           placeholder="Nhập tên mới..." 
           autoFocus
         />
         <div className="flex justify-end gap-3">
           <button onClick={onCancel} className="px-4 py-2 text-zinc-400 hover:text-white transition">Hủy</button>
-          <button onClick={onSubmit} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition">Lưu tên mới</button>
+          <button onClick={onSubmit} className="bg-theme-10 hover:bg-theme-10 text-white px-6 py-2 rounded-lg font-medium transition">Lưu tên mới</button>
         </div>
       </div>
     </div>

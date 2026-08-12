@@ -64,16 +64,17 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
     <div className="w-full flex items-center gap-3 text-[11px] text-zinc-400 font-medium">
       <span>{formatDuration(currentTime)}</span>
       <input 
-        type="range" min={0} max={duration} 
-        value={currentTime} 
-        onChange={handleSeekChange} 
+        type="range" 
+        min={0} max={Math.floor(duration || 0)} 
+        value={Math.floor(currentTime)} 
+        onChange={handleSeekChange}
         onMouseDown={() => setIsDragging(true)}
         onMouseUp={handleSeekCommit}
         onTouchStart={() => setIsDragging(true)}
         onTouchEnd={handleSeekCommit}
         disabled={!currentTrack} 
-        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400" 
-        style={{ background: `linear-gradient(to right, #10b981 ${timePercent}%, #27272a ${timePercent}%)` }} 
+        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10 transition-all" 
+        style={{ background: `linear-gradient(to right, var(--theme-10) ${timePercent}%, var(--theme-30) ${timePercent}%)` }} 
       />
       <span>{currentTrack ? formatDuration(duration) : '0:00'}</span>
     </div>

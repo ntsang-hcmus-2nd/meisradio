@@ -40,13 +40,13 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
               <div 
                 key={track.id}
                 onClick={() => toggleSelect(track.id)}
-                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition ${isSelected ? 'bg-emerald-500/10 border-emerald-500/40 text-white' : 'bg-zinc-950/40 border-zinc-800/60 text-zinc-300 hover:bg-zinc-800/40'}`}
+                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition ${isSelected ? 'bg-theme-10/10 border-theme-10/40 text-white' : 'bg-zinc-950/40 border-zinc-800/60 text-zinc-300 hover:bg-zinc-800/40'}`}
               >
                 <div className="truncate flex-1 pr-4">
                   <p className="font-semibold truncate text-sm">{track.title}</p>
                   <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
                 </div>
-                <div className={`w-5 h-5 rounded flex items-center justify-center border transition ${isSelected ? 'bg-emerald-500 border-emerald-500 text-black' : 'border-zinc-700'}`}>
+                <div className={`w-5 h-5 rounded flex items-center justify-center border transition ${isSelected ? 'bg-theme-10 border-theme-10 text-black' : 'border-zinc-700'}`}>
                   {isSelected && <Check size={14} className="stroke-[3]" />}
                 </div>
               </div>
@@ -56,7 +56,7 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
 
         <div className="flex justify-end gap-3 pt-2 border-t border-zinc-800">
           <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">Hủy</button>
-          <button onClick={handleConfirm} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2">
+          <button onClick={handleConfirm} className="bg-theme-10 hover:bg-theme-10 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2">
             <Plus size={16} /> Thêm {selectedIds.length} bài hát
           </button>
         </div>

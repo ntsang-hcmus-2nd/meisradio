@@ -134,13 +134,13 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4 shrink-0">
-          <div className="flex items-center gap-2"><Sliders className="text-emerald-500" size={22} /><h2 className="text-lg font-bold text-white">Equalizer (EQ)</h2></div>
-          <label className="flex items-center gap-2 cursor-pointer ml-4 bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-emerald-500">
+          <div className="flex items-center gap-2"><Sliders className="text-theme-10" size={22} /><h2 className="text-lg font-bold text-white">Equalizer (EQ)</h2></div>
+          <label className="flex items-center gap-2 cursor-pointer ml-4 bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-theme-10">
             <span className="text-zinc-300 text-sm font-medium">Bật EQ</span>
-            <input type="checkbox" checked={isEqEnabled} onChange={e => setIsEqEnabled(e.target.checked)} className="w-4 h-4 accent-emerald-500 cursor-pointer" />
+            <input type="checkbox" checked={isEqEnabled} onChange={e => setIsEqEnabled(e.target.checked)} className="w-4 h-4 accent-theme-10 cursor-pointer" />
           </label>
           <div className="flex items-center gap-2">
-            <button onClick={handleAddBand} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition"><Plus size={16} /> Thêm dải tần</button>
+            <button onClick={handleAddBand} className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-10 hover:bg-theme-10 text-white rounded-lg text-xs font-medium transition"><Plus size={16} /> Thêm dải tần</button>
             <button onClick={handleResetEQ} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"><RotateCcw size={14} /> Reset</button>
             <button onClick={() => setShowEQ(false)} className="text-zinc-400 hover:text-white px-2 text-lg"><X size={18}/></button>
           </div>
@@ -159,7 +159,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
                   <CustomSelect value={band.type} onChange={(val) => handleUpdateBand(band.id, 'type', val)} options={[{ value: 'peaking', label: 'Peaking' }, { value: 'lowshelf', label: 'Low Shelf' }, { value: 'highshelf', label: 'High Shelf' }, { value: 'lowpass', label: 'Low Pass' }, { value: 'highpass', label: 'High Pass' }]} />
                 </div>
                 <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
-                  <div className="flex justify-between text-zinc-400"><span>Gain</span><span className="font-mono text-emerald-400">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span></div>
+                  <div className="flex justify-between text-zinc-400"><span>Gain</span><span className="font-mono text-theme-10">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span></div>
                   <input 
                     type="range" min="-20" max="20" step="0.5" 
                     defaultValue={band.gain} 
@@ -176,7 +176,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
                     }} 
                     onMouseUp={(e) => handleUpdateBand(band.id, 'gain', Number((e.target as HTMLInputElement).value))}
                     onTouchEnd={(e) => handleUpdateBand(band.id, 'gain', Number((e.target as HTMLInputElement).value))}
-                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500" 
+                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" 
                     style={{ background: `linear-gradient(to right, #10b981 ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)` }} 
                   />
                 </div>

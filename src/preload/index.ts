@@ -56,6 +56,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   mpvSetVolume: (vol: number) => ipcRenderer.invoke('mpv:setVolume', vol),
   mpvSetEqualizer: (bands: number[]) => ipcRenderer.invoke('mpv:setEqualizer', bands),
   setBitPerfect: (val: boolean) => ipcRenderer.invoke('mpv:setBitPerfect', val),
+  setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
   
   onMpvTime: (callback: (val: number) => void) => {
     ipcRenderer.removeAllListeners('mpv:time')

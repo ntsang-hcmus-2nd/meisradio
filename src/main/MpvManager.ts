@@ -43,6 +43,7 @@ export class MpvInstance extends EventEmitter {
       '--keep-open=yes',
       `--input-ipc-server=${this.pipeName}`,
       '--no-video',
+      '--hwdec=auto',
       '--msg-level=all=no'
     ]
 
@@ -139,6 +140,10 @@ export class MpvInstance extends EventEmitter {
   public setVolume(vol: number) {
     // vol: 0-1
     this.sendCommand(['set_property', 'volume', vol * 100])
+  }
+
+  public setAudioDevice(device: string) {
+    this.sendCommand(['set_property', 'audio-device', device])
   }
 
   public setEqualizer(bands: number[]) {
@@ -266,6 +271,11 @@ export class MpvManager extends EventEmitter {
 
   public setVolume(vol: number) {
     this.activeInstance?.setVolume(vol)
+  }
+
+  public setAudioDevice(device: string) {
+    this.currentAudioDevice = device
+    this.activeInstance?.setAudioDevice(device)
   }
 
   public setEqualizer(bands: number[]) {

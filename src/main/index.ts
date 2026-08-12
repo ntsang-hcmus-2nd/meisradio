@@ -224,6 +224,13 @@ app.whenReady().then(() => {
     mpvManager?.init(config.audioDevice, val)
   })
 
+  ipcMain.handle('music:setAudioDevice', (_, deviceId) => {
+    const config = getConfig()
+    config.audioDevice = deviceId
+    saveConfig(config)
+    mpvManager?.setAudioDevice(deviceId)
+  })
+
   // ==========================================
   // HỆ THỐNG QUẢN LÝ THƯ VIỆN & PLAYLIST
   // ==========================================
@@ -1296,8 +1303,8 @@ app.whenReady().then(() => {
       else {
         const config = getConfig();
         
-        // 1. CHUẨN BỊ LUỒNG 1: yt-dlp lấy 20 bài hát độ chính xác cao
-        const ytdlpPromise = ytdlp(`ytsearch20:${query}`, { dumpSingleJson: true, noWarnings: true, flatPlaylist: true } as any);
+        // 1. CHUẨN BỊ LUỒNG 1: yt-dlp lấy 50 bài hát độ chính xác cao
+        const ytdlpPromise = ytdlp(`ytsearch50:${query}`, { dumpSingleJson: true, noWarnings: true, flatPlaylist: true } as any);
 
         // 2. CHUẨN BỊ LUỒNG 2: YouTube Music API lấy Playlist, Album, Nghệ sĩ
         const url = 'https://music.youtube.com/youtubei/v1/search?prettyPrint=false';
