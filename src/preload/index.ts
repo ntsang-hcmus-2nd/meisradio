@@ -47,6 +47,32 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   getYtmPlaylist: (playlistId: string) => ipcRenderer.invoke('music:getYtmPlaylist', playlistId),
   getYtmArtist: (artistId: string) => ipcRenderer.invoke('music:getYtmArtist', artistId), // <-- DÒNG MỚI NÀY
   preloadStream: (targetId: string) => ipcRenderer.invoke('music:preloadStream', targetId),
+
+  // MPV API
+  mpvPlay: (url: string, crossfade: number) => ipcRenderer.invoke('mpv:play', url, crossfade),
+  mpvResume: () => ipcRenderer.invoke('mpv:resume'),
+  mpvPause: () => ipcRenderer.invoke('mpv:pause'),
+  mpvSeek: (pos: number) => ipcRenderer.invoke('mpv:seek', pos),
+  mpvSetVolume: (vol: number) => ipcRenderer.invoke('mpv:setVolume', vol),
+  mpvSetEqualizer: (bands: number[]) => ipcRenderer.invoke('mpv:setEqualizer', bands),
+  setBitPerfect: (val: boolean) => ipcRenderer.invoke('mpv:setBitPerfect', val),
+  
+  onMpvTime: (callback: (val: number) => void) => {
+    ipcRenderer.removeAllListeners('mpv:time')
+    ipcRenderer.on('mpv:time', (_e, val) => callback(val))
+  },
+  onMpvDuration: (callback: (val: number) => void) => {
+    ipcRenderer.removeAllListeners('mpv:duration')
+    ipcRenderer.on('mpv:duration', (_e, val) => callback(val))
+  },
+  onMpvPaused: (callback: (val: boolean) => void) => {
+    ipcRenderer.removeAllListeners('mpv:paused')
+    ipcRenderer.on('mpv:paused', (_e, val) => callback(val))
+  },
+  onMpvEnded: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('mpv:ended')
+    ipcRenderer.on('mpv:ended', () => callback())
+  },
 }
 
 if (process.contextIsolated) {

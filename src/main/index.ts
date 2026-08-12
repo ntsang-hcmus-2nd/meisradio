@@ -11,7 +11,9 @@ import NodeID3 from 'node-id3'
 import ytdlpDefault, { create } from 'yt-dlp-exec' // Đã sửa lỗi import yt-dlp
 import axios from 'axios'
 import http from 'http'
+import { MpvManager } from './MpvManager'
 
+let mpvManager: MpvManager | null = null
 // FFmpeg directories
 
 const ffmpegDir = is.dev 
@@ -162,6 +164,11 @@ function createWindow(): void {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+  
+  app.on('before-quit', () => {
+    isQuitting = true
+    if (mpvManager) mpvManager.killAll()
+  })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -181,6 +188,40 @@ app.whenReady().then(() => {
   ipcMain.handle('music:saveConfig', (_, data) => {
     saveConfig(data)
     return { success: true }
+  })
+
+  // ==========================================
+  // MPV AUDIO BACKEND IPC
+  // ==========================================
+  mpvManager = new MpvManager()
+  const currentConfig = getConfig()
+  mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? true).catch(console.error) // auto init on start
+  
+  mpvManager.on('time', (val) => mainWindow?.webContents.send('mpv:time', val))
+  mpvManager.on('duration', (val) => mainWindow?.webContents.send('mpv:duration', val))
+  mpvManager.on('paused', (val) => mainWindow?.webContents.send('mpv:paused', val))
+  mpvManager.on('ended', () => mainWindow?.webContents.send('mpv:ended'))
+
+  ipcMain.handle('mpv:play', (_, url, crossfade) => {
+    // If it's a file path, we need to ensure it's loaded as raw path by MPV
+    // Or if it's http it just works.
+    let rawPath = url
+    if (rawPath.startsWith('file:///')) {
+      const { fileURLToPath } = require('url')
+      try { rawPath = fileURLToPath(rawPath) } catch(e){}
+    }
+    mpvManager?.playTrack(rawPath, crossfade)
+  })
+  ipcMain.handle('mpv:resume', () => mpvManager?.play())
+  ipcMain.handle('mpv:pause', () => mpvManager?.pause())
+  ipcMain.handle('mpv:seek', (_, pos) => mpvManager?.seek(pos))
+  ipcMain.handle('mpv:setVolume', (_, vol) => mpvManager?.setVolume(vol))
+  ipcMain.handle('mpv:setEqualizer', (_, bands) => mpvManager?.setEqualizer(bands))
+  ipcMain.handle('mpv:setBitPerfect', (_, val) => {
+    const config = getConfig()
+    config.bitPerfectEnabled = val
+    saveConfig(config)
+    mpvManager?.init(config.audioDevice, val)
   })
 
   // ==========================================

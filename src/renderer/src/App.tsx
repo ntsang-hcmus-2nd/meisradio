@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
@@ -139,6 +140,35 @@ export default function App() {
   // 1. REFS
   // ==========================================
   const audioRef = useRef<HTMLAudioElement>(null)
+
+    // Mock HTMLAudioElement for MPV
+    audioRef.current = {
+      play: async () => { window.api.mpvResume() },
+      pause: () => { window.api.mpvPause() },
+      get currentTime() { return this._currentTime || 0 },
+      set currentTime(val) { window.api.mpvSeek(val); this._currentTime = val },
+      get volume() { return this._volume || 1 },
+      set volume(val) { window.api.mpvSetVolume(val); this._volume = val },
+      get duration() { return this._duration || 0 },
+      _listeners: {},
+      addEventListener: function(event, cb) {
+        if (!this._listeners[event]) this._listeners[event] = [];
+        this._listeners[event].push(cb);
+      },
+      removeEventListener: function(event, cb) {
+        if (!this._listeners[event]) return;
+        this._listeners[event] = this._listeners[event].filter(l => l !== cb);
+      },
+      dispatchEvent: function(event) {
+        if (!this._listeners[event]) return;
+        this._listeners[event].forEach(cb => cb());
+      },
+      _currentTime: 0,
+      _duration: 0,
+      _volume: 1,
+      src: ''
+    } as any;
+
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
   const filterNodesRef = useRef<BiquadFilterNode[]>([])
@@ -191,6 +221,7 @@ export default function App() {
   const [volume, setVolume] = useState(1)
   const [prevVolume, setPrevVolume] = useState<number>(1)
   const [crossfadeEnabled, setCrossfadeEnabled] = useState(false)
+  const [bitPerfectEnabled, setBitPerfectEnabled] = useState(true)
   const [crossfadeDuration, setCrossfadeDuration] = useState(3)
 
   // System Tray & Mini Player States
@@ -1019,6 +1050,7 @@ export default function App() {
     window.api.getConfig().then(cfg => {
       if (cfg.volume !== undefined) setVolume(cfg.volume)
       if (cfg.crossfadeEnabled !== undefined) setCrossfadeEnabled(cfg.crossfadeEnabled)
+      if (cfg.bitPerfectEnabled !== undefined) setBitPerfectEnabled(cfg.bitPerfectEnabled)
       if (cfg.crossfadeDuration !== undefined) setCrossfadeDuration(cfg.crossfadeDuration)
       if (cfg.eqBands) setEqBands(cfg.eqBands)
       if (cfg.isEqEnabled !== undefined) setIsEqEnabled(cfg.isEqEnabled)
@@ -1041,12 +1073,12 @@ export default function App() {
   useEffect(() => {
     // @ts-ignore
     window.api.saveConfig({ 
-      volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, // Thêm isEqEnabled
+      volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, // Thêm isEqEnabled
       driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode 
     }) 
     // @ts-ignore
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
-  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode])
+  }, [volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode])
 
   // Dominant Color
   useEffect(() => {
@@ -1084,7 +1116,7 @@ export default function App() {
       const ctx = audioCtxRef.current
       if (!analyserNodeRef.current) { analyserNodeRef.current = ctx.createAnalyser(); analyserNodeRef.current.fftSize = 2048 }
       if (!sourceNodeRef.current) {
-        try { sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current) } catch (e) { return }
+        try { if (!audioRef.current || !(audioRef.current instanceof HTMLAudioElement)) return; sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current) } catch (e) { return }
       }
 
       sourceNodeRef.current.disconnect()
@@ -1669,13 +1701,57 @@ export default function App() {
   // 7. MAIN RENDER
   // ==========================================
 
+  // MPV Listeners
+  useEffect(() => {
+    window.api.onMpvTime((val) => {
+      if (audioRef.current) {
+        (audioRef.current as any)._currentTime = val;
+        if (typeof (audioRef.current as any).dispatchEvent === 'function') {
+          (audioRef.current as any).dispatchEvent('timeupdate');
+        }
+      }
+    });
+    window.api.onMpvDuration((val) => {
+      if (audioRef.current) {
+        (audioRef.current as any)._duration = val;
+        if (typeof (audioRef.current as any).dispatchEvent === 'function') {
+          (audioRef.current as any).dispatchEvent('durationchange');
+          (audioRef.current as any).dispatchEvent('loadedmetadata');
+        }
+      }
+    });
+    window.api.onMpvPaused((val) => {
+      setIsPlaying(!val)
+      if (audioRef.current && typeof (audioRef.current as any).dispatchEvent === 'function') {
+        (audioRef.current as any).dispatchEvent(val ? 'pause' : 'play');
+      }
+    });
+    window.api.onMpvEnded(() => handleNext());
+  }, []);
+
+  // Watch currentTrack
+  useEffect(() => {
+    if (currentTrack && currentTrack.filePath) {
+      window.api.mpvPlay(currentTrack.filePath, crossfadeEnabled ? crossfadeDuration : 0)
+    }
+  }, [currentTrack]);
+
+  // Watch EQ
+  useEffect(() => {
+    if (isEqEnabled) {
+      window.api.mpvSetEqualizer(eqBands.map(b => b.gain))
+    } else {
+      window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0])
+    }
+  }, [eqBands, isEqEnabled]);
+
   // Giao diện chính (Full Screen)
  return (
     <>
       {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG VÀ ÉP THAY ĐỔI SAMPLE RATE */}
       <audio
         key={currentSampleRate} // Tự động remount khi Sample Rate thay đổi
-        ref={audioRef}
+        /* ref removed for MPV */
         crossOrigin="anonymous" // QUAN TRỌNG: Ổn định luồng CORS cho Web Audio API
         src={currentTrack ? (currentTrack.filePath?.startsWith('http') || currentTrack.filePath?.startsWith('file://') ? currentTrack.filePath : `file://${currentTrack.filePath}`) : undefined}
         onEnded={() => { 
@@ -2141,6 +2217,25 @@ export default function App() {
                         <input type="text" readOnly value={libraryPath || 'Chưa thiết lập'} className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300" />
                         <button onClick={handleSelectLibrary} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Thay đổi</button>
                       </div>
+                    </div>
+
+                    
+                    <div className="border-t border-zinc-800 pt-6 mt-6">
+                      <h3 className="text-emerald-400 font-semibold mb-2">Bit-perfect (WASAPI/ASIO Exclusive)</h3>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-300 text-sm">Chế độ Bit-perfect (Bỏ qua Windows Mixer)</span>
+                        <input 
+                          type="checkbox" 
+                          checked={bitPerfectEnabled} 
+                          onChange={e => {
+                            const val = e.target.checked
+                            setBitPerfectEnabled(val)
+                            window.api.setBitPerfect(val)
+                          }} 
+                          className="w-4 h-4 text-emerald-600 bg-zinc-800 border-zinc-700 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer"
+                        />
+                      </div>
+                      <p className="text-xs text-zinc-500 mt-2">Lưu ý: Bật chế độ này sẽ chiếm quyền Audio, các ứng dụng khác sẽ không có tiếng. Thay đổi sẽ khởi động lại luồng âm thanh.</p>
                     </div>
 
                     <div className="border-t border-zinc-800 pt-6 mt-6">
