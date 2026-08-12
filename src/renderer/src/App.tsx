@@ -141,6 +141,7 @@ export default function App() {
   // ==========================================
   const audioRef = useRef<HTMLAudioElement>(null)
 
+    if (!audioRef.current) {
     // Mock HTMLAudioElement for MPV
     audioRef.current = {
       play: async () => { window.api.mpvResume() },
@@ -168,6 +169,7 @@ export default function App() {
       _volume: 1,
       src: ''
     } as any;
+}
 
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
@@ -1057,7 +1059,7 @@ export default function App() {
       if (cfg.googleDriveApiKey) setGoogleDriveApiKey(cfg.googleDriveApiKey)
       if (cfg.driveLink) setDriveLink(cfg.driveLink) 
       if (cfg.selectedDeviceId) setSelectedDeviceId(cfg.selectedDeviceId)
-      if (cfg.showVisualizer !== undefined) setShowVisualizer(cfg.showVisualizer)
+      if (cfg.showVisualizer !== undefined) if (!cfg.bitPerfectEnabled) setShowVisualizer(cfg.showVisualizer)
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
       if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
@@ -2662,7 +2664,7 @@ export default function App() {
             <>
               {!isLite && (
                 <>
-                  <button onClick={() => setShowVisualizer(!showVisualizer)} className={`transition ${showVisualizer ? 'text-emerald-500' : 'hover:text-white'}`} title="Bật/tắt hiệu ứng sóng âm"><Activity size={18} /></button>
+                  <button disabled={bitPerfectEnabled} onClick={() => setShowVisualizer(!showVisualizer)} className={`transition ${showVisualizer ? 'text-emerald-500' : 'hover:text-white'}`} title={bitPerfectEnabled ? "Visualizer không khả dụng ở chế độ Bit-perfect (WASAPI)" : "Bật/tắt hiệu ứng sóng âm"}><Activity size={18} /></button>
                   <button onClick={() => setShowLyricsPanel(!showLyricsPanel)} className={`transition ${showLyricsPanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Lời bài hát"><Mic2 size={18} /></button>
                 </>
               )}
