@@ -121,7 +121,7 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
         </div>
       </td>
       <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
-      <td onClick={() => handleRowClick(track, tracks)} className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}</span></td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}{track.bitDepth ? ` • ${track.bitDepth}-BIT` : ''}</span></td>
       <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
       <td className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
     </>
@@ -217,13 +217,14 @@ export default function App() {
   const [currentTrack, setCurrentTrack] = useState<any | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isShuffle, setIsShuffle] = useState(false)
+
   const [playQueue, setPlayQueue] = useState<any[]>([])
   const [originalQueue, setOriginalQueue] = useState<any[]>([])
   const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0)
   const [volume, setVolume] = useState(1)
   const [prevVolume, setPrevVolume] = useState<number>(1)
+  const [bitPerfectEnabled, setBitPerfectEnabled] = useState(false)
   const [crossfadeEnabled, setCrossfadeEnabled] = useState(false)
-  const [bitPerfectEnabled, setBitPerfectEnabled] = useState(true)
   const [crossfadeDuration, setCrossfadeDuration] = useState(3)
 
   // System Tray & Mini Player States
@@ -235,8 +236,15 @@ export default function App() {
   const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false)
   const [showEQ, setShowEQ] = useState(false)
   const [showVisualizer, setShowVisualizer] = useState(false)
+  const [showSpectrogram, setShowSpectrogram] = useState(true)
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false)
   const [isLyricsMaximized, setIsLyricsMaximized] = useState<boolean>(false)
+
+  useEffect(() => {
+    if (isLyricsMaximized) {
+      setIsLyricsMaximized(false)
+    }
+  }, [activeView])
 
   // Audio Devices & EQ States
   const [isEqEnabled, setIsEqEnabled] = useState(false)
@@ -1728,8 +1736,7 @@ export default function App() {
         (audioRef.current as any).dispatchEvent(val ? 'pause' : 'play');
       }
     });
-    window.api.onMpvEnded(() => handleNext());
-  }, []);
+    window.api.onMpvEnded(() => { if (!crossfadeEnabled) handleNext() }); }, [handleNext, crossfadeEnabled]);
 
   // Watch currentTrack
   useEffect(() => {
@@ -2206,8 +2213,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              {/* VIEW: CÀI ĐẶT */}
+{/* VIEW: CÀI ĐẶT */}
               {activeView === 'settings' && (
                 <div className="max-w-2xl">
                   <h2 className="text-3xl font-bold text-white mb-6">Cài đặt hệ thống</h2>
@@ -2221,9 +2227,8 @@ export default function App() {
                       </div>
                     </div>
 
-                    
                     <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Bit-perfect (WASAPI/ASIO Exclusive)</h3>
+                      <h3 className="text-emerald-400 font-semibold mb-2">Bit-perfect (WASAPI Exclusive/ASIO)</h3>
                       <div className="flex items-center justify-between">
                         <span className="text-zinc-300 text-sm">Chế độ Bit-perfect (Bỏ qua Windows Mixer)</span>
                         <input 
@@ -2241,80 +2246,38 @@ export default function App() {
                     </div>
 
                     <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Crossfade (Chuyển bài mượt mà)</h3>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-300 text-sm">Bật hiệu ứng Crossfade</span>
-                        <input 
-                          type="checkbox" 
-                          checked={isLite} 
-                          onChange={e => {
-                            const isLite = e.target.checked
-                            setisLite(isLite)
-                            
-                            if (isLite) {
-                              // 1. Tắt ngay các hiệu ứng đồ họa
-                              setShowVisualizer(false)
-                              setShowLyricsPanel(false)
-                              setIsLyricsMaximized(false)
-                              
-                              // 2. Ép hệ thống gọi Garbage Collection dọn sạch RAM ngay lập tức
-                              // @ts-ignore
-                              if (window.api && window.api.forceGC) {
-                                // Dùng setTimeout nhỏ để giao diện kịp chuyển trạng thái xong mới dọn rác
-                                setTimeout(() => {
-                                  // @ts-ignore
-                                  window.api.forceGC()
-                                }, 100)
-                              }
-                            }
-                          }} 
-                          className="w-5 h-5 accent-emerald-500 cursor-pointer" 
-                        />
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-emerald-400 font-semibold">Trình phân tích phổ (Spectrogram)</h3>
+                        <button onClick={() => setShowSpectrogram(!showSpectrogram)} className="text-xs px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300 transition">
+                          {showSpectrogram ? 'Tắt' : 'Bật'}
+                        </button>
                       </div>
-                      {crossfadeEnabled && (
-                        <div className="mt-4 flex items-center gap-4">
-                          <span className="text-zinc-400 text-sm">Thời gian làm mờ:</span>
-                          <CustomNumberInput min={1} max={10} value={crossfadeDuration} onChange={setCrossfadeDuration} />
-                          <span className="text-zinc-400 text-sm">giây</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Trình phân tích phổ (Spectrogram)</h3>
                       <p className="text-sm text-zinc-400 mb-4">Theo dõi biểu đồ thác nước tần số (Waterfall) thời gian thực của bản nhạc hiện tại. Khuyến nghị phát nhạc Chất lượng cao (Lossless) để kiểm tra dải cắt tần (Frequency Cutoff).</p>
                       
-                      <div className="bg-black border border-zinc-800 rounded-xl overflow-hidden relative flex flex-col" style={{ height: '300px' }}>
-                        
-                        {/* LỚP PHỦ TRỤC Y: HIỂN THỊ TẦN SỐ (Hz) */}
-                        <div className="absolute top-0 left-0 bottom-6 w-12 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[10px] text-zinc-400 font-mono text-center z-10 pointer-events-none">
-                          <span>15k</span>
-                          <span>10k</span>
-                          <span>5k</span>
-                          <span>1k</span>
-                          <span>0Hz</span>
-                        </div>
-
-                        {/* LỚP PHỦ TRỤC X: HIỂN THỊ THỜI GIAN (Giây) */}
-                        <div className="absolute bottom-0 left-12 right-0 h-6 bg-zinc-950/90 border-t border-zinc-800 flex items-center justify-between px-4 text-[10px] text-zinc-400 font-mono z-10 pointer-events-none">
-                          <span>-10s</span>
-                          <span>-7.5s</span>
-                          <span>-5s</span>
-                          <span>-2.5s</span>
-                          <span className="text-emerald-500 font-bold">Hiện tại (0s)</span>
-                        </div>
-
-                        {/* CANVAS VẼ PHỔ (Lùi vào để nhường chỗ cho Trục X/Y) */}
-                        <div className="absolute top-0 left-12 right-0 bottom-6 z-0">
-                          <canvas ref={spectrogramCanvasRef} width={1024} height={276} className="w-full h-full" />
-                        </div>
-
-                        {!isPlaying && (
-                          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                            <span className="text-zinc-400 text-sm font-medium">Đang tạm dừng - Vui lòng phát nhạc để phân tích âm thanh</span>
+                      {showSpectrogram && (
+                        <div className="bg-black border border-zinc-800 rounded-xl overflow-hidden relative flex flex-col" style={{ height: '300px' }}>
+                          
+                          {/* LỚP PHỦ TRỤC Y: HIỂN THỊ TẦN SỐ (Hz) */}
+                          <div className="absolute top-0 left-0 bottom-0 w-12 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[10px] text-zinc-400 font-mono text-center z-10 pointer-events-none">
+                            <span>15k</span>
+                            <span>10k</span>
+                            <span>5k</span>
+                            <span>1k</span>
+                            <span>0Hz</span>
                           </div>
-                        )}
-                      </div>
+
+                          {/* CANVAS VẼ PHỔ */}
+                          <div className="absolute top-0 left-12 right-0 bottom-0 z-0">
+                            <canvas ref={spectrogramCanvasRef} width={1024} height={276} className="w-full h-full" />
+                          </div>
+
+                          {!isPlaying && (
+                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                              <span className="text-zinc-400 text-sm font-medium">Đang tạm dừng - Vui lòng phát nhạc để phân tích âm thanh</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="border-t border-zinc-800 pt-6 mt-6">
@@ -2632,7 +2595,16 @@ export default function App() {
             <p className="text-xs text-zinc-400 mt-1 truncate">{currentTrack ? currentTrack.artist : '---'}</p>
             {currentTrack && (
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">{currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}</span>
+                <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md">
+                  <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                    {currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}
+                  </span>
+                  {currentTrack.bitDepth && (
+                    <span className="text-[10px] uppercase font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                      {currentTrack.bitDepth}-BIT
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] text-zinc-500">{currentTrack.sampleRate ? `${currentTrack.sampleRate / 1000}kHz` : ''} {currentTrack.bitrate ? ` | ${Math.round(currentTrack.bitrate / 1000)} kbps` : ''}</span>
               </div>
             )}

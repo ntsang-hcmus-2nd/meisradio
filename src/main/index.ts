@@ -195,7 +195,7 @@ app.whenReady().then(() => {
   // ==========================================
   mpvManager = new MpvManager()
   const currentConfig = getConfig()
-  mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? true).catch(console.error) // auto init on start
+  mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false).catch(console.error) // auto init on start
   
   mpvManager.on('time', (val) => mainWindow?.webContents.send('mpv:time', val))
   mpvManager.on('duration', (val) => mainWindow?.webContents.send('mpv:duration', val))
@@ -291,7 +291,7 @@ app.whenReady().then(() => {
                 title: metadata.common.title || subItem.replace(/\.[^/.]+$/, ""),
                 artist: metadata.common.artist || 'Unknown', album: metadata.common.album || 'Unknown',
                 duration: metadata.format.duration, format: metadata.format.container || subItem.split('.').pop()?.toUpperCase(),
-                bitrate: metadata.format.bitrate, sampleRate: metadata.format.sampleRate,
+                bitrate: metadata.format.bitrate, sampleRate: metadata.format.sampleRate, bitDepth: metadata.format.bitsPerSample,
                 lossless: metadata.format.lossless, isCloud: false, coverArt: coverUrl,
               }
               playlistTracks.push(trackData)
@@ -519,6 +519,7 @@ app.whenReady().then(() => {
           format: metadata.format.container || 'Unknown',
           bitrate: metadata.format.bitrate,
           sampleRate: metadata.format.sampleRate,
+          bitDepth: metadata.format.bitsPerSample,
           lossless: metadata.format.lossless,
           coverArt: coverBase64
         })
@@ -770,7 +771,7 @@ app.whenReady().then(() => {
             id: destPath, filePath: pathToFileURL(destPath).href, title, artist,
             album, duration: metadata?.format.duration || 0,
             format: metadata?.format.container || ext.toUpperCase(), bitrate: metadata?.format.bitrate,
-            sampleRate: metadata?.format.sampleRate, lossless: metadata?.format.lossless, coverArt: null, isCloud: false
+            sampleRate: metadata?.format.sampleRate, bitDepth: metadata?.format.bitsPerSample, lossless: metadata?.format.lossless, coverArt: null, isCloud: false
           }
           downloadedTracks.push(newTrackObj)
           existingTracks.push(newTrackObj)
@@ -958,6 +959,7 @@ app.whenReady().then(() => {
           format: metadata.format.container || fileName.split('.').pop()?.toUpperCase(),
           bitrate: metadata.format.bitrate,
           sampleRate: metadata.format.sampleRate,
+          bitDepth: metadata.format.bitsPerSample,
           lossless: metadata.format.lossless,
           coverArt: coverBase64,
           isCloud: false

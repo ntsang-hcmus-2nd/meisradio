@@ -28,7 +28,7 @@ export class MpvInstance extends EventEmitter {
     this.pipeName = getPipeName()
   }
 
-  public async init(audioDevice?: string, bitPerfect: boolean = true) {
+  public async init(audioDevice?: string, bitPerfect: boolean = false) {
     const binName = process.platform === 'win32' ? 'mpv.exe' : 'mpv'
     const binPath = is.dev
       ? path.join(app.getAppPath(), 'resources', 'bin', binName)
@@ -169,9 +169,9 @@ export class MpvManager extends EventEmitter {
   private crossfadeInterval: NodeJS.Timeout | null = null
 
   private currentAudioDevice?: string
-  private currentBitPerfect: boolean = true
+  private currentBitPerfect: boolean = false
 
-  public async init(audioDevice?: string, bitPerfect: boolean = true) {
+  public async init(audioDevice?: string, bitPerfect: boolean = false) {
     if (this.activeInstance) {
       this.activeInstance.kill()
     }
