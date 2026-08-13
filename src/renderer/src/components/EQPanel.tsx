@@ -106,9 +106,10 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
       for (let i = 0; i < drawWidth; i++) totalMag[i] *= magResponse[i];
     });
 
+    const theme10Color = getComputedStyle(document.documentElement).getPropertyValue('--theme-10').trim() || '#10b981';
     ctx.beginPath(); 
     ctx.lineWidth = 3; 
-    ctx.strokeStyle = isEqEnabled ? '#10b981' : '#52525b'; 
+    ctx.strokeStyle = isEqEnabled ? theme10Color : '#52525b'; 
     
     for (let i = 0; i < drawWidth; i++) {
       const db = 20 * Math.log10(totalMag[i]);
@@ -123,8 +124,16 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
     // Fill màu Gradient phía dưới
     ctx.lineTo(width, drawHeight); 
     ctx.lineTo(paddingLeft, drawHeight);
-    ctx.fillStyle = isEqEnabled ? 'rgba(16, 185, 129, 0.1)' : 'rgba(82, 82, 91, 0.1)'; 
+    
+    if (isEqEnabled) {
+      ctx.globalAlpha = 0.1;
+      ctx.fillStyle = theme10Color;
+    } else {
+      ctx.fillStyle = 'rgba(82, 82, 91, 0.1)';
+    }
+    
     ctx.fill();
+    ctx.globalAlpha = 1.0; // Reset
 
   }, [showEQ, eqBands, isEqEnabled])
 
@@ -140,7 +149,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
             <input type="checkbox" checked={isEqEnabled} onChange={e => setIsEqEnabled(e.target.checked)} className="w-4 h-4 accent-theme-10 cursor-pointer" />
           </label>
           <div className="flex items-center gap-2">
-            <button onClick={handleAddBand} className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-10 hover:bg-theme-10 text-white rounded-lg text-xs font-medium transition"><Plus size={16} /> Thêm dải tần</button>
+            <button onClick={handleAddBand} className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-10 hover:bg-theme-10/80 text-white rounded-lg text-xs font-medium transition"><Plus size={16} /> Thêm dải tần</button>
             <button onClick={handleResetEQ} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"><RotateCcw size={14} /> Reset</button>
             <button onClick={() => setShowEQ(false)} className="text-zinc-400 hover:text-white px-2 text-lg"><X size={18}/></button>
           </div>
@@ -166,7 +175,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
                     onChange={(e) => {
                       // TỐI ƯU HÓA: Đẩy tham số thẳng vào Node Audio phần cứng, ngắt kết nối với React
                       const val = Number(e.target.value);
-                      e.target.style.background = `linear-gradient(to right, #10b981 ${((val + 20) / 40) * 100}%, #27272a ${((val + 20) / 40) * 100}%)`;
+                      e.target.style.background = `linear-gradient(to right, var(--theme-10) ${((val + 20) / 40) * 100}%, #27272a ${((val + 20) / 40) * 100}%)`;
                       e.target.previousElementSibling!.children[1].textContent = `${val > 0 ? '+' : ''}${val} dB`; // Cập nhật mác Text
                       
                       if (filterNodesRef && filterNodesRef.current) {
@@ -177,7 +186,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({ showEQ, setShowEQ, isEqEnabled
                     onMouseUp={(e) => handleUpdateBand(band.id, 'gain', Number((e.target as HTMLInputElement).value))}
                     onTouchEnd={(e) => handleUpdateBand(band.id, 'gain', Number((e.target as HTMLInputElement).value))}
                     className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" 
-                    style={{ background: `linear-gradient(to right, #10b981 ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)` }} 
+                    style={{ background: `linear-gradient(to right, var(--theme-10) ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)` }} 
                   />
                 </div>
                 <button onClick={() => handleDeleteBand(band.id)} className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3"><Trash2 size={16} /></button>

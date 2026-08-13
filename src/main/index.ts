@@ -123,12 +123,27 @@ function saveConfig(data: any) {
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
+  // Đọc cấu hình khi khởi tạo cửa sổ
+  const config = getConfig()
+  closeToTray = config.closeToTray ?? false
+  minimizeToTray = config.minimizeToTray ?? false
+
+  const windowState = config.windowState || { width: 1200, height: 800, isMaximized: false }
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowState.width || 1200,
+    height: windowState.height || 800,
+    x: windowState.x,
+    y: windowState.y,
     title: "MEI'S RADIO",
     show: false,
     autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: 'rgba(0,0,0,0)',
+      symbolColor: '#ffffff',
+      height: 40
+    },
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -136,11 +151,23 @@ function createWindow(): void {
       webSecurity: false
     }
   })
+
+  if (windowState.isMaximized) {
+    mainWindow.maximize()
+  }
   
-  // Đọc cấu hình khi khởi tạo cửa sổ
-  const config = getConfig()
-  closeToTray = config.closeToTray ?? false
-  minimizeToTray = config.minimizeToTray ?? false
+  // Lưu trạng thái cửa sổ khi thay đổi
+  const saveWindowState = () => {
+    if (!mainWindow) return
+    const bounds = mainWindow.getBounds()
+    const isMaximized = mainWindow.isMaximized()
+    saveConfig({ windowState: { ...bounds, isMaximized } })
+  }
+  
+  mainWindow.on('resized', saveWindowState)
+  mainWindow.on('moved', saveWindowState)
+  mainWindow.on('maximize', saveWindowState)
+  mainWindow.on('unmaximize', saveWindowState)
 
   // MỚI: Bắt sự kiện khi bấm nút Thu nhỏ (Minimize - Dấu trừ)
   // @ts-ignore
