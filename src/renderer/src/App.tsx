@@ -24,6 +24,7 @@ import { AddSongsModal } from './components/modals/AddSongsModal'
 import { PlayerProgressBar } from './components/PlayerProgressBar'
 import { Sidebar } from './components/Sidebar'
 import { EQPanel } from './components/EQPanel'
+import { VolumeSlider } from './components/VolumeSlider'
 
 import { extractThemeColors } from './utils/colorUtils'
 
@@ -2349,8 +2350,8 @@ export default function App() {
                                     <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title="Lấy ảnh từ bài hát đầu tiên"><Sparkles size={16}/></button>
                                   </div>
                                   <div className="flex items-center justify-between">
-                                    <div>
-                                      <h3 className="font-bold text-white truncate max-w-[140px]">{pl.name}</h3>
+                                    <div className="min-w-0 flex-1 pr-2">
+                                      <h3 className="font-bold text-white truncate">{pl.name}</h3>
                                       <p className="text-xs text-zinc-500">{pl.tracks.length} bài hát</p>
                                     </div>
                                     <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
@@ -2636,23 +2637,7 @@ export default function App() {
           )}
 
           {/* Thanh chỉnh âm lượng luôn giữ lại */}
-          <div className="flex items-center gap-2 w-32">
-            <button onClick={toggleMute} className="hover:text-white transition">{volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
-            <input 
-              type="range" min="0" max="1" step="0.01" 
-              defaultValue={volume} 
-              onChange={(e) => {
-                // TỐI ƯU HÓA: Cập nhật âm thanh phần cứng trực tiếp, KHÔNG gọi setVolume để tránh render
-                const val = parseFloat(e.target.value);
-                if (audioRef.current) audioRef.current.volume = val;
-                e.target.style.background = `linear-gradient(to right, var(--theme-10) ${val * 100}%, var(--theme-30) ${val * 100}%)`;
-              }}
-              onMouseUp={(e) => setVolume(parseFloat((e.target as HTMLInputElement).value))}
-              onTouchEnd={(e) => setVolume(parseFloat((e.target as HTMLInputElement).value))}
-              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10" 
-              style={{ background: `linear-gradient(to right, var(--theme-10) ${volume * 100}%, var(--theme-30) ${volume * 100}%)` }} 
-            />
-          </div>
+          <VolumeSlider volume={volume} setVolume={setVolume} audioRef={audioRef} />
         </div>
         {/* EQ MODAL ĐỘC LẬP */}
         <EQPanel 
