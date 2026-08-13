@@ -19,7 +19,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({ isOpen
           type="text" 
           value={playlistName} 
           onChange={(e) => setPlaylistName(e.target.value)} 
-          className="w-full bg-zinc-950 border border-zinc-700 rounded p-3 text-sm text-white mb-6 focus:outline-none focus:border-emerald-500" 
+          className="w-full bg-zinc-950 border border-zinc-700 rounded p-3 text-sm text-white mb-6 focus:outline-none focus:border-theme-10" 
           placeholder="Nhập tên playlist..." 
           autoFocus
         />
@@ -32,7 +32,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({ isOpen
                 setPlaylistName('')
               }
             }} 
-            className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg font-medium transition"
+            className="bg-theme-10 hover:bg-theme-10 text-white px-6 py-2 rounded-lg font-medium transition"
           >
             Tạo mới
           </button>

@@ -11,7 +11,9 @@ import NodeID3 from 'node-id3'
 import ytdlpDefault, { create } from 'yt-dlp-exec' // Đã sửa lỗi import yt-dlp
 import axios from 'axios'
 import http from 'http'
+import { MpvManager } from './MpvManager'
 
+let mpvManager: MpvManager | null = null
 // FFmpeg directories
 
 const ffmpegDir = is.dev 
@@ -48,6 +50,10 @@ const ytdlp = is.dev
 app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('disable-http-cache');
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-hardware-overlays');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
 
 let tray: Tray | null = null
 let isQuitting = false 
@@ -72,7 +78,10 @@ function getConfig() {
       return config
     }
   } catch (e) {}
-  return { libraryPath: null, crossfadeEnabled: false, crossfadeDuration: 3, volume: 1, eqBands: null, liteMode: false }
+  return { 
+    libraryPath: null, crossfadeEnabled: false, crossfadeDuration: 3, 
+    volume: 1, eqBands: null, appMode: 'default' // <-- Thay liteMode bằng appMode
+  }
 }
 
 function saveConfig(data: any) {
@@ -114,12 +123,27 @@ function saveConfig(data: any) {
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
+  // Đọc cấu hình khi khởi tạo cửa sổ
+  const config = getConfig()
+  closeToTray = config.closeToTray ?? false
+  minimizeToTray = config.minimizeToTray ?? false
+
+  const windowState = config.windowState || { width: 1200, height: 800, isMaximized: false }
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowState.width || 1200,
+    height: windowState.height || 800,
+    x: windowState.x,
+    y: windowState.y,
     title: "MEI'S RADIO",
     show: false,
     autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: 'rgba(0,0,0,0)',
+      symbolColor: '#ffffff',
+      height: 40
+    },
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -127,11 +151,23 @@ function createWindow(): void {
       webSecurity: false
     }
   })
+
+  if (windowState.isMaximized) {
+    mainWindow.maximize()
+  }
   
-  // Đọc cấu hình khi khởi tạo cửa sổ
-  const config = getConfig()
-  closeToTray = config.closeToTray ?? false
-  minimizeToTray = config.minimizeToTray ?? false
+  // Lưu trạng thái cửa sổ khi thay đổi
+  const saveWindowState = () => {
+    if (!mainWindow) return
+    const bounds = mainWindow.getBounds()
+    const isMaximized = mainWindow.isMaximized()
+    saveConfig({ windowState: { ...bounds, isMaximized } })
+  }
+  
+  mainWindow.on('resized', saveWindowState)
+  mainWindow.on('moved', saveWindowState)
+  mainWindow.on('maximize', saveWindowState)
+  mainWindow.on('unmaximize', saveWindowState)
 
   // MỚI: Bắt sự kiện khi bấm nút Thu nhỏ (Minimize - Dấu trừ)
   // @ts-ignore
@@ -155,6 +191,11 @@ function createWindow(): void {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+  
+  app.on('before-quit', () => {
+    isQuitting = true
+    if (mpvManager) mpvManager.killAll()
+  })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -174,6 +215,47 @@ app.whenReady().then(() => {
   ipcMain.handle('music:saveConfig', (_, data) => {
     saveConfig(data)
     return { success: true }
+  })
+
+  // ==========================================
+  // MPV AUDIO BACKEND IPC
+  // ==========================================
+  mpvManager = new MpvManager()
+  const currentConfig = getConfig()
+  mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false).catch(console.error) // auto init on start
+  
+  mpvManager.on('time', (val) => mainWindow?.webContents.send('mpv:time', val))
+  mpvManager.on('duration', (val) => mainWindow?.webContents.send('mpv:duration', val))
+  mpvManager.on('paused', (val) => mainWindow?.webContents.send('mpv:paused', val))
+  mpvManager.on('ended', () => mainWindow?.webContents.send('mpv:ended'))
+
+  ipcMain.handle('mpv:play', (_, url, crossfade) => {
+    // If it's a file path, we need to ensure it's loaded as raw path by MPV
+    // Or if it's http it just works.
+    let rawPath = url
+    if (rawPath.startsWith('file:///')) {
+      const { fileURLToPath } = require('url')
+      try { rawPath = fileURLToPath(rawPath) } catch(e){}
+    }
+    mpvManager?.playTrack(rawPath, crossfade)
+  })
+  ipcMain.handle('mpv:resume', () => mpvManager?.play())
+  ipcMain.handle('mpv:pause', () => mpvManager?.pause())
+  ipcMain.handle('mpv:seek', (_, pos) => mpvManager?.seek(pos))
+  ipcMain.handle('mpv:setVolume', (_, vol) => mpvManager?.setVolume(vol))
+  ipcMain.handle('mpv:setEqualizer', (_, bands) => mpvManager?.setEqualizer(bands))
+  ipcMain.handle('mpv:setBitPerfect', (_, val) => {
+    const config = getConfig()
+    config.bitPerfectEnabled = val
+    saveConfig(config)
+    mpvManager?.init(config.audioDevice, val)
+  })
+
+  ipcMain.handle('music:setAudioDevice', (_, deviceId) => {
+    const config = getConfig()
+    config.audioDevice = deviceId
+    saveConfig(config)
+    mpvManager?.setAudioDevice(deviceId)
   })
 
   // ==========================================
@@ -243,7 +325,7 @@ app.whenReady().then(() => {
                 title: metadata.common.title || subItem.replace(/\.[^/.]+$/, ""),
                 artist: metadata.common.artist || 'Unknown', album: metadata.common.album || 'Unknown',
                 duration: metadata.format.duration, format: metadata.format.container || subItem.split('.').pop()?.toUpperCase(),
-                bitrate: metadata.format.bitrate, sampleRate: metadata.format.sampleRate,
+                bitrate: metadata.format.bitrate, sampleRate: metadata.format.sampleRate, bitDepth: metadata.format.bitsPerSample,
                 lossless: metadata.format.lossless, isCloud: false, coverArt: coverUrl,
               }
               playlistTracks.push(trackData)
@@ -471,6 +553,7 @@ app.whenReady().then(() => {
           format: metadata.format.container || 'Unknown',
           bitrate: metadata.format.bitrate,
           sampleRate: metadata.format.sampleRate,
+          bitDepth: metadata.format.bitsPerSample,
           lossless: metadata.format.lossless,
           coverArt: coverBase64
         })
@@ -722,7 +805,7 @@ app.whenReady().then(() => {
             id: destPath, filePath: pathToFileURL(destPath).href, title, artist,
             album, duration: metadata?.format.duration || 0,
             format: metadata?.format.container || ext.toUpperCase(), bitrate: metadata?.format.bitrate,
-            sampleRate: metadata?.format.sampleRate, lossless: metadata?.format.lossless, coverArt: null, isCloud: false
+            sampleRate: metadata?.format.sampleRate, bitDepth: metadata?.format.bitsPerSample, lossless: metadata?.format.lossless, coverArt: null, isCloud: false
           }
           downloadedTracks.push(newTrackObj)
           existingTracks.push(newTrackObj)
@@ -910,6 +993,7 @@ app.whenReady().then(() => {
           format: metadata.format.container || fileName.split('.').pop()?.toUpperCase(),
           bitrate: metadata.format.bitrate,
           sampleRate: metadata.format.sampleRate,
+          bitDepth: metadata.format.bitsPerSample,
           lossless: metadata.format.lossless,
           coverArt: coverBase64,
           isCloud: false
@@ -1242,9 +1326,14 @@ app.whenReady().then(() => {
             return { success: true, isUrl: true, type: 'song', track };
         }
       } 
-      // XỬ LÝ TÌM KIẾM TRẢ VỀ PHÂN LOẠI (Nghệ sĩ, Bài hát, Playlist)
+      /// XỬ LÝ TÌM KIẾM TRẢ VỀ PHÂN LOẠI (Nghệ sĩ, Bài hát, Playlist)
       else {
-        const config = getConfig()
+        const config = getConfig();
+        
+        // 1. CHUẨN BỊ LUỒNG 1: yt-dlp lấy 50 bài hát độ chính xác cao
+        const ytdlpPromise = ytdlp(`ytsearch50:${query}`, { dumpSingleJson: true, noWarnings: true, flatPlaylist: true } as any);
+
+        // 2. CHUẨN BỊ LUỒNG 2: YouTube Music API lấy Playlist, Album, Nghệ sĩ
         const url = 'https://music.youtube.com/youtubei/v1/search?prettyPrint=false';
         const payload = {
           context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20240108.01.00', hl: 'vi', gl: 'VN' } },
@@ -1261,52 +1350,18 @@ app.whenReady().then(() => {
           const authHash = generateSapisidHash(config.ytCookie);
           if (authHash) headers['Authorization'] = authHash;
         }
+        const ytmPromise = axios.post(url, payload, { headers });
 
-        const response = await axios.post(url, payload, { headers });
-        const data = response.data;
-        const tabs = data?.contents?.tabbedSearchResultsRenderer?.tabs || [];
-        const sectionList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+        // TỐI ƯU HÓA: Chạy 2 luồng song song cùng lúc, thời gian phản hồi bằng đúng với luồng chậm nhất
+        const [ytdlpResponse, ytmResponse] = await Promise.allSettled([ytdlpPromise, ytmPromise]);
 
         const sections: any[] = [];
         const seenTitles = new Set(); // BỘ LỌC CHỐNG TRÙNG LẶP
 
-        for (let section of sectionList) {
-           if (section.itemSectionRenderer?.contents) section = section.itemSectionRenderer.contents[0];
-           
-           const shelf = section.musicShelfRenderer || section.musicCardShelfRenderer || section.musicCarouselShelfRenderer;
-           if (!shelf) continue;
-
-           const titleRuns = shelf.title?.runs || shelf.header?.musicCardShelfHeaderBasicRenderer?.title?.runs || [];
-           const title = titleRuns.map((r: any) => r.text).join('') || 'Kết quả';
-           
-           if (seenTitles.has(title)) continue;
-
-           const items: any[] = [];
-           // Quét các danh sách kết quả (List/Card)
-           for (const item of shelf.contents || []) {
-               const parsed = parseYtmItem(item);
-               if (parsed) items.push(parsed);
-           }
-           
-           // Quét riêng trường hợp Thẻ nổi bật (Top Result) không có mảng contents
-           if (items.length === 0 && section.musicCardShelfRenderer) {
-              const parsedCard = parseYtmItem({ musicResponsiveListItemRenderer: section.musicCardShelfRenderer });
-              if (parsedCard) items.push(parsedCard);
-           }
-           
-           if (items.length > 0) {
-               seenTitles.add(title);
-               sections.push({ title, contents: items });
-           }
-        }
-        
-        // KIỂM TRA PHƯƠNG ÁN B: Nếu Google từ chối trả về phân loại, dùng ngay Lõi yt-dlp để bóc tách 15 bài hát
-        if (sections.length > 0) {
-            return { success: true, isUrl: false, data: sections };
-        } else {
-            const output = await ytdlp(`ytsearch15:${query}`, { dumpSingleJson: true, noWarnings: true, flatPlaylist: true } as any) as any;
+        // --- XỬ LÝ KẾT QUẢ LUỒNG 1 (Đưa 20 bài hát lên đỉnh) ---
+        if (ytdlpResponse.status === 'fulfilled') {
+            const output = ytdlpResponse.value as any;
             const results = output.entries ? output.entries : [output];
-            
             const tracks = results.map((track: any) => {
               const covers = extractCovers(track.thumbnails || (track.thumbnail ? [{url: track.thumbnail}] : []), track.id);
               return {
@@ -1322,10 +1377,49 @@ app.whenReady().then(() => {
             });
             
             if (tracks.length > 0) {
-                return { success: true, isUrl: false, data: [{ title: 'Kết quả tìm kiếm', contents: tracks }] };
+                seenTitles.add('bài hát');
+                sections.push({ title: 'Bài hát (Mở rộng)', contents: tracks });
             }
-            return { success: true, isUrl: false, data: [] };
         }
+
+        // --- XỬ LÝ KẾT QUẢ LUỒNG 2 (Nạp các Playlist, Nghệ sĩ phía dưới) ---
+        if (ytmResponse.status === 'fulfilled') {
+            const data = ytmResponse.value.data;
+            const tabs = data?.contents?.tabbedSearchResultsRenderer?.tabs || [];
+            const sectionList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+
+            for (let section of sectionList) {
+               if (section.itemSectionRenderer?.contents) section = section.itemSectionRenderer.contents[0];
+               
+               const shelf = section.musicShelfRenderer || section.musicCardShelfRenderer || section.musicCarouselShelfRenderer;
+               if (!shelf) continue;
+
+               const titleRuns = shelf.title?.runs || shelf.header?.musicCardShelfHeaderBasicRenderer?.title?.runs || [];
+               const title = titleRuns.map((r: any) => r.text).join('') || `Kết quả ${sections.length + 1}`;
+               
+               // Bỏ qua mục "Bài hát" gốc của YTM (vì đã có 20 bài của yt-dlp xịn hơn)
+               if (title.toLowerCase().includes('bài hát') || title.toLowerCase() === 'songs') continue;
+               if (seenTitles.has(title)) continue;
+
+               const items: any[] = [];
+               for (const item of shelf.contents || []) {
+                   const parsed = parseYtmItem(item);
+                   if (parsed) items.push(parsed);
+               }
+               
+               if (items.length === 0 && section.musicCardShelfRenderer) {
+                  const parsedCard = parseYtmItem({ musicResponsiveListItemRenderer: section.musicCardShelfRenderer });
+                  if (parsedCard) items.push(parsedCard);
+               }
+               
+               if (items.length > 0) {
+                   seenTitles.add(title);
+                   sections.push({ title, contents: items });
+               }
+            }
+        }
+
+        return { success: true, isUrl: false, data: sections };
       }
     } catch (e: any) {
       return { success: false, error: e.message }

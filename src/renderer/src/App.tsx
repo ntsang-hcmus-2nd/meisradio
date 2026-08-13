@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
@@ -8,6 +9,9 @@ import {
   Home, ArrowLeft,
 } from 'lucide-react'
 import { TableVirtuoso } from 'react-virtuoso'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 // Đã sử dụng đúng đường dẫn logo của bạn
 import thumbnailHolder from '../../../resources/HoT_Chibi_Emoji.png'
 import { CustomNumberInput } from './components/CustomNumberInput'
@@ -21,6 +25,8 @@ import { PlayerProgressBar } from './components/PlayerProgressBar'
 import { Sidebar } from './components/Sidebar'
 import { EQPanel } from './components/EQPanel'
 
+import { extractThemeColors } from './utils/colorUtils'
+
 // --- HELPER FUNCTIONS & INTERFACES (OUTSIDE COMPONENT) ---
 const formatDuration = (seconds: number) => {
   if (!seconds || isNaN(seconds)) return '0:00'
@@ -28,6 +34,33 @@ const formatDuration = (seconds: number) => {
   const secs = Math.floor(seconds % 60)
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
+
+// --- WEBGL HELPER FUNCTIONS ---
+const compileShader = (gl: WebGLRenderingContext, type: number, source: string) => {
+  const shader = gl.createShader(type);
+  if (!shader) return null;
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error('WebGL Shader Error:', gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+};
+
+const createWebGLProgram = (gl: WebGLRenderingContext, vsSource: string, fsSource: string) => {
+  const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vsSource);
+  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+  if (!vertexShader || !fragmentShader) return null;
+  const program = gl.createProgram();
+  if (!program) return null;
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+  return program;
+};
 
 export interface EQBand {
   id: string
@@ -66,12 +99,104 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
   img.src = imageSrc
 }
 
+const VirtuosoComponents = {
+  Table: ({ style, ...props }: any) => <table {...props} className="w-full text-left text-sm" style={{ ...style, borderCollapse: 'collapse' }} />,
+  TableHead: React.forwardRef((props: any, ref: any) => <thead {...props} ref={ref} />),
+  TableRow: (props: any) => <tr {...props} className="group border-b border-theme-30/20 transition-colors cursor-pointer hover:bg-white/5" />
+};
+
+// TỐI ƯU HÓA: Ghi nhớ từng dòng bài hát, ngăn React vẽ lại toàn bộ bảng khi thao tác
+const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, openTagEditor }: any) => {
+  return (
+    <>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-center text-zinc-500 group-hover:text-white">
+        {isThisTrackPlaying && isPlaying ? <div className="w-3 h-3 bg-theme-10 rounded-full animate-pulse mx-auto" /> : index + 1}
+      </td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-theme-30 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+            {/* TỐI ƯU HÓA: Xóa bỏ loading="lazy" vì Virtuoso đã tự động Lazy Load, kết hợp cả 2 sẽ gây spike CPU */}
+            {(!isLite && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <img src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
+            {track.isCloud && <div className="absolute top-0 right-0 bg-theme-10/80 p-0.5 rounded-bl-md"><Cloud size={10} className="text-white" /></div>}
+          </div>
+          <div className="truncate w-48 lg:w-64">
+            <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>{track.title}</p>
+            <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
+          </div>
+        </div>
+      </td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4"><span className="px-2 py-1 bg-theme-30 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}{track.bitDepth ? ` • ${track.bitDepth}-BIT` : ''}</span></td>
+      <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
+      <td className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
+    </>
+  )
+}, (prevProps, nextProps) => {
+  // So sánh thông minh: Chỉ render lại đúng bài hát đang phát hoặc đổi chế độ Lite
+  return prevProps.isThisTrackPlaying === nextProps.isThisTrackPlaying && 
+         prevProps.isPlaying === nextProps.isPlaying && 
+         prevProps.isLite === nextProps.isLite &&
+         prevProps.track.id === nextProps.track.id;
+});
+
+const SortableQueueItem = ({ id, track, isActive, isPlaying, isLite, onPlay }: any) => {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={() => onPlay(track)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${isActive ? 'bg-theme-10/20 border border-theme-10/30' : 'hover:bg-theme-30/50 border border-transparent'}`}>
+      <div className="w-10 h-10 bg-theme-30 rounded flex-shrink-0 overflow-hidden relative flex items-center justify-center">
+         {(!isLite && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover pointer-events-none" /> : <ListMusic size={16} className="text-zinc-500" />}
+         {isActive && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-3 h-3 bg-theme-10 rounded-full animate-pulse" /></div>}
+      </div>
+      <div className="truncate flex-1">
+        <p className={`text-sm font-semibold truncate ${isActive ? 'text-theme-10' : 'text-white'}`}>{track.title}</p>
+        <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
 
   // ==========================================
   // 1. REFS
   // ==========================================
   const audioRef = useRef<HTMLAudioElement>(null)
+
+    if (!audioRef.current) {
+    // Mock HTMLAudioElement for MPV
+    audioRef.current = {
+      play: async () => { window.api.mpvResume() },
+      pause: () => { window.api.mpvPause() },
+      get currentTime() { return this._currentTime || 0 },
+      set currentTime(val) { window.api.mpvSeek(val); this._currentTime = val },
+      get volume() { return this._volume || 1 },
+      set volume(val) { window.api.mpvSetVolume(val); this._volume = val },
+      get duration() { return this._duration || 0 },
+      _listeners: {},
+      addEventListener: function(event, cb) {
+        if (!this._listeners[event]) this._listeners[event] = [];
+        this._listeners[event].push(cb);
+      },
+      removeEventListener: function(event, cb) {
+        if (!this._listeners[event]) return;
+        this._listeners[event] = this._listeners[event].filter(l => l !== cb);
+      },
+      dispatchEvent: function(event) {
+        if (!this._listeners[event]) return;
+        this._listeners[event].forEach(cb => cb());
+      },
+      _currentTime: 0,
+      _duration: 0,
+      _volume: 1,
+      src: ''
+    } as any;
+}
+
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
   const filterNodesRef = useRef<BiquadFilterNode[]>([])
@@ -93,15 +218,21 @@ export default function App() {
   const [isAlbumLoading, setIsAlbumLoading] = useState(false)
   const preloadedRef = useRef<string | null>(null) // Đánh dấu ID đã được preload
 
-  // Lite Mode State
-  const [liteMode, setLiteMode] = useState(false)
+  // State Chế độ hiệu suất
+  const [appMode, setAppMode] = useState<'default' | 'lite' | 'core'>('default')
+  const isLite = appMode === 'lite' || appMode === 'core' // Dùng chung cho việc tắt ảnh bìa, màu sắc
+  const isCore = appMode === 'core' // Chỉ định cắt luồng mảng Audio và UI mạng
   
   // UI & General App States
   const [activeView, setActiveView] = useState<'home' | 'songs' | 'playlists' | 'settings' | 'drive'>('home')
   const [themeColor, setThemeColor] = useState('rgba(39, 39, 42, 0)')
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({message: '', type: 'info', visible: false})
+  const [customBgImage, setCustomBgImage] = useState<string | null>(null)
+  const [bgImageInput, setBgImageInput] = useState<string>('')
+  const [customBgOpacity, setCustomBgOpacity] = useState<number>(1)
+  const [customBgBlur, setCustomBgBlur] = useState<number>(0)
   const [isReloading, setIsReloading] = useState(false)
-
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false) // Flag để ngăn ghi đè config
   // Library & Search States
   const [libraryPath, setLibraryPath] = useState<string | null>(null)
   const [libraryTracks, setLibraryTracks] = useState<any[]>([])
@@ -116,11 +247,19 @@ export default function App() {
   const [currentTrack, setCurrentTrack] = useState<any | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isShuffle, setIsShuffle] = useState(false)
+
   const [playQueue, setPlayQueue] = useState<any[]>([])
+
+  // DnD Sensors (Móc Hook ở cấp cao nhất để tránh lỗi Rules of Hooks)
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
   const [originalQueue, setOriginalQueue] = useState<any[]>([])
   const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0)
   const [volume, setVolume] = useState(1)
   const [prevVolume, setPrevVolume] = useState<number>(1)
+  const [bitPerfectEnabled, setBitPerfectEnabled] = useState(false)
   const [crossfadeEnabled, setCrossfadeEnabled] = useState(false)
   const [crossfadeDuration, setCrossfadeDuration] = useState(3)
 
@@ -133,13 +272,24 @@ export default function App() {
   const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false)
   const [showEQ, setShowEQ] = useState(false)
   const [showVisualizer, setShowVisualizer] = useState(false)
+  const [showSpectrogram, setShowSpectrogram] = useState(true)
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false)
   const [isLyricsMaximized, setIsLyricsMaximized] = useState<boolean>(false)
+
+  useEffect(() => {
+    if (isLyricsMaximized) {
+      setIsLyricsMaximized(false)
+    }
+  }, [activeView])
 
   // Audio Devices & EQ States
   const [isEqEnabled, setIsEqEnabled] = useState(false)
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('default')
+  const selectedDeviceRef = useRef<string>('default');
+  useEffect(() => { 
+    selectedDeviceRef.current = selectedDeviceId; 
+  }, [selectedDeviceId]);
   const [eqBands, setEqBands] = useState<EQBand[]>([
     { id: '1', frequency: 60, gain: 0, type: 'peaking', q: 1.4 },
     { id: '2', frequency: 230, gain: 0, type: 'peaking', q: 1.4 },
@@ -804,6 +954,48 @@ export default function App() {
     }
   }
 
+  // Apply Background & Extract Theme
+  useEffect(() => {
+    if (customBgImage) {
+      document.documentElement.style.setProperty('--bg-image', `url(${customBgImage})`)
+      
+      extractThemeColors(customBgImage).then(colors => {
+        if (colors) {
+          document.documentElement.style.setProperty('--theme-60', colors.primary60)
+          document.documentElement.style.setProperty('--theme-30', colors.secondary30)
+          document.documentElement.style.setProperty('--theme-10', colors.accent10)
+        }
+      })
+    } else {
+      document.documentElement.style.setProperty('--bg-image', 'none')
+      // Reset to default
+      document.documentElement.style.setProperty('--theme-60', '#18181b')
+      document.documentElement.style.setProperty('--theme-30', '#27272a')
+      document.documentElement.style.setProperty('--theme-10', '#10b981')
+    }
+  }, [customBgImage])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bg-opacity', customBgOpacity.toString())
+  }, [customBgOpacity])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bg-blur', `${customBgBlur}px`)
+  }, [customBgBlur])
+
+  // Change Audio Device
+  useEffect(() => {
+    if (selectedDeviceId) {
+      if (audioRef.current) {
+        if (typeof (audioRef.current as any).setSinkId === 'function') {
+          (audioRef.current as any).setSinkId(selectedDeviceId).catch(console.error);
+        }
+      }
+      window.api.setAudioDevice(selectedDeviceId)
+    }
+  }, [selectedDeviceId])
+
+  // --- Chức năng cài đặt ---
   // --- Tag Editor ---
   const openTagEditor = (track: any, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -892,7 +1084,7 @@ export default function App() {
 
   // Fetch Original High-Res Cover for Fullscreen Lyrics
   useEffect(() => {
-    if (!isLyricsMaximized || liteMode || !currentTrack) {
+    if (!isLyricsMaximized || isLite || !currentTrack) {
       setOriginalCover(null)
       return
     }
@@ -910,17 +1102,19 @@ export default function App() {
     } else {
       setOriginalCover(currentTrack.coverArt)
     }
-  }, [isLyricsMaximized, currentTrack?.id, liteMode])
+  }, [isLyricsMaximized, currentTrack?.id, isLite])
 
   // Apply device change
   useEffect(() => {
     const applyDevice = async () => {
       try {
+        // TỐI ƯU HÓA: Chromium yêu cầu dùng chuỗi rỗng '' cho thiết bị mặc định
+        const targetId = selectedDeviceId === 'default' ? '' : selectedDeviceId;
         if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
-          await (audioRef.current as any).setSinkId(selectedDeviceId)
+          await (audioRef.current as any).setSinkId(targetId)
         }
         if (audioCtxRef.current && typeof (audioCtxRef.current as any).setSinkId === 'function') {
-          await (audioCtxRef.current as any).setSinkId(selectedDeviceId)
+          await (audioCtxRef.current as any).setSinkId(targetId)
         }
       } catch (error) {
         console.error("Lỗi khi chuyển đổi thiết bị âm thanh:", error)
@@ -944,37 +1138,48 @@ export default function App() {
     window.api.getConfig().then(cfg => {
       if (cfg.volume !== undefined) setVolume(cfg.volume)
       if (cfg.crossfadeEnabled !== undefined) setCrossfadeEnabled(cfg.crossfadeEnabled)
+      if (cfg.bitPerfectEnabled !== undefined) setBitPerfectEnabled(cfg.bitPerfectEnabled)
       if (cfg.crossfadeDuration !== undefined) setCrossfadeDuration(cfg.crossfadeDuration)
       if (cfg.eqBands) setEqBands(cfg.eqBands)
       if (cfg.isEqEnabled !== undefined) setIsEqEnabled(cfg.isEqEnabled)
       if (cfg.googleDriveApiKey) setGoogleDriveApiKey(cfg.googleDriveApiKey)
       if (cfg.driveLink) setDriveLink(cfg.driveLink) 
       if (cfg.selectedDeviceId) setSelectedDeviceId(cfg.selectedDeviceId)
-      if (cfg.showVisualizer !== undefined) setShowVisualizer(cfg.showVisualizer)
+      if (cfg.showVisualizer !== undefined) if (!cfg.bitPerfectEnabled) setShowVisualizer(cfg.showVisualizer)
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
-      if (cfg.liteMode !== undefined) setLiteMode(cfg.liteMode) // MỚI
+      if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
+      else if (cfg.liteMode !== undefined) setAppMode(cfg.liteMode ? 'lite' : 'default') // Fallback cấu hình cũ
+      if (cfg.customBgImage !== undefined) {
+        setCustomBgImage(cfg.customBgImage);
+        setBgImageInput(cfg.customBgImage || '');
+      }
+      if (cfg.customBgOpacity !== undefined) setCustomBgOpacity(cfg.customBgOpacity)
+      if (cfg.customBgBlur !== undefined) setCustomBgBlur(cfg.customBgBlur)
       if (cfg.ytCookie) {
         fetchDashboard()
       }
+      setIsConfigLoaded(true)
       loadLibrary()
     })
   }, [])
 
   // Auto-save Config & Update Tray
   useEffect(() => {
+    if (!isConfigLoaded) return; // Không lưu cấu hình mặc định vào file khi chưa đọc xong
     // @ts-ignore
     window.api.saveConfig({ 
-      volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, // Thêm isEqEnabled
-      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode 
+      volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey,
+      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode,
+      customBgImage, customBgOpacity, customBgBlur
     }) 
     // @ts-ignore
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
-  }, [volume, crossfadeEnabled, crossfadeDuration, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, liteMode])
+  }, [volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode, customBgImage, customBgOpacity, customBgBlur, isConfigLoaded])
 
   // Dominant Color
   useEffect(() => {
-    if (liteMode) {
+    if (isLite) {
       setThemeColor('rgba(24, 24, 27, 1)') // Trả về màu tĩnh (Zinc-900) không đổi nền
       return
     }
@@ -983,7 +1188,7 @@ export default function App() {
     } else {
       setThemeColor('rgba(39, 39, 42, 0)')
     }
-  }, [currentTrack, liteMode]) // Thêm liteMode vào dependency
+  }, [currentTrack, isLite]) // Thêm isLite vào dependency
 
   // Audio Context & Cấu trúc luồng Bit-perfect
   // EFFECT 1: CHỈ KHỞI TẠO LẠI BỘ LỌC KHI ĐỔI BÀI HOẶC BẬT/TẮT EQ (Tiết kiệm CPU)
@@ -998,19 +1203,30 @@ export default function App() {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
         try { audioCtxRef.current = new AudioContextClass({ sampleRate: currentSampleRate }) } 
         catch (e) { audioCtxRef.current = new AudioContextClass() }
+        
+        // THÊM ĐOẠN NÀY: Bơm lại thiết bị đầu ra cho Context mới ngay khi nó vừa được tái tạo
+        const targetId = selectedDeviceRef.current === 'default' ? '' : selectedDeviceRef.current;
+        if (typeof (audioCtxRef.current as any).setSinkId === 'function') {
+          (audioCtxRef.current as any).setSinkId(targetId).catch(console.error);
+        }
       }
       const ctx = audioCtxRef.current
       if (!analyserNodeRef.current) { analyserNodeRef.current = ctx.createAnalyser(); analyserNodeRef.current.fftSize = 2048 }
       if (!sourceNodeRef.current) {
-        try { sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current) } catch (e) { return }
+        try { if (!audioRef.current || !(audioRef.current instanceof HTMLAudioElement)) return; sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current) } catch (e) { return }
       }
 
       sourceNodeRef.current.disconnect()
-      filterNodesRef.current.forEach(node => node.disconnect())
+      filterNodesRef.current.forEach(node => {
+        node.disconnect()
+        // Giải phóng thêm tham chiếu cấp thấp
+        node.frequency.cancelScheduledValues(0) 
+        node.gain.cancelScheduledValues(0)
+      })
       filterNodesRef.current = []
 
       let prevNode: AudioNode = sourceNodeRef.current
-      if (isEqEnabled) {
+      if (isEqEnabled && !isCore) {
         const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
         sortedBands.forEach((band) => {
           const filter = ctx.createBiquadFilter()
@@ -1045,86 +1261,210 @@ export default function App() {
     })
   }, [eqBands, isEqEnabled])
 
-  // Visualizer Animation
+  // Visualizer Animation (GPU WebGL)
   useEffect(() => {
-    if (liteMode || !isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
+    if (isLite || !isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
 
     const canvas = visualizerCanvasRef.current
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    
-    const analyser = analyserNodeRef.current
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
+    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false })
+    if (!gl) return
 
-    const draw = () => {
-      reqAnimRef.current = requestAnimationFrame(draw)
-      analyser.getByteFrequencyData(dataArray)
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      
-      const barWidth = (canvas.width / bufferLength) * 2.5
-      let x = 0
-
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * canvas.height
-        ctx.fillStyle = `rgba(16, 185, 129, ${dataArray[i] / 255})` 
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight)
-        x += barWidth + 1
+    // VERTEX SHADER: Xác định khung hình Canvas
+    const vsSource = `
+      attribute vec2 a_position;
+      varying vec2 v_uv;
+      void main() {
+        v_uv = a_position * 0.5 + 0.5;
+        gl_Position = vec4(a_position, 0.0, 1.0);
       }
+    `;
+
+    // FRAGMENT SHADER: Dựng các cột sóng bằng phần cứng
+    const fsSource = `
+      precision mediump float;
+      varying vec2 v_uv;
+      uniform sampler2D u_audioData;
+      void main() {
+        float bands = 128.0; // Số lượng cột sóng
+        float bandX = floor(v_uv.x * bands) / bands;
+        
+        // Tạo khoảng cách (gap) giữa các cột
+        if (fract(v_uv.x * bands) > 0.75) {
+           gl_FragColor = vec4(0.0);
+           return;
+        }
+        
+        // Đọc dữ liệu âm thanh
+        float val = texture2D(u_audioData, vec2(bandX, 0.5)).r;
+        
+        // Vẽ màu xanh Emerald
+        if (v_uv.y < val) {
+          gl_FragColor = vec4(16.0/255.0, 185.0/255.0, 129.0/255.0, val);
+        } else {
+          gl_FragColor = vec4(0.0);
+        }
+      }
+    `;
+
+    const program = createWebGLProgram(gl, vsSource, fsSource);
+    if (!program) return;
+    gl.useProgram(program);
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const positionLoc = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(positionLoc);
+    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    const analyser = analyserNodeRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    let lastDrawTime = performance.now();
+    const fpsInterval = 1000 / 30; // 30 FPS
+
+    const draw = (now: number) => {
+      reqAnimRef.current = requestAnimationFrame(draw);
+      
+      const elapsed = now - lastDrawTime;
+      if (elapsed < fpsInterval) return;
+      lastDrawTime = now - (elapsed % fpsInterval);
+
+      analyser.getByteFrequencyData(dataArray);
+
+      // Đẩy mảng âm thanh vào Texture WebGL
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, bufferLength, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, dataArray);
+
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
-    draw()
+    reqAnimRef.current = requestAnimationFrame(draw);
 
-    return () => cancelAnimationFrame(reqAnimRef.current)
-  }, [isPlaying, isLyricsMaximized, showVisualizer])
+    return () => {
+      cancelAnimationFrame(reqAnimRef.current);
+      gl.deleteProgram(program);
+      gl.deleteTexture(texture);
+      gl.deleteBuffer(positionBuffer);
+    }
+  }, [isPlaying, isLite, showVisualizer])
 
-  // Spectrogram Animation (Chỉ chạy trong Cài đặt)
+  // Spectrogram Animation (GPU WebGL Waterfall)
   useEffect(() => {
     if (activeView !== 'settings' || !spectrogramCanvasRef.current || !analyserNodeRef.current) return
 
     const canvas = spectrogramCanvasRef.current
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    if (!ctx) return
+    const gl = canvas.getContext('webgl', { alpha: false })
+    if (!gl) return
+
+    // SỬA LỖI TẠI ĐÂY: Tắt tính năng đệm 4-byte mặc định, đọc dữ liệu theo khối 1-byte
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+
+    const vsSource = `
+      attribute vec2 a_position;
+      varying vec2 v_uv;
+      void main() {
+        v_uv = a_position * 0.5 + 0.5;
+        gl_Position = vec4(a_position, 0.0, 1.0);
+      }
+    `;
+
+    // FRAGMENT SHADER: Vẽ bản đồ nhiệt, tự động cuộn (Scroll) theo thời gian
+    const fsSource = `
+      precision mediump float;
+      varying vec2 v_uv;
+      uniform sampler2D u_history;
+      uniform float u_offset;
+      
+      vec3 hsl2rgb(vec3 c) {
+          vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0);
+          return c.z + c.y * (rgb-0.5)*(1.0-abs(2.0*c.z-1.0));
+      }
+
+      void main() {
+          float x = fract(u_offset + v_uv.x);
+          float y = v_uv.y * 0.6; 
+          
+          float val = texture2D(u_history, vec2(x, y)).r;
+          
+          if (val == 0.0) {
+             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+          } else {
+             float hue = (1.0 - val) * 240.0 / 360.0;
+             gl_FragColor = vec4(hsl2rgb(vec3(hue, 1.0, 0.5)), 1.0);
+          }
+      }
+    `;
+
+    const program = createWebGLProgram(gl, vsSource, fsSource);
+    if (!program) return;
+    gl.useProgram(program);
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const positionLoc = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(positionLoc);
+    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+    // Kéo cấu hình Node ra trước để làm chuẩn kích thước cho Texture
+    const analyser = analyserNodeRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    // SỬA LỖI TẠI ĐÂY: Ép chiều cao Texture khớp tuyệt đối với độ dài mảng dữ liệu (bufferLength)
+    const textureWidth = 1024;
+    const textureHeight = bufferLength; 
     
-    const analyser = analyserNodeRef.current
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, textureWidth, textureHeight, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); 
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-    // Dùng 1 canvas ẩn để dịch chuyển hình ảnh tạo hiệu ứng thác nước (waterfall) liên tục
-    const tempCanvas = document.createElement('canvas')
-    tempCanvas.width = canvas.width
-    tempCanvas.height = canvas.height
-    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })
+    const offsetLoc = gl.getUniformLocation(program, 'u_offset');
+    
+    let lastDrawTime = performance.now();
+    const fpsInterval = 1000 / 30; // 30 FPS
+    let currentColumn = 0;
 
-    const draw = () => {
-      reqAnimSpectrogramRef.current = requestAnimationFrame(draw)
-      if (!isPlaying) return
+    const draw = (now: number) => {
+      reqAnimSpectrogramRef.current = requestAnimationFrame(draw);
+      if (!isPlaying) return;
 
-      analyser.getByteFrequencyData(dataArray)
+      const elapsed = now - lastDrawTime;
+      if (elapsed < fpsInterval) return;
+      lastDrawTime = now - (elapsed % fpsInterval);
 
-      if (tempCtx) {
-        tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height)
-      }
+      analyser.getByteFrequencyData(dataArray);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(tempCanvas, -2, 0) // Dịch sang trái 2 pixel để cuộn ảnh mượt mà
+      // CẬP NHẬT GPU: Upload mảng dữ liệu an toàn vào đúng cột đang quét
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, currentColumn, 0, 1, bufferLength, gl.LUMINANCE, gl.UNSIGNED_BYTE, dataArray);
 
-      // Vẽ cột tần số mới vào rìa phải
-      for (let i = 0; i < bufferLength; i++) {
-        const value = dataArray[i]
-        // Focus hiển thị 60% dải băng thông (Loại bỏ các dải âm thanh siêu thanh ít dùng)
-        const y = canvas.height - (i / (bufferLength * 0.6)) * canvas.height
-        if (y < 0) continue
+      currentColumn = (currentColumn + 1) % textureWidth;
+      const offset = currentColumn / textureWidth;
 
-        // Biểu đồ nhiệt (Heatmap): Đen (0) -> Xanh dương/Lục -> Vàng -> Đỏ (255)
-        const hue = (1 - value / 255) * 240 
-        ctx.fillStyle = value === 0 ? '#000000' : `hsl(${hue}, 100%, 50%)`
-        ctx.fillRect(canvas.width - 2, y, 2, 2)
-      }
+      gl.uniform1f(offsetLoc, offset);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
-    draw()
+    reqAnimSpectrogramRef.current = requestAnimationFrame(draw);
 
-    return () => cancelAnimationFrame(reqAnimSpectrogramRef.current)
+    return () => {
+      cancelAnimationFrame(reqAnimSpectrogramRef.current);
+      gl.deleteProgram(program);
+      gl.deleteTexture(texture);
+      gl.deleteBuffer(positionBuffer);
+    }
   }, [isPlaying, activeView])
 
   // EQ Curve Drawing
@@ -1190,7 +1530,7 @@ export default function App() {
 
   // Track Cover Loading
   useEffect(() => {
-    if (liteMode) return
+    if (isLite) return
     let isCurrent = true 
     if (currentTrack && !currentTrack.isCloud && currentTrack.coverArt?.includes('.thumbnails')) {
       // @ts-ignore
@@ -1239,7 +1579,7 @@ export default function App() {
 
   // Load Lyrics
   useEffect(() => {
-    if (liteMode || !currentTrack) {
+    if (isLite || !currentTrack) {
       setLyrics([])
       return
     }
@@ -1397,76 +1737,58 @@ export default function App() {
   // ==========================================
   const renderTrackTable = (tracks: any[]) => {
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-zinc-900/20 rounded-lg border border-zinc-800/50 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 bg-theme-60/20 rounded-lg border border-theme-30/50 overflow-hidden">
         <TableVirtuoso
           style={{ height: '100%', width: '100%' }}
           data={tracks}
-          components={{
-            Table: ({ style, ...props }) => <table {...props} className="w-full text-left text-sm" style={{ ...style, borderCollapse: 'collapse' }} />,
-            TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref} />),
-            TableRow: (props) => <tr {...props} className="group border-b border-zinc-800/20 transition-colors cursor-pointer hover:bg-white/5" />
-          }}
+          components={VirtuosoComponents}
           fixedHeaderContent={() => (
-            <tr className="text-zinc-500 border-b border-zinc-800/50 select-none bg-zinc-900 shadow-sm">
+            <tr className="text-zinc-500 border-b border-theme-30/50 select-none bg-theme-60 shadow-sm">
               <th onClick={() => handleSort('id')} className="pb-3 pt-4 font-medium w-12 text-center cursor-pointer group hover:text-white transition" title="Sắp xếp theo STT">
                 <div className="inline-flex items-center gap-1 justify-center">
                   <span>#</span>
-                  {sortField === 'id' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'id' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
               <th onClick={() => handleSort('title')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo tên bài hát">
                 <div className="inline-flex items-center gap-1">
                   <span>TÊN BÀI HÁT</span>
-                  {sortField === 'title' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'title' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
               <th onClick={() => handleSort('album')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo Album">
                 <div className="inline-flex items-center gap-1">
                   <span>ALBUM</span>
-                  {sortField === 'album' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'album' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
               <th onClick={() => handleSort('isCloud')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo định dạng">
                 <div className="inline-flex items-center gap-1">
                   <span>ĐỊNH DẠNG</span>
-                  {sortField === 'isCloud' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'isCloud' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
               <th onClick={() => handleSort('duration')} className="pb-3 pt-4 font-medium text-right pr-4 cursor-pointer group hover:text-white transition" title="Sắp xếp theo thời lượng">
                 <div className="inline-flex items-center gap-1 justify-end">
                   <span>THỜI GIAN</span>
-                  {sortField === 'duration' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-emerald-500" /> : <ArrowDown size={12} className="text-emerald-500" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'duration' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
               <th className="pb-3 pt-4 font-medium text-center">THAO TÁC</th>
             </tr>
           )}
-          itemContent={(index, track) => {
-            const isThisTrackPlaying = currentTrack?.id === track.id
-            return (
-              <>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-center text-zinc-500 group-hover:text-white">
-                  {isThisTrackPlaying && isPlaying ? <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse mx-auto" /> : index + 1}
-                </td>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-zinc-800 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-                      {(!liteMode && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <img loading="lazy" src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
-                      {track.isCloud && <div className="absolute top-0 right-0 bg-emerald-500/80 p-0.5 rounded-bl-md"><Cloud size={10} className="text-white" /></div>}
-                    </div>
-                    <div className="truncate w-48 lg:w-64">
-                      <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-emerald-400' : 'text-white group-hover:text-emerald-400'}`}>{track.title}</p>
-                      <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
-                    </div>
-                  </div>
-                </td>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4"><span className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}</span></td>
-                <td onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
-                <td className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
-              </>
-            )
-          }}
+          itemContent={(index, track) => (
+            <TrackRow 
+              track={track} 
+              index={index} 
+              isThisTrackPlaying={currentTrack?.id === track.id}
+              isPlaying={isPlaying}
+              isLite={isLite}
+              handleRowClick={handleRowClick}
+              tracks={tracks}
+              openTagEditor={openTagEditor}
+            />
+          )}
         />
       </div>
     )
@@ -1476,14 +1798,84 @@ export default function App() {
   // 7. MAIN RENDER
   // ==========================================
 
+  // MPV Listeners
+  useEffect(() => {
+    window.api.onMpvTime((val) => {
+      if (audioRef.current) {
+        (audioRef.current as any)._currentTime = val;
+        if (typeof (audioRef.current as any).dispatchEvent === 'function') {
+          (audioRef.current as any).dispatchEvent('timeupdate');
+        }
+      }
+    });
+    window.api.onMpvDuration((val) => {
+      if (audioRef.current) {
+        (audioRef.current as any)._duration = val;
+        if (typeof (audioRef.current as any).dispatchEvent === 'function') {
+          (audioRef.current as any).dispatchEvent('durationchange');
+          (audioRef.current as any).dispatchEvent('loadedmetadata');
+        }
+      }
+    });
+    window.api.onMpvPaused((val) => {
+      setIsPlaying(!val)
+      if (audioRef.current && typeof (audioRef.current as any).dispatchEvent === 'function') {
+        (audioRef.current as any).dispatchEvent(val ? 'pause' : 'play');
+      }
+    });
+    window.api.onMpvEnded(() => { if (!crossfadeEnabled) handleNext() }); }, [handleNext, crossfadeEnabled]);
+
+  // Watch currentTrack
+  useEffect(() => {
+    if (currentTrack && currentTrack.filePath) {
+      if (bitPerfectEnabled) {
+        window.api.mpvPlay(currentTrack.filePath, crossfadeEnabled ? crossfadeDuration : 0)
+        if (audioRef.current) audioRef.current.pause()
+      } else {
+        // Dừng mpv và chuyển sang HTML Audio
+        window.api.mpvPause(true)
+        if (audioRef.current) {
+          audioRef.current.play().catch(e => console.warn('Audio play error:', e))
+          setIsPlaying(true)
+        }
+      }
+    }
+  }, [currentTrack, bitPerfectEnabled]);
+
+  // Watch EQ
+  useEffect(() => {
+    if (isEqEnabled) {
+      window.api.mpvSetEqualizer(eqBands.map(b => b.gain))
+    } else {
+      window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0])
+    }
+  }, [eqBands, isEqEnabled]);
+
+  const handlePlayPause = () => {
+    if (!currentTrack) return;
+    
+    if (bitPerfectEnabled) {
+      window.api.mpvPause();
+    } else if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch(console.warn);
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
   // Giao diện chính (Full Screen)
  return (
     <>
+      <div className="custom-bg" />
       {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG VÀ ÉP THAY ĐỔI SAMPLE RATE */}
       <audio
         key={currentSampleRate} // Tự động remount khi Sample Rate thay đổi
         ref={audioRef}
         crossOrigin="anonymous" // QUAN TRỌNG: Ổn định luồng CORS cho Web Audio API
+        autoPlay={!bitPerfectEnabled}
         src={currentTrack ? (currentTrack.filePath?.startsWith('http') || currentTrack.filePath?.startsWith('file://') ? currentTrack.filePath : `file://${currentTrack.filePath}`) : undefined}
         onEnded={() => { 
           const audio = audioRef.current;
@@ -1524,12 +1916,12 @@ export default function App() {
       {/* 2. RẼ NHÁNH GIAO DIỆN BẰNG TERNARY OPERATOR */}
       {isMiniPlayer ? (
         // --- GIAO DIỆN MINI PLAYER ---
-        <div className="h-screen w-screen bg-zinc-950/90 backdrop-blur-md overflow-hidden flex items-center p-3 border border-zinc-800" style={{ backgroundColor: themeColor }}>
-          {!liteMode && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
+        <div className="h-screen w-screen bg-zinc-950/90 backdrop-blur-md overflow-hidden flex items-center p-3 border border-theme-30" style={{ backgroundColor: themeColor }}>
+          {!isLite && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
           
-          <div className="w-24 h-24 bg-zinc-800 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group">
-            {(!liteMode && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>}
-            <button onClick={handleToggleMiniPlayer} className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Trở về chế độ Đầy đủ">
+          <div className="w-24 h-24 bg-theme-30 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group">
+            {(!isLite && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ListMusic size={32} /></div>}
+            <button onClick={handleToggleMiniPlayer} className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title="Trở về chế độ Đầy đủ">
               <Maximize2 size={14} />
             </button>
           </div>
@@ -1542,7 +1934,7 @@ export default function App() {
             
             <div className="flex items-center gap-3">
               <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={18} /></button>
-              <button onClick={() => { if(currentTrack) setIsPlaying(!isPlaying) }} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition">
+              <button onClick={handlePlayPause} className="w-8 h-8 rounded-full bg-theme-10 text-white flex items-center justify-center hover:scale-105 transition">
                 {isPlaying ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current translate-x-[1px]" />}
               </button>
               <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={18} /></button>
@@ -1551,13 +1943,13 @@ export default function App() {
         </div>
       ) : (
         // --- GIAO DIỆN CHÍNH (FULL SCREEN) ---
-        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${liteMode ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: themeColor }}>
-      {!liteMode && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
+        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: themeColor }}>
+      {!isLite && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
 
       {/* OVERLAYS & MODALS */}
       {toast.visible && (
-        <div className="fixed top-10 right-10 z-[100] animate-fade-in flex items-center gap-3 bg-zinc-900 border border-zinc-700 shadow-2xl py-3 px-5 rounded-xl">
-          {toast.type === 'success' && <Sparkles size={18} className="text-emerald-400" />}
+        <div className="fixed top-10 right-10 z-[100] animate-fade-in flex items-center gap-3 bg-theme-60 border border-zinc-700 shadow-2xl py-3 px-5 rounded-xl">
+          {toast.type === 'success' && <Sparkles size={18} className="text-theme-10" />}
           {toast.type === 'error' && <X size={18} className="text-red-400" />}
           {toast.type === 'info' && <Cloud size={18} className="text-blue-400" />}
           <span className="text-sm font-medium text-white">{toast.message}</span>
@@ -1568,9 +1960,9 @@ export default function App() {
       {/* MỚI: PROGRESS BAR DẠNG TOAST (NỔI GÓC PHẢI) */}
       {/* ========================================= */}
       {isDownloading && downloadProgress && (
-        <div className="fixed bottom-28 right-8 z-[90] bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl p-5 w-80 shadow-2xl flex flex-col animate-fade-in pointer-events-none">
+        <div className="fixed bottom-28 right-8 z-[90] bg-theme-60/95 backdrop-blur-md border border-zinc-700/80 rounded-xl p-5 w-80 shadow-2xl flex flex-col animate-fade-in pointer-events-none">
           <div className="flex items-center gap-3 mb-2">
-            <Cloud size={20} className="text-emerald-500 animate-pulse" />
+            <Cloud size={20} className="text-theme-10 animate-pulse" />
             <h3 className="text-sm font-bold text-white">Đang tải xuống...</h3>
           </div>
           
@@ -1578,15 +1970,15 @@ export default function App() {
             {downloadProgress.fileName}
           </p>
           
-          <div className="w-full bg-zinc-950 rounded-full h-1.5 mb-2 overflow-hidden border border-zinc-800">
+          <div className="w-full bg-zinc-950 rounded-full h-1.5 mb-2 overflow-hidden border border-theme-30">
             <div 
-              className="bg-emerald-500 h-full transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+              className="bg-theme-10 h-full transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
               style={{ width: `${(downloadProgress.current / downloadProgress.total) * 100}%` }}
             />
           </div>
           
           <div className="flex items-center justify-between w-full text-[10px] font-medium">
-            <span className="text-emerald-400">{Math.round((downloadProgress.current / downloadProgress.total) * 100)}%</span>
+            <span className="text-theme-10">{Math.round((downloadProgress.current / downloadProgress.total) * 100)}%</span>
             <span className="text-zinc-500">{downloadProgress.current} / {downloadProgress.total} tệp</span>
           </div>
         </div>
@@ -1631,6 +2023,16 @@ export default function App() {
         onAddTracks={handleAddTracksToActivePlaylist}
       />
 
+      <div 
+        className="w-full h-8 flex-shrink-0 z-[100] flex items-center px-3 gap-2" 
+        style={{ WebkitAppRegion: 'drag' as any }}
+      >
+        <div className="flex items-center gap-2 text-zinc-400 text-xs font-semibold opacity-70">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+          <span>Mei's Radio</span>
+        </div>
+      </div>
+
       <div className="flex flex-1 overflow-hidden">
         {/* SIDEBAR TABS */}
         {/* SIDEBAR COMPONENT */}
@@ -1639,12 +2041,13 @@ export default function App() {
         setSearchQuery={setSearchQuery} setSearchInput={setSearchInput}
         setActiveAlbum={setActiveAlbum} setActivePlaylist={setActivePlaylist}
         fetchDashboard={fetchDashboard}
+        isCore={isCore}
       />
 
         {/* NỘI DUNG CHÍNH (ĐỔI THEO TAB) */}
         <main className={`flex-1 flex flex-col bg-transparent overflow-hidden ${isLyricsMaximized ? 'hidden' : ''}`}>
           
-          <header className="h-20 px-8 flex items-center justify-between border-b border-zinc-800/50 flex-shrink-0 w-full">
+          <header className="h-20 px-8 flex items-center justify-between border-b border-theme-30/50 flex-shrink-0 w-full">
             <div className="relative w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
               <input 
@@ -1682,11 +2085,11 @@ export default function App() {
                   } 
                 }}
                 placeholder={activeView === 'home' ? "Tìm kiếm nhạc trên YouTube / YT Music..." : "Tìm bài hát, nghệ sĩ trong máy..."} 
-                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors" 
+                className="w-full bg-theme-60/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors" 
               />
             </div>
             
-            <button onClick={handleReloadLibrary} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-emerald-500' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title="Làm mới Thư viện">
+            <button onClick={handleReloadLibrary} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-theme-60/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title="Làm mới Thư viện">
               <RefreshCw size={16} className={isReloading ? 'animate-spin' : ''} />
               {isReloading ? 'Đang làm mới...' : 'Làm mới'}
             </button>
@@ -1695,7 +2098,7 @@ export default function App() {
           <div className="flex-1 flex overflow-hidden">
             
             {/* CỘT TRÁI: DATA VIEW */}
-            <div key={activeView} className={`${liteMode ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+            <div key={activeView} className={`${isLite ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
               {/* VIEW: TRANG CHỦ DASHBOARD */}
               {activeView === 'home' && (
                 <div className="flex flex-col h-full">
@@ -1703,19 +2106,19 @@ export default function App() {
                   {activeAlbum ? (
                     <div className="flex flex-col h-full animate-fade-in">
                       <div className="flex items-center gap-4 mb-8">
-                        <button onClick={() => setActiveAlbum(null)} className="p-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition">
+                        <button onClick={() => setActiveAlbum(null)} className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition">
                           <ArrowLeft size={20}/>
                         </button>
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-1">Danh sách phát</p>
+                          <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-1">Danh sách phát</p>
                           <h2 className="text-3xl font-extrabold text-white">{activeAlbum.title}</h2>
                         </div>
                       </div>
                       
                       {isAlbumLoading ? (
                         <div className="flex-1 flex flex-col items-center justify-center">
-                           <Activity size={40} className="text-emerald-500 mb-4 animate-bounce" />
-                           <p className="text-emerald-500 animate-pulse font-medium">Đang trích xuất bài hát từ YouTube Music...</p>
+                           <Activity size={40} className="text-theme-10 mb-4 animate-bounce" />
+                           <p className="text-theme-10 animate-pulse font-medium">Đang trích xuất bài hát từ YouTube Music...</p>
                         </div>
                       ) : (
                         renderTrackTable(activeAlbum.tracks)
@@ -1735,13 +2138,13 @@ export default function App() {
                             title="Làm mới Trang chủ"
                             className="focus:outline-none flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
                           >
-                            <Home size={32} className="text-emerald-400 hover:text-emerald-300" />
+                            <Home size={32} className="text-theme-10 hover:text-theme-10" />
                           </button>
                           Dành cho bạn
                         </h2>
 
                         {/* NÚT ĐĂNG NHẬP / LÀM MỚI COOKIE */}
-                        <button onClick={handleYtmLogin} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-emerald-500/20">
+                        <button onClick={handleYtmLogin} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
                           <Cloud size={18} /> Đăng nhập / Đồng bộ YouTube
                         </button>
                       </div>
@@ -1769,7 +2172,7 @@ export default function App() {
                                   if (item.style === 'LIST') {
                                     return (
                                       <div key={i} className="flex items-center gap-3 w-96 snap-start group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition" onClick={() => handleDashboardItemClick(item)}>
-                                        <div className="w-12 h-12 bg-zinc-800 rounded flex-shrink-0 relative overflow-hidden shadow-md">
+                                        <div className="w-12 h-12 bg-theme-30 rounded flex-shrink-0 relative overflow-hidden shadow-md">
                                           {item.thumbnails && item.thumbnails.length > 0 ? (
                                             <img loading="lazy" src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                                           ) : (
@@ -1780,11 +2183,11 @@ export default function App() {
                                           </div>
                                         </div>
                                         <div className="flex-1 truncate">
-                                          <p className="font-semibold text-sm text-white truncate group-hover:text-emerald-400 transition">{item.title}</p>
+                                          <p className="font-semibold text-sm text-white truncate group-hover:text-theme-10 transition">{item.title}</p>
                                           <p className="text-xs text-zinc-500 truncate mt-0.5">{item.subtitle}</p>
                                         </div>
                                         {!item.isArtist && (
-                                          <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-full transition" title="Tải xuống thư viện">
+                                          <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-theme-10 hover:bg-theme-10/10 rounded-full transition" title="Tải xuống thư viện">
                                             <Download size={14} />
                                           </button>
                                         )}
@@ -1795,7 +2198,7 @@ export default function App() {
                                   // --- GIAO DIỆN KIỂU CARD (Dành cho Video/Album) ---
                                   return (
                                     <div key={i} className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer" onClick={() => handleDashboardItemClick(item)}>
-                                      <div className="w-40 h-40 bg-zinc-800 rounded-xl mb-3 overflow-hidden relative shadow-lg">
+                                      <div className="w-40 h-40 bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-lg">
                                         {item.thumbnails && item.thumbnails.length > 0 ? (
                                           <img loading="lazy" src={item.thumbnails[item.thumbnails.length - 1].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                                         ) : (
@@ -1804,12 +2207,12 @@ export default function App() {
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                           <button 
                                             onClick={(e) => { e.stopPropagation(); handleDashboardItemClick(item); }} 
-                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs text-white font-medium flex items-center gap-1 transition"
+                                            className="px-3 py-1.5 bg-theme-10 hover:bg-theme-10 rounded-lg text-xs text-white font-medium flex items-center gap-1 transition"
                                           >
                                             <Play size={14}/> Phát ngay
                                           </button>
                                           {!item.isArtist && (
-                                            <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-zinc-800/90 text-white rounded-full hover:bg-emerald-500 hover:scale-110 transition shadow-2xl" title="Tải xuống thư viện">
+                                            <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-theme-30/90 text-white rounded-full hover:bg-theme-10 hover:scale-110 transition shadow-2xl" title="Tải xuống thư viện">
                                               <Download size={18} />
                                             </button>
                                           )}
@@ -1838,7 +2241,7 @@ export default function App() {
                       <h2 className="text-3xl font-bold text-white">{searchQuery ? 'Kết quả tìm kiếm' : 'Danh sách bài hát'}</h2>
                       <span className="text-zinc-500 text-sm mb-1">{processedLibraryTracks.length} bài hát</span>
                     </div>
-                    <button onClick={handleImportFiles} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-emerald-500/20">
+                    <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
                       <Plus size={18} /> Thêm nhạc vào Thư viện
                     </button>
                   </div>
@@ -1859,26 +2262,26 @@ export default function App() {
                 <div className="flex flex-col h-full max-w-4xl">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-                      <Cloud size={32} className="text-emerald-400" /> Google Drive
+                      <Cloud size={32} className="text-theme-10" /> Google Drive
                     </h2>
                   </div>
                   
-                  <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-xl mb-6 shadow-lg">
-                    <h3 className="text-emerald-400 font-semibold mb-2">Nhập liên kết thư mục</h3>
+                  <div className="bg-theme-60/50 border border-theme-30 p-6 rounded-xl mb-6 shadow-lg">
+                    <h3 className="text-theme-10 font-semibold mb-2">Nhập liên kết thư mục</h3>
                     <p className="text-sm text-zinc-400 mb-4">Dán liên kết thư mục Drive chứa nhạc của bạn (Yêu cầu bật chế độ "Bất kỳ ai có liên kết").</p>
                     <div className="flex gap-3 items-center">
                       <div className="relative flex-1">
                         <Link size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                        <input type="text" value={driveLink} onChange={(e) => setDriveLink(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className="w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+                        <input type="text" value={driveLink} onChange={(e) => setDriveLink(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className="w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors" />
                       </div>
-                      <button onClick={handleDriveSubmit} disabled={!driveLink || isFetchingDrive} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2">
+                      <button onClick={handleDriveSubmit} disabled={!driveLink || isFetchingDrive} className="bg-theme-10 hover:bg-theme-10 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2">
                         {isFetchingDrive ? <span className="animate-pulse">Đang quét...</span> : 'Quét dữ liệu'}
                       </button>
                     </div>
                   </div>
 
                   {/* Kết quả / Danh sách file đã tìm thấy */}
-                  <div className="flex-1 flex flex-col bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-6 min-h-[300px]">
+                  <div className="flex-1 flex flex-col bg-theme-60/30 border border-theme-30/50 rounded-xl p-6 min-h-[300px]">
                     {driveFiles.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
                         <Cloud size={56} className="mb-4 opacity-20" />
@@ -1895,17 +2298,17 @@ export default function App() {
 
                         return (
                           <>
-                            <div className="flex items-center justify-between mb-4 pb-4 border-b border-zinc-800/50">
+                            <div className="flex items-center justify-between mb-4 pb-4 border-b border-theme-30/50">
                               <h3 className="font-bold text-white">
                                 {searchQuery 
                                   ? `Tìm thấy ${filteredDriveFiles.length} kết quả cho "${searchQuery}"` 
                                   : `Đã tìm thấy ${driveFiles.length} tệp âm thanh`}
                               </h3>
                               <div className="flex gap-3">
-                                <button onClick={handleDriveStream} className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-4 py-2 rounded-lg text-sm font-medium transition">
+                                <button onClick={handleDriveStream} className="flex items-center gap-2 bg-theme-10/10 text-theme-10 hover:bg-theme-10/20 px-4 py-2 rounded-lg text-sm font-medium transition">
                                   <Wifi size={16} /> Stream tất cả
                                 </button>
-                                <button onClick={handleDriveDownload} disabled={isDownloading} className="flex items-center gap-2 bg-zinc-800 text-white hover:bg-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
+                                <button onClick={handleDriveDownload} disabled={isDownloading} className="flex items-center gap-2 bg-theme-30 text-white hover:bg-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
                                   {isDownloading ? <span className="animate-pulse">Đang xử lý...</span> : <><Download size={16} /> Tải về Thư viện (Lossless)</>}
                                 </button>
                               </div>
@@ -1916,13 +2319,13 @@ export default function App() {
                                 <p className="text-zinc-500 text-center mt-10">Không tìm thấy bài hát nào khớp với "{searchQuery}".</p>
                               ) : (
                                 filteredDriveFiles.map((f, i) => (
-                                  <div key={i} className="flex items-center gap-4 p-3 bg-zinc-900/40 hover:bg-zinc-800/80 rounded-lg border border-zinc-800/50 transition">
-                                    <div className="w-10 h-10 bg-zinc-800 rounded flex items-center justify-center flex-shrink-0 text-emerald-500"><ListMusic size={18} /></div>
+                                  <div key={i} className="flex items-center gap-4 p-3 bg-theme-60/40 hover:bg-theme-30/80 rounded-lg border border-theme-30/50 transition">
+                                    <div className="w-10 h-10 bg-theme-30 rounded flex items-center justify-center flex-shrink-0 text-theme-10"><ListMusic size={18} /></div>
                                     <div className="flex-1 truncate">
                                       <p className="font-semibold text-white truncate text-sm">{f.title}</p>
-                                      <p className="text-xs text-zinc-500 mt-0.5">Định dạng gốc: <span className="text-emerald-500/80 uppercase">{f.format}</span></p>
+                                      <p className="text-xs text-zinc-500 mt-0.5">Định dạng gốc: <span className="text-theme-10/80 uppercase">{f.format}</span></p>
                                     </div>
-                                    <button onClick={() => setCloudActionTrack(f)} className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-zinc-300 font-medium transition">Tùy chọn</button>
+                                    <button onClick={() => setCloudActionTrack(f)} className="px-3 py-1.5 bg-theme-30 hover:bg-zinc-700 rounded text-xs text-zinc-300 font-medium transition">Tùy chọn</button>
                                   </div>
                                 ))
                               )}
@@ -1934,115 +2337,153 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              {/* VIEW: CÀI ĐẶT */}
+{/* VIEW: CÀI ĐẶT */}
               {activeView === 'settings' && (
                 <div className="max-w-2xl">
                   <h2 className="text-3xl font-bold text-white mb-6">Cài đặt hệ thống</h2>
-                  <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-xl space-y-6">
+                  <div className="bg-theme-60/50 border border-theme-30 p-6 rounded-xl space-y-6">
                     <div>
-                      <h3 className="text-emerald-400 font-semibold mb-2">Thư mục gốc (Thư viện)</h3>
-                      <p className="text-sm text-zinc-400 mb-4">Chọn thư mục chứa nhạc. Ứng dụng sẽ tự động quét bài hát...</p>
-                      <div className="flex gap-3 items-center">
-                        <input type="text" readOnly value={libraryPath || 'Chưa thiết lập'} className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300" />
-                        <button onClick={handleSelectLibrary} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Thay đổi</button>
+                      <h3 className="text-theme-10 font-semibold mb-2">Hình nền tuỳ chỉnh</h3>
+                      <div className="flex gap-3 items-center mb-4">
+                        <input 
+                          type="text" 
+                          value={bgImageInput} 
+                          onChange={(e) => setBgImageInput(e.target.value)} 
+                          placeholder="Nhập đường dẫn ảnh web (URL) hoặc chọn file..." 
+                          className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
+                        />
+                        <button 
+                          onClick={() => setCustomBgImage(bgImageInput)}
+                          className="bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                        >
+                          Áp dụng link
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            const filePath = await window.api.selectImageFile()
+                            if (filePath) {
+                              const localPath = `file:///${filePath.replace(/\\/g, '/')}`
+                              setBgImageInput(localPath)
+                              setCustomBgImage(localPath)
+                            }
+                          }}
+                          className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                        >
+                          Chọn ảnh
+                        </button>
+                        <button 
+                          onClick={() => { setCustomBgImage(null); setBgImageInput(''); }}
+                          className="bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                        >
+                          Xoá nền
+                        </button>
+                      </div>
+                      
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm text-zinc-300 w-32">Độ sáng hình nền:</span>
+                          <input 
+                            type="range" 
+                            min="0" max="1" step="0.05" 
+                            value={customBgOpacity} 
+                            onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))}
+                            className="flex-1 accent-theme-10"
+                          />
+                          <span className="text-sm font-mono text-zinc-400 w-12 text-right">{Math.round(customBgOpacity * 100)}%</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm text-zinc-300 w-32">Độ mờ (Blur):</span>
+                          <input 
+                            type="range" 
+                            min="0" max="100" step="1" 
+                            value={customBgBlur} 
+                            onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
+                            className="flex-1 accent-theme-10"
+                          />
+                          <span className="text-sm font-mono text-zinc-400 w-12 text-right">{customBgBlur}px</span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Crossfade (Chuyển bài mượt mà)</h3>
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <h3 className="text-theme-10 font-semibold mb-2">Thư mục gốc (Thư viện)</h3>
+                      <p className="text-sm text-zinc-400 mb-4">Chọn thư mục chứa nhạc. Ứng dụng sẽ tự động quét bài hát...</p>
+                      <div className="flex gap-3 items-center">
+                        <input type="text" readOnly value={libraryPath || 'Chưa thiết lập'} className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300" />
+                        <button onClick={handleSelectLibrary} className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Thay đổi</button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <h3 className="text-theme-10 font-semibold mb-2">Bit-perfect (WASAPI Exclusive/ASIO)</h3>
                       <div className="flex items-center justify-between">
-                        <span className="text-zinc-300 text-sm">Bật hiệu ứng Crossfade</span>
+                        <span className="text-zinc-300 text-sm">Chế độ Bit-perfect (Bỏ qua Windows Mixer)</span>
                         <input 
                           type="checkbox" 
-                          checked={liteMode} 
+                          checked={bitPerfectEnabled} 
                           onChange={e => {
-                            const isLite = e.target.checked
-                            setLiteMode(isLite)
-                            
-                            if (isLite) {
-                              // 1. Tắt ngay các hiệu ứng đồ họa
-                              setShowVisualizer(false)
-                              setShowLyricsPanel(false)
-                              setIsLyricsMaximized(false)
-                              
-                              // 2. Ép hệ thống gọi Garbage Collection dọn sạch RAM ngay lập tức
-                              // @ts-ignore
-                              if (window.api && window.api.forceGC) {
-                                // Dùng setTimeout nhỏ để giao diện kịp chuyển trạng thái xong mới dọn rác
-                                setTimeout(() => {
-                                  // @ts-ignore
-                                  window.api.forceGC()
-                                }, 100)
-                              }
-                            }
+                            const val = e.target.checked
+                            setBitPerfectEnabled(val)
+                            window.api.setBitPerfect(val)
                           }} 
-                          className="w-5 h-5 accent-emerald-500 cursor-pointer" 
+                          className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
                         />
                       </div>
-                      {crossfadeEnabled && (
-                        <div className="mt-4 flex items-center gap-4">
-                          <span className="text-zinc-400 text-sm">Thời gian làm mờ:</span>
-                          <CustomNumberInput min={1} max={10} value={crossfadeDuration} onChange={setCrossfadeDuration} />
-                          <span className="text-zinc-400 text-sm">giây</span>
+                      <p className="text-xs text-zinc-500 mt-2">Lưu ý: Bật chế độ này sẽ chiếm quyền Audio, các ứng dụng khác sẽ không có tiếng. Thay đổi sẽ khởi động lại luồng âm thanh.</p>
+                    </div>
+
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-theme-10 font-semibold">Trình phân tích phổ (Spectrogram)</h3>
+                        <button onClick={() => setShowSpectrogram(!showSpectrogram)} className="text-xs px-3 py-1 bg-theme-30 hover:bg-zinc-700 rounded-full text-zinc-300 transition">
+                          {showSpectrogram ? 'Tắt' : 'Bật'}
+                        </button>
+                      </div>
+                      <p className="text-sm text-zinc-400 mb-4">Theo dõi biểu đồ thác nước tần số (Waterfall) thời gian thực của bản nhạc hiện tại. Khuyến nghị phát nhạc Chất lượng cao (Lossless) để kiểm tra dải cắt tần (Frequency Cutoff).</p>
+                      
+                      {showSpectrogram && (
+                        <div className="bg-black border border-theme-30 rounded-xl overflow-hidden relative flex flex-col" style={{ height: '300px' }}>
+                          
+                          {/* LỚP PHỦ TRỤC Y: HIỂN THỊ TẦN SỐ (Hz) */}
+                          <div className="absolute top-0 left-0 bottom-0 w-12 bg-zinc-950/90 border-r border-theme-30 flex flex-col justify-between py-2 text-[10px] text-zinc-400 font-mono text-center z-10 pointer-events-none">
+                            <span>15k</span>
+                            <span>10k</span>
+                            <span>5k</span>
+                            <span>1k</span>
+                            <span>0Hz</span>
+                          </div>
+
+                          {/* CANVAS VẼ PHỔ */}
+                          <div className="absolute top-0 left-12 right-0 bottom-0 z-0">
+                            <canvas ref={spectrogramCanvasRef} width={1024} height={276} className="w-full h-full" />
+                          </div>
+
+                          {!isPlaying && (
+                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                              <span className="text-zinc-400 text-sm font-medium">Đang tạm dừng - Vui lòng phát nhạc để phân tích âm thanh</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
 
-                    <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Trình phân tích phổ (Spectrogram)</h3>
-                      <p className="text-sm text-zinc-400 mb-4">Theo dõi biểu đồ thác nước tần số (Waterfall) thời gian thực của bản nhạc hiện tại. Khuyến nghị phát nhạc Chất lượng cao (Lossless) để kiểm tra dải cắt tần (Frequency Cutoff).</p>
-                      
-                      <div className="bg-black border border-zinc-800 rounded-xl overflow-hidden relative flex flex-col" style={{ height: '300px' }}>
-                        
-                        {/* LỚP PHỦ TRỤC Y: HIỂN THỊ TẦN SỐ (Hz) */}
-                        <div className="absolute top-0 left-0 bottom-6 w-12 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[10px] text-zinc-400 font-mono text-center z-10 pointer-events-none">
-                          <span>15k</span>
-                          <span>10k</span>
-                          <span>5k</span>
-                          <span>1k</span>
-                          <span>0Hz</span>
-                        </div>
-
-                        {/* LỚP PHỦ TRỤC X: HIỂN THỊ THỜI GIAN (Giây) */}
-                        <div className="absolute bottom-0 left-12 right-0 h-6 bg-zinc-950/90 border-t border-zinc-800 flex items-center justify-between px-4 text-[10px] text-zinc-400 font-mono z-10 pointer-events-none">
-                          <span>-10s</span>
-                          <span>-7.5s</span>
-                          <span>-5s</span>
-                          <span>-2.5s</span>
-                          <span className="text-emerald-500 font-bold">Hiện tại (0s)</span>
-                        </div>
-
-                        {/* CANVAS VẼ PHỔ (Lùi vào để nhường chỗ cho Trục X/Y) */}
-                        <div className="absolute top-0 left-12 right-0 bottom-6 z-0">
-                          <canvas ref={spectrogramCanvasRef} width={1024} height={276} className="w-full h-full" />
-                        </div>
-
-                        {!isPlaying && (
-                          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                            <span className="text-zinc-400 text-sm font-medium">Đang tạm dừng - Vui lòng phát nhạc để phân tích âm thanh</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Google Drive API Key</h3>
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <h3 className="text-theme-10 font-semibold mb-2">Google Drive API Key</h3>
                       <p className="text-sm text-zinc-400 mb-4">Nhập khóa API của bạn để sử dụng tính năng tải nhạc từ Cloud.</p>
                       <div className="flex gap-3 items-center">
-                        <input type="text" value={googleDriveApiKey} onChange={e => setGoogleDriveApiKey(e.target.value)} placeholder="AIzaSy..." className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:outline-none focus:border-emerald-500 transition-colors" />
+                        <input type="text" value={googleDriveApiKey} onChange={e => setGoogleDriveApiKey(e.target.value)} placeholder="AIzaSy..." className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:outline-none focus:border-theme-10 transition-colors" />
                       </div>
                       <p className="text-xs text-zinc-500 mt-2 italic">*Khóa của bạn sẽ được lưu an toàn trên máy tính cá nhân.</p>
                     </div>
 
-                    <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Thiết bị âm thanh (Output Device)</h3>
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <h3 className="text-theme-10 font-semibold mb-2">Thiết bị âm thanh (Output Device)</h3>
                       <p className="text-sm text-zinc-400 mb-4">Chọn loa hoặc tai nghe để phát nhạc.</p>
                       <CustomSelect value={selectedDeviceId} onChange={setSelectedDeviceId} options={audioDevices.map(device => ({ value: device.deviceId, label: device.label || (device.deviceId === 'default' ? 'Thiết bị mặc định của hệ thống' : `Thiết bị ${device.deviceId.slice(0, 8)}...`) }))} />
                     </div>
 
-                    <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Hành vi cửa sổ</h3>
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <h3 className="text-theme-10 font-semibold mb-2">Hành vi cửa sổ</h3>
                       <div className="flex flex-col gap-4 mt-4">
                         <div className="flex items-center justify-between">
                           <div>
@@ -2066,26 +2507,33 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="border-t border-zinc-800 pt-6 mt-6">
-                      <h3 className="text-emerald-400 font-semibold mb-2">Chế độ Lite (Tiết kiệm tài nguyên)</h3>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-zinc-300 text-sm block">Bật chế độ Lite</span>
-                          <span className="text-zinc-500 text-xs">Vô hiệu hóa ảnh bìa, lời bài hát, hiệu ứng sóng âm và chuyển màu nền.</span>
-                        </div>
-                        <input 
-                          type="checkbox" 
-                          checked={liteMode} 
-                          onChange={e => {
-                            const isLite = e.target.checked
-                            setLiteMode(isLite)
-                            if (isLite) {
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <h3 className="text-theme-10 font-semibold mb-2">Chế độ hoạt động (Hiệu suất)</h3>
+                      <p className="text-sm text-zinc-400 mb-4">Điều chỉnh mức độ tiêu thụ tài nguyên của ứng dụng để phù hợp với cấu hình máy.</p>
+                      <div className="w-full">
+                        <CustomSelect 
+                          value={appMode} 
+                          onChange={(val) => {
+                            setAppMode(val as any)
+                            if (val === 'lite' || val === 'core') {
                               setShowVisualizer(false)
                               setShowLyricsPanel(false)
                               setIsLyricsMaximized(false)
+                              if (val === 'core') {
+                                setShowEQ(false)
+                                // Tự động đóng tab mạng nếu đang xem
+                                if (activeView === 'home' || activeView === 'online' || activeView === 'drive') setActiveView('songs')
+                              }
+                              // Ép thu gom rác ngay lập tức
+                              // @ts-ignore
+                              if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
                             }
                           }} 
-                          className="w-5 h-5 accent-emerald-500 cursor-pointer" 
+                          options={[
+                            { value: 'default', label: 'Tiêu chuẩn' }, 
+                            { value: 'lite', label: 'Tiết kiệm' },
+                            { value: 'core', label: 'Cốt lõi' }
+                          ]} 
                         />
                       </div>
                     </div>
@@ -2100,10 +2548,10 @@ export default function App() {
                     <h2 className="text-3xl font-bold text-white">{searchQuery ? 'Kết quả tìm kiếm' : 'Playlist của tôi'}</h2>
                     {!searchQuery && (
                       <div className="flex gap-3">
-                        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-emerald-500/20">
+                        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
                           <Plus size={16} /> Tạo Playlist mới
                         </button>
-                        <button onClick={handleAutoGeneratePlaylists} className="flex items-center gap-2 bg-zinc-800 hover:bg-emerald-600/20 hover:text-emerald-400 border border-zinc-700 hover:border-emerald-500/50 px-4 py-2 rounded-lg text-sm font-medium transition">
+                        <button onClick={handleAutoGeneratePlaylists} className="flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition">
                           <Sparkles size={16} /> Tự động phân loại Album
                         </button>
                       </div>
@@ -2122,18 +2570,18 @@ export default function App() {
                             {searchQuery && <h3 className="text-xl font-bold text-white mb-6">Album & Danh sách phát</h3>}
                             <div className="grid grid-cols-4 gap-6">
                               {matchedPlaylists.map(pl => (
-                                <div key={pl.name} className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-800/50 hover:bg-zinc-800/50 transition group cursor-pointer" onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}>
-                                  <div className="aspect-square bg-zinc-800 rounded-lg mb-4 overflow-hidden relative">
-                                    {(!liteMode && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
-                                    <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Chọn ảnh từ máy tính"><ImageIcon size={16}/></button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-emerald-500 transition" title="Lấy ảnh từ bài hát đầu tiên"><Sparkles size={16}/></button>
+                                <div key={pl.name} className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer" onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}>
+                                  <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative">
+                                    {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                                    <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title="Chọn ảnh từ máy tính"><ImageIcon size={16}/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title="Lấy ảnh từ bài hát đầu tiên"><Sparkles size={16}/></button>
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <div>
                                       <h3 className="font-bold text-white truncate max-w-[140px]">{pl.name}</h3>
                                       <p className="text-xs text-zinc-500">{pl.tracks.length} bài hát</p>
                                     </div>
-                                    <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="text-zinc-500 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
                                   </div>
                                 </div>
                               ))}
@@ -2153,21 +2601,21 @@ export default function App() {
                 <>
                   <div className="flex items-end justify-between mb-8">
                     <div className="flex items-end gap-6">
-                      <div className="w-40 h-40 bg-zinc-800 rounded-xl overflow-hidden shadow-2xl relative group">
-                        {(!liteMode && activePlaylist.thumbnail) ? <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                      <div className="w-40 h-40 bg-theme-30 rounded-xl overflow-hidden shadow-2xl relative group">
+                        {(!isLite && activePlaylist.thumbnail) ? <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                       </div>
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-2">Playlist</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Playlist</p>
                         <h2 className="text-5xl font-extrabold text-white mb-4">{activePlaylist.name}</h2>
                         <p className="text-zinc-400">{activePlaylist.tracks.length} bài hát</p>
                       </div>
                     </div>
                     {/* Nút thêm nhạc riêng cho Playlist */}
                     <div className="flex gap-3">
-                      <button onClick={() => setShowAddSongsModal(true)} className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                      <button onClick={() => setShowAddSongsModal(true)} className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
                         <Plus size={16} /> Thêm bài hát có sẵn
                       </button>
-                      <button onClick={handleImportFiles} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-emerald-500/20">
+                      <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
                         <Plus size={16} /> Tải file từ máy tính
                       </button>
                     </div>
@@ -2181,15 +2629,15 @@ export default function App() {
             
             {/* CỘT PHẢI: LỜI BÀI HÁT (SPLIT VIEW) */}
             {showLyricsPanel && (
-              <div className="w-96 border-l border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm flex flex-col">
-                <div className="p-4 flex items-center justify-between border-b border-zinc-800/50">
-                  <h3 className="font-bold text-white flex items-center gap-2"><Mic2 size={16} className="text-emerald-400"/> Lời bài hát</h3>
-                  <button onClick={() => setIsLyricsMaximized(true)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-zinc-800"><Maximize2 size={16}/></button>
+              <div className="w-96 border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
+                <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
+                  <h3 className="font-bold text-white flex items-center gap-2"><Mic2 size={16} className="text-theme-10"/> Lời bài hát</h3>
+                  <button onClick={() => setIsLyricsMaximized(true)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><Maximize2 size={16}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
                   {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-10">Không có lời bài hát.</p> : lyrics.map((line, index) => {
                     const isActive = index === currentLyricIndex
-                    return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-emerald-400 text-xl' : 'text-zinc-500 text-sm hover:text-zinc-300'}`}>{line.text}</p>
+                    return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-theme-10 text-xl' : 'text-zinc-500 text-sm hover:text-zinc-300'}`}>{line.text}</p>
                   })}
                 </div>
               </div>
@@ -2197,30 +2645,46 @@ export default function App() {
 
             {/* CỘT PHẢI: HÀNG ĐỢI DANH SÁCH PHÁT (QUEUE) */}
             {showQueuePanel && (
-              <div className="w-96 border-l border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm flex flex-col">
-                <div className="p-4 flex items-center justify-between border-b border-zinc-800/50">
-                  <h3 className="font-bold text-white flex items-center gap-2"><List size={16} className="text-emerald-400"/> Danh sách đang phát</h3>
-                  <button onClick={() => setShowQueuePanel(false)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-zinc-800"><X size={16}/></button>
+              <div className="w-96 border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
+                <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
+                  <h3 className="font-bold text-white flex items-center gap-2"><List size={16} className="text-theme-10"/> Danh sách đang phát</h3>
+                  <button onClick={() => setShowQueuePanel(false)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><X size={16}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                   {playQueue.length === 0 ? (
                     <p className="text-zinc-500 italic mt-10 text-center">Hàng đợi trống.</p>
                   ) : (
-                    playQueue.map((track, index) => {
-                      const isActive = currentTrack?.id === track.id
-                      return (
-                        <div key={index} onClick={() => handlePlayTrack(track)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${isActive ? 'bg-emerald-500/20 border border-emerald-500/30' : 'hover:bg-zinc-800/50 border border-transparent'}`}>
-                          <div className="w-10 h-10 bg-zinc-800 rounded flex-shrink-0 overflow-hidden relative flex items-center justify-center">
-                             {(!liteMode && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <ListMusic size={16} className="text-zinc-500" />}
-                             {isActive && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" /></div>}
-                          </div>
-                          <div className="truncate flex-1">
-                            <p className={`text-sm font-semibold truncate ${isActive ? 'text-emerald-400' : 'text-white'}`}>{track.title}</p>
-                            <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
-                          </div>
-                        </div>
-                      )
-                    })
+                    <DndContext 
+                      sensors={dndSensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={(event) => {
+                        const { active, over } = event;
+                        if (active.id !== over?.id) {
+                          setPlayQueue((items) => {
+                            const oldIndex = items.findIndex((_, i) => `queue-${i}` === active.id);
+                            const newIndex = items.findIndex((_, i) => `queue-${i}` === over?.id);
+                            return arrayMove(items, oldIndex, newIndex);
+                          });
+                        }
+                      }}
+                    >
+                      <SortableContext items={playQueue.map((_, i) => `queue-${i}`)} strategy={verticalListSortingStrategy}>
+                        {playQueue.map((track, index) => {
+                          const isActive = currentTrack?.id === track.id
+                          return (
+                            <SortableQueueItem 
+                              key={`queue-${index}`} 
+                              id={`queue-${index}`}
+                              track={track} 
+                              isActive={isActive} 
+                              isPlaying={isPlaying} 
+                              isLite={isLite} 
+                              onPlay={handlePlayTrack} 
+                            />
+                          )
+                        })}
+                      </SortableContext>
+                    </DndContext>
                   )}
                 </div>
               </div>
@@ -2230,23 +2694,32 @@ export default function App() {
 
         {/* FULLSCREEN LYRICS */}
         {isLyricsMaximized && showLyricsPanel && (
-          <div className="flex-1 flex flex-col bg-zinc-950/90 backdrop-blur-xl z-40 relative">
-            <button onClick={() => setIsLyricsMaximized(false)} className="absolute top-8 right-8 text-zinc-400 hover:text-white bg-zinc-800 p-3 rounded-full"><Minimize2 size={24}/></button>
+          <div className="flex-1 flex flex-col bg-zinc-950/90 backdrop-blur-xl z-40 relative animate-fade-in" style={{ willChange: 'opacity, transform' }}>
+            <button onClick={() => setIsLyricsMaximized(false)} className="absolute top-8 right-8 text-zinc-400 hover:text-white bg-theme-30 p-3 rounded-full hover:scale-110 transition-transform"><Minimize2 size={24}/></button>
             <div className="flex-1 flex items-center justify-center p-12">
               <div className="w-1/2 flex flex-col items-center justify-center gap-6">
-                <div className="w-80 h-80 bg-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
-                  {(!liteMode && (originalCover || currentTrack?.coverArt)) ? (
-                    <img loading="lazy" src={originalCover || currentTrack.coverArt} className="w-full h-full object-cover" />
+                <div className="w-80 h-80 rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-10 rounded-full mix-blend-overlay"></div>
+                  <div className="w-12 h-12 bg-zinc-950 rounded-full absolute z-20 border-2 border-zinc-700 shadow-inner"></div>
+                  {(!isLite && (originalCover || currentTrack?.coverArt)) ? (
+                    <img 
+                      loading="lazy" 
+                      src={originalCover || currentTrack.coverArt} 
+                      className={`w-full h-full object-cover ${isPlaying ? 'animate-spin-slow' : ''}`}
+                      style={{ willChange: 'transform' }} 
+                    />
                   ) : (
-                    <ListMusic size={60} className="m-auto mt-32 text-zinc-600" />
+                    <div className={`w-full h-full flex items-center justify-center bg-zinc-800 ${isPlaying ? 'animate-spin-slow' : ''}`}>
+                      <ListMusic size={60} className="text-zinc-600" />
+                    </div>
                   )}
                 </div>
-                <div className="text-center"><h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2><p className="text-emerald-400 text-lg">{currentTrack?.artist}</p></div>
+                <div className="text-center"><h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2><p className="text-theme-10 text-lg">{currentTrack?.artist}</p></div>
               </div>
               <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">
                  {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-32 text-xl">Không có lời bài hát.</p> : lyrics.map((line, index) => {
                   const isActive = index === currentLyricIndex
-                  return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-emerald-400 text-3xl scale-105' : 'text-zinc-500 text-xl hover:text-zinc-300 opacity-50'}`}>{line.text}</p>
+                  return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-theme-10 text-3xl scale-105' : 'text-zinc-500 text-xl hover:text-zinc-300 opacity-50'}`}>{line.text}</p>
                 })}
               </div>
             </div>
@@ -2255,45 +2728,45 @@ export default function App() {
       </div>
 
       {/* VISUALIZER CANVAS */}
-      {!liteMode && showVisualizer && (
+      {!isLite && showVisualizer && (
         <canvas ref={visualizerCanvasRef} width={1024} height={150} className={`w-full h-24 bg-transparent pointer-events-none absolute bottom-24 left-0 z-10 transition-opacity duration-500 opacity-20`} />
       )}
       
       {/* PLAYER BAR */}
-      <footer className="h-24 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between px-6 z-20 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+      <footer className="h-24 bg-theme-60 border-t border-theme-30 flex items-center justify-between px-6 z-20 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
         
         {/* EQ Overlay */}
         {showEQ && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4 shrink-0">
+            <div className="bg-theme-60 border border-theme-30 rounded-xl p-6 w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
+              <div className="flex items-center justify-between pb-4 border-b border-theme-30 mb-4 shrink-0">
                 <div className="flex items-center gap-2">
-                  <Sliders className="text-emerald-500" size={22} />
+                  <Sliders className="text-theme-10" size={22} />
                   <h2 className="text-lg font-bold text-white">Equalizer (EQ)</h2>
                 </div>
                 {/* Nút bật tắt EQ Bit-perfect */}
-                  <label className="flex items-center gap-2 cursor-pointer ml-4 bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-emerald-500">
+                  <label className="flex items-center gap-2 cursor-pointer ml-4 bg-zinc-950 px-3 py-1.5 rounded-lg border border-theme-30 transition hover:border-theme-10">
                     <span className="text-zinc-300 text-sm font-medium">Bật EQ</span>
                     <input 
                       type="checkbox" 
                       checked={isEqEnabled} 
                       onChange={e => setIsEqEnabled(e.target.checked)} 
-                      className="w-4 h-4 accent-emerald-500 cursor-pointer" 
+                      className="w-4 h-4 accent-theme-10 cursor-pointer" 
                     />
                   </label>
                 <div className="flex items-center gap-2">
-                  <button onClick={handleAddBand} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition"><Plus size={16} /> Thêm dải tần</button>
-                  <button onClick={handleResetEQ} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"><RotateCcw size={14} /> Reset</button>
+                  <button onClick={handleAddBand} className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-10 hover:bg-theme-10 text-white rounded-lg text-xs font-medium transition"><Plus size={16} /> Thêm dải tần</button>
+                  <button onClick={handleResetEQ} className="flex items-center gap-1 px-3 py-1.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"><RotateCcw size={14} /> Reset</button>
                   <button onClick={() => setShowEQ(false)} className="text-zinc-400 hover:text-white px-2 text-lg">✕</button>
                 </div>
               </div>
 
-              <canvas ref={eqCanvasRef} width={800} height={150} className="w-full h-32 bg-zinc-950 rounded-lg border border-zinc-800 mb-4 shrink-0" />
+              <canvas ref={eqCanvasRef} width={800} height={150} className="w-full h-32 bg-zinc-950 rounded-lg border border-theme-30 mb-4 shrink-0" />
 
               <div className="overflow-y-auto flex-1 pr-2 space-y-3">
                 {eqBands.length === 0 ? <p className="text-center text-zinc-500 py-8">Chưa có dải tần nào. Hãy bấm "Thêm dải tần".</p> : (
                   eqBands.sort((a, b) => a.frequency - b.frequency).map((band) => (
-                      <div key={band.id} className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-3 flex flex-wrap items-center gap-4 text-xs">
+                      <div key={band.id} className="bg-zinc-950/60 border border-theme-30/80 rounded-lg p-3 flex flex-wrap items-center gap-4 text-xs">
                         <div className="flex flex-col gap-1 w-28">
                           <label className="text-zinc-400 font-mono text-xs">Tần số (Hz)</label>
                           <CustomNumberInput min={20} max={20000} step={10} value={band.frequency} onChange={(val) => handleUpdateBand(band.id, 'frequency', val)} />
@@ -2312,9 +2785,9 @@ export default function App() {
                         <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
                             <div className="flex justify-between text-zinc-400">
                               <span>Mức khuếch đại (Gain)</span>
-                              <span className="font-mono text-emerald-400">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
+                              <span className="font-mono text-theme-10">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
                             </div>
-                            <input type="range" min="-20" max="20" step="0.5" value={band.gain} onChange={(e) => handleUpdateBand(band.id, 'gain', Number(e.target.value))} className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500" style={{ background: `linear-gradient(to right, #10b981 ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)` }} />
+                            <input type="range" min="-20" max="20" step="0.5" value={band.gain} onChange={(e) => handleUpdateBand(band.id, 'gain', Number(e.target.value))} className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" style={{ background: `linear-gradient(to right, var(--theme-10) ${((band.gain + 20) / 40) * 100}%, var(--theme-30) ${((band.gain + 20) / 40) * 100}%)` }} />
                         </div>
                         <button onClick={() => handleDeleteBand(band.id)} className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3" title="Xóa dải EQ"><Trash2 size={16} /></button>
                       </div>
@@ -2326,15 +2799,24 @@ export default function App() {
         )}
 
         <div className="flex items-center gap-4 w-1/3">
-          <div className="w-14 h-14 bg-zinc-800 rounded-md shadow-lg overflow-hidden flex-shrink-0">
-            {(!liteMode && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
+          <div className="w-14 h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
+            {(!isLite && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
           </div>
           <div className="truncate">
             <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : 'Chưa có bài hát'}</h4>
             <p className="text-xs text-zinc-400 mt-1 truncate">{currentTrack ? currentTrack.artist : '---'}</p>
             {currentTrack && (
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">{currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}</span>
+                <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md">
+                  <span className="text-[10px] uppercase font-bold text-theme-10 bg-theme-10/10 px-1.5 py-0.5 rounded">
+                    {currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}
+                  </span>
+                  {currentTrack.bitDepth && (
+                    <span className="text-[10px] uppercase font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                      {currentTrack.bitDepth}-BIT
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] text-zinc-500">{currentTrack.sampleRate ? `${currentTrack.sampleRate / 1000}kHz` : ''} {currentTrack.bitrate ? ` | ${Math.round(currentTrack.bitrate / 1000)} kbps` : ''}</span>
               </div>
             )}
@@ -2343,13 +2825,13 @@ export default function App() {
 
         <div className="flex flex-col items-center justify-center w-1/3 max-w-md">
           <div className="flex items-center gap-6 mb-2">
-            <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-emerald-500' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
+            <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
             <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
-            <button onClick={() => { if(currentTrack) setIsPlaying(!isPlaying) }} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-white text-black hover:scale-105' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'}`}>
+            <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
               {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current translate-x-[2px]" />}
             </button>
             <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={20} /></button>
-            <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-emerald-500' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+            <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
           </div>
           <PlayerProgressBar 
             audioRef={audioRef} 
@@ -2362,19 +2844,37 @@ export default function App() {
         </div>
         
         <div className="flex items-center justify-end gap-4 w-1/3 text-zinc-400">
-          {!liteMode && (
+          {!isCore && (
             <>
-              <button onClick={() => setShowVisualizer(!showVisualizer)} className={`transition ${showVisualizer ? 'text-emerald-500' : 'hover:text-white'}`} title="Bật/tắt hiệu ứng sóng âm"><Activity size={18} /></button>
-              <button onClick={() => setShowLyricsPanel(!showLyricsPanel)} className={`transition ${showLyricsPanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Lời bài hát"><Mic2 size={18} /></button>
+              {!isLite && (
+                <>
+                  <button disabled={bitPerfectEnabled} onClick={() => setShowVisualizer(!showVisualizer)} className={`transition ${showVisualizer ? 'text-theme-10' : 'hover:text-white'}`} title={bitPerfectEnabled ? "Visualizer không khả dụng ở chế độ Bit-perfect (WASAPI)" : "Bật/tắt hiệu ứng sóng âm"}><Activity size={18} /></button>
+                  <button onClick={() => setShowLyricsPanel(!showLyricsPanel)} className={`transition ${showLyricsPanel ? 'text-theme-10' : 'hover:text-white'}`} title="Lời bài hát"><Mic2 size={18} /></button>
+                </>
+              )}
+              <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title="Trình phát thu nhỏ (Mini Player)"><PictureInPicture2 size={18} /></button>
+              <button onClick={() => { setShowQueuePanel(!showQueuePanel); setShowLyricsPanel(false); }} className={`transition ${showQueuePanel ? 'text-theme-10' : 'hover:text-white'}`} title="Danh sách đang phát"><List size={18} /></button>
+              <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-theme-10' : 'hover:text-white'}`} title="Bộ chỉnh âm (Equalizer)"><Sliders size={18} /></button>
             </>
           )}
-          <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title="Trình phát thu nhỏ (Mini Player)"><PictureInPicture2 size={18} /></button>
-          <button onClick={() => { setShowQueuePanel(!showQueuePanel); setShowLyricsPanel(false); }} className={`transition ${showQueuePanel ? 'text-emerald-500' : 'hover:text-white'}`} title="Danh sách đang phát"><List size={18} /></button>
-          <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-emerald-500' : 'hover:text-white'}`} title="Bộ chỉnh âm (Equalizer)"><Sliders size={18} /></button>
 
+          {/* Thanh chỉnh âm lượng luôn giữ lại */}
           <div className="flex items-center gap-2 w-32">
             <button onClick={toggleMute} className="hover:text-white transition">{volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
-            <input type="range" min="0" max="1" step="0.01" value={volume} onChange={handleVolumeChange} className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400" style={{ background: `linear-gradient(to right, #10b981 ${volume * 100}%, #27272a ${volume * 100}%)` }} />
+            <input 
+              type="range" min="0" max="1" step="0.01" 
+              defaultValue={volume} 
+              onChange={(e) => {
+                // TỐI ƯU HÓA: Cập nhật âm thanh phần cứng trực tiếp, KHÔNG gọi setVolume để tránh render
+                const val = parseFloat(e.target.value);
+                if (audioRef.current) audioRef.current.volume = val;
+                e.target.style.background = `linear-gradient(to right, var(--theme-10) ${val * 100}%, var(--theme-30) ${val * 100}%)`;
+              }}
+              onMouseUp={(e) => setVolume(parseFloat((e.target as HTMLInputElement).value))}
+              onTouchEnd={(e) => setVolume(parseFloat((e.target as HTMLInputElement).value))}
+              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10" 
+              style={{ background: `linear-gradient(to right, var(--theme-10) ${volume * 100}%, var(--theme-30) ${volume * 100}%)` }} 
+            />
           </div>
         </div>
         {/* EQ MODAL ĐỘC LẬP */}

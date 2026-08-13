@@ -19,7 +19,7 @@ export const CloudActionModal: React.FC<CloudActionModalProps> = ({ track, isDow
         <div className="space-y-3">
           <button 
             onClick={() => onAction('stream')}
-            className="w-full flex items-center justify-center gap-3 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 py-3 rounded-lg font-medium transition"
+            className="w-full flex items-center justify-center gap-3 bg-theme-10/10 text-theme-10 hover:bg-theme-10/20 py-3 rounded-lg font-medium transition"
           >
             <Wifi size={18} /> Phát trực tiếp (Stream)
           </button>

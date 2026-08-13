@@ -17,7 +17,7 @@ export const CustomNumberInput: React.FC<NumberInputProps> = ({
   step = 1,
 }) => {
   return (
-    <div className="inline-flex items-center bg-zinc-900 border border-zinc-700/80 rounded-lg overflow-hidden focus-within:border-emerald-500 transition-all">
+    <div className="inline-flex items-center bg-zinc-900 border border-zinc-700/80 rounded-lg overflow-hidden focus-within:border-theme-10 transition-all">
       <button
         type="button"
         onClick={() => onChange(Math.max(min, value - step))}
