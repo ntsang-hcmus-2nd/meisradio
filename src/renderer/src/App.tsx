@@ -35,32 +35,8 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
-// --- WEBGL HELPER FUNCTIONS ---
-const compileShader = (gl: WebGLRenderingContext, type: number, source: string) => {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error('WebGL Shader Error:', gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
-};
-
-const createWebGLProgram = (gl: WebGLRenderingContext, vsSource: string, fsSource: string) => {
-  const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vsSource);
-  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
-  if (!vertexShader || !fragmentShader) return null;
-  const program = gl.createProgram();
-  if (!program) return null;
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
-  return program;
-};
+import { WebGLVisualizer } from './components/visualizers/WebGLVisualizer'
+import { WebGLSpectrogram } from './components/visualizers/WebGLSpectrogram'
 
 export interface EQBand {
   id: string
@@ -81,18 +57,22 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
   img.crossOrigin = 'Anonymous'
   img.onload = () => {
     const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return
-    canvas.width = img.width
-    canvas.height = img.height
-    ctx.drawImage(img, 0, 0)
     
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+    // Tối ưu CPU/RAM: Thu nhỏ ảnh xuống 128x128
+    canvas.width = 128
+    canvas.height = 128
+    ctx.drawImage(img, 0, 0, 128, 128)
+    
+    const data = ctx.getImageData(0, 0, 128, 128).data
     let r = 0, g = 0, b = 0, count = 0
-    for (let i = 0; i < data.length; i += 40) {
+    // Lấy mẫu (sample) để tính màu trung bình
+    for (let i = 0; i < data.length; i += 16) {
       r += data[i]; g += data[i + 1]; b += data[i + 2]
       count++
     }
+    if (count === 0) count = 1
     r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count)
     callback(`rgba(${Math.max(r-30, 0)}, ${Math.max(g-30, 0)}, ${Math.max(b-30, 0)}, 0.4)`)
   }
@@ -139,7 +119,7 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
          prevProps.track.id === nextProps.track.id;
 });
 
-const SortableQueueItem = ({ id, track, isActive, isPlaying, isLite, onPlay }: any) => {
+const SortableQueueItem = React.memo(({ id, track, isActive, isPlaying, isLite, onPlay }: any) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -149,7 +129,7 @@ const SortableQueueItem = ({ id, track, isActive, isPlaying, isLite, onPlay }: a
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={() => onPlay(track)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${isActive ? 'bg-theme-10/20 border border-theme-10/30' : 'hover:bg-theme-30/50 border border-transparent'}`}>
       <div className="w-10 h-10 bg-theme-30 rounded flex-shrink-0 overflow-hidden relative flex items-center justify-center">
-         {(!isLite && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover pointer-events-none" /> : <ListMusic size={16} className="text-zinc-500" />}
+         {(!isLite && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover pointer-events-none" /> : <ListMusic size={16} className="text-zinc-500" />}
          {isActive && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-3 h-3 bg-theme-10 rounded-full animate-pulse" /></div>}
       </div>
       <div className="truncate flex-1">
@@ -158,7 +138,7 @@ const SortableQueueItem = ({ id, track, isActive, isPlaying, isLite, onPlay }: a
       </div>
     </div>
   );
-};
+}, (prev, next) => prev.isActive === next.isActive && prev.isPlaying === next.isPlaying && prev.isLite === next.isLite && prev.track.id === next.track.id);
 
 export default function App() {
 
@@ -205,8 +185,6 @@ export default function App() {
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const reqAnimRef = useRef<number>(0)
   const activeLyricRef = useRef<HTMLParagraphElement | null>(null)
-  const spectrogramCanvasRef = useRef<HTMLCanvasElement>(null)
-  const reqAnimSpectrogramRef = useRef<number>(0)
 
   // ==========================================
   // 2. STATES
@@ -1261,211 +1239,6 @@ export default function App() {
     })
   }, [eqBands, isEqEnabled])
 
-  // Visualizer Animation (GPU WebGL)
-  useEffect(() => {
-    if (isLite || !isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
-
-    const canvas = visualizerCanvasRef.current
-    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false })
-    if (!gl) return
-
-    // VERTEX SHADER: Xác định khung hình Canvas
-    const vsSource = `
-      attribute vec2 a_position;
-      varying vec2 v_uv;
-      void main() {
-        v_uv = a_position * 0.5 + 0.5;
-        gl_Position = vec4(a_position, 0.0, 1.0);
-      }
-    `;
-
-    // FRAGMENT SHADER: Dựng các cột sóng bằng phần cứng
-    const fsSource = `
-      precision mediump float;
-      varying vec2 v_uv;
-      uniform sampler2D u_audioData;
-      void main() {
-        float bands = 128.0; // Số lượng cột sóng
-        float bandX = floor(v_uv.x * bands) / bands;
-        
-        // Tạo khoảng cách (gap) giữa các cột
-        if (fract(v_uv.x * bands) > 0.75) {
-           gl_FragColor = vec4(0.0);
-           return;
-        }
-        
-        // Đọc dữ liệu âm thanh
-        float val = texture2D(u_audioData, vec2(bandX, 0.5)).r;
-        
-        // Vẽ màu xanh Emerald
-        if (v_uv.y < val) {
-          gl_FragColor = vec4(16.0/255.0, 185.0/255.0, 129.0/255.0, val);
-        } else {
-          gl_FragColor = vec4(0.0);
-        }
-      }
-    `;
-
-    const program = createWebGLProgram(gl, vsSource, fsSource);
-    if (!program) return;
-    gl.useProgram(program);
-
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-    const positionLoc = gl.getAttribLocation(program, 'a_position');
-    gl.enableVertexAttribArray(positionLoc);
-    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-    const analyser = analyserNodeRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    let lastDrawTime = performance.now();
-    const fpsInterval = 1000 / 30; // 30 FPS
-
-    const draw = (now: number) => {
-      reqAnimRef.current = requestAnimationFrame(draw);
-      
-      const elapsed = now - lastDrawTime;
-      if (elapsed < fpsInterval) return;
-      lastDrawTime = now - (elapsed % fpsInterval);
-
-      analyser.getByteFrequencyData(dataArray);
-
-      // Đẩy mảng âm thanh vào Texture WebGL
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, bufferLength, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, dataArray);
-
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    }
-    reqAnimRef.current = requestAnimationFrame(draw);
-
-    return () => {
-      cancelAnimationFrame(reqAnimRef.current);
-      gl.deleteProgram(program);
-      gl.deleteTexture(texture);
-      gl.deleteBuffer(positionBuffer);
-    }
-  }, [isPlaying, isLite, showVisualizer])
-
-  // Spectrogram Animation (GPU WebGL Waterfall)
-  useEffect(() => {
-    if (activeView !== 'settings' || !spectrogramCanvasRef.current || !analyserNodeRef.current) return
-
-    const canvas = spectrogramCanvasRef.current
-    const gl = canvas.getContext('webgl', { alpha: false })
-    if (!gl) return
-
-    // SỬA LỖI TẠI ĐÂY: Tắt tính năng đệm 4-byte mặc định, đọc dữ liệu theo khối 1-byte
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-
-    const vsSource = `
-      attribute vec2 a_position;
-      varying vec2 v_uv;
-      void main() {
-        v_uv = a_position * 0.5 + 0.5;
-        gl_Position = vec4(a_position, 0.0, 1.0);
-      }
-    `;
-
-    // FRAGMENT SHADER: Vẽ bản đồ nhiệt, tự động cuộn (Scroll) theo thời gian
-    const fsSource = `
-      precision mediump float;
-      varying vec2 v_uv;
-      uniform sampler2D u_history;
-      uniform float u_offset;
-      
-      vec3 hsl2rgb(vec3 c) {
-          vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0);
-          return c.z + c.y * (rgb-0.5)*(1.0-abs(2.0*c.z-1.0));
-      }
-
-      void main() {
-          float x = fract(u_offset + v_uv.x);
-          float y = v_uv.y * 0.6; 
-          
-          float val = texture2D(u_history, vec2(x, y)).r;
-          
-          if (val == 0.0) {
-             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-          } else {
-             float hue = (1.0 - val) * 240.0 / 360.0;
-             gl_FragColor = vec4(hsl2rgb(vec3(hue, 1.0, 0.5)), 1.0);
-          }
-      }
-    `;
-
-    const program = createWebGLProgram(gl, vsSource, fsSource);
-    if (!program) return;
-    gl.useProgram(program);
-
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-    const positionLoc = gl.getAttribLocation(program, 'a_position');
-    gl.enableVertexAttribArray(positionLoc);
-    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-
-    // Kéo cấu hình Node ra trước để làm chuẩn kích thước cho Texture
-    const analyser = analyserNodeRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    // SỬA LỖI TẠI ĐÂY: Ép chiều cao Texture khớp tuyệt đối với độ dài mảng dữ liệu (bufferLength)
-    const textureWidth = 1024;
-    const textureHeight = bufferLength; 
-    
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, textureWidth, textureHeight, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); 
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-    const offsetLoc = gl.getUniformLocation(program, 'u_offset');
-    
-    let lastDrawTime = performance.now();
-    const fpsInterval = 1000 / 30; // 30 FPS
-    let currentColumn = 0;
-
-    const draw = (now: number) => {
-      reqAnimSpectrogramRef.current = requestAnimationFrame(draw);
-      if (!isPlaying) return;
-
-      const elapsed = now - lastDrawTime;
-      if (elapsed < fpsInterval) return;
-      lastDrawTime = now - (elapsed % fpsInterval);
-
-      analyser.getByteFrequencyData(dataArray);
-
-      // CẬP NHẬT GPU: Upload mảng dữ liệu an toàn vào đúng cột đang quét
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, currentColumn, 0, 1, bufferLength, gl.LUMINANCE, gl.UNSIGNED_BYTE, dataArray);
-
-      currentColumn = (currentColumn + 1) % textureWidth;
-      const offset = currentColumn / textureWidth;
-
-      gl.uniform1f(offsetLoc, offset);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    }
-    reqAnimSpectrogramRef.current = requestAnimationFrame(draw);
-
-    return () => {
-      cancelAnimationFrame(reqAnimSpectrogramRef.current);
-      gl.deleteProgram(program);
-      gl.deleteTexture(texture);
-      gl.deleteBuffer(positionBuffer);
-    }
-  }, [isPlaying, activeView])
 
   // EQ Curve Drawing
   useEffect(() => {
@@ -2455,7 +2228,11 @@ export default function App() {
 
                           {/* CANVAS VẼ PHỔ */}
                           <div className="absolute top-0 left-12 right-0 bottom-0 z-0">
-                            <canvas ref={spectrogramCanvasRef} width={1024} height={276} className="w-full h-full" />
+                            <WebGLSpectrogram 
+                              analyserNodeRef={analyserNodeRef} 
+                              isPlaying={isPlaying} 
+                              activeView={activeView} 
+                            />
                           </div>
 
                           {!isPlaying && (
@@ -2724,7 +2501,12 @@ export default function App() {
 
       {/* VISUALIZER CANVAS */}
       {!isLite && showVisualizer && (
-        <canvas ref={visualizerCanvasRef} width={1024} height={150} className={`w-full h-24 bg-transparent pointer-events-none absolute bottom-24 left-0 z-10 transition-opacity duration-500 opacity-20`} />
+        <WebGLVisualizer 
+          analyserNodeRef={analyserNodeRef} 
+          isPlaying={isPlaying} 
+          isLite={isLite} 
+          showVisualizer={showVisualizer} 
+        />
       )}
       
       {/* PLAYER BAR */}
