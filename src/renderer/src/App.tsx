@@ -2402,7 +2402,7 @@ export default function App() {
             
             {/* CỘT PHẢI: LỜI BÀI HÁT (SPLIT VIEW) */}
             {showLyricsPanel && (
-              <div className="w-96 border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
+              <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
                 <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
                   <h3 className="font-bold text-white flex items-center gap-2"><Mic2 size={16} className="text-theme-10"/> Lời bài hát</h3>
                   <button onClick={() => setIsLyricsMaximized(true)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><Maximize2 size={16}/></button>
@@ -2418,7 +2418,7 @@ export default function App() {
 
             {/* CỘT PHẢI: HÀNG ĐỢI DANH SÁCH PHÁT (QUEUE) */}
             {showQueuePanel && (
-              <div className="w-96 border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
+              <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
                 <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
                   <h3 className="font-bold text-white flex items-center gap-2"><List size={16} className="text-theme-10"/> Danh sách đang phát</h3>
                   <button onClick={() => setShowQueuePanel(false)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><X size={16}/></button>
@@ -2467,11 +2467,11 @@ export default function App() {
 
         {/* FULLSCREEN LYRICS */}
         {isLyricsMaximized && showLyricsPanel && (
-          <div className="flex-1 flex flex-col bg-zinc-950/90 backdrop-blur-xl z-40 relative animate-fade-in" style={{ willChange: 'opacity, transform' }}>
+          <div className="flex-1 flex flex-col bg-transparent z-40 relative animate-fade-in" style={{ willChange: 'opacity, transform' }}>
             <button onClick={() => setIsLyricsMaximized(false)} className="absolute top-8 right-8 text-zinc-400 hover:text-white bg-theme-30 p-3 rounded-full hover:scale-110 transition-transform"><Minimize2 size={24}/></button>
             <div className="flex-1 flex items-center justify-center p-12">
               <div className="w-1/2 flex flex-col items-center justify-center gap-6">
-                <div className="w-80 h-80 rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
+                <div className="w-[25vw] max-w-[400px] min-w-[250px] aspect-square rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
                   <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-10 rounded-full mix-blend-overlay"></div>
                   <div className="w-12 h-12 bg-zinc-950 rounded-full absolute z-20 border-2 border-zinc-700 shadow-inner"></div>
                   {(!isLite && (originalCover || currentTrack?.coverArt)) ? (
