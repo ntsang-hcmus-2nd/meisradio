@@ -1,5 +1,5 @@
 import React from 'react'
-import { Home, Library, ListMusic, Cloud, Settings, Wifi } from 'lucide-react'
+import { Home, Library, ListMusic, Cloud, Settings } from 'lucide-react'
 import logoImg from '../../../../resources/HoT_Chibi_Icon.png'
 
 interface SidebarProps {

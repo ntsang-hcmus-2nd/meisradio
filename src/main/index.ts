@@ -1286,7 +1286,7 @@ app.whenReady().then(() => {
 
       try {
         const imgRes = await axios({ method: 'GET', url: targetUrl, responseType: 'stream', decompress: false });
-        res.setHeader('Content-Type', imgRes.headers['content-type'] || 'image/jpeg');
+        res.setHeader('Content-Type', (imgRes.headers['content-type'] as string) || 'image/jpeg');
         const fileStream = fs.createWriteStream(cachedImgPath);
         imgRes.data.pipe(fileStream);
         imgRes.data.pipe(res);
