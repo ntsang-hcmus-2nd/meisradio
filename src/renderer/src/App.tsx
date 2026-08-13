@@ -2027,9 +2027,9 @@ export default function App() {
         className="w-full h-8 flex-shrink-0 z-[100] flex items-center px-3 gap-2" 
         style={{ WebkitAppRegion: 'drag' as any }}
       >
-        <div className="flex items-center gap-2 text-zinc-400 text-xs font-semibold opacity-70">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
-          <span>Mei's Radio</span>
+        <div className="flex items-center gap-2 text-zinc-400 text-sm font-semibold opacity-70">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+          <span className="font-whisper text-xl" style={{ letterSpacing: '1px', marginTop: '2px' }}>Mei's Radio</span>
         </div>
       </div>
 
@@ -2339,7 +2339,7 @@ export default function App() {
               )}
 {/* VIEW: CÀI ĐẶT */}
               {activeView === 'settings' && (
-                <div className="max-w-2xl">
+                <div className="w-full max-w-5xl">
                   <h2 className="text-3xl font-bold text-white mb-6">Cài đặt hệ thống</h2>
                   <div className="bg-theme-60/50 border border-theme-30 p-6 rounded-xl space-y-6">
                     <div>
@@ -2476,11 +2476,6 @@ export default function App() {
                       <p className="text-xs text-zinc-500 mt-2 italic">*Khóa của bạn sẽ được lưu an toàn trên máy tính cá nhân.</p>
                     </div>
 
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">Thiết bị âm thanh (Output Device)</h3>
-                      <p className="text-sm text-zinc-400 mb-4">Chọn loa hoặc tai nghe để phát nhạc.</p>
-                      <CustomSelect value={selectedDeviceId} onChange={setSelectedDeviceId} options={audioDevices.map(device => ({ value: device.deviceId, label: device.label || (device.deviceId === 'default' ? 'Thiết bị mặc định của hệ thống' : `Thiết bị ${device.deviceId.slice(0, 8)}...`) }))} />
-                    </div>
 
                     <div className="border-t border-theme-30 pt-6 mt-6">
                       <h3 className="text-theme-10 font-semibold mb-2">Hành vi cửa sổ</h3>
