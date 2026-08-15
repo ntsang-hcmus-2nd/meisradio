@@ -114,12 +114,6 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
       <td onContextMenu={(e) => onContextMenu?.(track, e)} className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
     </>
   )
-}, (prevProps, nextProps) => {
-  // So sánh thông minh: Chỉ render lại đúng bài hát đang phát hoặc đổi chế độ Lite
-  return prevProps.isThisTrackPlaying === nextProps.isThisTrackPlaying && 
-         prevProps.isPlaying === nextProps.isPlaying && 
-         prevProps.isLite === nextProps.isLite &&
-         prevProps.track.id === nextProps.track.id;
 });
 
 const SortableQueueItem = React.memo(({ id, track, isActive, isPlaying, isLite, onPlay, onContextMenu }: any) => {
