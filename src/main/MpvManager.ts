@@ -146,16 +146,18 @@ export class MpvInstance extends EventEmitter {
     this.sendCommand(['set_property', 'audio-device', device])
   }
 
-  public setEqualizer(bands: number[]) {
-    // MPV equalizer filter: af=equalizer=f=32:width_type=h:width=50:g=X,...
-    // Here bands is an array of gain values for frequencies:
-    // [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+  public setEqualizer(bands: number[], preamp: number = 0) {
+    // MPV equalizer filter: af=volume=volume=XdB,equalizer=f=32:width_type=h:width=50:g=X,...
     const freqs = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-    const eqFilters = freqs.map((f, i) => {
+    const filters: string[] = []
+    if (preamp !== 0) {
+      filters.push(`volume=volume=${preamp}dB:precision=fixed`)
+    }
+    freqs.forEach((f, i) => {
       const g = bands[i] || 0
-      return `equalizer=f=${f}:width_type=h:width=50:g=${g}`
+      filters.push(`equalizer=f=${f}:width_type=h:width=50:g=${g}`)
     })
-    this.sendCommand(['af', 'set', eqFilters.join(',')])
+    this.sendCommand(['af', 'set', filters.join(',')])
   }
 
   public kill() {
@@ -278,8 +280,8 @@ export class MpvManager extends EventEmitter {
     this.activeInstance?.setAudioDevice(device)
   }
 
-  public setEqualizer(bands: number[]) {
-    this.activeInstance?.setEqualizer(bands)
+  public setEqualizer(bands: number[], preamp: number = 0) {
+    this.activeInstance?.setEqualizer(bands, preamp)
   }
 
   public killAll() {

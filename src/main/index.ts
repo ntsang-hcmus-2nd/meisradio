@@ -263,7 +263,7 @@ app.whenReady().then(() => {
   ipcMain.handle('mpv:pause', () => mpvManager?.pause())
   ipcMain.handle('mpv:seek', (_, pos) => mpvManager?.seek(pos))
   ipcMain.handle('mpv:setVolume', (_, vol) => mpvManager?.setVolume(vol))
-  ipcMain.handle('mpv:setEqualizer', (_, bands) => mpvManager?.setEqualizer(bands))
+  ipcMain.handle('mpv:setEqualizer', (_, bands, preamp = 0) => mpvManager?.setEqualizer(bands, preamp))
   ipcMain.handle('mpv:setBitPerfect', (_, val) => {
     const config = getConfig()
     config.bitPerfectEnabled = val

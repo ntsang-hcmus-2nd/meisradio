@@ -13,15 +13,17 @@ interface EQPanelProps {
   eqBands: EQBand[]
   setEqBands: React.Dispatch<React.SetStateAction<EQBand[]>>
   filterNodesRef: React.MutableRefObject<BiquadFilterNode[]>
+  preampGain: number
+  setPreampGain: (v: number) => void
 }
 
 export const EQPanel: React.FC<EQPanelProps> = ({ 
-  showEQ, setShowEQ, isEqEnabled, setIsEqEnabled, eqBands, setEqBands, filterNodesRef 
+  showEQ, setShowEQ, isEqEnabled, setIsEqEnabled, eqBands, setEqBands, filterNodesRef,
+  preampGain, setPreampGain
 }) => {
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
-  const [preampGain, setPreampGain] = useState<number>(0)
   const [searchHeadphone, setSearchHeadphone] = useState<string>('')
   const [showAutoEqModal, setShowAutoEqModal] = useState<boolean>(false)
 
@@ -217,7 +219,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     ctx.strokeStyle = isEqEnabled ? theme10Color : '#52525b'
     
     for (let i = 0; i < drawWidth; i++) {
-      const db = 20 * Math.log10(totalMag[i])
+      const db = (20 * Math.log10(totalMag[i])) + (isEqEnabled ? preampGain : 0)
       const clampedDb = Math.max(-20, Math.min(20, db))
       const y = paddingTop + (drawHeight / 2) - (clampedDb / 20) * (drawHeight / 2)
       
@@ -239,13 +241,13 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     
     ctx.fill()
     ctx.globalAlpha = 1.0
-  }, [isEqEnabled, filterNodesRef])
+  }, [isEqEnabled, filterNodesRef, preampGain])
 
   useEffect(() => {
     if (!showEQ) return
     const frameId = requestAnimationFrame(drawEQCanvas)
     return () => cancelAnimationFrame(frameId)
-  }, [showEQ, eqBands, isEqEnabled, drawEQCanvas])
+  }, [showEQ, eqBands, isEqEnabled, preampGain, drawEQCanvas])
 
   if (!showEQ) return null
 

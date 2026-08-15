@@ -58,7 +58,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   mpvPause: () => ipcRenderer.invoke('mpv:pause'),
   mpvSeek: (pos: number) => ipcRenderer.invoke('mpv:seek', pos),
   mpvSetVolume: (vol: number) => ipcRenderer.invoke('mpv:setVolume', vol),
-  mpvSetEqualizer: (bands: number[]) => ipcRenderer.invoke('mpv:setEqualizer', bands),
+  mpvSetEqualizer: (bands: number[], preamp?: number) => ipcRenderer.invoke('mpv:setEqualizer', bands, preamp),
   setBitPerfect: (val: boolean) => ipcRenderer.invoke('mpv:setBitPerfect', val),
   setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
   

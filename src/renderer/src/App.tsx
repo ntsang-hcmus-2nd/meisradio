@@ -154,6 +154,7 @@ export default function App() {
 
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const preampNodeRef = useRef<GainNode | null>(null)
   const filterNodesRef = useRef<BiquadFilterNode[]>([])
   const analyserNodeRef = useRef<AnalyserNode | null>(null)
   const visualizerCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -250,6 +251,7 @@ export default function App() {
     { id: '4', frequency: 3600, gain: 0, type: 'peaking', q: 1.4 },
     { id: '5', frequency: 14000, gain: 0, type: 'peaking', q: 1.4 },
   ])
+  const [preampGain, setPreampGain] = useState<number>(0)
 
   // Lyrics States
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
@@ -1372,8 +1374,12 @@ export default function App() {
       if (!sourceNodeRef.current) {
         try { if (!audioRef.current || !(audioRef.current instanceof HTMLAudioElement)) return; sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current) } catch (e) { return }
       }
+      if (!preampNodeRef.current) {
+        preampNodeRef.current = ctx.createGain()
+      }
 
       sourceNodeRef.current.disconnect()
+      preampNodeRef.current.disconnect()
       filterNodesRef.current.forEach(node => {
         node.disconnect()
         // Giải phóng thêm tham chiếu cấp thấp
@@ -1382,8 +1388,16 @@ export default function App() {
       })
       filterNodesRef.current = []
 
+      // Độ lợi tuyến tính của Preamp: G = 10^(dB / 20)
+      const linearPreamp = isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0
+      preampNodeRef.current.gain.value = linearPreamp
+
       let prevNode: AudioNode = sourceNodeRef.current
       if (isEqEnabled && !isCore) {
+        // Nối qua GainNode Preamp trước khi vào các BiquadFilter EQ
+        prevNode.connect(preampNodeRef.current)
+        prevNode = preampNodeRef.current
+
         const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
         sortedBands.forEach((band) => {
           const filter = ctx.createBiquadFilter()
@@ -1402,8 +1416,12 @@ export default function App() {
     setupAudio()
   }, [isEqEnabled, currentSampleRate]) // <-- Đã bỏ eqBands ra khỏi dependency
 
-  // EFFECT 2: THAY ĐỔI EQ REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
+  // EFFECT 2: THAY ĐỔI EQ & PREAMP REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
   useEffect(() => {
+    if (preampNodeRef.current) {
+      const linearPreamp = isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0
+      preampNodeRef.current.gain.value = linearPreamp
+    }
     if (!isEqEnabled || filterNodesRef.current.length === 0) return
     const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
     sortedBands.forEach((band, index) => {
@@ -1416,7 +1434,7 @@ export default function App() {
         filter.type = band.type || 'peaking'
       }
     })
-  }, [eqBands, isEqEnabled])
+  }, [eqBands, isEqEnabled, preampGain])
 
   // Track Cover Loading
   useEffect(() => {
@@ -1734,14 +1752,14 @@ export default function App() {
     }
   }, [currentTrack, bitPerfectEnabled]);
 
-  // Watch EQ
+  // Watch EQ & Preamp
   useEffect(() => {
     if (isEqEnabled) {
-      window.api.mpvSetEqualizer(eqBands.map(b => b.gain))
+      window.api.mpvSetEqualizer(eqBands.map(b => b.gain), preampGain)
     } else {
-      window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0])
+      window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0], 0)
     }
-  }, [eqBands, isEqEnabled]);
+  }, [eqBands, isEqEnabled, preampGain]);
 
   const handlePlayPause = () => {
     if (!currentTrack) return;
@@ -1941,6 +1959,8 @@ export default function App() {
         eqBands={eqBands} 
         setEqBands={setEqBands} 
         filterNodesRef={filterNodesRef}
+        preampGain={preampGain}
+        setPreampGain={setPreampGain}
       />
 
       <SpectrogramModal 
