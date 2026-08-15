@@ -1,140 +1,183 @@
 import React, { useEffect, useRef } from 'react'
 
-const compileShader = (gl: WebGLRenderingContext, type: number, source: string) => {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error('WebGL Shader Error:', gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
-};
-
-const createWebGLProgram = (gl: WebGLRenderingContext, vsSource: string, fsSource: string) => {
-  const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vsSource);
-  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
-  if (!vertexShader || !fragmentShader) return null;
-  const program = gl.createProgram();
-  if (!program) return null;
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
-  return program;
-};
-
 interface WebGLVisualizerProps {
   analyserNodeRef: React.MutableRefObject<AnalyserNode | null>
   isPlaying: boolean
-  isLite: boolean
-  showVisualizer: boolean
+  isLite?: boolean
+  showVisualizer?: boolean
+  className?: string
+  barCount?: number
 }
 
-export const WebGLVisualizer = React.memo(({
-  analyserNodeRef, isPlaying, isLite, showVisualizer
-}: WebGLVisualizerProps) => {
-  const visualizerCanvasRef = useRef<HTMLCanvasElement>(null)
-  const reqAnimRef = useRef<number>()
+export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
+  analyserNodeRef,
+  isPlaying,
+  isLite = false,
+  showVisualizer = true,
+  className,
+  barCount = 48
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const reqAnimRef = useRef<number | undefined>(undefined)
 
   useEffect(() => {
-    if (isLite || !isPlaying || !visualizerCanvasRef.current || !analyserNodeRef.current || !showVisualizer) return
+    if (isLite || !showVisualizer || !canvasRef.current) return
 
-    const canvas = visualizerCanvasRef.current
-    const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false })
-    if (!gl) return
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
 
-    const vsSource = `
-      attribute vec2 a_position;
-      varying vec2 v_uv;
-      void main() {
-        v_uv = a_position * 0.5 + 0.5;
-        gl_Position = vec4(a_position, 0.0, 1.0);
-      }
-    `;
+    const numBands = barCount
+    const minFreq = 25
+    const maxFreq = 20000
+    const smoothedValues = new Float32Array(numBands).fill(0)
+    const peakValues = new Float32Array(numBands).fill(0)
 
-    const fsSource = `
-      precision mediump float;
-      varying vec2 v_uv;
-      uniform sampler2D u_audioData;
-      void main() {
-        float bands = 128.0;
-        float bandX = floor(v_uv.x * bands) / bands;
-        
-        if (fract(v_uv.x * bands) > 0.75) {
-           gl_FragColor = vec4(0.0);
-           return;
-        }
-        
-        float val = texture2D(u_audioData, vec2(bandX, 0.5)).r;
-        
-        if (v_uv.y < val) {
-          gl_FragColor = vec4(16.0/255.0, 185.0/255.0, 129.0/255.0, val);
-        } else {
-          gl_FragColor = vec4(0.0);
-        }
-      }
-    `;
+    let lastDrawTime = performance.now()
+    const fpsInterval = 1000 / 60 // 60 FPS
 
-    const program = createWebGLProgram(gl, vsSource, fsSource);
-    if (!program) return;
-    gl.useProgram(program);
-
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-    const positionLoc = gl.getAttribLocation(program, 'a_position');
-    gl.enableVertexAttribArray(positionLoc);
-    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-    const analyser = analyserNodeRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    let lastDrawTime = performance.now();
-    const fpsInterval = 1000 / 30; // 30 FPS
+    let rawDataArray = new Uint8Array(1024)
 
     const draw = (now: number) => {
-      reqAnimRef.current = requestAnimationFrame(draw);
-      
-      const elapsed = now - lastDrawTime;
-      if (elapsed < fpsInterval) return;
-      lastDrawTime = now - (elapsed % fpsInterval);
+      reqAnimRef.current = requestAnimationFrame(draw)
 
-      analyser.getByteFrequencyData(dataArray);
+      const elapsed = now - lastDrawTime
+      if (elapsed < fpsInterval) return
+      lastDrawTime = now - (elapsed % fpsInterval)
 
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, bufferLength, 1, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, dataArray);
+      const dpr = window.devicePixelRatio || 1
+      const rect = canvas.getBoundingClientRect()
+      const width = rect.width
+      const height = rect.height
 
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (width === 0 || height === 0) return
+
+      const targetW = Math.floor(width * dpr)
+      const targetH = Math.floor(height * dpr)
+
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW
+        canvas.height = targetH
+      }
+
+      ctx.save()
+      ctx.scale(dpr, dpr)
+      ctx.clearRect(0, 0, width, height)
+
+      const analyser = analyserNodeRef.current
+      if (analyser && isPlaying) {
+        if (analyser.context && (analyser.context as any).state === 'suspended') {
+          try { (analyser.context as any).resume?.().catch(() => {}) } catch (e) {}
+        }
+
+        const binCount = analyser.frequencyBinCount
+        if (rawDataArray.length !== binCount) {
+          rawDataArray = new Uint8Array(binCount)
+        }
+        analyser.getByteFrequencyData(rawDataArray)
+
+        const sampleRate = analyser.context?.sampleRate || 44100
+        const nyquist = sampleRate / 2
+
+        for (let i = 0; i < numBands; i++) {
+          const fStart = minFreq * Math.pow(maxFreq / minFreq, i / numBands)
+          const fEnd = minFreq * Math.pow(maxFreq / minFreq, (i + 1) / numBands)
+
+          const binStart = Math.max(0, Math.min(binCount - 1, Math.floor((fStart / nyquist) * binCount)))
+          const binEnd = Math.max(binStart, Math.min(binCount - 1, Math.ceil((fEnd / nyquist) * binCount)))
+
+          let sum = 0
+          let count = 0
+          for (let b = binStart; b <= binEnd; b++) {
+            sum += rawDataArray[b]
+            count++
+          }
+          const rawVal = count > 0 ? (sum / count) / 255 : 0
+
+          // Phản hồi tăng tốc nhanh, hạ xuống mượt
+          if (rawVal > smoothedValues[i]) {
+            smoothedValues[i] = rawVal
+          } else {
+            smoothedValues[i] = Math.max(0, smoothedValues[i] - 0.04)
+          }
+
+          if (smoothedValues[i] > peakValues[i]) {
+            peakValues[i] = smoothedValues[i]
+          } else {
+            peakValues[i] = Math.max(0, peakValues[i] - 0.015)
+          }
+        }
+      } else {
+        // Tắt dần khi dừng phát
+        for (let i = 0; i < numBands; i++) {
+          smoothedValues[i] = Math.max(0, smoothedValues[i] - 0.05)
+          peakValues[i] = Math.max(0, peakValues[i] - 0.02)
+        }
+      }
+
+      // Lấy màu chủ đạo
+      const rawTheme = getComputedStyle(document.documentElement).getPropertyValue('--theme-10').trim()
+      const theme10Color = (rawTheme && (rawTheme.startsWith('#') || rawTheme.startsWith('rgb') || rawTheme.startsWith('hsl'))) ? rawTheme : '#10b981'
+
+      const gap = 2
+      const totalGap = (numBands - 1) * gap
+      const barWidth = Math.max(2, (width - totalGap) / numBands)
+
+      // Gradient chung cho toàn bộ khung từ đáy lên đỉnh
+      const gradient = ctx.createLinearGradient(0, height, 0, 0)
+      gradient.addColorStop(0, 'rgba(16, 185, 129, 0.25)')
+      gradient.addColorStop(0.65, theme10Color)
+      gradient.addColorStop(1, '#ffffff')
+
+      // Vẽ các cột phổ tần số
+      for (let i = 0; i < numBands; i++) {
+        const val = smoothedValues[i]
+        const peak = peakValues[i]
+        const barHeight = Math.max(2, val * (height - 6))
+        const x = i * (barWidth + gap)
+        const y = height - barHeight - 2
+
+        ctx.fillStyle = gradient
+        ctx.beginPath()
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(x, y, barWidth, barHeight, [2, 2, 0, 0])
+        } else {
+          ctx.rect(x, y, barWidth, barHeight)
+        }
+        ctx.fill()
+
+        // Vẽ đỉnh peak
+        if (peak > 0.05) {
+          const peakY = Math.max(0, height - (peak * (height - 6)) - 4)
+          ctx.fillStyle = '#ffffff'
+          ctx.beginPath()
+          if (typeof ctx.roundRect === 'function') {
+            ctx.roundRect(x, peakY, barWidth, 1.5, 1)
+          } else {
+            ctx.rect(x, peakY, barWidth, 1.5)
+          }
+          ctx.fill()
+        }
+      }
+
+      ctx.restore()
     }
-    reqAnimRef.current = requestAnimationFrame(draw);
+
+    reqAnimRef.current = requestAnimationFrame(draw)
 
     return () => {
-      if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current);
-      gl.deleteProgram(program);
-      gl.deleteTexture(texture);
-      gl.deleteBuffer(positionBuffer);
+      if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
     }
-  }, [isPlaying, isLite, showVisualizer, analyserNodeRef])
+  }, [isPlaying, isLite, showVisualizer, analyserNodeRef, barCount])
 
-  if (isLite || !showVisualizer) return null;
+  if (isLite || !showVisualizer) return null
 
   return (
     <canvas 
-      ref={visualizerCanvasRef} 
-      width={1024} 
-      height={150} 
-      className={`w-full h-24 bg-transparent pointer-events-none absolute bottom-24 left-0 z-10 transition-opacity duration-500 opacity-20`} 
+      ref={canvasRef} 
+      className={className || "w-full h-full block bg-transparent"}
+      style={{ width: '100%', height: '100%', display: 'block' }}
     />
   )
 })
+

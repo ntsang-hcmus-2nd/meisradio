@@ -12,6 +12,9 @@ import ytdlpDefault, { create } from 'yt-dlp-exec' // Đã sửa lỗi import yt
 import axios from 'axios'
 import http from 'http'
 import { MpvManager } from './MpvManager'
+import { writeFlacMetadata } from './flacMetadata'
+
+export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma']
 
 let mpvManager: MpvManager | null = null
 // FFmpeg directories
@@ -35,6 +38,23 @@ if (!fs.existsSync(IMAGE_CACHE_DIR)) {
 }
 
 const CONFIG_PATH = join(DATA_FOLDER, 'music-config.json');
+const METADATA_CACHE_PATH = join(DATA_FOLDER, 'metadata-cache.json');
+const LIBRARY_CACHE_PATH = join(DATA_FOLDER, 'library-cache.json');
+
+let metadataCache: Record<string, { mtime: number; data: any }> = {};
+try {
+  if (fs.existsSync(METADATA_CACHE_PATH)) {
+    metadataCache = JSON.parse(fs.readFileSync(METADATA_CACHE_PATH, 'utf-8'));
+  }
+} catch (e) {
+  metadataCache = {};
+}
+
+function saveMetadataCache() {
+  try {
+    fs.writeFileSync(METADATA_CACHE_PATH, JSON.stringify(metadataCache));
+  } catch (e) {}
+}
 
 // 2. KHỞI TẠO YT-DLP AN TOÀN (Chống lỗi không tìm thấy file .exe trong app.asar)
 const ytdlp = is.dev 
@@ -270,119 +290,199 @@ app.whenReady().then(() => {
     return { success: true, path: filePaths[0] }
   })
 
-  // 2. Đọc toàn bộ thư viện (Tất cả bài hát + Playlists)
-  ipcMain.handle('music:getLibrary', async () => {
+  // 2. Đọc toàn bộ thư viện (Tất cả bài hát + Playlists) với cơ chế quét gia tăng (Incremental Scan)
+  ipcMain.handle('music:getLibrary', async (_, forceRefresh: boolean = false) => {
     const config = getConfig()
     if (!config.libraryPath || !fs.existsSync(config.libraryPath)) {
       return { success: false, error: 'Chưa cài đặt thư viện' }
     }
     
     const rootPath = config.libraryPath
+
+    // 1. NẾU MỞ APP BÌNH THƯỜNG (KHÔNG FORCE REFRESH): ĐỌC TRỰC TIẾP TỪ CACHE, 0% QUÉT Ổ CỨNG
+    if (!forceRefresh && fs.existsSync(LIBRARY_CACHE_PATH)) {
+      try {
+        const cached = JSON.parse(fs.readFileSync(LIBRARY_CACHE_PATH, 'utf-8'))
+        if (cached && cached.libraryPath === rootPath && Array.isArray(cached.tracks) && cached.tracks.length > 0) {
+          return { success: true, fromCache: true, libraryPath: rootPath, tracks: cached.tracks, playlists: cached.playlists || [] }
+        }
+      } catch (e) {}
+    }
+
+    // 2. LÀM MỚI GIA TĂNG (INCREMENTAL REFRESH):
+    // Nạp lại danh sách bài hát trước đó vào Memory Map để tái sử dụng ngay lập tức
+    const previousTrackMap = new Map<string, any>()
+    if (fs.existsSync(LIBRARY_CACHE_PATH)) {
+      try {
+        const cached = JSON.parse(fs.readFileSync(LIBRARY_CACHE_PATH, 'utf-8'))
+        if (cached && Array.isArray(cached.tracks)) {
+          for (const t of cached.tracks) {
+            const key = t.id || t.filePath
+            if (key) previousTrackMap.set(key, t)
+          }
+        }
+      } catch (e) {}
+    }
+
     const items = fs.readdirSync(rootPath)
     
     const tracks: any[] = []
     const playlists: any[] = []
-    const supportedExts = ['.mp3', '.flac', '.wav', '.m4a']
+    const supportedExts = SUPPORTED_AUDIO_EXTS
+    const existingDiskPaths = new Set<string>()
 
-    // MỚI: Khởi tạo thư mục ẩn để chứa ảnh Proxy (Thumbnail)
+    // Khởi tạo thư mục ẩn để chứa ảnh Proxy (Thumbnail)
     const thumbDir = join(rootPath, '.thumbnails')
-    if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir)
+    if (!fs.existsSync(thumbDir)) {
+      try { fs.mkdirSync(thumbDir) } catch (e) {}
+    }
+
+    let cacheModified = false
+
+    const parseOrGetTrack = async (trackPath: string, subItemName: string, stat: fs.Stats) => {
+      existingDiskPaths.add(trackPath)
+
+      const trackHash = crypto.createHash('md5').update(trackPath).digest('hex')
+      const thumbPath = join(thumbDir, `${trackHash}.jpg`)
+      let coverUrl: string | null = null
+      if (fs.existsSync(thumbPath)) {
+        coverUrl = pathToFileURL(thumbPath).href
+      }
+
+      // KIỂM TRA CACHE: Nếu file đã có và mtime không đổi -> TÁI SỬ DỤNG HOÀN TOÀN, KHÔNG ĐỌC LẠI FILE
+      const cached = metadataCache[trackPath]
+      if (cached && cached.mtime === stat.mtimeMs && cached.data) {
+        const existingTrack = previousTrackMap.get(trackPath) || previousTrackMap.get(cached.data.filePath)
+        if (existingTrack) {
+          return existingTrack
+        }
+        return {
+          ...cached.data,
+          filePath: pathToFileURL(trackPath).href,
+          coverArt: coverUrl || cached.data.coverArt || null
+        }
+      }
+
+      // CHỈ ĐỌC VÀ PHÂN TÍCH METADATA VỚI CÁC FILE MỚI ĐƯỢC THÊM HOẶC BỊ SỬA ĐỔI
+      try {
+        const metadata = await mm.parseFile(trackPath)
+        if (!coverUrl && metadata.common.picture && metadata.common.picture.length > 0) {
+          try {
+            const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
+            const resized = img.resize({ width: 128, height: 128, quality: 'good' })
+            fs.writeFileSync(thumbPath, resized.toJPEG(80))
+            coverUrl = pathToFileURL(thumbPath).href
+          } catch(e) {}
+        }
+
+        const trackData = {
+          id: trackPath,
+          filePath: pathToFileURL(trackPath).href,
+          title: metadata.common.title || subItemName.replace(/\.[^/.]+$/, ""),
+          artist: metadata.common.artist || 'Unknown',
+          album: metadata.common.album || 'Unknown',
+          duration: metadata.format.duration,
+          format: metadata.format.container || subItemName.split('.').pop()?.toUpperCase(),
+          bitrate: metadata.format.bitrate,
+          sampleRate: metadata.format.sampleRate,
+          bitDepth: metadata.format.bitsPerSample,
+          lossless: metadata.format.lossless,
+          isCloud: false,
+          coverArt: coverUrl,
+          lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
+        }
+
+        metadataCache[trackPath] = {
+          mtime: stat.mtimeMs,
+          data: trackData
+        }
+        cacheModified = true
+        return trackData
+      } catch (e) {
+        const fallbackTrack = {
+          id: trackPath,
+          filePath: pathToFileURL(trackPath).href,
+          title: subItemName,
+          artist: 'Unknown',
+          album: 'Unknown',
+          isCloud: false,
+          coverArt: coverUrl
+        }
+        return fallbackTrack
+      }
+    }
 
     for (const item of items) {
       const itemPath = join(rootPath, item)
-      const stat = fs.statSync(itemPath)
+      try {
+        const stat = fs.statSync(itemPath)
 
-      if (stat.isDirectory() && item !== '.thumbnails') {
-        const playlistTracks: any[] = []
-        const subItems = fs.readdirSync(itemPath)
-        for (const subItem of subItems) {
-          if (supportedExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
-            const trackPath = join(itemPath, subItem)
-            
-            // Xử lý Caching Ảnh Proxy
-            let coverUrl: string | null = null
-            const trackHash = crypto.createHash('md5').update(trackPath).digest('hex')
-            const thumbPath = join(thumbDir, `${trackHash}.jpg`)
-
-            if (fs.existsSync(thumbPath)) {
-              coverUrl = pathToFileURL(thumbPath).href
-            }
-
-            try {
-              const metadata = await mm.parseFile(trackPath)
-              
-              if (!coverUrl && metadata.common.picture && metadata.common.picture.length > 0) {
-                try {
-                  const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
-                  const resized = img.resize({ width: 128, height: 128, quality: 'good' })
-                  fs.writeFileSync(thumbPath, resized.toJPEG(80))
-                  coverUrl = pathToFileURL(thumbPath).href
-                } catch(e) {}
-              }
-
-              const trackData = {
-                id: trackPath, filePath: pathToFileURL(trackPath).href, 
-                title: metadata.common.title || subItem.replace(/\.[^/.]+$/, ""),
-                artist: metadata.common.artist || 'Unknown', album: metadata.common.album || 'Unknown',
-                duration: metadata.format.duration, format: metadata.format.container || subItem.split('.').pop()?.toUpperCase(),
-                bitrate: metadata.format.bitrate, sampleRate: metadata.format.sampleRate, bitDepth: metadata.format.bitsPerSample,
-                lossless: metadata.format.lossless, isCloud: false, coverArt: coverUrl,
-              }
-              playlistTracks.push(trackData)
-              tracks.push(trackData)
-            } catch (e) {
-              const fallbackTrack = { id: trackPath, filePath: pathToFileURL(trackPath).href, title: subItem, isCloud: false }
-              playlistTracks.push(fallbackTrack)
-              tracks.push(fallbackTrack)
+        if (stat.isDirectory() && item !== '.thumbnails') {
+          const playlistTracks: any[] = []
+          const subItems = fs.readdirSync(itemPath)
+          for (const subItem of subItems) {
+            if (supportedExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
+              const trackPath = join(itemPath, subItem)
+              try {
+                const subStat = fs.statSync(trackPath)
+                const trackData = await parseOrGetTrack(trackPath, subItem, subStat)
+                playlistTracks.push(trackData)
+                tracks.push(trackData)
+              } catch (e) {}
             }
           }
-        }
-        
-        let thumbnailUrl: string | null = null
-        const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
-        for (const ext of possibleImageExts) {
-          const imgPath = join(itemPath, `${item}${ext}`)
-          if (fs.existsSync(imgPath)) {
-            thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
-            break
-          }
-        }
-        playlists.push({ name: item, path: itemPath, tracks: playlistTracks, thumbnail: thumbnailUrl })
-      } else if (supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
-        
-        // Xử lý Caching Ảnh Proxy cho bài hát ở Thư viện gốc
-        let coverUrl: string | null = null
-        const trackHash = crypto.createHash('md5').update(itemPath).digest('hex')
-        const thumbPath = join(thumbDir, `${trackHash}.jpg`)
-
-        if (fs.existsSync(thumbPath)) {
-          coverUrl = pathToFileURL(thumbPath).href
-        }
-
-        try {
-          const metadata = await mm.parseFile(itemPath)
           
-          if (!coverUrl && metadata.common.picture && metadata.common.picture.length > 0) {
-            try {
-              const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
-              const resized = img.resize({ width: 128, height: 128, quality: 'good' })
-              fs.writeFileSync(thumbPath, resized.toJPEG(80))
-              coverUrl = pathToFileURL(thumbPath).href
-            } catch(e) {}
+          let thumbnailUrl: string | null = null
+          const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
+          const commonCoverNames = ['cover', 'folder', 'front', 'artwork', item, 'thumb', 'thumbnail', 'album']
+
+          // 1. Kiểm tra các tên cover tiêu chuẩn
+          for (const name of commonCoverNames) {
+            for (const ext of possibleImageExts) {
+              const imgPath = join(itemPath, `${name}${ext}`)
+              if (fs.existsSync(imgPath)) {
+                thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
+                break
+              }
+            }
+            if (thumbnailUrl) break
           }
 
-          tracks.push({
-            id: itemPath, filePath: pathToFileURL(itemPath).href, 
-            title: metadata.common.title || item.replace(/\.[^/.]+$/, ""),
-            artist: metadata.common.artist || 'Unknown', album: metadata.common.album || 'Unknown',
-            duration: metadata.format.duration, format: metadata.format.container || item.split('.').pop()?.toUpperCase(),
-            isCloud: false, coverArt: coverUrl, lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
-          })
-        } catch (e) {
-          tracks.push({ id: itemPath, filePath: pathToFileURL(itemPath).href, title: item, isCloud: false })
+          // 2. Nếu không có tên chuẩn, quét tìm bất kỳ file ảnh nào trong thư mục playlist
+          if (!thumbnailUrl) {
+            for (const subItem of subItems) {
+              if (possibleImageExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
+                const imgPath = join(itemPath, subItem)
+                thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
+                break
+              }
+            }
+          }
+
+          playlists.push({ name: item, path: itemPath, tracks: playlistTracks, thumbnail: thumbnailUrl })
+        } else if (supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
+          const trackData = await parseOrGetTrack(itemPath, item, stat)
+          tracks.push(trackData)
         }
+      } catch (e) {}
+    }
+
+    // DỌN DẸP CACHE: Loại bỏ các file đã bị xóa khỏi ổ đĩa khỏi metadataCache
+    for (const cachedPath of Object.keys(metadataCache)) {
+      if (!existingDiskPaths.has(cachedPath)) {
+        delete metadataCache[cachedPath]
+        cacheModified = true
       }
     }
+
+    if (cacheModified) {
+      saveMetadataCache()
+    }
+
+    try {
+      fs.writeFileSync(LIBRARY_CACHE_PATH, JSON.stringify({ libraryPath: rootPath, tracks, playlists }))
+    } catch (e) {}
+
     return { success: true, libraryPath: rootPath, tracks, playlists }
   })
 
@@ -426,7 +526,7 @@ app.whenReady().then(() => {
   ipcMain.handle('music:autoGeneratePlaylists', async () => {
     const rootPath = getConfig().libraryPath
     const items = fs.readdirSync(rootPath)
-    const supportedExts = ['.mp3', '.flac', '.wav', '.m4a']
+    const supportedExts = SUPPORTED_AUDIO_EXTS
     let movedCount = 0
     for (const item of items) {
       const itemPath = join(rootPath, item)
@@ -475,37 +575,120 @@ app.whenReady().then(() => {
     } catch (error) { return null }
   })
 
+  // Đọc buffer file âm thanh để dựng spectrogram toàn bài hát
+  ipcMain.handle('music:readAudioBuffer', async (_event, audioFilePath: string) => {
+    try {
+      if (!audioFilePath) return { success: false, error: 'Đường dẫn rỗng' }
+      if (audioFilePath.startsWith('http')) return { success: false, error: 'Chỉ hỗ trợ file cục bộ' }
+      let rawPath = audioFilePath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') {
+        try { rawPath = decodeURIComponent(rawPath) } catch (e) {}
+      }
+      if (fs.existsSync(rawPath)) {
+        const fileBuffer = fs.readFileSync(rawPath)
+        return { 
+          success: true, 
+          buffer: fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength) 
+        }
+      }
+      return { success: false, error: `Không tìm thấy file: ${rawPath}` }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 7. Cập nhật Metadata (Hỗ trợ MP3 ID3 và FLAC Vorbis Comments + Picture)
   ipcMain.handle('music:updateTags', async (_, filePath: string, newTags: any, newImagePath: string | null) => {
     try {
       let rawPath = filePath.replace(/^file:\/\/\/?/, '')
       if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
 
-      const tags: any = {
-        title: newTags.title,
-        artist: newTags.artist,
-        album: newTags.album,
-        unsynchronisedLyrics: { language: 'eng', text: newTags.lyrics || '' }
+      if (!fs.existsSync(rawPath)) {
+        return { success: false, error: 'Tệp không tồn tại trên hệ thống' }
       }
 
-      if (newImagePath) {
-        tags.image = newImagePath
-      }
+      const isFlac = rawPath.toLowerCase().endsWith('.flac')
+      const isMp3 = rawPath.toLowerCase().endsWith('.mp3')
 
-      // Hiện tại hỗ trợ write ID3 cho MP3
-      if (rawPath.toLowerCase().endsWith('.mp3')) {
+      if (isFlac) {
+        // Ghi trực tiếp vào file FLAC
+        const flacRes = await writeFlacMetadata(rawPath, {
+          title: newTags.title,
+          artist: newTags.artist,
+          album: newTags.album,
+          lyrics: newTags.lyrics
+        }, newImagePath)
+
+        if (!flacRes.success) {
+          return { success: false, error: flacRes.error }
+        }
+      } else if (isMp3) {
+        // Ghi trực tiếp vào file MP3
+        const tags: any = {
+          title: newTags.title,
+          artist: newTags.artist,
+          album: newTags.album,
+          unsynchronisedLyrics: { language: 'eng', text: newTags.lyrics || '' }
+        }
+        if (newImagePath) {
+          tags.image = newImagePath
+        }
         const success = NodeID3.update(tags, rawPath)
-        if (success) return { success: true }
-        return { success: false, error: 'Không thể ghi thẻ ID3' }
+        if (!success) {
+          return { success: false, error: 'Không thể ghi thẻ ID3 vào file MP3' }
+        }
       } else {
-        // Đối với FLAC/WAV, tạo file .lrc cục bộ cho lời bài hát thay thế
+        // Đối với định dạng khác, lưu Lời bài hát dưới dạng file .lrc trùng tên
         if (newTags.lyrics) {
           const dir = path.dirname(rawPath)
           const fileNameWithoutExt = path.basename(rawPath, path.extname(rawPath))
           const lrcPath = path.join(dir, `${fileNameWithoutExt}.lrc`)
           fs.writeFileSync(lrcPath, newTags.lyrics, 'utf-8')
         }
-        return { success: true, note: 'Định dạng chưa hỗ trợ ghi ảnh trực tiếp, đã lưu Lời bài hát dưới dạng .lrc' }
       }
+
+      // Cập nhật Thumbnail Proxy nếu có ảnh mới
+      const config = getConfig()
+      const rootPath = config.libraryPath || path.dirname(rawPath)
+      const thumbDir = join(rootPath, '.thumbnails')
+      if (!fs.existsSync(thumbDir)) {
+        try { fs.mkdirSync(thumbDir) } catch (e) {}
+      }
+
+      const trackHash = crypto.createHash('md5').update(rawPath).digest('hex')
+      const thumbPath = join(thumbDir, `${trackHash}.jpg`)
+      let coverUrl: string | null = null
+
+      if (newImagePath && fs.existsSync(newImagePath)) {
+        try {
+          const img = nativeImage.createFromPath(newImagePath)
+          const resized = img.resize({ width: 128, height: 128, quality: 'good' })
+          fs.writeFileSync(thumbPath, resized.toJPEG(80))
+          coverUrl = `${pathToFileURL(thumbPath).href}?t=${Date.now()}`
+        } catch (e) {}
+      } else if (fs.existsSync(thumbPath)) {
+        coverUrl = `${pathToFileURL(thumbPath).href}?t=${Date.now()}`
+      }
+
+      // Cập nhật ngay vào Metadata Cache
+      const stat = fs.statSync(rawPath)
+      const existingCached = metadataCache[rawPath]?.data || {}
+      metadataCache[rawPath] = {
+        mtime: stat.mtimeMs,
+        data: {
+          ...existingCached,
+          id: rawPath,
+          filePath: pathToFileURL(rawPath).href,
+          title: newTags.title || existingCached.title,
+          artist: newTags.artist || existingCached.artist,
+          album: newTags.album || existingCached.album,
+          lyrics: newTags.lyrics || existingCached.lyrics,
+          coverArt: coverUrl || existingCached.coverArt
+        }
+      }
+      saveMetadataCache()
+
+      return { success: true, coverUrl }
     } catch (e: any) {
       return { success: false, error: e.message }
     }
@@ -513,10 +696,73 @@ app.whenReady().then(() => {
 
   ipcMain.handle('music:selectImageFile', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({ 
-      filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg'] }] 
+      filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg', 'webp'] }] 
     })
     if (canceled || filePaths.length === 0) return null
     return filePaths[0]
+  })
+
+  // 8. Xóa bài hát (Xóa file / Chuyển vào Thùng rác)
+  ipcMain.handle('music:deleteTrack', async (_, trackPath: string, deletePermanently: boolean = false) => {
+    try {
+      let rawPath = trackPath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
+
+      if (fs.existsSync(rawPath)) {
+        if (deletePermanently) {
+          await shell.trashItem(rawPath)
+          const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
+          if (fs.existsSync(lrcPath)) {
+            await shell.trashItem(lrcPath)
+          }
+        } else {
+          fs.unlinkSync(rawPath)
+          const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
+          if (fs.existsSync(lrcPath)) {
+            fs.unlinkSync(lrcPath)
+          }
+        }
+      }
+
+      if (metadataCache[rawPath]) {
+        delete metadataCache[rawPath]
+        saveMetadataCache()
+      }
+
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 9. Xóa Playlist (Chuyển thư mục Playlist vào Thùng rác)
+  ipcMain.handle('music:deletePlaylist', async (_, playlistName: string) => {
+    try {
+      const config = getConfig()
+      if (!config.libraryPath) return { success: false, error: 'Chưa cấu hình thư viện' }
+      const playlistFolder = join(config.libraryPath, playlistName)
+      if (fs.existsSync(playlistFolder)) {
+        await shell.trashItem(playlistFolder)
+      }
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 10. Mở file / thư mục trong File Explorer
+  ipcMain.handle('music:showInFolder', async (_, targetPath: string) => {
+    try {
+      let rawPath = targetPath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
+      if (fs.existsSync(rawPath)) {
+        shell.showItemInFolder(rawPath)
+        return { success: true }
+      }
+      return { success: false, error: 'Đường dẫn không tồn tại trên ổ đĩa' }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
   })
 
   // ==========================================
@@ -826,7 +1072,7 @@ app.whenReady().then(() => {
     
     try {
       const items = fs.readdirSync(playlistPath)
-      const supportedExts = ['.mp3', '.flac', '.wav', '.m4a']
+      const supportedExts = SUPPORTED_AUDIO_EXTS
       
       // Tìm bài hát đầu tiên có đuôi hỗ trợ
       const firstTrack = items.find(item => supportedExts.some(ext => item.toLowerCase().endsWith(ext)))
@@ -952,7 +1198,7 @@ app.whenReady().then(() => {
     // Mở hộp thoại chọn nhiều file nhạc
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Audio Files', extensions: ['mp3', 'flac', 'wav', 'm4a'] }]
+      filters: [{ name: 'Audio Files', extensions: ['mp3', 'flac', 'wav', 'm4a', 'opus', 'ogg', 'aac', 'alac', 'aiff', 'wma'] }]
     })
 
     if (canceled || filePaths.length === 0) return { success: false, canceled: true }
