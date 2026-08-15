@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Whisper';
+  src: url('./fonts/Whisper-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Google Sans Flex';
+  src: url('./fonts/GoogleSansFlex.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@theme {
+  --font-whisper: 'Whisper', cursive;
+  --font-sans: 'Google Sans Flex', ui-sans-serif, system-ui, sans-serif;
+}
 :root {
   --theme-60: #18181b; /* Nền chính */
   --theme-30: #27272a; /* Nền phụ / Panel */

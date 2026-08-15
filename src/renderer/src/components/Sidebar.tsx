@@ -1,5 +1,5 @@
 import React from 'react'
-import { Home, Library, ListMusic, Cloud, Settings, Wifi } from 'lucide-react'
+import { Home, Library, ListMusic, Cloud, Settings } from 'lucide-react'
 import logoImg from '../../../../resources/HoT_Chibi_Icon.png'
 
 interface SidebarProps {
@@ -26,11 +26,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <aside className="w-64 bg-theme-60/60 backdrop-blur-md border-r border-theme-30/50 flex flex-col justify-between shrink-0 transition-all z-20">
+    <aside className="w-[15vw] min-w-[200px] max-w-[300px] bg-theme-60/60 backdrop-blur-md border-r border-theme-30/50 flex flex-col justify-between shrink-0 transition-all z-20">
       <div className="p-6 space-y-8">
-        <h1 className="text-2xl font-bold text-theme-10 tracking-wider flex items-center gap-2 opacity-90">
+        <h1 className="text-3xl font-whisper text-theme-10 tracking-widest flex items-center gap-2 opacity-90" style={{ letterSpacing: '2px' }}>
           <img loading="lazy" src={logoImg} alt="Logo" className="w-8 h-8 object-contain" /> 
-          MEI'S RADIO
+          <span style={{ marginTop: '4px' }}>Mei's Radio</span>
         </h1>
         <nav className="space-y-6">
           <div>
