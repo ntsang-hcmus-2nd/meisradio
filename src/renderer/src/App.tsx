@@ -40,6 +40,7 @@ const formatDuration = (seconds: number) => {
 
 import { WebGLVisualizer } from './components/visualizers/WebGLVisualizer'
 import { WebGLSpectrogram } from './components/visualizers/WebGLSpectrogram'
+import { useTranslation } from './locales'
 
 export interface EQBand {
   id: string
@@ -52,6 +53,17 @@ export interface EQBand {
 interface LyricLine {
   time: number // Thời gian tính theo giây
   text: string
+}
+
+// Chuẩn hóa đường dẫn hình ảnh cho Background
+const normalizeImagePath = (input: string): string => {
+  if (!input) return ''
+  let trimmed = input.trim().replace(/^["']|["']$/g, '')
+  if (/^[a-zA-Z]:[/\\]/.test(trimmed)) {
+    const forwardSlashes = trimmed.replace(/\\/g, '/')
+    return 'file:///' + encodeURI(forwardSlashes).replace(/#/g, '%23').replace(/\?/g, '%3F')
+  }
+  return trimmed
 }
 
 // Hàm phân tích màu chủ đạo bằng Canvas
@@ -145,7 +157,19 @@ const SortableQueueItem = React.memo(({ id, track, isActive, isPlaying, isLite, 
   );
 }, (prev, next) => prev.isActive === next.isActive && prev.isPlaying === next.isPlaying && prev.isLite === next.isLite && prev.track.id === next.track.id);
 
+const SC_GENRES = [
+  { id: 'all-music', key: 'all' },
+  { id: 'electronic', key: 'electronic' },
+  { id: 'hiphoprap', key: 'hiphoprap' },
+  { id: 'pop', key: 'pop' },
+  { id: 'chill', key: 'chill' },
+  { id: 'rock', key: 'rock' },
+  { id: 'ambient', key: 'ambient' },
+  { id: 'danceedm', key: 'danceedm' }
+]
+
 export default function App() {
+  const { t, language, setLanguage } = useTranslation()
 
   // ==========================================
   // 1. REFS
@@ -154,6 +178,7 @@ export default function App() {
 
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const preampNodeRef = useRef<GainNode | null>(null)
   const filterNodesRef = useRef<BiquadFilterNode[]>([])
   const analyserNodeRef = useRef<AnalyserNode | null>(null)
   const visualizerCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -177,15 +202,23 @@ export default function App() {
   const isCore = appMode === 'core' // Chỉ định cắt luồng mảng Audio và UI mạng
   
   // UI & General App States
-  const [activeView, setActiveView] = useState<'home' | 'songs' | 'playlists' | 'settings' | 'drive'>('home')
+  const [activeView, setActiveView] = useState<'home' | 'home-ytm' | 'home-soundcloud' | 'songs' | 'playlists' | 'settings' | 'drive'>('home-ytm')
   const [themeColor, setThemeColor] = useState('rgba(39, 39, 42, 0)')
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({message: '', type: 'info', visible: false})
   const [customBgImage, setCustomBgImage] = useState<string | null>(null)
+  const [useTrackCoverAsBg, setUseTrackCoverAsBg] = useState<boolean>(false)
   const [bgImageInput, setBgImageInput] = useState<string>('')
   const [customBgOpacity, setCustomBgOpacity] = useState<number>(1)
   const [customBgBlur, setCustomBgBlur] = useState<number>(0)
   const [isReloading, setIsReloading] = useState(false)
   const [isConfigLoaded, setIsConfigLoaded] = useState(false) // Flag để ngăn ghi đè config
+
+  // SoundCloud & YTM Auth States
+  const [scDashboardData, setScDashboardData] = useState<any[]>([])
+  const [isScLoading, setIsScLoading] = useState<boolean>(false)
+  const [scUser, setScUser] = useState<any | null>(null)
+  const [selectedScGenre, setSelectedScGenre] = useState<string>('all-music')
+  const [isYtmLoggedIn, setIsYtmLoggedIn] = useState<boolean>(false)
   // Library & Search States
   const [libraryPath, setLibraryPath] = useState<string | null>(null)
   const [libraryTracks, setLibraryTracks] = useState<any[]>([])
@@ -250,6 +283,7 @@ export default function App() {
     { id: '4', frequency: 3600, gain: 0, type: 'peaking', q: 1.4 },
     { id: '5', frequency: 14000, gain: 0, type: 'peaking', q: 1.4 },
   ])
+  const [preampGain, setPreampGain] = useState<number>(0)
 
   // Lyrics States
   const [lyrics, setLyrics] = useState<LyricLine[]>([])
@@ -294,15 +328,18 @@ export default function App() {
     }
   }, [currentTrack]);
 
-  // --- Dashboard ---
+  // --- Dashboard & Online Music ---
   const fetchDashboard = async () => {
     // @ts-ignore
     const res = await window.api.getHomeDashboard()
     if (res.success) {
       setDashboardData(res.data)
+      setIsYtmLoggedIn(true)
     } else {
-      console.error("Lỗi Dashboard:", res.error)
-      alert("Lỗi tải dữ liệu YouTube Music: " + res.error)
+      setIsYtmLoggedIn(false)
+      if (res.error && res.error !== 'Chưa đăng nhập') {
+        console.warn("Lỗi Dashboard YTM:", res.error)
+      }
     }
   }
 
@@ -310,10 +347,90 @@ export default function App() {
     // @ts-ignore
     const res = await window.api.ytmLogin()
     if (res.success) {
-      showToast('Đăng nhập thành công!', 'success')
+      setIsYtmLoggedIn(true)
+      showToast(t('toasts.ytmLoginSuccess'), 'success')
       fetchDashboard()
     } else {
-      alert('Lỗi đăng nhập: ' + res.error)
+      alert('Error: ' + res.error)
+    }
+  }
+
+  const handleYtmLogout = async () => {
+    // @ts-ignore
+    const res = await window.api.ytmLogout()
+    if (res.success) {
+      setIsYtmLoggedIn(false)
+      setDashboardData([])
+      showToast(t('toasts.ytmLogout'), 'info')
+    }
+  }
+
+  const fetchScDashboard = async (genre?: string) => {
+    setIsScLoading(true)
+    const targetGenre = genre || selectedScGenre
+    // @ts-ignore
+    const res = await window.api.getScDashboard(targetGenre)
+    if (res && res.success) {
+      setScDashboardData(res.data)
+    }
+    // @ts-ignore
+    const userRes = await window.api.getScUser()
+    if (userRes && userRes.success) {
+      setScUser(userRes.user)
+    } else {
+      setScUser(null)
+    }
+    setIsScLoading(false)
+  }
+
+  const handleScLogin = async () => {
+    // @ts-ignore
+    const res = await window.api.scLogin()
+    if (res.success) {
+      showToast(t('toasts.scLoginSuccess'), 'success')
+      if (res.user) setScUser(res.user)
+      fetchScDashboard()
+    } else {
+      alert('Error: ' + res.error)
+    }
+  }
+
+  const handleScLogout = async () => {
+    // @ts-ignore
+    const res = await window.api.scLogout()
+    if (res.success) {
+      setScUser(null)
+      showToast(t('toasts.scLogout'), 'info')
+      fetchScDashboard()
+    }
+  }
+
+  const handleScItemClick = async (item: any) => {
+    if (item.isPlaylist || item.playlistId) {
+      setActiveAlbum({ title: item.title, tracks: [] })
+      setIsAlbumLoading(true)
+      // @ts-ignore
+      const res = await window.api.getScPlaylist(item.playlistId)
+      if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
+      else { alert(res.error); setActiveAlbum(null); }
+      setIsAlbumLoading(false)
+    } else {
+      const track = {
+        id: item.id || `sc-${item.originalId}`,
+        originalId: item.originalId,
+        title: item.title,
+        artist: item.artist,
+        album: item.album || 'SoundCloud Single',
+        duration: item.duration || 0,
+        format: 'STREAM',
+        isCloud: true,
+        isOnline: true,
+        platform: 'soundcloud',
+        permalinkUrl: item.permalinkUrl,
+        coverArt: item.coverArt || (item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : null),
+        coverArtHighRes: item.coverArtHighRes || null
+      }
+      playAndGenerateRadio(track)
     }
   }
 
@@ -360,39 +477,43 @@ export default function App() {
     // 2. Phát nhạc ngay lập tức
     handlePlayTrack(track);
 
-    // 3. Gọi ngầm API lấy danh sách "Tiếp theo"
-    // @ts-ignore
-    window.api.getUpNext(track.originalId).then((res: any) => {
-      if (res.success && res.tracks.length > 0) {
-        // Lọc bỏ bài hát đầu tiên nếu nó trùng với bài đang phát
-        const nextTracks = res.tracks.filter((t: any) => t.originalId !== track.originalId);
-        
-        // Bơm nhạc vào Hàng đợi một cách an toàn
-        setPlayQueue(prev => {
-          if (prev.length === 1 && prev[0].originalId === track.originalId) {
-            return [...prev, ...nextTracks];
-          }
-          return prev;
-        });
-        
-        setOriginalQueue(prev => {
-          if (prev.length === 1 && prev[0].originalId === track.originalId) {
-            return [...prev, ...nextTracks];
-          }
-          return prev;
-        });
-      }
-    });
+    // 3. Nếu là bài hát YouTube thì gọi ngầm API lấy danh sách "Tiếp theo"
+    if (track.platform === 'youtube' || (!track.platform && !String(track.id).startsWith('sc-'))) {
+      // @ts-ignore
+      window.api.getUpNext(track.originalId).then((res: any) => {
+        if (res && res.success && res.tracks && res.tracks.length > 0) {
+          // Lọc bỏ bài hát đầu tiên nếu nó trùng với bài đang phát
+          const nextTracks = res.tracks.filter((t: any) => t.originalId !== track.originalId);
+          
+          // Bơm nhạc vào Hàng đợi một cách an toàn
+          setPlayQueue(prev => {
+            if (prev.length === 1 && prev[0].originalId === track.originalId) {
+              return [...prev, ...nextTracks];
+            }
+            return prev;
+          });
+          
+          setOriginalQueue(prev => {
+            if (prev.length === 1 && prev[0].originalId === track.originalId) {
+              return [...prev, ...nextTracks];
+            }
+            return prev;
+          });
+        }
+      }).catch(() => {});
+    }
   }
 
   const handleDashboardItemDownload = async (item: any) => {
-    if (item.videoId) {
+    if (item.videoId || item.platform === 'soundcloud' || (item.originalId && !item.isPlaylist)) {
       // 1. TẢI 1 BÀI HÁT ĐƠN LẺ
       const track = {
-        originalId: item.videoId,
+        originalId: item.originalId || item.videoId,
         title: item.title,
-        artist: item.subtitle,
-        album: item.subtitle || 'Singles', // Lấy Subtitle (thường là tên ca sĩ) làm thư mục phân loại tạm
+        artist: item.artist || item.subtitle,
+        album: item.album || item.subtitle || 'Singles',
+        platform: item.platform || 'youtube',
+        permalinkUrl: item.permalinkUrl
       };
       
       setIsDownloading(true);
@@ -405,23 +526,26 @@ export default function App() {
       setDownloadProgress(null);
       
       if (res.success) { 
-        showToast(`Đã tải xong "${item.title}"!`, 'success'); 
+        showToast(t('toasts.downloadFinished', { title: item.title }), 'success'); 
         loadLibrary(); 
       } else if (!res.canceled) { 
-        alert('Lỗi tải xuống: ' + res.error); 
+        alert('Download Error: ' + res.error); 
       }
 
     } else if (item.playlistId) {
       // 2. TẢI TOÀN BỘ ALBUM / PLAYLIST
-      const confirmDownload = confirm(`Bạn có muốn tải toàn bộ bài hát trong "${item.title}" không? (Quá trình này sẽ tốn chút thời gian)`);
+      const confirmDownload = confirm(`Do you want to download all tracks from "${item.title}"? (This might take a while)`);
       if (!confirmDownload) return;
       
       setIsDownloading(true);
-      setDownloadProgress({ current: 0, total: 0, fileName: 'Đang trích xuất dữ liệu Album...' });
+      setDownloadProgress({ current: 0, total: 0, fileName: t('common.loading') });
       
       // Lấy danh sách track trong Album
       // @ts-ignore
-      const res = await window.api.getYtmPlaylist(item.playlistId);
+      const res = item.platform === 'soundcloud'
+        ? await window.api.getScPlaylist(item.playlistId)
+        : await window.api.getYtmPlaylist(item.playlistId);
+
       if (res.success && res.tracks) {
          const tracks = res.tracks;
          let successCount = 0;
@@ -430,17 +554,17 @@ export default function App() {
             setDownloadProgress({ current: i + 1, total: tracks.length, fileName: tracks[i].title });
             
             // Ép tên Album cho bài hát để gom chung vào 1 thư mục
-            const trackToDl = { ...tracks[i], album: item.title };
+            const trackToDl = { ...tracks[i], album: item.title, platform: item.platform || 'youtube' };
             
             // @ts-ignore
             const dlRes = await window.api.downloadOnline(trackToDl);
             if (dlRes.success) successCount++;
          }
          
-         showToast(`Đã tải hoàn tất ${successCount}/${tracks.length} bài hát của Album!`, 'success');
+         showToast(t('toasts.albumDownloadFinished', { count: successCount, total: tracks.length }), 'success');
          loadLibrary();
       } else {
-         alert('Lỗi lấy danh sách Album: ' + res.error);
+         alert('Error getting album tracks: ' + res.error);
       }
       
       setIsDownloading(false);
@@ -459,11 +583,11 @@ export default function App() {
     // @ts-ignore
     const res = await window.api.createPlaylist(name)
     if (res.success) {
-      showToast('Đã tạo playlist thành công!', 'success')
+      showToast(t('toasts.playlistCreated'), 'success')
       setShowCreateModal(false)
       loadLibrary()
     } else {
-      alert('Lỗi: ' + res.error)
+      alert('Error: ' + res.error)
     }
   }
 
@@ -476,7 +600,7 @@ export default function App() {
       // @ts-ignore
       await window.api.addTrackToPlaylist(activePlaylist.name, rawTrackPath)
     }
-    showToast(`Đã thêm ${tracksToAdd.length} bài hát vào playlist!`, 'success')
+    showToast(t('toasts.tracksAddedToPlaylist', { count: tracksToAdd.length }), 'success')
     loadLibrary()
   }
 
@@ -516,17 +640,17 @@ export default function App() {
     // @ts-ignore
     const res = await window.api.setLibraryFolder()
     if (res.success) {
-      alert('Đã lưu thư mục thư viện gốc!')
+      showToast(t('toasts.librarySavedSuccess'), 'success')
       loadLibrary()
     }
   }
 
   const handleAutoGeneratePlaylists = async () => {
-    if (!confirm('Hành động này sẽ tự động tạo thư mục và di chuyển các bài hát có chung Album vào đó. Bạn có chắc chắn?')) return
+    if (!confirm(t('toasts.autoCategorizeConfirm'))) return
     // @ts-ignore
     const res = await window.api.autoGeneratePlaylists()
     if (res.success) {
-      alert(`Đã di chuyển thành công ${res.movedCount} bài hát vào các Playlist Album!`)
+      showToast(t('toasts.autoCategorizeSuccess', { count: res.movedCount }), 'success')
       loadLibrary()
     }
   }
@@ -537,7 +661,7 @@ export default function App() {
     const res = await window.api.importLocalFiles(targetFolder, libraryTracks)
     if (res && res.success) {
       if (res.tracks.length > 0) {
-        alert(`Đã thêm thành công ${res.tracks.length} bài hát vào thư mục!`)
+        showToast(t('toasts.tracksAddedToPlaylist', { count: res.tracks.length }), 'success')
         loadLibrary()
       }
     } else if (res && res.error) {
@@ -556,7 +680,7 @@ export default function App() {
       setPlaylistRename({ isOpen: false, oldName: '', newName: '' })
       loadLibrary()
     } else {
-      alert('Lỗi đổi tên: ' + res.error)
+      alert('Error renaming playlist: ' + res.error)
     }
   }
 
@@ -564,7 +688,7 @@ export default function App() {
     // @ts-ignore
     const res = await window.api.extractPlaylistThumbnail(playlistName)
     if (res.success) {
-      alert('Đã cập nhật ảnh bìa từ bài hát đầu tiên thành công!')
+      showToast(t('toasts.coverUpdatedSuccess'), 'success')
       loadLibrary()
     } else {
       alert(res.error)
@@ -575,7 +699,7 @@ export default function App() {
     // @ts-ignore
     const res = await window.api.setPlaylistThumbnail(playlistName)
     if (res.success) {
-      alert('Đã thay đổi ảnh bìa thành công! Đang tải lại thư viện...')
+      showToast(t('toasts.coverChangeSuccess'), 'success')
       loadLibrary()
     }
   }
@@ -622,35 +746,38 @@ export default function App() {
 
   // --- Player Controls ---
   const handlePlayTrack = async (track: any) => {
-    if (crossfadeEnabled && isPlaying && audioRef.current && currentTrack) {
-      const fadeAudio = new Audio(audioRef.current.src)
-      fadeAudio.currentTime = audioRef.current.currentTime
-      fadeAudio.volume = volume
-      fadeAudio.play()
-      
-      const step = volume / (crossfadeDuration * 20)
-      const fadeInterval = setInterval(() => {
-        if (fadeAudio.volume - step > 0) fadeAudio.volume -= step
-        else {
-          fadeAudio.pause()
-          clearInterval(fadeInterval)
-        }
-      }, 50)
+    if (crossfadeEnabled && isPlaying && audioRef.current && currentTrack && !bitPerfectEnabled) {
+      try {
+        const fadeAudio = new Audio(audioRef.current.src)
+        fadeAudio.currentTime = audioRef.current.currentTime
+        fadeAudio.volume = volume
+        fadeAudio.play().catch(() => {})
+        
+        const step = volume / (crossfadeDuration * 20)
+        const fadeInterval = setInterval(() => {
+          if (fadeAudio.volume - step > 0) fadeAudio.volume -= step
+          else {
+            fadeAudio.pause()
+            clearInterval(fadeInterval)
+          }
+        }, 50)
+      } catch (e) {}
     }
 
     let trackToPlay = { ...track };
 
     // TỰ ĐỘNG: Phân giải URL cho nhạc Online nếu chưa có
-    if ((trackToPlay.isOnline || trackToPlay.platform === 'youtube') && (!trackToPlay.filePath || !trackToPlay.filePath.startsWith('http://127.0.0.1'))) {
-      showToast('Đang kết nối luồng phát...', 'info');
+    const isOnlineTrack = trackToPlay.isOnline || trackToPlay.isCloud || trackToPlay.platform === 'youtube' || trackToPlay.platform === 'soundcloud' || String(trackToPlay.id).startsWith('sc-') || String(trackToPlay.id).startsWith('yt-');
+    if (isOnlineTrack && (!trackToPlay.filePath || !trackToPlay.filePath.startsWith('http://127.0.0.1'))) {
+      showToast(t('toasts.connectingStream'), 'info');
       // @ts-ignore
       const res = await window.api.getStreamUrl(trackToPlay);
       if (res.success && res.url) {
         trackToPlay.filePath = res.url;
         // @ts-ignore
-        if (window.api.logWatchHistory) window.api.logWatchHistory(trackToPlay.originalId);
+        if (window.api.logWatchHistory && trackToPlay.platform === 'youtube') window.api.logWatchHistory(trackToPlay.originalId);
       } else {
-        alert('Lỗi lấy luồng nhạc: ' + res.error);
+        alert('Stream error: ' + (res.error || 'Unknown'));
         return;
       }
     }
@@ -658,7 +785,7 @@ export default function App() {
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
     if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-      await audioCtxRef.current.resume();
+      await audioCtxRef.current.resume().catch(() => {});
     }
   }
 
@@ -746,6 +873,26 @@ export default function App() {
     setIsMiniPlayer(nextState)
     // @ts-ignore
     window.api.toggleMiniPlayer(nextState)
+  }
+
+  const handleToggleLyrics = () => {
+    if (showLyricsPanel) {
+      setShowLyricsPanel(false)
+      setIsLyricsMaximized(false)
+    } else {
+      setShowLyricsPanel(true)
+      setShowQueuePanel(false)
+    }
+  }
+
+  const handleToggleQueue = () => {
+    if (showQueuePanel) {
+      setShowQueuePanel(false)
+    } else {
+      setShowQueuePanel(true)
+      setShowLyricsPanel(false)
+      setIsLyricsMaximized(false)
+    }
   }
 
   const handleRowClick = async (track: any, contextList?: any[]) => {
@@ -865,29 +1012,29 @@ export default function App() {
 
   const handleDriveStream = () => {
     setLibraryTracks(prev => [...prev, ...driveFiles])
-    alert(`Đã thêm ${driveFiles.length} bài hát vào danh sách phát!`)
+    showToast(t('toasts.tracksAddedToPlaylist', { count: driveFiles.length }), 'success')
   }
 
   const handleDriveDownload = async () => {
     if (!libraryPath) {
-      showToast("Vui lòng vào Cài đặt để thiết lập Thư viện gốc trước khi tải!", 'error')
+      showToast(t('toasts.setLibraryFirst'), 'error')
       return
     }
     setIsDownloading(true)
-    setDownloadProgress({ current: 0, total: driveFiles.length, fileName: 'Chuẩn bị tải...' })
+    setDownloadProgress({ current: 0, total: driveFiles.length, fileName: t('common.loading') })
     try {
       // @ts-ignore
       const result = await window.api.downloadMultipleFiles(driveFiles, processedLibraryTracks)
       if (result.success) {
         if (result.tracks.length > 0) {
-          showToast(`Đã tải xong ${result.tracks.length} bài hát về máy!`, 'success')
+          showToast(t('toasts.driveDownloadFinished', { count: result.tracks.length }), 'success')
           loadLibrary()
         }
       } else {
-        showToast('Lỗi hệ thống: ' + result.error, 'error')
+        showToast(t('toasts.systemError') + result.error, 'error')
       }
     } catch (e) {
-      showToast('Có lỗi xảy ra khi tải file!', 'error')
+      showToast(t('toasts.downloadError'), 'error')
     }
     setIsDownloading(false)
     setDownloadProgress(null)
@@ -918,12 +1065,18 @@ export default function App() {
     }
   }
 
+  // Determine effective background image
+  const effectiveBgImage = useTrackCoverAsBg 
+    ? (currentTrack?.coverArtHighRes || currentTrack?.coverArt || null)
+    : customBgImage
+
   // Apply Background & Extract Theme
   useEffect(() => {
-    if (customBgImage) {
-      document.documentElement.style.setProperty('--bg-image', `url(${customBgImage})`)
+    if (effectiveBgImage) {
+      const sanitizedUrl = effectiveBgImage.replace(/"/g, '\\"')
+      document.documentElement.style.setProperty('--bg-image', `url("${sanitizedUrl}")`)
       
-      extractThemeColors(customBgImage).then(colors => {
+      extractThemeColors(effectiveBgImage).then(colors => {
         if (colors) {
           document.documentElement.style.setProperty('--theme-60', colors.primary60)
           document.documentElement.style.setProperty('--theme-30', colors.secondary30)
@@ -937,7 +1090,7 @@ export default function App() {
       document.documentElement.style.setProperty('--theme-30', '#27272a')
       document.documentElement.style.setProperty('--theme-10', '#10b981')
     }
-  }, [customBgImage])
+  }, [effectiveBgImage])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--bg-opacity', customBgOpacity.toString())
@@ -991,7 +1144,7 @@ export default function App() {
     // @ts-ignore
     const res = await window.api.updateTags(editingTrack.id, editTags, editImagePath)
     if (res.success) {
-      showToast(res.note || 'Đã lưu thông tin thẻ bài hát thành công!', 'success')
+      showToast(res.note || t('toasts.tagSavedSuccess'), 'success')
       if (currentTrack && currentTrack.id === editingTrack.id) {
         setCurrentTrack({
           ...currentTrack,
@@ -1004,7 +1157,7 @@ export default function App() {
       }
       setEditingTrack(null)
       loadLibrary()
-    } else alert('Lỗi: ' + res.error)
+    } else alert('Error: ' + res.error)
   }
 
   // --- Context Menu State & Handlers ---
@@ -1023,17 +1176,17 @@ export default function App() {
     const items: ContextMenuItem[] = [
       {
         id: 'play',
-        label: 'Phát bài hát',
+        label: t('contextMenu.play'),
         icon: <Play size={14} />,
         onClick: () => handleRowClick(track, libraryTracks)
       },
       {
         id: 'add-queue',
-        label: 'Thêm vào hàng đợi',
+        label: t('contextMenu.addQueue'),
         icon: <ListPlus size={14} />,
         onClick: () => {
           setPlayQueue(prev => [...prev, track])
-          showToast(`Đã thêm "${track.title}" vào hàng đợi!`, 'success')
+          showToast(t('toasts.addedToQueue', { title: track.title }), 'success')
         }
       }
     ]
@@ -1041,7 +1194,7 @@ export default function App() {
     if (playlists && playlists.length > 0) {
       items.push({
         id: 'add-to-playlist',
-        label: 'Thêm vào Playlist...',
+        label: t('contextMenu.addToPlaylist'),
         icon: <FolderPlus size={14} />,
         subItems: playlists.map(pl => ({
           id: `pl-${pl.name}`,
@@ -1051,7 +1204,7 @@ export default function App() {
             const rawTrackPath = track.id || track.filePath
             // @ts-ignore
             await window.api.addTrackToPlaylist(pl.name, rawTrackPath)
-            showToast(`Đã thêm vào playlist "${pl.name}"!`, 'success')
+            showToast(t('toasts.addedToPlaylist', { name: pl.name }), 'success')
             loadLibrary()
           }
         }))
@@ -1062,14 +1215,14 @@ export default function App() {
       { id: 'div-1', label: '', divider: true },
       {
         id: 'edit-tags',
-        label: 'Chỉnh sửa thẻ (Metadata)',
+        label: t('contextMenu.editTags'),
         icon: <Edit2 size={14} />,
         disabled: track.isCloud,
         onClick: () => openTagEditor(track, e)
       },
       {
         id: 'show-in-folder',
-        label: 'Mở vị trí tệp trong Explorer',
+        label: t('contextMenu.showInFolder'),
         icon: <FolderOpen size={14} />,
         disabled: track.isCloud,
         onClick: async () => {
@@ -1084,15 +1237,15 @@ export default function App() {
     if (isInsidePlaylist) {
       items.push({
         id: 'remove-from-playlist',
-        label: `Xóa khỏi playlist "${activePlaylist.name}"`,
+        label: t('contextMenu.removeFromPlaylist', { name: activePlaylist.name }),
         icon: <Trash2 size={14} />,
         danger: true,
         onClick: async () => {
-          if (!confirm(`Bạn có chắc muốn xóa bài hát "${track.title}" khỏi playlist "${activePlaylist.name}"?`)) return
+          if (!confirm(t('contextMenu.confirmRemoveFromPlaylist', { title: track.title, name: activePlaylist.name }))) return
           const rawTrackPath = track.id || track.filePath
           // @ts-ignore
           await window.api.deleteTrack(rawTrackPath, false)
-          showToast('Đã xóa bài hát khỏi playlist!', 'success')
+          showToast(t('toasts.removedFromPlaylist'), 'success')
           loadLibrary()
         }
       })
@@ -1100,20 +1253,20 @@ export default function App() {
 
     items.push({
       id: 'delete-permanent',
-      label: 'Xóa tệp (Chuyển vào Thùng rác)',
+      label: t('contextMenu.deleteFile'),
       icon: <Trash2 size={14} />,
       danger: true,
       disabled: track.isCloud,
       onClick: async () => {
-        if (!confirm(`Bạn có chắc chắn muốn chuyển tệp "${track.title}" vào Thùng rác máy tính?`)) return
+        if (!confirm(t('contextMenu.confirmDeleteFile', { title: track.title }))) return
         const rawTrackPath = track.id || track.filePath
         // @ts-ignore
         const res = await window.api.deleteTrack(rawTrackPath, true)
         if (res && res.success) {
-          showToast(`Đã chuyển "${track.title}" vào Thùng rác!`, 'success')
+          showToast(t('toasts.movedToTrash', { title: track.title }), 'success')
           loadLibrary()
         } else {
-          alert('Lỗi khi xóa bài hát: ' + res?.error)
+          alert('Error deleting track: ' + res?.error)
         }
       }
     })
@@ -1128,7 +1281,7 @@ export default function App() {
     const items: ContextMenuItem[] = [
       {
         id: 'play-all',
-        label: 'Phát toàn bộ danh sách',
+        label: t('contextMenu.playAll'),
         icon: <Play size={14} />,
         disabled: !pl.tracks || pl.tracks.length === 0,
         onClick: () => {
@@ -1139,7 +1292,7 @@ export default function App() {
       },
       {
         id: 'add-songs',
-        label: 'Thêm bài hát vào playlist',
+        label: t('contextMenu.addSongs'),
         icon: <Plus size={14} />,
         onClick: () => {
           setActivePlaylist(pl)
@@ -1149,26 +1302,26 @@ export default function App() {
       { id: 'div-1', label: '', divider: true },
       {
         id: 'rename-playlist',
-        label: 'Đổi tên Playlist',
+        label: t('contextMenu.renamePlaylist'),
         icon: <Edit2 size={14} />,
         onClick: () => setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name })
       },
       {
         id: 'change-cover',
-        label: 'Đổi ảnh bìa Playlist',
+        label: t('contextMenu.changeCover'),
         icon: <ImageIcon size={14} />,
         onClick: () => handleChangePlaylistImage(pl.name)
       },
       {
         id: 'extract-cover',
-        label: 'Lấy ảnh từ bài hát đầu tiên',
+        label: t('contextMenu.extractCover'),
         icon: <Sparkles size={14} />,
         disabled: !pl.tracks || pl.tracks.length === 0,
         onClick: () => handleExtractPlaylistImage(pl.name)
       },
       {
         id: 'show-in-folder',
-        label: 'Mở thư mục Playlist trong Explorer',
+        label: t('contextMenu.openPlaylistFolder'),
         icon: <FolderOpen size={14} />,
         onClick: async () => {
           // @ts-ignore
@@ -1178,19 +1331,19 @@ export default function App() {
       { id: 'div-2', label: '', divider: true },
       {
         id: 'delete-playlist',
-        label: `Xóa playlist "${pl.name}"`,
+        label: t('contextMenu.deletePlaylist', { name: pl.name }),
         icon: <Trash2 size={14} />,
         danger: true,
         onClick: async () => {
-          if (!confirm(`Bạn có chắc chắn muốn xóa Playlist "${pl.name}" và chuyển thư mục vào Thùng rác?`)) return
+          if (!confirm(t('contextMenu.confirmDeletePlaylist', { name: pl.name }))) return
           // @ts-ignore
           const res = await window.api.deletePlaylist(pl.name)
           if (res && res.success) {
-            showToast(`Đã xóa playlist "${pl.name}"!`, 'success')
+            showToast(t('toasts.playlistDeleted', { name: pl.name }), 'success')
             if (activePlaylist?.name === pl.name) setActivePlaylist(null)
             loadLibrary()
           } else {
-            alert('Lỗi khi xóa playlist: ' + res?.error)
+            alert('Error deleting playlist: ' + res?.error)
           }
         }
       }
@@ -1311,11 +1464,17 @@ export default function App() {
         setCustomBgImage(cfg.customBgImage);
         setBgImageInput(cfg.customBgImage || '');
       }
+      if (cfg.useTrackCoverAsBg !== undefined) setUseTrackCoverAsBg(cfg.useTrackCoverAsBg)
       if (cfg.customBgOpacity !== undefined) setCustomBgOpacity(cfg.customBgOpacity)
       if (cfg.customBgBlur !== undefined) setCustomBgBlur(cfg.customBgBlur)
       if (cfg.ytCookie) {
+        setIsYtmLoggedIn(true)
         fetchDashboard()
       }
+      if (cfg.scUserInfo) {
+        setScUser(cfg.scUserInfo)
+      }
+      fetchScDashboard()
       setIsConfigLoaded(true)
       loadLibrary()
     })
@@ -1328,16 +1487,16 @@ export default function App() {
     window.api.saveConfig({ 
       volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey,
       driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode,
-      customBgImage, customBgOpacity, customBgBlur
+      customBgImage, customBgOpacity, customBgBlur, useTrackCoverAsBg
     }) 
     // @ts-ignore
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
-  }, [volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode, customBgImage, customBgOpacity, customBgBlur, isConfigLoaded])
+  }, [volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode, customBgImage, customBgOpacity, customBgBlur, useTrackCoverAsBg, isConfigLoaded])
 
   // Dominant Color
   useEffect(() => {
-    if (isLite) {
-      setThemeColor('rgba(24, 24, 27, 1)') // Trả về màu tĩnh (Zinc-900) không đổi nền
+    if (isLite || effectiveBgImage) {
+      setThemeColor('transparent') // Không dùng màu nền đè lên ảnh nền
       return
     }
     if (currentTrack?.coverArt) {
@@ -1345,7 +1504,7 @@ export default function App() {
     } else {
       setThemeColor('rgba(39, 39, 42, 0)')
     }
-  }, [currentTrack, isLite]) // Thêm isLite vào dependency
+  }, [currentTrack, isLite, effectiveBgImage]) // Thêm isLite vào dependency
 
   // Audio Context & Cấu trúc luồng Bit-perfect
   // EFFECT 1: CHỈ KHỞI TẠO LẠI BỘ LỌC KHI ĐỔI BÀI HOẶC BẬT/TẮT EQ (Tiết kiệm CPU)
@@ -1353,37 +1512,62 @@ export default function App() {
     if (!audioRef.current) return
     const setupAudio = async () => {
       if (audioCtxRef.current && audioCtxRef.current.sampleRate !== currentSampleRate) {
-        await audioCtxRef.current.close()
-        audioCtxRef.current = null; sourceNodeRef.current = null; analyserNodeRef.current = null
+        try { await audioCtxRef.current.close() } catch (e) {}
+        audioCtxRef.current = null
+        sourceNodeRef.current = null
+        analyserNodeRef.current = null
+        preampNodeRef.current = null
+        filterNodesRef.current = []
       }
       if (!audioCtxRef.current) {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
         try { audioCtxRef.current = new AudioContextClass({ sampleRate: currentSampleRate }) } 
         catch (e) { audioCtxRef.current = new AudioContextClass() }
         
-        // THÊM ĐOẠN NÀY: Bơm lại thiết bị đầu ra cho Context mới ngay khi nó vừa được tái tạo
+        // Bơm lại thiết bị đầu ra cho Context mới ngay khi nó vừa được tái tạo
         const targetId = selectedDeviceRef.current === 'default' ? '' : selectedDeviceRef.current;
         if (typeof (audioCtxRef.current as any).setSinkId === 'function') {
           (audioCtxRef.current as any).setSinkId(targetId).catch(console.error);
         }
       }
       const ctx = audioCtxRef.current
-      if (!analyserNodeRef.current) { analyserNodeRef.current = ctx.createAnalyser(); analyserNodeRef.current.fftSize = 2048 }
+      if (!analyserNodeRef.current) { 
+        analyserNodeRef.current = ctx.createAnalyser()
+        analyserNodeRef.current.fftSize = 2048 
+      }
       if (!sourceNodeRef.current) {
-        try { if (!audioRef.current || !(audioRef.current instanceof HTMLAudioElement)) return; sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current) } catch (e) { return }
+        try { 
+          if (!audioRef.current || !(audioRef.current instanceof HTMLAudioElement)) return
+          sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current) 
+        } catch (e) { 
+          return 
+        }
+      }
+      if (!preampNodeRef.current) {
+        preampNodeRef.current = ctx.createGain()
       }
 
-      sourceNodeRef.current.disconnect()
+      try { sourceNodeRef.current.disconnect() } catch (e) {}
+      try { preampNodeRef.current.disconnect() } catch (e) {}
       filterNodesRef.current.forEach(node => {
-        node.disconnect()
-        // Giải phóng thêm tham chiếu cấp thấp
-        node.frequency.cancelScheduledValues(0) 
-        node.gain.cancelScheduledValues(0)
+        try {
+          node.disconnect()
+          node.frequency.cancelScheduledValues(0) 
+          node.gain.cancelScheduledValues(0)
+        } catch (e) {}
       })
       filterNodesRef.current = []
 
+      // Độ lợi tuyến tính của Preamp: G = 10^(dB / 20)
+      const linearPreamp = isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0
+      preampNodeRef.current.gain.value = linearPreamp
+
       let prevNode: AudioNode = sourceNodeRef.current
       if (isEqEnabled && !isCore) {
+        // Nối qua GainNode Preamp trước khi vào các BiquadFilter EQ
+        prevNode.connect(preampNodeRef.current)
+        prevNode = preampNodeRef.current
+
         const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
         sortedBands.forEach((band) => {
           const filter = ctx.createBiquadFilter()
@@ -1399,11 +1583,15 @@ export default function App() {
       prevNode.connect(analyserNodeRef.current)
       analyserNodeRef.current.connect(ctx.destination)
     }
-    setupAudio()
+    setupAudio().catch(e => console.error('[setupAudio error]', e))
   }, [isEqEnabled, currentSampleRate]) // <-- Đã bỏ eqBands ra khỏi dependency
 
-  // EFFECT 2: THAY ĐỔI EQ REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
+  // EFFECT 2: THAY ĐỔI EQ & PREAMP REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
   useEffect(() => {
+    if (preampNodeRef.current) {
+      const linearPreamp = isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0
+      preampNodeRef.current.gain.value = linearPreamp
+    }
     if (!isEqEnabled || filterNodesRef.current.length === 0) return
     const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
     sortedBands.forEach((band, index) => {
@@ -1416,7 +1604,7 @@ export default function App() {
         filter.type = band.type || 'peaking'
       }
     })
-  }, [eqBands, isEqEnabled])
+  }, [eqBands, isEqEnabled, preampGain])
 
   // Track Cover Loading
   useEffect(() => {
@@ -1435,14 +1623,17 @@ export default function App() {
 
   // Audio Playing Effect
   useEffect(() => {
+    if (bitPerfectEnabled) return;
     if (audioRef.current && audioCtxRef.current) {
       if (isPlaying) {
         // Đánh thức lại AudioContext khi bấm Play
         if (audioCtxRef.current.state === 'suspended') {
-          audioCtxRef.current.resume()
+          audioCtxRef.current.resume().catch(() => {})
         }
         
-        audioRef.current.play().catch(e => console.error(e))
+        audioRef.current.play().catch(e => {
+          if (e.name !== 'AbortError') console.warn('Audio play error:', e)
+        })
         if (crossfadeEnabled) {
           audioRef.current.volume = 0
           const step = volume / (crossfadeDuration * 20)
@@ -1461,11 +1652,11 @@ export default function App() {
         audioRef.current.pause()
         // ĐÓNG BĂNG toàn bộ xử lý âm thanh (EQ, Visualizer) khi dừng nhạc
         if (audioCtxRef.current.state === 'running') {
-          audioCtxRef.current.suspend()
+          audioCtxRef.current.suspend().catch(() => {})
         }
       }
     }
-  }, [isPlaying, currentTrack])
+  }, [isPlaying, currentTrack, bitPerfectEnabled])
 
   // Load Lyrics
   useEffect(() => {
@@ -1635,37 +1826,37 @@ export default function App() {
           increaseViewportBy={{ top: 200, bottom: 200 }}
           fixedHeaderContent={() => (
             <tr className="text-zinc-500 border-b border-theme-30/50 select-none bg-theme-60 shadow-sm">
-              <th onClick={() => handleSort('id')} className="pb-3 pt-4 font-medium w-12 text-center cursor-pointer group hover:text-white transition" title="Sắp xếp theo STT">
+              <th onClick={() => handleSort('id')} className="pb-3 pt-4 font-medium w-12 text-center cursor-pointer group hover:text-white transition" title={t('trackTable.sortIndex')}>
                 <div className="inline-flex items-center gap-1 justify-center">
-                  <span>#</span>
+                  <span>{t('trackTable.index')}</span>
                   {sortField === 'id' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th onClick={() => handleSort('title')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo tên bài hát">
+              <th onClick={() => handleSort('title')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title={t('trackTable.sortTitle')}>
                 <div className="inline-flex items-center gap-1">
-                  <span>TÊN BÀI HÁT</span>
+                  <span>{t('trackTable.title')}</span>
                   {sortField === 'title' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th onClick={() => handleSort('album')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo Album">
+              <th onClick={() => handleSort('album')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title={t('trackTable.sortAlbum')}>
                 <div className="inline-flex items-center gap-1">
-                  <span>ALBUM</span>
+                  <span>{t('trackTable.album')}</span>
                   {sortField === 'album' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th onClick={() => handleSort('isCloud')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title="Sắp xếp theo định dạng">
+              <th onClick={() => handleSort('isCloud')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title={t('trackTable.sortFormat')}>
                 <div className="inline-flex items-center gap-1">
-                  <span>ĐỊNH DẠNG</span>
+                  <span>{t('trackTable.format')}</span>
                   {sortField === 'isCloud' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th onClick={() => handleSort('duration')} className="pb-3 pt-4 font-medium text-right pr-4 cursor-pointer group hover:text-white transition" title="Sắp xếp theo thời lượng">
+              <th onClick={() => handleSort('duration')} className="pb-3 pt-4 font-medium text-right pr-4 cursor-pointer group hover:text-white transition" title={t('trackTable.sortDuration')}>
                 <div className="inline-flex items-center gap-1 justify-end">
-                  <span>THỜI GIAN</span>
+                  <span>{t('trackTable.duration')}</span>
                   {sortField === 'duration' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th className="pb-3 pt-4 font-medium text-center">THAO TÁC</th>
+              <th className="pb-3 pt-4 font-medium text-center">{t('trackTable.actions')}</th>
             </tr>
           )}
           itemContent={(index, track) => (
@@ -1693,29 +1884,24 @@ export default function App() {
   // MPV Listeners
   useEffect(() => {
     window.api.onMpvTime((val) => {
-      if (audioRef.current) {
+      if (bitPerfectEnabled && audioRef.current) {
         (audioRef.current as any)._currentTime = val;
-        if (typeof (audioRef.current as any).dispatchEvent === 'function') {
-          (audioRef.current as any).dispatchEvent('timeupdate');
-        }
       }
     });
     window.api.onMpvDuration((val) => {
-      if (audioRef.current) {
+      if (bitPerfectEnabled && audioRef.current) {
         (audioRef.current as any)._duration = val;
-        if (typeof (audioRef.current as any).dispatchEvent === 'function') {
-          (audioRef.current as any).dispatchEvent('durationchange');
-          (audioRef.current as any).dispatchEvent('loadedmetadata');
-        }
       }
     });
     window.api.onMpvPaused((val) => {
-      setIsPlaying(!val)
-      if (audioRef.current && typeof (audioRef.current as any).dispatchEvent === 'function') {
-        (audioRef.current as any).dispatchEvent(val ? 'pause' : 'play');
+      if (bitPerfectEnabled) {
+        setIsPlaying(!val)
       }
     });
-    window.api.onMpvEnded(() => { if (!crossfadeEnabled) handleNext() }); }, [handleNext, crossfadeEnabled]);
+    window.api.onMpvEnded(() => {
+      if (bitPerfectEnabled && !crossfadeEnabled) handleNext()
+    });
+  }, [handleNext, crossfadeEnabled, bitPerfectEnabled]);
 
   // Watch currentTrack
   useEffect(() => {
@@ -1724,24 +1910,20 @@ export default function App() {
         window.api.mpvPlay(currentTrack.filePath, crossfadeEnabled ? crossfadeDuration : 0)
         if (audioRef.current) audioRef.current.pause()
       } else {
-        // Dừng mpv và chuyển sang HTML Audio
+        // Dừng mpv khi phát bằng HTML Audio
         window.api.mpvPause(true)
-        if (audioRef.current) {
-          audioRef.current.play().catch(e => console.warn('Audio play error:', e))
-          setIsPlaying(true)
-        }
       }
     }
   }, [currentTrack, bitPerfectEnabled]);
 
-  // Watch EQ
+  // Watch EQ & Preamp
   useEffect(() => {
     if (isEqEnabled) {
-      window.api.mpvSetEqualizer(eqBands.map(b => b.gain))
+      window.api.mpvSetEqualizer(eqBands.map(b => b.gain), preampGain)
     } else {
-      window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0])
+      window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0], 0)
     }
-  }, [eqBands, isEqEnabled]);
+  }, [eqBands, isEqEnabled, preampGain]);
 
   const handlePlayPause = () => {
     if (!currentTrack) return;
@@ -1853,8 +2035,8 @@ export default function App() {
         </div>
       ) : (
         // --- GIAO DIỆN CHÍNH (FULL SCREEN) ---
-        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: themeColor }}>
-      {!isLite && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
+        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: effectiveBgImage ? 'transparent' : themeColor }}>
+      {!isLite && !effectiveBgImage && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
 
       {/* OVERLAYS & MODALS */}
       {toast.visible && (
@@ -1941,6 +2123,8 @@ export default function App() {
         eqBands={eqBands} 
         setEqBands={setEqBands} 
         filterNodesRef={filterNodesRef}
+        preampGain={preampGain}
+        setPreampGain={setPreampGain}
       />
 
       <SpectrogramModal 
@@ -1980,11 +2164,12 @@ export default function App() {
         setSearchQuery={setSearchQuery} setSearchInput={setSearchInput}
         setActiveAlbum={setActiveAlbum} setActivePlaylist={setActivePlaylist}
         fetchDashboard={fetchDashboard}
+        fetchScDashboard={fetchScDashboard}
         isCore={isCore}
       />
 
         {/* NỘI DUNG CHÍNH (ĐỔI THEO TAB) */}
-        <main className={`flex-1 flex flex-col bg-transparent overflow-hidden ${isLyricsMaximized ? 'hidden' : ''}`}>
+        <main className={`flex-1 flex flex-col bg-transparent overflow-hidden ${(isLyricsMaximized && showLyricsPanel) ? 'hidden' : ''}`}>
           
           <header className="h-20 px-8 flex items-center justify-between border-b border-theme-30/50 flex-shrink-0 w-full">
             <div className="relative w-96">
@@ -1995,16 +2180,17 @@ export default function App() {
                 onChange={(e) => { 
                   const val = e.target.value;
                   setSearchInput(val); 
-                  if (activeView !== 'home') {
+                  if (activeView !== 'home' && activeView !== 'home-ytm' && activeView !== 'home-soundcloud') {
                     setSearchQuery(val);
                   } else if (val === '') {
                     setSearchQuery('');
-                    fetchDashboard();
+                    if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard();
+                    if (activeView === 'home-soundcloud') fetchScDashboard();
                   } 
                 }}
                 onKeyDown={(e) => { 
                   if (e.key === 'Enter' && searchInput.trim() !== '') {
-                    if (activeView === 'home') {
+                    if (activeView === 'home' || activeView === 'home-ytm') {
                       // @ts-ignore
                       window.api.searchOnline(searchInput).then(res => {
                         if (res.success) {
@@ -2017,7 +2203,29 @@ export default function App() {
                             setDashboardData(res.data);
                           }
                         } else {
-                          alert('Lỗi tìm kiếm: ' + res.error);
+                          alert('Lỗi tìm kiếm YouTube Music: ' + res.error);
+                        }
+                      });
+                    } else if (activeView === 'home-soundcloud') {
+                      // @ts-ignore
+                      window.api.searchScOnline(searchInput).then(res => {
+                        if (res.success) {
+                          const sections: any[] = [];
+                          if (res.tracks && res.tracks.length > 0) {
+                            sections.push({
+                              title: `Kết quả tìm kiếm: "${searchInput}"`,
+                              contents: res.tracks
+                            });
+                          }
+                          if (res.playlists && res.playlists.length > 0) {
+                            sections.push({
+                              title: `Danh sách phát liên quan`,
+                              contents: res.playlists
+                            });
+                          }
+                          setScDashboardData(sections);
+                        } else {
+                          alert('Lỗi tìm kiếm SoundCloud: ' + res.error);
                         }
                       });
                     } else {
@@ -2025,14 +2233,20 @@ export default function App() {
                     }
                   } 
                 }}
-                placeholder={activeView === 'home' ? "Tìm kiếm nhạc trên YouTube / YT Music..." : "Tìm bài hát, nghệ sĩ trong máy..."} 
+                placeholder={
+                  (activeView === 'home' || activeView === 'home-ytm') 
+                    ? t('header.searchYtm')
+                    : (activeView === 'home-soundcloud')
+                    ? t('header.searchSc')
+                    : t('header.searchLocal')
+                } 
                 className="w-full bg-theme-60/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors" 
               />
             </div>
             
-            <button onClick={handleReloadLibrary} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-theme-60/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title="Làm mới Thư viện">
+            <button onClick={handleReloadLibrary} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-theme-60/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title={t('header.refreshLibrary')}>
               <RefreshCw size={16} className={isReloading ? 'animate-spin' : ''} />
-              {isReloading ? 'Đang làm mới...' : 'Làm mới'}
+              {isReloading ? t('header.refreshing') : t('header.refresh')}
             </button>
           </header>
 
@@ -2040,8 +2254,9 @@ export default function App() {
             
             {/* CỘT TRÁI: DATA VIEW */}
             <div key={activeView} className={`${isLite ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-              {/* VIEW: TRANG CHỦ DASHBOARD */}
-              {activeView === 'home' && (
+              
+              {/* VIEW: TRANG CHỦ YOUTUBE MUSIC */}
+              {(activeView === 'home' || activeView === 'home-ytm') && (
                 <div className="flex flex-col h-full">
                   {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST --- */}
                   {activeAlbum ? (
@@ -2051,15 +2266,15 @@ export default function App() {
                           <ArrowLeft size={20}/>
                         </button>
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-1">Danh sách phát</p>
+                          <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-1">{t('home.ytmPlaylist')}</p>
                           <h2 className="text-3xl font-extrabold text-white">{activeAlbum.title}</h2>
                         </div>
                       </div>
                       
                       {isAlbumLoading ? (
                         <div className="flex-1 flex flex-col items-center justify-center">
-                           <Activity size={40} className="text-theme-10 mb-4 animate-bounce" />
-                           <p className="text-theme-10 animate-pulse font-medium">Đang trích xuất bài hát từ YouTube Music...</p>
+                           <Activity size={40} className="text-red-500 mb-4 animate-bounce" />
+                           <p className="text-red-400 animate-pulse font-medium">{t('home.extractingYtm')}</p>
                         </div>
                       ) : (
                         renderTrackTable(activeAlbum.tracks)
@@ -2069,33 +2284,57 @@ export default function App() {
                     /* --- NẾU LÀ MÀN HÌNH DASHBOARD GỐC --- */
                     <>
                       <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                        <div className="flex items-center gap-3">
                           <button 
                             onClick={() => {
                               setSearchInput('');
                               setSearchQuery('');
                               fetchDashboard();
                             }}
-                            title="Làm mới Trang chủ"
-                            className="focus:outline-none flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
+                            title={t('home.refreshYtm')}
+                            className="focus:outline-none flex items-center justify-center cursor-pointer hover:scale-110 transition-all w-10 h-10 rounded-xl bg-red-600/10 border border-red-500/20 text-red-500"
                           >
-                            <Home size={32} className="text-theme-10 hover:text-theme-10" />
+                            <Play size={20} className="fill-current" />
                           </button>
-                          Dành cho bạn
-                        </h2>
+                          <div>
+                            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                              {t('home.ytmTitle')}
+                            </h2>
+                            <p className="text-xs text-zinc-400">{t('home.ytmSubtitle')}</p>
+                          </div>
+                        </div>
 
-                        {/* NÚT ĐĂNG NHẬP / LÀM MỚI COOKIE */}
-                        <button onClick={handleYtmLogin} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
-                          <Cloud size={18} /> Đăng nhập / Đồng bộ YouTube
-                        </button>
+                        {/* NÚT ĐĂNG NHẬP / ĐĂNG XUẤT YOUTUBE */}
+                        <div className="flex items-center gap-3">
+                          {isYtmLoggedIn ? (
+                            <div className="flex items-center gap-3 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                <span className="text-xs text-zinc-300 font-medium">{t('home.ytmSynced')}</span>
+                              </div>
+                              <button 
+                                onClick={handleYtmLogout} 
+                                className="text-xs text-red-400 hover:text-red-300 hover:underline transition font-medium border-l border-zinc-700 pl-3"
+                                title={t('home.ytmLogout')}
+                              >
+                                {t('home.ytmLogout')}
+                              </button>
+                            </div>
+                          ) : (
+                            <button onClick={handleYtmLogin} className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-red-600/20">
+                              <Cloud size={18} /> {t('home.ytmLogin')}
+                            </button>
+                          )}
+                        </div>
                       </div>
+
                       <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
                         {/* THÔNG BÁO KHI CHƯA ĐĂNG NHẬP (TRỐNG DỮ LIỆU) */}
                         {dashboardData.length === 0 ? (
                            <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
                              <ListMusic size={56} className="mb-4 opacity-20" />
-                             <p className="text-lg">Chưa có dữ liệu đề xuất</p>
-                             <p className="text-sm mt-1">Vui lòng nhấn nút Đồng bộ ở góc trên để nạp danh sách nhạc từ YouTube Music.</p>
+                             <p className="text-lg">{t('home.noRecommendationsTitle')}</p>
+                             <p className="text-sm mt-1">{t('home.noRecommendationsDesc')}</p>
                            </div>
                         ) : (
                           dashboardData.map((section, index) => {
@@ -2105,11 +2344,8 @@ export default function App() {
                             <div key={index}>
                               <h3 className="text-xl font-bold text-white mb-4">{section.title}</h3>
                               
-                              {/* Phân nhánh cấu trúc lưới (Grid 4 hàng ngang) hoặc Cuộn thẻ (Flex) */}
                               <div className={`overflow-x-auto pb-4 scrollbar-hide snap-x ${isListSection ? 'grid grid-rows-4 grid-flow-col gap-x-6 gap-y-3' : 'flex gap-4'}`}>
                                 {section.contents.map((item: any, i: number) => {
-                                  
-                                  // --- GIAO DIỆN KIỂU LIST (Dành cho Bài hát thịnh hành) ---
                                   if (item.style === 'LIST') {
                                     return (
                                       <div key={i} className="flex items-center gap-3 w-96 snap-start group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition" onClick={() => handleDashboardItemClick(item)}>
@@ -2124,11 +2360,11 @@ export default function App() {
                                           </div>
                                         </div>
                                         <div className="flex-1 truncate">
-                                          <p className="font-semibold text-sm text-white truncate group-hover:text-theme-10 transition">{item.title}</p>
+                                          <p className="font-semibold text-sm text-white truncate group-hover:text-red-400 transition">{item.title}</p>
                                           <p className="text-xs text-zinc-500 truncate mt-0.5">{item.subtitle}</p>
                                         </div>
                                         {!item.isArtist && (
-                                          <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-theme-10 hover:bg-theme-10/10 rounded-full transition" title="Tải xuống thư viện">
+                                          <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-400/10 rounded-full transition" title={t('home.downloadToLib')}>
                                             <Download size={14} />
                                           </button>
                                         )}
@@ -2136,7 +2372,6 @@ export default function App() {
                                     )
                                   }
 
-                                  // --- GIAO DIỆN KIỂU CARD (Dành cho Video/Album) ---
                                   return (
                                     <div key={i} className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer" onClick={() => handleDashboardItemClick(item)}>
                                       <div className="w-40 h-40 bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-lg">
@@ -2148,12 +2383,12 @@ export default function App() {
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                           <button 
                                             onClick={(e) => { e.stopPropagation(); handleDashboardItemClick(item); }} 
-                                            className="px-3 py-1.5 bg-theme-10 hover:bg-theme-10 rounded-lg text-xs text-white font-medium flex items-center gap-1 transition"
+                                            className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs text-white font-medium flex items-center gap-1 transition"
                                           >
-                                            <Play size={14}/> Phát ngay
+                                            <Play size={14}/> {t('home.playNow')}
                                           </button>
                                           {!item.isArtist && (
-                                            <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-theme-30/90 text-white rounded-full hover:bg-theme-10 hover:scale-110 transition shadow-2xl" title="Tải xuống thư viện">
+                                            <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-theme-30/90 text-white rounded-full hover:bg-red-600 hover:scale-110 transition shadow-2xl" title={t('home.downloadToLib')}>
                                               <Download size={18} />
                                             </button>
                                           )}
@@ -2174,25 +2409,234 @@ export default function App() {
                 </div>
               )}
 
+              {/* VIEW: TRANG CHỦ SOUNDCLOUD */}
+              {activeView === 'home-soundcloud' && (
+                <div className="flex flex-col h-full">
+                  {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST SOUNDCLOUD --- */}
+                  {activeAlbum ? (
+                    <div className="flex flex-col h-full animate-fade-in">
+                      <div className="flex items-center gap-4 mb-8">
+                        <button onClick={() => setActiveAlbum(null)} className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition">
+                          <ArrowLeft size={20}/>
+                        </button>
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-1">{t('home.scPlaylist')}</p>
+                          <h2 className="text-3xl font-extrabold text-white">{activeAlbum.title}</h2>
+                        </div>
+                      </div>
+                      
+                      {isAlbumLoading ? (
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                           <Activity size={40} className="text-amber-500 mb-4 animate-bounce" />
+                           <p className="text-amber-400 animate-pulse font-medium">{t('home.extractingSc')}</p>
+                        </div>
+                      ) : (
+                        renderTrackTable(activeAlbum.tracks)
+                      )}
+                    </div>
+                  ) : (
+                    /* --- NẾU LÀ MÀN HÌNH SOUNDCLOUD DASHBOARD --- */
+                    <>
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center">
+                            <Cloud size={22} className="fill-current" />
+                          </div>
+                          <div>
+                            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                              {t('home.scTitle')}
+                            </h2>
+                            <p className="text-xs text-zinc-400">{t('home.scSubtitle')}</p>
+                          </div>
+                        </div>
+
+                        {/* THANH THÔNG TIN TÀI KHOẢN & ĐĂNG NHẬP / ĐỔI TÀI KHOẢN SOUNDCLOUD */}
+                        <div className="flex items-center gap-3">
+                          {scUser ? (
+                            <div className="flex items-center gap-3 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3 py-1.5">
+                              {scUser.avatarUrl ? (
+                                <img src={scUser.avatarUrl} alt={scUser.username} className="w-7 h-7 rounded-full object-cover border border-amber-500/50" />
+                              ) : (
+                                <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold">
+                                  {scUser.username?.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="flex flex-col">
+                                <span className="text-xs font-semibold text-white">{scUser.username}</span>
+                                <span className="text-[10px] text-amber-400">{t('home.scMember')}</span>
+                              </div>
+                              <button 
+                                onClick={handleScLogout} 
+                                className="text-xs text-amber-400 hover:text-amber-300 hover:underline transition font-medium border-l border-zinc-700 pl-3 ml-1"
+                                title={t('home.scLogout')}
+                              >
+                                {t('home.scLogout')}
+                              </button>
+                            </div>
+                          ) : (
+                            <button onClick={handleScLogin} className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white px-4 py-2 rounded-xl text-xs font-semibold transition shadow-lg shadow-orange-600/20">
+                              <Cloud size={16} /> {t('home.scLogin')}
+                            </button>
+                          )}
+                          
+                          <button 
+                            onClick={() => fetchScDashboard()} 
+                            disabled={isScLoading}
+                            className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
+                            title={t('home.refreshSc')}
+                          >
+                            <RefreshCw size={16} className={isScLoading ? 'animate-spin text-amber-400' : ''} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* THANH CHỌN THỂ LOẠI (GENRE FILTER PILLS) */}
+                      <div className="flex items-center gap-2 overflow-x-auto pb-3 scrollbar-hide mb-4 shrink-0">
+                        {SC_GENRES.map((g) => {
+                          const isSelected = selectedScGenre === g.id
+                          return (
+                            <button
+                              key={g.id}
+                              onClick={() => {
+                                setSelectedScGenre(g.id)
+                                fetchScDashboard(g.id)
+                              }}
+                              className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                                isSelected
+                                  ? 'bg-amber-500 text-black font-semibold shadow-md shadow-amber-500/20'
+                                  : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                              }`}
+                            >
+                              {t(`home.genres.${g.key}` as any)}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {/* NỘI DUNG SOUNDCLOUD SECTIONS */}
+                      <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
+                        {isScLoading && scDashboardData.length === 0 ? (
+                          <div className="flex-1 flex flex-col items-center justify-center mt-20 text-zinc-500">
+                            <Activity size={40} className="text-amber-500 animate-bounce mb-3" />
+                            <p className="text-sm font-medium text-amber-400 animate-pulse">{t('home.loadingSc')}</p>
+                          </div>
+                        ) : scDashboardData.length === 0 ? (
+                          <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
+                            <Cloud size={56} className="mb-4 opacity-20 text-amber-500" />
+                            <p className="text-lg">{t('home.noScTracksTitle')}</p>
+                            <p className="text-sm mt-1">{t('home.noScTracksDesc')}</p>
+                          </div>
+                        ) : (
+                          scDashboardData.map((section, index) => {
+                            const isListSection = section.contents.some((t: any) => t.style === 'LIST' || t.format === 'STREAM');
+
+                            return (
+                              <div key={index}>
+                                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                  <span>{section.title}</span>
+                                </h3>
+                                
+                                <div className={`overflow-x-auto pb-4 scrollbar-hide snap-x ${isListSection ? 'grid grid-rows-4 grid-flow-col gap-x-6 gap-y-3' : 'flex gap-4'}`}>
+                                  {section.contents.map((item: any, i: number) => {
+                                    if (item.style === 'LIST' || item.format === 'STREAM') {
+                                      return (
+                                        <div 
+                                          key={i} 
+                                          className="flex items-center gap-3 w-96 snap-start group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition" 
+                                          onClick={() => handleScItemClick(item)}
+                                          onContextMenu={(e) => {
+                                            e.preventDefault()
+                                            setContextMenu({
+                                              x: e.clientX,
+                                              y: e.clientY,
+                                              items: [
+                                                { id: 'sc-play', label: t('contextMenu.play'), onClick: () => handleScItemClick(item) },
+                                                { id: 'sc-queue', label: t('contextMenu.addQueue'), onClick: () => setPlayQueue(prev => [...prev, item]) },
+                                                { id: 'sc-dl', label: t('contextMenu.downloadToLib'), onClick: () => handleDashboardItemDownload(item) }
+                                              ]
+                                            })
+                                          }}
+                                        >
+                                          <div className="w-12 h-12 bg-theme-30 rounded-lg flex-shrink-0 relative overflow-hidden shadow-md">
+                                            {item.coverArt || (item.thumbnails && item.thumbnails.length > 0) ? (
+                                              <img loading="lazy" src={item.coverArt || item.thumbnails[0].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                            ) : (
+                                              <Cloud size={20} className="m-auto mt-3 text-amber-500/50" />
+                                            )}
+                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                              <Play size={18} className="text-amber-400 fill-current ml-0.5" />
+                                            </div>
+                                          </div>
+                                          <div className="flex-1 truncate">
+                                            <p className="font-semibold text-sm text-white truncate group-hover:text-amber-400 transition">{item.title}</p>
+                                            <p className="text-xs text-zinc-500 truncate mt-0.5">{item.artist || item.subtitle}</p>
+                                          </div>
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} 
+                                            className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-amber-400 hover:bg-amber-400/10 rounded-full transition" 
+                                            title={t('home.downloadToLib')}
+                                          >
+                                            <Download size={14} />
+                                          </button>
+                                        </div>
+                                      )
+                                    }
+
+                                    return (
+                                      <div key={i} className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer" onClick={() => handleScItemClick(item)}>
+                                        <div className="w-40 h-40 bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-lg">
+                                          {item.coverArt || (item.thumbnails && item.thumbnails.length > 0) ? (
+                                            <img loading="lazy" src={item.coverArt || item.thumbnails[0].url} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                                          ) : (
+                                            <Cloud size={40} className="m-auto mt-16 text-amber-500/40" />
+                                          )}
+                                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                            <button 
+                                              onClick={(e) => { e.stopPropagation(); handleScItemClick(item); }} 
+                                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 rounded-lg text-xs text-black font-semibold flex items-center gap-1 transition"
+                                            >
+                                              <Play size={14}/> {t('home.playNow')}
+                                            </button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleDashboardItemDownload(item); }} className="w-10 h-10 flex items-center justify-center bg-theme-30/90 text-white rounded-full hover:bg-amber-500 hover:text-black hover:scale-110 transition shadow-2xl" title={t('home.downloadToLib')}>
+                                              <Download size={18} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <p className="font-semibold text-sm text-white truncate">{item.title}</p>
+                                        <p className="text-xs text-zinc-500 truncate mt-1">{item.subtitle || item.artist}</p>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* VIEW: BÀI HÁT */}
               {activeView === 'songs' && (
                 <>
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-end gap-4">
-                      <h2 className="text-3xl font-bold text-white">{searchQuery ? 'Kết quả tìm kiếm' : 'Danh sách bài hát'}</h2>
-                      <span className="text-zinc-500 text-sm mb-1">{processedLibraryTracks.length} bài hát</span>
+                      <h2 className="text-3xl font-bold text-white">{searchQuery ? t('songsView.searchResults') : t('songsView.songList')}</h2>
+                      <span className="text-zinc-500 text-sm mb-1">{processedLibraryTracks.length} {t('common.songs')}</span>
                     </div>
                     <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
-                      <Plus size={18} /> Thêm nhạc vào Thư viện
+                      <Plus size={18} /> {t('songsView.addMusic')}
                     </button>
                   </div>
                   {libraryPath ? (
-                    processedLibraryTracks.length > 0 ? renderTrackTable(processedLibraryTracks) : <p className="text-zinc-500 mt-10 text-center">Không tìm thấy bài hát nào khớp với "{searchQuery}".</p>
+                    processedLibraryTracks.length > 0 ? renderTrackTable(processedLibraryTracks) : <p className="text-zinc-500 mt-10 text-center">{t('songsView.noSongsMatched', { query: searchQuery })}</p>
                   ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
                       <HardDrive size={56} className="mb-4 opacity-20" />
-                      <p className="text-lg">Chưa cấu hình Thư viện</p>
-                      <p className="text-sm mt-1">Vui lòng vào phần Cài đặt để chọn Thư mục chứa nhạc của bạn.</p>
+                      <p className="text-lg">{t('songsView.libraryNotConfigured')}</p>
+                      <p className="text-sm mt-1">{t('songsView.libraryNotConfiguredDesc')}</p>
                     </div>
                   )}
                 </>
@@ -2203,20 +2647,20 @@ export default function App() {
                 <div className="flex flex-col h-full max-w-4xl">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-                      <Cloud size={32} className="text-theme-10" /> Google Drive
+                      <Cloud size={32} className="text-theme-10" /> {t('driveView.title')}
                     </h2>
                   </div>
                   
                   <div className="bg-theme-60/50 border border-theme-30 p-6 rounded-xl mb-6 shadow-lg">
-                    <h3 className="text-theme-10 font-semibold mb-2">Nhập liên kết thư mục</h3>
-                    <p className="text-sm text-zinc-400 mb-4">Dán liên kết thư mục Drive chứa nhạc của bạn (Yêu cầu bật chế độ "Bất kỳ ai có liên kết").</p>
+                    <h3 className="text-theme-10 font-semibold mb-2">{t('driveView.enterFolderLink')}</h3>
+                    <p className="text-sm text-zinc-400 mb-4">{t('driveView.folderLinkDesc')}</p>
                     <div className="flex gap-3 items-center">
                       <div className="relative flex-1">
                         <Link size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                        <input type="text" value={driveLink} onChange={(e) => setDriveLink(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className="w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors" />
+                        <input type="text" value={driveLink} onChange={(e) => setDriveLink(e.target.value)} placeholder={t('driveView.folderLinkPlaceholder')} className="w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors" />
                       </div>
                       <button onClick={handleDriveSubmit} disabled={!driveLink || isFetchingDrive} className="bg-theme-10 hover:bg-theme-10 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2">
-                        {isFetchingDrive ? <span className="animate-pulse">Đang quét...</span> : 'Quét dữ liệu'}
+                        {isFetchingDrive ? <span className="animate-pulse">{t('driveView.scanning')}</span> : t('driveView.scanData')}
                       </button>
                     </div>
                   </div>
@@ -2226,8 +2670,8 @@ export default function App() {
                     {driveFiles.length === 0 ? (
                       <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
                         <Cloud size={56} className="mb-4 opacity-20" />
-                        <p className="text-lg">Danh sách bài hát trống</p>
-                        <p className="text-sm mt-1">Vui lòng dán liên kết và nhấn quét để lấy danh sách từ Cloud.</p>
+                        <p className="text-lg">{t('driveView.emptyTitle')}</p>
+                        <p className="text-sm mt-1">{t('driveView.emptyDesc')}</p>
                       </div>
                     ) : (
                       (() => {
@@ -2242,31 +2686,31 @@ export default function App() {
                             <div className="flex items-center justify-between mb-4 pb-4 border-b border-theme-30/50">
                               <h3 className="font-bold text-white">
                                 {searchQuery 
-                                  ? `Tìm thấy ${filteredDriveFiles.length} kết quả cho "${searchQuery}"` 
-                                  : `Đã tìm thấy ${driveFiles.length} tệp âm thanh`}
+                                  ? t('driveView.foundResults', { count: filteredDriveFiles.length, query: searchQuery }) 
+                                  : t('driveView.foundAudioFiles', { count: driveFiles.length })}
                               </h3>
                               <div className="flex gap-3">
                                 <button onClick={handleDriveStream} className="flex items-center gap-2 bg-theme-10/10 text-theme-10 hover:bg-theme-10/20 px-4 py-2 rounded-lg text-sm font-medium transition">
-                                  <Wifi size={16} /> Stream tất cả
+                                  <Wifi size={16} /> {t('driveView.streamAll')}
                                 </button>
                                 <button onClick={handleDriveDownload} disabled={isDownloading} className="flex items-center gap-2 bg-theme-30 text-white hover:bg-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
-                                  {isDownloading ? <span className="animate-pulse">Đang xử lý...</span> : <><Download size={16} /> Tải về Thư viện (Lossless)</>}
+                                  {isDownloading ? <span className="animate-pulse">{t('common.loading')}</span> : <><Download size={16} /> {t('driveView.downloadLossless')}</>}
                                 </button>
                               </div>
                             </div>
                             
                             <div className="space-y-2 overflow-y-auto pr-2">
                               {filteredDriveFiles.length === 0 ? (
-                                <p className="text-zinc-500 text-center mt-10">Không tìm thấy bài hát nào khớp với "{searchQuery}".</p>
+                                <p className="text-zinc-500 text-center mt-10">{t('songsView.noSongsMatched', { query: searchQuery })}</p>
                               ) : (
                                 filteredDriveFiles.map((f, i) => (
                                   <div key={i} className="flex items-center gap-4 p-3 bg-theme-60/40 hover:bg-theme-30/80 rounded-lg border border-theme-30/50 transition">
                                     <div className="w-10 h-10 bg-theme-30 rounded flex items-center justify-center flex-shrink-0 text-theme-10"><ListMusic size={18} /></div>
                                     <div className="flex-1 truncate">
                                       <p className="font-semibold text-white truncate text-sm">{f.title}</p>
-                                      <p className="text-xs text-zinc-500 mt-0.5">Định dạng gốc: <span className="text-theme-10/80 uppercase">{f.format}</span></p>
+                                      <p className="text-xs text-zinc-500 mt-0.5">{t('driveView.originalFormat')}: <span className="text-theme-10/80 uppercase">{f.format}</span></p>
                                     </div>
-                                    <button onClick={() => setCloudActionTrack(f)} className="px-3 py-1.5 bg-theme-30 hover:bg-zinc-700 rounded text-xs text-zinc-300 font-medium transition">Tùy chọn</button>
+                                    <button onClick={() => setCloudActionTrack(f)} className="px-3 py-1.5 bg-theme-30 hover:bg-zinc-700 rounded text-xs text-zinc-300 font-medium transition">{t('common.options')}</button>
                                   </div>
                                 ))
                               )}
@@ -2281,48 +2725,87 @@ export default function App() {
 {/* VIEW: CÀI ĐẶT */}
               {activeView === 'settings' && (
                 <div className="w-full max-w-5xl">
-                  <h2 className="text-3xl font-bold text-white mb-6">Cài đặt hệ thống</h2>
+                  <h2 className="text-3xl font-bold text-white mb-6">{t('settings.title')}</h2>
                   <div className="bg-theme-60/50 border border-theme-30 p-6 rounded-xl space-y-6">
+                    {/* NGÔN NGỮ / LANGUAGE */}
                     <div>
-                      <h3 className="text-theme-10 font-semibold mb-2">Hình nền tuỳ chỉnh</h3>
-                      <div className="flex gap-3 items-center mb-4">
-                        <input 
-                          type="text" 
-                          value={bgImageInput} 
-                          onChange={(e) => setBgImageInput(e.target.value)} 
-                          placeholder="Nhập đường dẫn ảnh web (URL) hoặc chọn file..." 
-                          className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
+                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.language.title')}</h3>
+                      <p className="text-sm text-zinc-400 mb-4">{t('settings.language.desc')}</p>
+                      <div className="w-72">
+                        <CustomSelect 
+                          value={language} 
+                          onChange={(val) => setLanguage(val as any)} 
+                          options={[
+                            { value: 'en', label: t('settings.language.english') },
+                            { value: 'vi', label: t('settings.language.vietnamese') }
+                          ]} 
                         />
-                        <button 
-                          onClick={() => setCustomBgImage(bgImageInput)}
-                          className="bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition"
-                        >
-                          Áp dụng link
-                        </button>
-                        <button 
-                          onClick={async () => {
-                            const filePath = await window.api.selectImageFile()
-                            if (filePath) {
-                              const localPath = `file:///${filePath.replace(/\\/g, '/')}`
-                              setBgImageInput(localPath)
-                              setCustomBgImage(localPath)
-                            }
-                          }}
-                          className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                        >
-                          Chọn ảnh
-                        </button>
-                        <button 
-                          onClick={() => { setCustomBgImage(null); setBgImageInput(''); }}
-                          className="bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-medium transition"
-                        >
-                          Xoá nền
-                        </button>
                       </div>
+                    </div>
+
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <h3 className="text-theme-10 font-semibold mb-3">{t('settings.customBg.title')}</h3>
+                      
+                      {/* Checkbox tùy chọn dùng ảnh bìa bài hát */}
+                      <label className="flex items-center gap-3 cursor-pointer mb-4 select-none group w-fit">
+                        <input 
+                          type="checkbox" 
+                          checked={useTrackCoverAsBg} 
+                          onChange={(e) => setUseTrackCoverAsBg(e.target.checked)}
+                          className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
+                        />
+                        <span className="text-sm text-zinc-300 group-hover:text-white transition">
+                          {t('settings.customBg.useTrackCover')}
+                        </span>
+                      </label>
+
+                      {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
+                      {!useTrackCoverAsBg && (
+                        <div className="flex gap-3 items-center mb-4">
+                          <input 
+                            type="text" 
+                            value={bgImageInput} 
+                            onChange={(e) => setBgImageInput(e.target.value)} 
+                            placeholder={t('settings.customBg.placeholder')} 
+                            className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
+                          />
+                          <button 
+                            onClick={() => {
+                              const normalized = normalizeImagePath(bgImageInput)
+                              if (normalized) {
+                                setBgImageInput(normalized)
+                                setCustomBgImage(normalized)
+                              }
+                            }}
+                            className="bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                          >
+                            {t('settings.customBg.applyLink')}
+                          </button>
+                          <button 
+                            onClick={async () => {
+                              const filePath = await window.api.selectImageFile()
+                              if (filePath) {
+                                const normalized = normalizeImagePath(filePath)
+                                setBgImageInput(normalized)
+                                setCustomBgImage(normalized)
+                              }
+                            }}
+                            className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                          >
+                            {t('settings.customBg.chooseImage')}
+                          </button>
+                          <button 
+                            onClick={() => { setCustomBgImage(null); setBgImageInput(''); }}
+                            className="bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                          >
+                            {t('settings.customBg.removeBg')}
+                          </button>
+                        </div>
+                      )}
                       
                       <div className="flex flex-col gap-4">
                         <div className="flex items-center gap-4">
-                          <span className="text-sm text-zinc-300 w-32">Độ sáng hình nền:</span>
+                          <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.opacity')}:</span>
                           <input 
                             type="range" 
                             min="0" max="1" step="0.05" 
@@ -2333,7 +2816,7 @@ export default function App() {
                           <span className="text-sm font-mono text-zinc-400 w-12 text-right">{Math.round(customBgOpacity * 100)}%</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="text-sm text-zinc-300 w-32">Độ mờ (Blur):</span>
+                          <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.blur')}:</span>
                           <input 
                             type="range" 
                             min="0" max="100" step="1" 
@@ -2347,18 +2830,18 @@ export default function App() {
                     </div>
 
                     <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">Thư mục gốc (Thư viện)</h3>
-                      <p className="text-sm text-zinc-400 mb-4">Chọn thư mục chứa nhạc. Ứng dụng sẽ tự động quét bài hát...</p>
+                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.library.title')}</h3>
+                      <p className="text-sm text-zinc-400 mb-4">{t('settings.library.desc')}</p>
                       <div className="flex gap-3 items-center">
-                        <input type="text" readOnly value={libraryPath || 'Chưa thiết lập'} className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300" />
-                        <button onClick={handleSelectLibrary} className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Thay đổi</button>
+                        <input type="text" readOnly value={libraryPath || t('settings.library.notSet')} className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300" />
+                        <button onClick={handleSelectLibrary} className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition">{t('settings.library.change')}</button>
                       </div>
                     </div>
 
                     <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">Bit-perfect (WASAPI Exclusive/ASIO)</h3>
+                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.bitPerfect.title')}</h3>
                       <div className="flex items-center justify-between">
-                        <span className="text-zinc-300 text-sm">Chế độ Bit-perfect (Bỏ qua Windows Mixer)</span>
+                        <span className="text-zinc-300 text-sm">{t('settings.bitPerfect.label')}</span>
                         <input 
                           type="checkbox" 
                           checked={bitPerfectEnabled} 
@@ -2370,47 +2853,47 @@ export default function App() {
                           className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
                         />
                       </div>
-                      <p className="text-xs text-zinc-500 mt-2">Lưu ý: Bật chế độ này sẽ chiếm quyền Audio, các ứng dụng khác sẽ không có tiếng. Thay đổi sẽ khởi động lại luồng âm thanh.</p>
+                      <p className="text-xs text-zinc-500 mt-2">{t('settings.bitPerfect.note')}</p>
                     </div>
 
                     <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">Google Drive API Key</h3>
-                      <p className="text-sm text-zinc-400 mb-4">Nhập khóa API của bạn để sử dụng tính năng tải nhạc từ Cloud.</p>
+                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.googleDrive.title')}</h3>
+                      <p className="text-sm text-zinc-400 mb-4">{t('settings.googleDrive.desc')}</p>
                       <div className="flex gap-3 items-center">
                         <input type="text" value={googleDriveApiKey} onChange={e => setGoogleDriveApiKey(e.target.value)} placeholder="AIzaSy..." className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:outline-none focus:border-theme-10 transition-colors" />
                       </div>
-                      <p className="text-xs text-zinc-500 mt-2 italic">*Khóa của bạn sẽ được lưu an toàn trên máy tính cá nhân.</p>
+                      <p className="text-xs text-zinc-500 mt-2 italic">{t('settings.googleDrive.note')}</p>
                     </div>
 
 
                     <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">Hành vi cửa sổ</h3>
+                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.windowBehavior.title')}</h3>
                       <div className="flex flex-col gap-4 mt-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-zinc-200 text-sm">Khi nhấn nút Thu nhỏ (Minimize)</p>
-                            <p className="text-xs text-zinc-500">Mặc định thu nhỏ xuống thanh Taskbar</p>
+                            <p className="text-zinc-200 text-sm">{t('settings.windowBehavior.onMinimize')}</p>
+                            <p className="text-xs text-zinc-500">{t('settings.windowBehavior.onMinimizeDesc')}</p>
                           </div>
                           <div className="w-72">
-                            <CustomSelect value={minimizeToTray ? 'tray' : 'taskbar'} onChange={(val) => setMinimizeToTray(val === 'tray')} options={[{ value: 'taskbar', label: 'Thu nhỏ xuống Taskbar' }, { value: 'tray', label: 'Thu nhỏ xuống System Tray' }]} />
+                            <CustomSelect value={minimizeToTray ? 'tray' : 'taskbar'} onChange={(val) => setMinimizeToTray(val === 'tray')} options={[{ value: 'taskbar', label: t('settings.windowBehavior.minimizeTaskbar') }, { value: 'tray', label: t('settings.windowBehavior.minimizeTray') }]} />
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-zinc-200 text-sm">Khi nhấn nút Đóng (Close)</p>
-                            <p className="text-xs text-zinc-500">Tránh vô tình tắt nhạc khi đóng cửa sổ</p>
+                            <p className="text-zinc-200 text-sm">{t('settings.windowBehavior.onClose')}</p>
+                            <p className="text-xs text-zinc-500">{t('settings.windowBehavior.onCloseDesc')}</p>
                           </div>
                           <div className="w-72">
-                            <CustomSelect value={closeToTray ? 'tray' : 'quit'} onChange={(val) => setCloseToTray(val === 'tray')} options={[{ value: 'quit', label: 'Thoát hoàn toàn ứng dụng' }, { value: 'tray', label: 'Thu nhỏ xuống System Tray' }]} />
+                            <CustomSelect value={closeToTray ? 'tray' : 'quit'} onChange={(val) => setCloseToTray(val === 'tray')} options={[{ value: 'quit', label: t('settings.windowBehavior.closeQuit') }, { value: 'tray', label: t('settings.windowBehavior.closeTray') }]} />
                           </div>
                         </div>
                       </div>
                     </div>
 
                     <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">Chế độ hoạt động (Hiệu suất)</h3>
-                      <p className="text-sm text-zinc-400 mb-4">Điều chỉnh mức độ tiêu thụ tài nguyên của ứng dụng để phù hợp với cấu hình máy.</p>
+                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.appMode.title')}</h3>
+                      <p className="text-sm text-zinc-400 mb-4">{t('settings.appMode.desc')}</p>
                       <div className="w-full">
                         <CustomSelect 
                           value={appMode} 
@@ -2431,9 +2914,9 @@ export default function App() {
                             }
                           }} 
                           options={[
-                            { value: 'default', label: 'Tiêu chuẩn' }, 
-                            { value: 'lite', label: 'Tiết kiệm' },
-                            { value: 'core', label: 'Cốt lõi' }
+                            { value: 'default', label: t('settings.appMode.standard') }, 
+                            { value: 'lite', label: t('settings.appMode.lite') },
+                            { value: 'core', label: t('settings.appMode.core') }
                           ]} 
                         />
                       </div>
@@ -2446,14 +2929,14 @@ export default function App() {
               {activeView === 'playlists' && !activePlaylist && (
                 <>
                   <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-3xl font-bold text-white">{searchQuery ? 'Kết quả tìm kiếm' : 'Playlist của tôi'}</h2>
+                    <h2 className="text-3xl font-bold text-white">{searchQuery ? t('playlistsView.searchResults') : t('playlistsView.title')}</h2>
                     {!searchQuery && (
                       <div className="flex gap-3">
                         <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
-                          <Plus size={16} /> Tạo Playlist mới
+                          <Plus size={16} /> {t('playlistsView.createPlaylist')}
                         </button>
                         <button onClick={handleAutoGeneratePlaylists} className="flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition">
-                          <Sparkles size={16} /> Tự động phân loại Album
+                          <Sparkles size={16} /> {t('playlistsView.autoCategorize')}
                         </button>
                       </div>
                     )}
@@ -2464,14 +2947,14 @@ export default function App() {
                     const matchedSongs = processedLibraryTracks
 
                     if (!searchQuery && playlists.length === 0) {
-                      return <p className="text-zinc-500">Chưa có danh sách phát nào. Hãy tạo các thư mục con trong Thư viện gốc.</p>
+                      return <p className="text-zinc-500">{t('playlistsView.noPlaylists')}</p>
                     }
 
                     return (
                       <div className="space-y-10">
                         {(matchedPlaylists.length > 0 || !searchQuery) && (
                           <div>
-                            {searchQuery && <h3 className="text-xl font-bold text-white mb-6">Album & Danh sách phát ({matchedPlaylists.length})</h3>}
+                            {searchQuery && <h3 className="text-xl font-bold text-white mb-6">{t('playlistsView.playlistsAndAlbums', { count: matchedPlaylists.length })}</h3>}
                             <div className="grid grid-cols-4 gap-6">
                               {matchedPlaylists.map(pl => (
                                 <div 
@@ -2482,13 +2965,13 @@ export default function App() {
                                 >
                                   <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative">
                                     {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
-                                    <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title="Chọn ảnh từ máy tính"><ImageIcon size={16}/></button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title="Lấy ảnh từ bài hát đầu tiên"><Sparkles size={16}/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.chooseCover')}><ImageIcon size={16}/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.extractCover')}><Sparkles size={16}/></button>
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <div className="min-w-0 flex-1 pr-2">
                                       <h3 className="font-bold text-white truncate">{pl.name}</h3>
-                                      <p className="text-xs text-zinc-500">{pl.tracks.length} bài hát</p>
+                                      <p className="text-xs text-zinc-500">{pl.tracks.length} {t('common.songs')}</p>
                                     </div>
                                     <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
                                   </div>
@@ -2499,18 +2982,18 @@ export default function App() {
                         )}
                         {searchQuery && (
                           <div className="flex flex-col h-[520px] w-full shrink-0">
-                            <h3 className="text-xl font-bold text-white mb-4 shrink-0">Bài hát ({matchedSongs.length})</h3>
+                            <h3 className="text-xl font-bold text-white mb-4 shrink-0">{t('common.songs')} ({matchedSongs.length})</h3>
                             <div className="flex-1 min-h-0 flex flex-col h-[460px] w-full">
                               {matchedSongs.length > 0 ? (
                                 renderTrackTable(matchedSongs)
                               ) : (
-                                <p className="text-zinc-500 mt-4">Không tìm thấy bài hát nào khớp với "{searchQuery}".</p>
+                                <p className="text-zinc-500 mt-4">{t('songsView.noSongsMatched', { query: searchQuery })}</p>
                               )}
                             </div>
                           </div>
                         )}
                         {searchQuery && matchedPlaylists.length === 0 && matchedSongs.length === 0 && (
-                          <p className="text-zinc-500 mt-8 text-center">Không tìm thấy kết quả nào cho "{searchQuery}".</p>
+                          <p className="text-zinc-500 mt-8 text-center">{t('playlistsView.noResults', { query: searchQuery })}</p>
                         )}
                       </div>
                     )
@@ -2529,16 +3012,16 @@ export default function App() {
                       <div>
                         <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Playlist</p>
                         <h2 className="text-5xl font-extrabold text-white mb-4">{activePlaylist.name}</h2>
-                        <p className="text-zinc-400">{activePlaylist.tracks.length} bài hát</p>
+                        <p className="text-zinc-400">{activePlaylist.tracks.length} {t('common.songs')}</p>
                       </div>
                     </div>
                     {/* Nút thêm nhạc riêng cho Playlist */}
                     <div className="flex gap-3">
                       <button onClick={() => setShowAddSongsModal(true)} className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-                        <Plus size={16} /> Thêm bài hát có sẵn
+                        <Plus size={16} /> {t('playlistsView.addExistingSongs')}
                       </button>
                       <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
-                        <Plus size={16} /> Tải file từ máy tính
+                        <Plus size={16} /> {t('playlistsView.importFromComputer')}
                       </button>
                     </div>
                   </div>
@@ -2553,11 +3036,11 @@ export default function App() {
             {showLyricsPanel && (
               <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
                 <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
-                  <h3 className="font-bold text-white flex items-center gap-2"><Mic2 size={16} className="text-theme-10"/> Lời bài hát</h3>
+                  <h3 className="font-bold text-white flex items-center gap-2"><Mic2 size={16} className="text-theme-10"/> {t('lyrics.title')}</h3>
                   <button onClick={() => setIsLyricsMaximized(true)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><Maximize2 size={16}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
-                  {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-10">Không có lời bài hát.</p> : lyrics.map((line, index) => {
+                  {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-10">{t('lyrics.noLyrics')}</p> : lyrics.map((line, index) => {
                     const isActive = index === currentLyricIndex
                     return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-theme-10 text-xl' : 'text-zinc-500 text-sm hover:text-zinc-300'}`}>{line.text}</p>
                   })}
@@ -2577,12 +3060,12 @@ export default function App() {
             {showQueuePanel && (
               <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
                 <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
-                  <h3 className="font-bold text-white flex items-center gap-2"><List size={16} className="text-theme-10"/> Danh sách đang phát</h3>
+                  <h3 className="font-bold text-white flex items-center gap-2"><List size={16} className="text-theme-10"/> {t('queue.title')}</h3>
                   <button onClick={() => setShowQueuePanel(false)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><X size={16}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                   {playQueue.length === 0 ? (
-                    <p className="text-zinc-500 italic mt-10 text-center">Hàng đợi trống.</p>
+                    <p className="text-zinc-500 italic mt-10 text-center">{t('queue.empty')}</p>
                   ) : (
                     <DndContext 
                       sensors={dndSensors}
@@ -2662,7 +3145,7 @@ export default function App() {
                 <div className="text-center"><h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2><p className="text-theme-10 text-lg">{currentTrack?.artist}</p></div>
               </div>
               <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">
-                 {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-32 text-xl">Không có lời bài hát.</p> : lyrics.map((line, index) => {
+                 {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-32 text-xl">{t('lyrics.noLyrics')}</p> : lyrics.map((line, index) => {
                   const isActive = index === currentLyricIndex
                   return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-theme-10 text-3xl scale-105' : 'text-zinc-500 text-xl hover:text-zinc-300 opacity-50'}`}>{line.text}</p>
                 })}
@@ -2680,8 +3163,8 @@ export default function App() {
             {(!isLite && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
           </div>
           <div className="truncate">
-            <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : 'Chưa có bài hát'}</h4>
-            <p className="text-xs text-zinc-400 mt-1 truncate">{currentTrack ? currentTrack.artist : '---'}</p>
+            <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : t('player.noTrack')}</h4>
+            <p className="text-xs text-zinc-400 mt-1 truncate">{currentTrack ? currentTrack.artist : t('player.unknownArtist')}</p>
             {currentTrack && (
               <div className="flex items-center gap-2 mt-1">
                 <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md">
@@ -2725,13 +3208,13 @@ export default function App() {
             <>
               {!isLite && (
                 <>
-                  <button onClick={() => setShowSpectrogramModal(true)} className={`transition ${showSpectrogramModal ? 'text-theme-10' : 'hover:text-white'}`} title="Mở trình phân tích phổ (Spectrogram)"><Radio size={18} /></button>
-                  <button onClick={() => setShowLyricsPanel(!showLyricsPanel)} className={`transition ${showLyricsPanel ? 'text-theme-10' : 'hover:text-white'}`} title="Lời bài hát"><Mic2 size={18} /></button>
+                  <button onClick={() => setShowSpectrogramModal(true)} className={`transition ${showSpectrogramModal ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.spectrogram')}><Radio size={18} /></button>
+                  <button onClick={handleToggleLyrics} className={`transition ${showLyricsPanel ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.lyrics')}><Mic2 size={18} /></button>
                 </>
               )}
-              <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title="Trình phát thu nhỏ (Mini Player)"><PictureInPicture2 size={18} /></button>
-              <button onClick={() => { setShowQueuePanel(!showQueuePanel); setShowLyricsPanel(false); }} className={`transition ${showQueuePanel ? 'text-theme-10' : 'hover:text-white'}`} title="Danh sách đang phát"><List size={18} /></button>
-              <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-theme-10' : 'hover:text-white'}`} title="Bộ chỉnh âm (Equalizer)"><Sliders size={18} /></button>
+              <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title={t('player.miniPlayer')}><PictureInPicture2 size={18} /></button>
+              <button onClick={handleToggleQueue} className={`transition ${showQueuePanel ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.queue')}><List size={18} /></button>
+              <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.equalizer')}><Sliders size={18} /></button>
             </>
           )}
 

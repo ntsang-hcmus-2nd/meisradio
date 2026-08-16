@@ -4,6 +4,7 @@ import { CustomNumberInput } from './CustomNumberInput'
 import { CustomSelect } from './CustomSelect'
 import { EQBand } from '../App'
 import { BUILTIN_AUTOEQ_PROFILES, parsePeaceEqText, exportPeaceEqText, AutoEqProfile } from './autoeq/autoeqProfiles'
+import { useTranslation } from '../locales'
 
 interface EQPanelProps {
   showEQ: boolean
@@ -13,15 +14,18 @@ interface EQPanelProps {
   eqBands: EQBand[]
   setEqBands: React.Dispatch<React.SetStateAction<EQBand[]>>
   filterNodesRef: React.MutableRefObject<BiquadFilterNode[]>
+  preampGain: number
+  setPreampGain: (v: number) => void
 }
 
 export const EQPanel: React.FC<EQPanelProps> = ({ 
-  showEQ, setShowEQ, isEqEnabled, setIsEqEnabled, eqBands, setEqBands, filterNodesRef 
+  showEQ, setShowEQ, isEqEnabled, setIsEqEnabled, eqBands, setEqBands, filterNodesRef,
+  preampGain, setPreampGain
 }) => {
+  const { t } = useTranslation()
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
-  const [preampGain, setPreampGain] = useState<number>(0)
   const [searchHeadphone, setSearchHeadphone] = useState<string>('')
   const [showAutoEqModal, setShowAutoEqModal] = useState<boolean>(false)
 
@@ -217,7 +221,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     ctx.strokeStyle = isEqEnabled ? theme10Color : '#52525b'
     
     for (let i = 0; i < drawWidth; i++) {
-      const db = 20 * Math.log10(totalMag[i])
+      const db = (20 * Math.log10(totalMag[i])) + (isEqEnabled ? preampGain : 0)
       const clampedDb = Math.max(-20, Math.min(20, db))
       const y = paddingTop + (drawHeight / 2) - (clampedDb / 20) * (drawHeight / 2)
       
@@ -239,13 +243,13 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     
     ctx.fill()
     ctx.globalAlpha = 1.0
-  }, [isEqEnabled, filterNodesRef])
+  }, [isEqEnabled, filterNodesRef, preampGain])
 
   useEffect(() => {
     if (!showEQ) return
     const frameId = requestAnimationFrame(drawEQCanvas)
     return () => cancelAnimationFrame(frameId)
-  }, [showEQ, eqBands, isEqEnabled, drawEQCanvas])
+  }, [showEQ, eqBands, isEqEnabled, preampGain, drawEQCanvas])
 
   if (!showEQ) return null
 
@@ -272,14 +276,14 @@ export const EQPanel: React.FC<EQPanelProps> = ({
           <div className="flex items-center gap-3">
             <Sliders className="text-theme-10" size={22} />
             <div>
-              <h2 className="text-lg font-bold text-white leading-tight">Bộ chỉnh âm (Equalizer & AutoEQ)</h2>
-              <p className="text-[11px] text-zinc-400">Tương thích cấu hình tham số Peace Equalizer / EqualizerAPO</p>
+              <h2 className="text-lg font-bold text-white leading-tight">{t('modals.eq.title')}</h2>
+              <p className="text-[11px] text-zinc-400">Peace Equalizer / EqualizerAPO Compatible</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 cursor-pointer bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-theme-10">
-              <span className="text-zinc-300 text-xs font-semibold">Bật EQ</span>
+              <span className="text-zinc-300 text-xs font-semibold">{t('modals.eq.enableEq')}</span>
               <input 
                 type="checkbox" 
                 checked={isEqEnabled} 
@@ -291,7 +295,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             <button 
               onClick={() => setShowAutoEqModal(true)} 
               className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-10/20 hover:bg-theme-10/30 text-theme-10 border border-theme-10/30 rounded-lg text-xs font-semibold transition"
-              title="Chọn Profile Tai nghe AutoEQ"
+              title="AutoEQ Profiles"
             >
               <Headphones size={15} /> AutoEQ
             </button>
@@ -299,32 +303,32 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             <button 
               onClick={() => fileInputRef.current?.click()} 
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition"
-              title="Nhập file cấu hình Peace / EqualizerAPO (.txt)"
+              title={t('modals.eq.importFile')}
             >
-              <Upload size={14} /> Nhập Peace
+              <Upload size={14} /> {t('modals.eq.importFile')}
             </button>
 
             <button 
               onClick={handleExportFile} 
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition"
-              title="Xuất file cấu hình Peace (.txt)"
+              title={t('modals.eq.exportFile')}
             >
-              <Download size={14} /> Xuất
+              <Download size={14} /> {t('modals.eq.exportFile')}
             </button>
 
             <button 
               onClick={handleAddBand} 
               className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-10 hover:bg-theme-10/80 text-white rounded-lg text-xs font-medium transition"
             >
-              <Plus size={15} /> Thêm dải
+              <Plus size={15} /> + Band
             </button>
 
             <button 
               onClick={handleResetEQ} 
               className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"
-              title="Đặt lại EQ về mặc định"
+              title={t('modals.eq.reset')}
             >
-              <RotateCcw size={14} /> Reset
+              <RotateCcw size={14} /> {t('modals.eq.reset')}
             </button>
 
             <button onClick={() => setShowEQ(false)} className="text-zinc-400 hover:text-white p-1 text-lg">
@@ -339,9 +343,9 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         {/* PREAMP BAR */}
         <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 mb-4 flex items-center justify-between gap-4 text-xs shrink-0">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-zinc-300">Độ khuếch đại trước (Preamp):</span>
+            <span className="font-semibold text-zinc-300">{t('modals.eq.preamp')}:</span>
             <span className="font-mono text-theme-10 font-bold">{preampGain > 0 ? `+${preampGain.toFixed(1)}` : preampGain.toFixed(1)} dB</span>
-            <span className="text-[10px] text-zinc-500 italic">(Giảm gain khi dùng AutoEQ để chống méo âm/clipping)</span>
+            <span className="text-[10px] text-zinc-500 italic">(AutoEQ Preamp)</span>
           </div>
           <input 
             type="range" 
@@ -357,14 +361,14 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         {/* BANDS LIST */}
         <div className="overflow-y-auto flex-1 pr-2 space-y-3">
           {eqBands.length === 0 ? (
-            <p className="text-center text-zinc-500 py-8">Chưa có dải tần nào. Hãy bấm "Thêm dải" hoặc chọn "AutoEQ".</p>
+            <p className="text-center text-zinc-500 py-8">{t('modals.eq.noBandsFound')}</p>
           ) : (
             eqBands.map((band) => (
               <div key={band.id} className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex flex-wrap items-center gap-4 text-xs">
                 
                 {/* Tần số */}
                 <div className="flex flex-col gap-1 w-28">
-                  <label className="text-zinc-400 font-mono text-xs">Tần số (Hz)</label>
+                  <label className="text-zinc-400 font-mono text-xs">{t('modals.eq.freq')} (Hz)</label>
                   <CustomNumberInput 
                     min={20} 
                     max={20000} 
@@ -385,7 +389,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
 
                 {/* Loại Filter */}
                 <div className="flex flex-col gap-1 w-36">
-                  <label className="text-zinc-400 text-xs">Loại bộ lọc</label>
+                  <label className="text-zinc-400 text-xs">{t('modals.eq.type')}</label>
                   <CustomSelect 
                     value={band.type} 
                     onChange={(val) => {
@@ -400,18 +404,18 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                       requestAnimationFrame(drawEQCanvas)
                     }} 
                     options={[
-                      { value: 'peaking', label: 'Peaking (PK)' },
-                      { value: 'lowshelf', label: 'Low Shelf (LSC)' },
-                      { value: 'highshelf', label: 'High Shelf (HSC)' },
-                      { value: 'lowpass', label: 'Low Pass (LP)' },
-                      { value: 'highpass', label: 'High Pass (HP)' }
+                      { value: 'peaking', label: `${t('modals.eq.peaking')} (PK)` },
+                      { value: 'lowshelf', label: `${t('modals.eq.lowshelf')} (LSC)` },
+                      { value: 'highshelf', label: `${t('modals.eq.highshelf')} (HSC)` },
+                      { value: 'lowpass', label: `${t('modals.eq.lowpass')} (LP)` },
+                      { value: 'highpass', label: `${t('modals.eq.highpass')} (HP)` }
                     ]} 
                   />
                 </div>
 
                 {/* Hệ số Q */}
                 <div className="flex flex-col gap-1 w-24">
-                  <label className="text-zinc-400 text-xs">Độ rộng (Q)</label>
+                  <label className="text-zinc-400 text-xs">{t('modals.eq.bandwidthQ')}</label>
                   <CustomNumberInput 
                     min={0.1} 
                     max={10.0} 
@@ -433,7 +437,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                 {/* Gain Slider */}
                 <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
                   <div className="flex justify-between text-zinc-400">
-                    <span>Mức khuếch đại (Gain)</span>
+                    <span>{t('modals.eq.gain')}</span>
                     <span className="font-mono text-theme-10 font-bold">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
                   </div>
                   <input 
@@ -468,7 +472,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                 <button 
                   onClick={() => handleDeleteBand(band.id)} 
                   className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3" 
-                  title="Xóa dải EQ"
+                  title={t('common.delete')}
                 >
                   <Trash2 size={16} />
                 </button>
@@ -483,7 +487,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">
               <div className="flex items-center gap-2">
                 <Sparkles className="text-theme-10" size={20} />
-                <h3 className="font-bold text-white text-base">Kho Profile AutoEQ (Harman Target)</h3>
+                <h3 className="font-bold text-white text-base">AutoEQ Database (Harman Target)</h3>
               </div>
               <button onClick={() => setShowAutoEqModal(false)} className="text-zinc-400 hover:text-white p-1">
                 <X size={20} />
@@ -495,7 +499,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                 type="text"
                 value={searchHeadphone}
                 onChange={e => setSearchHeadphone(e.target.value)}
-                placeholder="Tìm tai nghe (Sony, Apple, Sennheiser, Moondrop, Audio-Technica, Tangzu...)"
+                placeholder={t('modals.eq.searchHeadphonePlaceholder')}
                 className="w-full bg-zinc-900 border border-zinc-700/60 rounded-xl py-2.5 px-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-theme-10"
               />
             </div>
@@ -503,7 +507,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-3 pr-1">
               {filteredAutoEqProfiles.length === 0 ? (
                 <div className="col-span-2 text-center text-zinc-500 py-12">
-                  Không tìm thấy tai nghe nào khớp với "{searchHeadphone}".
+                  No headphone profiles matched "{searchHeadphone}".
                 </div>
               ) : (
                 filteredAutoEqProfiles.map(p => {
@@ -521,10 +525,10 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-theme-10">{p.brand}</span>
                         <h4 className="font-bold text-white text-sm mt-0.5">{p.name}</h4>
-                        <p className="text-[11px] text-zinc-400 mt-1">{p.category} • {p.bands.length} dải tần • Preamp {p.preamp}dB</p>
+                        <p className="text-[11px] text-zinc-400 mt-1">{p.category} • {p.bands.length} bands • Preamp {p.preamp}dB</p>
                       </div>
                       <button className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isCurrent ? 'bg-theme-10 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}>
-                        {isCurrent ? 'Đang dùng' : 'Áp dụng'}
+                        {isCurrent ? 'Active' : 'Apply'}
                       </button>
                     </div>
                   )

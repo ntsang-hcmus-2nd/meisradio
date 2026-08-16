@@ -1,5 +1,6 @@
 import React from 'react'
 import { Image as ImageIcon, Music } from 'lucide-react'
+import { useTranslation } from '../../locales'
 
 interface TagEditorModalProps {
   track: any
@@ -14,6 +15,8 @@ interface TagEditorModalProps {
 export const TagEditorModal: React.FC<TagEditorModalProps> = ({ 
   track, tags, imagePath, setTags, onSelectImage, onSave, onClose 
 }) => {
+  const { t } = useTranslation()
+
   if (!track) return null
 
   const isFlac = track.filePath?.toLowerCase().endsWith('.flac') || track.format === 'FLAC'
@@ -27,10 +30,10 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
         <div className="flex items-center justify-between mb-6 pb-3 border-b border-zinc-800">
           <div className="flex items-center gap-2.5">
             <Music className="text-theme-10" size={20} />
-            <h2 className="text-lg font-bold text-white">Chỉnh sửa thông tin bài hát (Metadata)</h2>
+            <h2 className="text-lg font-bold text-white">{t('modals.tagEditor.title')}</h2>
           </div>
           <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-theme-10/10 text-theme-10 border border-theme-10/20">
-            {isFlac ? 'FLAC Vorbis Tag' : isMp3 ? 'MP3 ID3v2 Tag' : 'Audio Tag'}
+            {isFlac ? t('modals.tagEditor.flacTag') : isMp3 ? t('modals.tagEditor.mp3Tag') : t('modals.tagEditor.audioTag')}
           </span>
         </div>
 
@@ -50,42 +53,42 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
               onClick={onSelectImage} 
               className="text-xs font-semibold text-theme-10 hover:text-white bg-theme-10/15 hover:bg-theme-10/30 border border-theme-10/30 px-3 py-1.5 rounded-lg transition"
             >
-              Chọn ảnh bìa
+              {t('modals.tagEditor.chooseCover')}
             </button>
           </div>
 
           {/* Metadata inputs */}
           <div className="w-2/3 space-y-3.5 text-xs">
             <div>
-              <label className="text-zinc-400 font-medium mb-1 block">Tên bài hát (Title)</label>
+              <label className="text-zinc-400 font-medium mb-1 block">{t('modals.tagEditor.trackTitle')}</label>
               <input 
                 type="text" 
                 value={tags.title} 
                 onChange={e => setTags({ ...tags, title: e.target.value })} 
                 className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2.5 text-white focus:outline-none focus:border-theme-10" 
-                placeholder="Nhập tên bài hát..."
+                placeholder={t('modals.tagEditor.placeholderTitle')}
               />
             </div>
 
             <div>
-              <label className="text-zinc-400 font-medium mb-1 block">Nghệ sĩ (Artist)</label>
+              <label className="text-zinc-400 font-medium mb-1 block">{t('modals.tagEditor.artist')}</label>
               <input 
                 type="text" 
                 value={tags.artist} 
                 onChange={e => setTags({ ...tags, artist: e.target.value })} 
                 className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2.5 text-white focus:outline-none focus:border-theme-10" 
-                placeholder="Nhập tên nghệ sĩ..."
+                placeholder={t('modals.tagEditor.placeholderArtist')}
               />
             </div>
 
             <div>
-              <label className="text-zinc-400 font-medium mb-1 block">Album</label>
+              <label className="text-zinc-400 font-medium mb-1 block">{t('modals.tagEditor.album')}</label>
               <input 
                 type="text" 
                 value={tags.album} 
                 onChange={e => setTags({ ...tags, album: e.target.value })} 
                 className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2.5 text-white focus:outline-none focus:border-theme-10" 
-                placeholder="Nhập tên album..."
+                placeholder={t('modals.tagEditor.placeholderAlbum')}
               />
             </div>
           </div>
@@ -94,14 +97,14 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
         {/* Lyrics */}
         <div className="mt-4 text-xs">
           <div className="flex justify-between items-center mb-1">
-            <label className="text-zinc-400 font-medium">Lời bài hát (Định dạng LRC hoặc văn bản)</label>
-            <span className="text-[10px] text-zinc-500 font-mono">[00:00.00] Lyrics</span>
+            <label className="text-zinc-400 font-medium">{t('modals.tagEditor.lyrics')}</label>
+            <span className="text-[10px] text-zinc-500 font-mono">{t('modals.tagEditor.lyricsFormatInfo')}</span>
           </div>
           <textarea 
             value={tags.lyrics} 
             onChange={e => setTags({ ...tags, lyrics: e.target.value })} 
             className="w-full h-32 bg-zinc-950 border border-zinc-700/70 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-theme-10 resize-none" 
-            placeholder="[00:01.00] Dán lời bài hát có mốc thời gian hoặc lời thô vào đây..." 
+            placeholder={t('modals.tagEditor.lyricsPlaceholder')} 
           />
         </div>
 
@@ -111,13 +114,13 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
             onClick={onClose} 
             className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition"
           >
-            Hủy
+            {t('common.cancel')}
           </button>
           <button 
             onClick={onSave} 
             className="bg-theme-10 hover:bg-theme-10 text-white px-6 py-2 rounded-lg text-xs font-semibold shadow-lg shadow-theme-10/20 transition"
           >
-            Lưu thay đổi trực tiếp
+            {t('modals.tagEditor.saveDirect')}
           </button>
         </div>
 

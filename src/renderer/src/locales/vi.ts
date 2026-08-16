@@ -1,0 +1,330 @@
+import { TranslationDictionary } from './types'
+
+export const vi: TranslationDictionary = {
+  common: {
+    appName: "Mei's Radio",
+    cancel: 'Hủy',
+    save: 'Lưu',
+    confirm: 'Xác nhận',
+    delete: 'Xóa',
+    close: 'Đóng',
+    loading: 'Đang tải...',
+    search: 'Tìm kiếm',
+    refresh: 'Làm mới',
+    refreshing: 'Đang làm mới...',
+    options: 'Tùy chọn',
+    error: 'Lỗi',
+    success: 'Thành công',
+    unknown: 'Không rõ',
+    songs: 'bài hát',
+    files: 'tệp',
+    tracks: 'bản nhạc',
+    hours: 'giờ',
+    minutes: 'phút',
+    seconds: 'giây'
+  },
+  sidebar: {
+    library: 'Thư viện',
+    home: 'Trang chủ',
+    youtubeMusic: 'YouTube Music',
+    soundCloud: 'SoundCloud',
+    songList: 'Danh sách bài hát',
+    myPlaylists: 'Playlist của tôi',
+    cloudConnection: 'Liên kết Cloud',
+    googleDrive: 'Google Drive',
+    settings: 'Cài đặt'
+  },
+  header: {
+    searchYtm: 'Tìm kiếm nhạc trên YouTube Music...',
+    searchSc: 'Tìm kiếm nhạc trên SoundCloud...',
+    searchLocal: 'Tìm bài hát, nghệ sĩ trong máy...',
+    refreshLibrary: 'Làm mới Thư viện',
+    refresh: 'Làm mới',
+    refreshing: 'Đang làm mới...'
+  },
+  trackTable: {
+    index: '#',
+    title: 'TÊN BÀI HÁT',
+    album: 'ALBUM',
+    format: 'ĐỊNH DẠNG',
+    duration: 'THỜI GIAN',
+    actions: 'THAO TÁC',
+    sortIndex: 'Sắp xếp theo STT',
+    sortTitle: 'Sắp xếp theo tên bài hát',
+    sortAlbum: 'Sắp xếp theo Album',
+    sortFormat: 'Sắp xếp theo định dạng',
+    sortDuration: 'Sắp xếp theo thời lượng'
+  },
+  home: {
+    ytmTitle: 'YouTube Music',
+    ytmSubtitle: 'Khám phá và đề xuất cá nhân hóa',
+    refreshYtm: 'Làm mới YouTube Music',
+    ytmSynced: 'Đã đồng bộ YTM',
+    ytmLogout: 'Đăng xuất / Đổi tài khoản',
+    ytmLogin: 'Đăng nhập YouTube Music',
+    noRecommendationsTitle: 'Chưa có dữ liệu đề xuất',
+    noRecommendationsDesc: 'Vui lòng nhấn nút Đăng nhập ở góc trên để nạp danh sách nhạc từ YouTube Music.',
+    playNow: 'Phát ngay',
+    downloadToLib: 'Tải xuống thư viện',
+    extractingYtm: 'Đang trích xuất bài hát từ YouTube Music...',
+    ytmPlaylist: 'YouTube Music • Danh sách phát',
+    scTitle: 'SoundCloud',
+    scSubtitle: 'Stream âm nhạc trực tuyến & Bảng xếp hạng',
+    scMember: 'SoundCloud Member',
+    scLogout: 'Đăng xuất / Đổi tài khoản',
+    scLogin: 'Đăng nhập SoundCloud',
+    refreshSc: 'Làm mới SoundCloud',
+    loadingSc: 'Đang tải nhạc SoundCloud...',
+    noScTracksTitle: 'Không có bài hát',
+    noScTracksDesc: 'Không thể tải dữ liệu SoundCloud hoặc không có bài hát nào trong thể loại này.',
+    genres: {
+      all: 'Tất cả',
+      electronic: 'Electronic',
+      hiphoprap: 'Hip-Hop & Rap',
+      pop: 'Pop',
+      chill: 'Lo-fi & Chill',
+      rock: 'Rock',
+      ambient: 'Ambient',
+      danceedm: 'Dance & EDM'
+    }
+  },
+  songsView: {
+    searchResults: 'Kết quả tìm kiếm',
+    songList: 'Danh sách bài hát',
+    addMusic: 'Thêm nhạc vào Thư viện',
+    noSongsMatched: 'Không tìm thấy bài hát nào khớp với "{query}".',
+    libraryNotConfigured: 'Chưa cấu hình Thư viện',
+    libraryNotConfiguredDesc: 'Vui lòng vào phần Cài đặt để chọn Thư mục chứa nhạc của bạn.'
+  },
+  driveView: {
+    title: 'Google Drive',
+    enterFolderLink: 'Nhập liên kết thư mục',
+    folderLinkDesc: 'Dán liên kết thư mục Drive chứa nhạc của bạn (Yêu cầu bật chế độ "Bất kỳ ai có liên kết").',
+    folderLinkPlaceholder: 'https://drive.google.com/drive/folders/...',
+    scanning: 'Đang quét...',
+    scanData: 'Quét dữ liệu',
+    emptyTitle: 'Danh sách bài hát trống',
+    emptyDesc: 'Vui lòng dán liên kết và nhấn quét để lấy danh sách từ Cloud.',
+    foundResults: 'Tìm thấy {count} kết quả cho "{query}"',
+    foundAudioFiles: 'Đã tìm thấy {count} tệp âm thanh',
+    streamAll: 'Stream tất cả',
+    downloadLossless: 'Tải về Thư viện (Lossless)',
+    processing: 'Đang xử lý...',
+    originalFormat: 'Định dạng gốc:'
+  },
+  playlistsView: {
+    title: 'Playlist của tôi',
+    searchResults: 'Kết quả tìm kiếm',
+    createPlaylist: 'Tạo Playlist mới',
+    autoCategorize: 'Tự động phân loại Album',
+    noPlaylists: 'Chưa có danh sách phát nào. Hãy tạo các thư mục con trong Thư viện gốc.',
+    playlistsAndAlbums: 'Album & Danh sách phát ({count})',
+    chooseCover: 'Chọn ảnh từ máy tính',
+    extractCover: 'Lấy ảnh từ bài hát đầu tiên',
+    addExistingSongs: 'Thêm bài hát có sẵn',
+    importFromComputer: 'Tải file từ máy tính',
+    noSongsMatched: 'Không tìm thấy bài hát nào khớp với "{query}".',
+    noResultsFound: 'Không tìm thấy kết quả nào cho "{query}".'
+  },
+  settings: {
+    title: 'Cài đặt hệ thống',
+    language: {
+      title: 'Ngôn ngữ (Language)',
+      desc: 'Chọn ngôn ngữ hiển thị cho giao diện ứng dụng.',
+      english: 'English (Tiếng Anh)',
+      vietnamese: 'Tiếng Việt (Vietnamese)'
+    },
+    customBg: {
+      title: 'Hình nền tuỳ chỉnh',
+      useTrackCover: 'Sử dụng ảnh bìa bài hát làm hình nền (Tự động đổi theo bài hát)',
+      placeholder: 'Nhập đường dẫn ảnh web (URL) hoặc chọn file...',
+      applyLink: 'Áp dụng link',
+      chooseImage: 'Chọn ảnh',
+      removeBg: 'Xoá nền',
+      opacity: 'Độ sáng hình nền',
+      blur: 'Độ mờ (Blur)'
+    },
+    library: {
+      title: 'Thư mục gốc (Thư viện)',
+      desc: 'Chọn thư mục chứa nhạc. Ứng dụng sẽ tự động quét bài hát...',
+      notSet: 'Chưa thiết lập',
+      change: 'Thay đổi'
+    },
+    bitPerfect: {
+      title: 'Bit-perfect (WASAPI Exclusive/ASIO)',
+      label: 'Chế độ Bit-perfect (Bỏ qua Windows Mixer)',
+      note: 'Lưu ý: Bật chế độ này sẽ chiếm quyền Audio, các ứng dụng khác sẽ không có tiếng. Thay đổi sẽ khởi động lại luồng âm thanh.'
+    },
+    googleDrive: {
+      title: 'Google Drive API Key',
+      desc: 'Nhập khóa API của bạn để sử dụng tính năng tải nhạc từ Cloud.',
+      placeholder: 'AIzaSy...',
+      note: '*Khóa của bạn sẽ được lưu an toàn trên máy tính cá nhân.'
+    },
+    windowBehavior: {
+      title: 'Hành vi cửa sổ',
+      onMinimize: 'Khi nhấn nút Thu nhỏ (Minimize)',
+      onMinimizeDesc: 'Mặc định thu nhỏ xuống thanh Taskbar',
+      minimizeTaskbar: 'Thu nhỏ xuống Taskbar',
+      minimizeTray: 'Thu nhỏ xuống System Tray',
+      onClose: 'Khi nhấn nút Đóng (Close)',
+      onCloseDesc: 'Tránh vô tình tắt nhạc khi đóng cửa sổ',
+      closeQuit: 'Thoát hoàn toàn ứng dụng',
+      closeTray: 'Thu nhỏ xuống System Tray'
+    },
+    appMode: {
+      title: 'Chế độ hoạt động (Hiệu suất)',
+      desc: 'Điều chỉnh mức độ tiêu thụ tài nguyên của ứng dụng để phù hợp với cấu hình máy.',
+      standard: 'Tiêu chuẩn',
+      lite: 'Tiết kiệm',
+      core: 'Cốt lõi'
+    }
+  },
+  player: {
+    noTrack: 'Chưa có bài hát',
+    unknownArtist: 'Chưa rõ nghệ sĩ',
+    spectrogram: 'Mở trình phân tích phổ (Spectrogram)',
+    lyrics: 'Lời bài hát',
+    miniPlayer: 'Trình phát thu nhỏ (Mini Player)',
+    queue: 'Danh sách đang phát',
+    equalizer: 'Bộ chỉnh âm (Equalizer)',
+    volume: 'Âm lượng',
+    shuffle: 'Phát ngẫu nhiên',
+    repeatOff: 'Không lặp lại',
+    repeatAll: 'Lặp lại toàn bộ',
+    repeatOne: 'Lặp lại một bài',
+    play: 'Phát',
+    pause: 'Tạm dừng',
+    next: 'Bài tiếp theo',
+    prev: 'Bài trước đó'
+  },
+  lyrics: {
+    title: 'Lời bài hát',
+    noLyrics: 'Không có lời bài hát.',
+    syncing: 'Lời bài hát đồng bộ',
+    maximize: 'Xem toàn màn hình',
+    minimize: 'Thu nhỏ'
+  },
+  queue: {
+    title: 'Danh sách đang phát',
+    empty: 'Hàng đợi trống.'
+  },
+  contextMenu: {
+    play: 'Phát bài hát',
+    addQueue: 'Thêm vào hàng đợi',
+    addToPlaylist: 'Thêm vào Playlist...',
+    editTags: 'Chỉnh sửa thẻ (Metadata)',
+    showInFolder: 'Mở vị trí tệp trong Explorer',
+    removeFromPlaylist: 'Xóa khỏi playlist "{name}"',
+    deleteFile: 'Xóa tệp (Chuyển vào Thùng rác)',
+    confirmDeleteFile: 'Bạn có chắc chắn muốn chuyển tệp "{title}" vào Thùng rác máy tính?',
+    confirmRemoveFromPlaylist: 'Bạn có chắc muốn xóa bài hát "{title}" khỏi playlist "{name}"?',
+    playAll: 'Phát toàn bộ danh sách',
+    addSongs: 'Thêm bài hát vào playlist',
+    renamePlaylist: 'Đổi tên Playlist',
+    changeCover: 'Đổi ảnh bìa Playlist',
+    extractCover: 'Lấy ảnh từ bài hát đầu tiên',
+    openPlaylistFolder: 'Mở thư mục Playlist trong Explorer',
+    deletePlaylist: 'Xóa playlist "{name}"',
+    confirmDeletePlaylist: 'Bạn có chắc chắn muốn xóa Playlist "{name}" và chuyển thư mục vào Thùng rác?',
+    downloadToLib: 'Tải về thư viện'
+  },
+  modals: {
+    addSongs: {
+      title: 'Thêm bài hát vào "{name}"',
+      addCount: 'Thêm {count} bài hát'
+    },
+    cloudAction: {
+      desc: 'Đây là file lưu trên Cloud. Bạn muốn phát trực tiếp hay tải về máy để nghe Offline?',
+      streamDirect: 'Phát trực tiếp (Stream)',
+      downloadDirect: 'Lưu về máy (Download)',
+      downloading: 'Đang tải...'
+    },
+    createPlaylist: {
+      title: 'Tạo Playlist Mới',
+      placeholder: 'Nhập tên playlist...',
+      create: 'Tạo mới'
+    },
+    renamePlaylist: {
+      title: 'Đổi tên Playlist',
+      placeholder: 'Nhập tên mới...',
+      save: 'Lưu tên mới'
+    },
+    tagEditor: {
+      title: 'Chỉnh sửa thông tin bài hát (Metadata)',
+      flacTag: 'FLAC Vorbis Tag',
+      mp3Tag: 'MP3 ID3v2 Tag',
+      audioTag: 'Audio Tag',
+      chooseCover: 'Chọn ảnh bìa',
+      trackTitle: 'Tên bài hát (Title)',
+      placeholderTitle: 'Nhập tên bài hát...',
+      artist: 'Nghệ sĩ (Artist)',
+      placeholderArtist: 'Nhập tên nghệ sĩ...',
+      album: 'Album',
+      placeholderAlbum: 'Nhập tên album...',
+      lyrics: 'Lời bài hát (Định dạng LRC hoặc văn bản)',
+      lyricsFormatInfo: '[00:00.00] Lyrics',
+      lyricsPlaceholder: '[00:01.00] Dán lời bài hát có mốc thời gian hoặc lời thô vào đây...',
+      saveDirect: 'Lưu thay đổi trực tiếp'
+    },
+    spectrogram: {
+      title: 'Phổ tần số toàn bài hát (Full Spectrogram)',
+      noTrack: 'Chưa chọn bài hát',
+      closeWindow: 'Đóng cửa sổ',
+      generating: 'Đang dựng biểu đồ phổ toàn bản nhạc...',
+      errorPrefix: 'Không thể dựng phổ tần số: ',
+      ensureLocalFile: 'Vui lòng đảm bảo file bài hát có sẵn trên ổ đĩa nội bộ.',
+      seekInstruction: 'Click chuột vào bất kỳ điểm nào trên biểu đồ để tua bài hát đến thời điểm đó.',
+      intensityLegend: '*Dải sáng thể hiện cường độ âm thanh: Trắng (mạnh nhất) > Đỏ/Vàng > Xanh lục > Xanh lam > Đen (im lặng).'
+    },
+    eq: {
+      title: 'Bộ chỉnh âm (Parametric EQ)',
+      enableEq: 'Bật EQ',
+      autoEq: 'AutoEQ - Cấu hình tai nghe',
+      searchHeadphonePlaceholder: 'Tìm kiếm mẫu tai nghe (VD: Sony, Sennheiser, Moondrop)...',
+      importFile: 'Nhập từ Peace / APO (.txt)',
+      exportFile: 'Xuất ra Peace (.txt)',
+      reset: 'Đặt lại EQ',
+      preamp: 'Tăng âm (Preamp)',
+      gain: 'Khuếch đại (Gain)',
+      freq: 'Tần số (Freq)',
+      bandwidthQ: 'Hệ số Q',
+      type: 'Loại lọc (Type)',
+      peaking: 'Peaking',
+      lowshelf: 'Low Shelf',
+      highshelf: 'High Shelf',
+      lowpass: 'Low Pass',
+      highpass: 'High Pass',
+      noBandsFound: 'Không tìm thấy dải tần số nào hợp lệ trong tệp!'
+    }
+  },
+  toasts: {
+    ytmLoginSuccess: 'Đăng nhập YouTube Music thành công!',
+    ytmLogout: 'Đã đăng xuất YouTube Music',
+    scLoginSuccess: 'Đăng nhập SoundCloud thành công!',
+    scLogout: 'Đã đăng xuất SoundCloud',
+    downloadFinished: 'Đã tải xong "{title}"!',
+    albumDownloadFinished: 'Đã tải hoàn tất {count}/{total} bài hát của Album!',
+    playlistCreated: 'Đã tạo playlist thành công!',
+    tracksAddedToPlaylist: 'Đã thêm {count} bài hát vào playlist!',
+    connectingStream: 'Đang kết nối luồng phát...',
+    setLibraryFirst: 'Vui lòng vào Cài đặt để thiết lập Thư viện gốc trước khi tải!',
+    driveDownloadFinished: 'Đã tải xong {count} bài hát về máy!',
+    systemError: 'Lỗi hệ thống: ',
+    downloadError: 'Có lỗi xảy ra khi tải file!',
+    tagSavedSuccess: 'Đã lưu thông tin thẻ bài hát thành công!',
+    addedToQueue: 'Đã thêm "{title}" vào hàng đợi!',
+    addedToPlaylist: 'Đã thêm vào playlist "{name}"!',
+    removedFromPlaylist: 'Đã xóa bài hát khỏi playlist!',
+    movedToTrash: 'Đã chuyển "{title}" vào Thùng rác!',
+    playlistDeleted: 'Đã xóa playlist "{name}"!',
+    deleteTrackError: 'Lỗi khi xóa bài hát: ',
+    deletePlaylistError: 'Lỗi khi xóa playlist: ',
+    downloadProgress: 'Đang tải...',
+    librarySavedSuccess: 'Đã lưu thư mục thư viện gốc!',
+    autoCategorizeConfirm: 'Hành động này sẽ tự động tạo thư mục và di chuyển các bài hát có chung Album vào đó. Bạn có chắc chắn?',
+    autoCategorizeSuccess: 'Đã di chuyển thành công {count} bài hát vào các Playlist Album!',
+    coverUpdatedSuccess: 'Đã cập nhật ảnh bìa từ bài hát đầu tiên thành công!',
+    coverChangeSuccess: 'Đã thay đổi ảnh bìa thành công! Đang tải lại thư viện...'
+  }
+}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, X, Check } from 'lucide-react'
+import { useTranslation } from '../../locales'
 
 interface AddSongsModalProps {
   isOpen: boolean
@@ -10,6 +11,7 @@ interface AddSongsModalProps {
 }
 
 export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, playlistName, onClose, onAddTracks }) => {
+  const { t } = useTranslation()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   if (!isOpen) return null
@@ -29,7 +31,7 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-[600px] max-h-[80vh] flex flex-col shadow-2xl">
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">
-          <h2 className="text-xl font-bold text-white">Thêm bài hát vào "{playlistName}"</h2>
+          <h2 className="text-xl font-bold text-white">{t('modals.addSongs.title', { name: playlistName })}</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-white"><X size={20}/></button>
         </div>
 
@@ -55,9 +57,9 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
         </div>
 
         <div className="flex justify-end gap-3 pt-2 border-t border-zinc-800">
-          <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">Hủy</button>
+          <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white">{t('common.cancel')}</button>
           <button onClick={handleConfirm} className="bg-theme-10 hover:bg-theme-10 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2">
-            <Plus size={16} /> Thêm {selectedIds.length} bài hát
+            <Plus size={16} /> {t('modals.addSongs.addCount', { count: selectedIds.length })}
           </button>
         </div>
       </div>

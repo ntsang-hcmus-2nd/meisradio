@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Radio, X, Loader2, Sparkles } from 'lucide-react'
+import { useTranslation } from '../locales'
 
 interface SpectrogramModalProps {
   isOpen: boolean
@@ -68,38 +69,31 @@ function getColor(norm: number): [number, number, number] {
   } else if (norm < 0.4) {
     const t = (norm - 0.2) / 0.2
     return [
-      Math.floor(50 - t * 50),
-      Math.floor(30 + t * 180),
-      Math.floor(164 + t * 60)
-    ] // Cyan / Blue-Green
-  } else if (norm < 0.6) {
-    const t = (norm - 0.4) / 0.2
+      Math.floor(50 + t * 10),
+      Math.floor(30 + t * 160),
+      Math.floor(164 - t * 40)
+    ] // Cyan / Teal
+  } else if (norm < 0.65) {
+    const t = (norm - 0.4) / 0.25
     return [
-      Math.floor(t * 16),
-      Math.floor(210 + t * 35),
-      Math.floor(224 - t * 120)
-    ] // Emerald Green
-  } else if (norm < 0.8) {
-    const t = (norm - 0.6) / 0.2
-    return [
-      Math.floor(16 + t * 224),
-      Math.floor(245 - t * 45),
-      Math.floor(104 - t * 90)
-    ] // Gold / Orange
-  } else if (norm < 0.95) {
-    const t = (norm - 0.8) / 0.15
-    return [
-      Math.floor(240 + t * 15),
-      Math.floor(200 - t * 150),
-      Math.floor(14 + t * 40)
-    ] // Red / Crimson
-  } else {
-    const t = (norm - 0.95) / 0.05
+      Math.floor(60 + t * 195),
+      Math.floor(190 + t * 50),
+      Math.floor(124 - t * 124)
+    ] // Green / Lime
+  } else if (norm < 0.85) {
+    const t = (norm - 0.65) / 0.2
     return [
       255,
-      Math.floor(50 + t * 205),
-      Math.floor(54 + t * 201)
-    ] // White hot peak
+      Math.floor(240 - t * 160),
+      0
+    ] // Yellow / Orange
+  } else {
+    const t = (norm - 0.85) / 0.15
+    return [
+      255,
+      Math.floor(80 + t * 175),
+      Math.floor(t * 255)
+    ] // Orange / Red / White
   }
 }
 
@@ -112,6 +106,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   currentTrack,
   audioRef
 }) => {
+  const { t } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -352,7 +347,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h2 className="text-lg font-bold text-white">Phổ tần số toàn bài hát (Full Spectrogram)</h2>
+                <h2 className="text-lg font-bold text-white">{t('modals.spectrogram.title')}</h2>
                 {currentTrack && (
                   <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
                     <span className="font-bold text-theme-10 uppercase">
@@ -370,7 +365,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
                 )}
               </div>
               <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
-                {currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : 'Chưa chọn bài hát'}
+                {currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : t('modals.spectrogram.noTrack')}
               </p>
             </div>
           </div>
@@ -378,7 +373,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
           <button 
             onClick={onClose} 
             className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
-            title="Đóng cửa sổ"
+            title={t('modals.spectrogram.closeWindow')}
           >
             <X size={20} />
           </button>
@@ -412,15 +407,15 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
             {loading && (
               <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
                 <Loader2 size={36} className="text-theme-10 animate-spin" />
-                <span className="text-zinc-300 text-sm font-medium">Đang dựng biểu đồ phổ toàn bản nhạc...</span>
+                <span className="text-zinc-300 text-sm font-medium">{t('modals.spectrogram.generating')}</span>
               </div>
             )}
 
             {/* ERROR MESSAGE */}
             {errorMsg && (
               <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 z-30 p-6 text-center">
-                <span className="text-rose-400 text-sm font-semibold">Không thể dựng phổ tần số: {errorMsg}</span>
-                <span className="text-zinc-500 text-xs">Vui lòng đảm bảo file bài hát có sẵn trên ổ đĩa nội bộ.</span>
+                <span className="text-rose-400 text-sm font-semibold">{t('modals.spectrogram.errorPrefix')}{errorMsg}</span>
+                <span className="text-zinc-500 text-xs">{t('modals.spectrogram.ensureLocalFile')}</span>
               </div>
             )}
 
@@ -474,10 +469,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
         <div className="p-3.5 border-t border-zinc-800 bg-zinc-950/90 flex items-center justify-between text-xs text-zinc-400 shrink-0">
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-theme-10" />
-            <span>Click chuột vào bất kỳ điểm nào trên biểu đồ để tua bài hát đến thời điểm đó.</span>
+            <span>{t('modals.spectrogram.seekInstruction')}</span>
           </div>
           <p className="text-zinc-500 italic">
-            *Dải sáng thể hiện cường độ âm thanh: Trắng (mạnh nhất) &gt; Đỏ/Vàng &gt; Xanh lục &gt; Xanh lam &gt; Đen (im lặng).
+            {t('modals.spectrogram.intensityLegend')}
           </p>
         </div>
 
