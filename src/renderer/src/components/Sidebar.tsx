@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Home, Library, ListMusic, Cloud, Settings, ChevronDown, ChevronRight } from 'lucide-react'
+import { Home, Library, Disc, Mic2, Tag, ListPlus, Cloud, Settings, ChevronDown, ChevronRight } from 'lucide-react'
 import logoImg from '../../../../resources/HoT_Chibi_Icon.png'
 import { useTranslation } from '../locales'
 
@@ -10,6 +10,9 @@ interface SidebarProps {
   setSearchInput: (q: string) => void
   setActiveAlbum: (a: any) => void
   setActivePlaylist: (p: any) => void
+  setActiveArtist?: (a: any) => void
+  setActiveGenre?: (g: any) => void
+  setActiveUserPlaylist?: (p: any) => void
   fetchDashboard: () => void
   fetchScDashboard?: () => void
   isCore: boolean // <-- MỚI: Nhận trạng thái Core Mode
@@ -17,7 +20,8 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   activeView, setActiveView, setSearchQuery, setSearchInput, 
-  setActiveAlbum, setActivePlaylist, fetchDashboard, fetchScDashboard, isCore 
+  setActiveAlbum, setActivePlaylist, setActiveArtist, setActiveGenre, setActiveUserPlaylist,
+  fetchDashboard, fetchScDashboard, isCore 
 }) => {
   const { t } = useTranslation()
   const isHomeActive = activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud'
@@ -43,6 +47,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (fetchScDashboard) fetchScDashboard()
     }
     if (view === 'playlists') setActivePlaylist(null)
+    if (setActiveArtist && view === 'artists') setActiveArtist(null)
+    if (setActiveGenre && view === 'genres') setActiveGenre(null)
+    if (setActiveUserPlaylist && view === 'user-playlists') setActiveUserPlaylist(null)
   }
 
   return (
@@ -102,7 +109,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </li>
               )}
               <li onClick={() => handleNavClick('songs')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'songs' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Library size={18} /> {t('sidebar.songList')}</li>
-              <li onClick={() => handleNavClick('playlists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'playlists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><ListMusic size={18} /> {t('sidebar.myPlaylists')}</li>
+              <li onClick={() => handleNavClick('playlists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'playlists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Disc size={18} /> {t('sidebar.myPlaylists')}</li>
+              <li onClick={() => handleNavClick('artists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'artists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Mic2 size={18} /> {t('sidebar.artists')}</li>
+              <li onClick={() => handleNavClick('genres')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'genres' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Tag size={18} /> {t('sidebar.genres')}</li>
+              <li onClick={() => handleNavClick('user-playlists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'user-playlists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><ListPlus size={18} /> {t('sidebar.userPlaylists')}</li>
               
               {/* Ẩn tab Stream trực tuyến nếu ở chế độ Core */}
             </ul>

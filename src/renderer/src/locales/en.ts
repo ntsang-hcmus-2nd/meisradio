@@ -29,10 +29,18 @@ export const en: TranslationDictionary = {
     youtubeMusic: 'YouTube Music',
     soundCloud: 'SoundCloud',
     songList: 'All Songs',
-    myPlaylists: 'My Playlists',
+    myPlaylists: 'Playlists & Albums',
+    artists: 'Artists',
+    genres: 'Genres',
+    userPlaylists: 'My Playlists',
     cloudConnection: 'Cloud Storage',
     googleDrive: 'Google Drive',
     settings: 'Settings'
+  },
+  viewOptions: {
+    table: 'Detailed List',
+    grid: 'Card Grid',
+    compact: 'Compact List'
   },
   header: {
     searchYtm: 'Search on YouTube Music...',
@@ -96,6 +104,50 @@ export const en: TranslationDictionary = {
     libraryNotConfigured: 'Library Not Configured',
     libraryNotConfiguredDesc: 'Please go to Settings to select your music folder.'
   },
+  artistsView: {
+    title: 'Artists',
+    searchResults: 'Artist Search Results',
+    allArtists: 'All Artists',
+    albums: 'Albums & Playlists',
+    singlesAndTracks: 'All Songs',
+    noArtists: 'No artist data found in library.',
+    playAll: 'Play All',
+    shuffle: 'Shuffle',
+    artistCount: 'artists',
+    trackCount: 'songs',
+    albumCount: 'albums',
+    backToArtists: 'Back to Artists'
+  },
+  genresView: {
+    title: 'Genres',
+    searchResults: 'Genre Search Results',
+    allGenres: 'All Genres',
+    noGenres: 'No genre metadata found in library.',
+    genreCount: 'genres',
+    playAll: 'Play All',
+    shuffle: 'Shuffle',
+    songsInGenre: 'Songs in Genre',
+    topArtists: 'Top Artists',
+    backToGenres: 'Back to Genres'
+  },
+  userPlaylistsView: {
+    title: 'My Playlists',
+    searchResults: 'Playlist Search Results',
+    createPlaylist: 'Create Playlist',
+    playlistCount: 'playlists',
+    noPlaylists: 'No custom playlists yet. Click "Create Playlist" to get started!',
+    empty: 'No tracks in this playlist yet',
+    emptyPlaylist: 'This playlist is empty. Add songs from your library!',
+    addSongs: 'Add Songs',
+    chooseCover: 'Change Cover',
+    deletePlaylist: 'Delete Playlist',
+    confirmDelete: 'Are you sure you want to delete playlist "{name}"? (Original audio files will not be deleted)',
+    rename: 'Rename Playlist',
+    playAll: 'Play Playlist',
+    shuffle: 'Shuffle',
+    removeFromPlaylist: 'Remove from playlist',
+    confirmRemove: 'Are you sure you want to remove "{title}" from this playlist?'
+  },
   driveView: {
     title: 'Google Drive',
     enterFolderLink: 'Enter Folder Link',
@@ -113,9 +165,9 @@ export const en: TranslationDictionary = {
     originalFormat: 'Original format:'
   },
   playlistsView: {
-    title: 'My Playlists',
+    title: 'Playlists & Albums',
     searchResults: 'Search Results',
-    createPlaylist: 'Create New Playlist',
+    createPlaylist: 'Create Folder Playlist',
     autoCategorize: 'Auto-categorize Albums',
     noPlaylists: 'No playlists yet. Create subfolders in your root library to organize playlists.',
     playlistsAndAlbums: 'Albums & Playlists ({count})',
@@ -145,10 +197,16 @@ export const en: TranslationDictionary = {
       blur: 'Background Blur'
     },
     library: {
-      title: 'Root Folder (Library)',
-      desc: 'Select the folder containing your music. The app will automatically scan for audio tracks...',
-      notSet: 'Not configured',
-      change: 'Change'
+      title: 'Music Folders (Library)',
+      desc: 'Manage music folders on your computer. The app will automatically scan and combine songs from all folders.',
+      notSet: 'No folder configured',
+      change: 'Change Path',
+      addFolder: 'Add Music Folder',
+      removeFolder: 'Remove Folder',
+      updateFolder: 'Change Folder',
+      openFolder: 'Open in File Explorer',
+      folderCount: 'music folders configured',
+      rescan: 'Rescan All Libraries'
     },
     bitPerfect: {
       title: 'Bit-perfect (WASAPI Exclusive / ASIO)',

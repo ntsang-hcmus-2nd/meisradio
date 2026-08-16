@@ -29,10 +29,18 @@ export const vi: TranslationDictionary = {
     youtubeMusic: 'YouTube Music',
     soundCloud: 'SoundCloud',
     songList: 'Danh sách bài hát',
-    myPlaylists: 'Playlist của tôi',
+    myPlaylists: 'Danh sách phát',
+    artists: 'Nghệ sĩ',
+    genres: 'Thể loại',
+    userPlaylists: 'Playlist của tôi',
     cloudConnection: 'Liên kết Cloud',
     googleDrive: 'Google Drive',
     settings: 'Cài đặt'
+  },
+  viewOptions: {
+    table: 'Danh sách chi tiết',
+    grid: 'Lưới bìa thẻ',
+    compact: 'Danh sách thu gọn'
   },
   header: {
     searchYtm: 'Tìm kiếm nhạc trên YouTube Music...',
@@ -96,6 +104,50 @@ export const vi: TranslationDictionary = {
     libraryNotConfigured: 'Chưa cấu hình Thư viện',
     libraryNotConfiguredDesc: 'Vui lòng vào phần Cài đặt để chọn Thư mục chứa nhạc của bạn.'
   },
+  artistsView: {
+    title: 'Nghệ sĩ',
+    searchResults: 'Kết quả tìm kiếm nghệ sĩ',
+    allArtists: 'Tất cả nghệ sĩ',
+    albums: 'Album & Danh sách phát',
+    singlesAndTracks: 'Tất cả bài hát',
+    noArtists: 'Chưa có dữ liệu nghệ sĩ trong thư viện.',
+    playAll: 'Phát tất cả',
+    shuffle: 'Xáo trộn',
+    artistCount: 'nghệ sĩ',
+    trackCount: 'bài hát',
+    albumCount: 'album',
+    backToArtists: 'Quay lại danh sách nghệ sĩ'
+  },
+  genresView: {
+    title: 'Thể loại',
+    searchResults: 'Kết quả tìm kiếm thể loại',
+    allGenres: 'Tất cả thể loại',
+    noGenres: 'Chưa có dữ liệu thể loại trong thư viện.',
+    genreCount: 'thể loại',
+    playAll: 'Phát tất cả',
+    shuffle: 'Xáo trộn',
+    songsInGenre: 'Bài hát trong thể loại',
+    topArtists: 'Nghệ sĩ tiêu biểu',
+    backToGenres: 'Quay lại danh mục thể loại'
+  },
+  userPlaylistsView: {
+    title: 'Playlist của tôi',
+    searchResults: 'Kết quả tìm kiếm playlist',
+    createPlaylist: 'Tạo Playlist mới',
+    playlistCount: 'playlist',
+    noPlaylists: 'Chưa có playlist tùy chỉnh nào. Nhấn "Tạo Playlist mới" để bắt đầu!',
+    empty: 'Chưa có bài hát nào trong playlist này',
+    emptyPlaylist: 'Playlist này chưa có bài hát nào. Hãy thêm bài hát từ thư viện của bạn!',
+    addSongs: 'Thêm bài hát',
+    chooseCover: 'Đổi ảnh bìa',
+    deletePlaylist: 'Xóa Playlist',
+    confirmDelete: 'Bạn có chắc chắn muốn xóa playlist "{name}" không? (Các tệp nhạc gốc trên máy sẽ không bị ảnh hưởng)',
+    rename: 'Đổi tên Playlist',
+    playAll: 'Phát Playlist',
+    shuffle: 'Xáo trộn',
+    removeFromPlaylist: 'Xóa khỏi playlist',
+    confirmRemove: 'Bạn có chắc muốn bỏ bài hát "{title}" khỏi playlist này?'
+  },
   driveView: {
     title: 'Google Drive',
     enterFolderLink: 'Nhập liên kết thư mục',
@@ -113,9 +165,9 @@ export const vi: TranslationDictionary = {
     originalFormat: 'Định dạng gốc:'
   },
   playlistsView: {
-    title: 'Playlist của tôi',
+    title: 'Danh sách phát & Album',
     searchResults: 'Kết quả tìm kiếm',
-    createPlaylist: 'Tạo Playlist mới',
+    createPlaylist: 'Tạo thư mục Playlist',
     autoCategorize: 'Tự động phân loại Album',
     noPlaylists: 'Chưa có danh sách phát nào. Hãy tạo các thư mục con trong Thư viện gốc.',
     playlistsAndAlbums: 'Album & Danh sách phát ({count})',
@@ -145,10 +197,16 @@ export const vi: TranslationDictionary = {
       blur: 'Độ mờ (Blur)'
     },
     library: {
-      title: 'Thư mục gốc (Thư viện)',
-      desc: 'Chọn thư mục chứa nhạc. Ứng dụng sẽ tự động quét bài hát...',
-      notSet: 'Chưa thiết lập',
-      change: 'Thay đổi'
+      title: 'Thư mục nhạc (Thư viện)',
+      desc: 'Quản lý các thư mục chứa nhạc trên máy tính. Ứng dụng sẽ tự động quét và gom bài hát từ tất cả thư mục.',
+      notSet: 'Chưa thiết lập thư mục',
+      change: 'Đổi đường dẫn',
+      addFolder: 'Thêm thư mục nhạc',
+      removeFolder: 'Xóa thư mục',
+      updateFolder: 'Thay đổi thư mục',
+      openFolder: 'Mở trong File Explorer',
+      folderCount: 'thư mục nhạc đã thêm',
+      rescan: 'Quét lại toàn bộ thư viện'
     },
     bitPerfect: {
       title: 'Bit-perfect (WASAPI Exclusive/ASIO)',

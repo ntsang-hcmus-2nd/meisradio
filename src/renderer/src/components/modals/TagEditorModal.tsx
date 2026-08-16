@@ -4,7 +4,7 @@ import { useTranslation } from '../../locales'
 
 interface TagEditorModalProps {
   track: any
-  tags: { title: string; artist: string; album: string; lyrics: string }
+  tags: { title: string; artist: string; album: string; genre?: string; lyrics: string }
   imagePath: string | null
   setTags: (tags: any) => void
   onSelectImage: () => void
@@ -58,14 +58,14 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
           </div>
 
           {/* Metadata inputs */}
-          <div className="w-2/3 space-y-3.5 text-xs">
+          <div className="w-2/3 space-y-3 text-xs">
             <div>
               <label className="text-zinc-400 font-medium mb-1 block">{t('modals.tagEditor.trackTitle')}</label>
               <input 
                 type="text" 
                 value={tags.title} 
                 onChange={e => setTags({ ...tags, title: e.target.value })} 
-                className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2.5 text-white focus:outline-none focus:border-theme-10" 
+                className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10" 
                 placeholder={t('modals.tagEditor.placeholderTitle')}
               />
             </div>
@@ -76,20 +76,32 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
                 type="text" 
                 value={tags.artist} 
                 onChange={e => setTags({ ...tags, artist: e.target.value })} 
-                className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2.5 text-white focus:outline-none focus:border-theme-10" 
+                className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10" 
                 placeholder={t('modals.tagEditor.placeholderArtist')}
               />
             </div>
 
-            <div>
-              <label className="text-zinc-400 font-medium mb-1 block">{t('modals.tagEditor.album')}</label>
-              <input 
-                type="text" 
-                value={tags.album} 
-                onChange={e => setTags({ ...tags, album: e.target.value })} 
-                className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2.5 text-white focus:outline-none focus:border-theme-10" 
-                placeholder={t('modals.tagEditor.placeholderAlbum')}
-              />
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label className="text-zinc-400 font-medium mb-1 block">{t('modals.tagEditor.album')}</label>
+                <input 
+                  type="text" 
+                  value={tags.album} 
+                  onChange={e => setTags({ ...tags, album: e.target.value })} 
+                  className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10" 
+                  placeholder={t('modals.tagEditor.placeholderAlbum')}
+                />
+              </div>
+              <div>
+                <label className="text-zinc-400 font-medium mb-1 block">{t('genresView.title')}</label>
+                <input 
+                  type="text" 
+                  value={tags.genre || ''} 
+                  onChange={e => setTags({ ...tags, genre: e.target.value })} 
+                  className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10" 
+                  placeholder="Pop, Rock, Anime..."
+                />
+              </div>
             </div>
           </div>
         </div>

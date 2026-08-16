@@ -30,9 +30,17 @@ export interface TranslationDictionary {
     soundCloud: string
     songList: string
     myPlaylists: string
+    artists: string
+    genres: string
+    userPlaylists: string
     cloudConnection: string
     googleDrive: string
     settings: string
+  }
+  viewOptions: {
+    table: string
+    grid: string
+    compact: string
   }
   header: {
     searchYtm: string
@@ -96,6 +104,50 @@ export interface TranslationDictionary {
     libraryNotConfigured: string
     libraryNotConfiguredDesc: string
   }
+  artistsView: {
+    title: string
+    searchResults: string
+    allArtists: string
+    albums: string
+    singlesAndTracks: string
+    noArtists: string
+    playAll: string
+    shuffle: string
+    artistCount: string
+    trackCount: string
+    albumCount: string
+    backToArtists: string
+  }
+  genresView: {
+    title: string
+    searchResults: string
+    allGenres: string
+    noGenres: string
+    genreCount: string
+    playAll: string
+    shuffle: string
+    songsInGenre: string
+    topArtists: string
+    backToGenres: string
+  }
+  userPlaylistsView: {
+    title: string
+    searchResults: string
+    createPlaylist: string
+    playlistCount: string
+    noPlaylists: string
+    empty: string
+    emptyPlaylist: string
+    addSongs: string
+    chooseCover: string
+    deletePlaylist: string
+    confirmDelete: string
+    rename: string
+    playAll: string
+    shuffle: string
+    removeFromPlaylist: string
+    confirmRemove: string
+  }
   driveView: {
     title: string
     enterFolderLink: string
@@ -149,6 +201,12 @@ export interface TranslationDictionary {
       desc: string
       notSet: string
       change: string
+      addFolder: string
+      removeFolder: string
+      updateFolder: string
+      openFolder: string
+      folderCount: string
+      rescan: string
     }
     bitPerfect: {
       title: string

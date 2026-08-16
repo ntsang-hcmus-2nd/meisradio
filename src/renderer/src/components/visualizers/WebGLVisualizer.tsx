@@ -24,7 +24,7 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
     if (isLite || !showVisualizer || !canvasRef.current) return
 
     const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { alpha: true })
     if (!ctx) return
 
     const numBands = barCount
@@ -38,6 +38,45 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
 
     let rawDataArray = new Uint8Array(1024)
 
+    // Cache layout dimensions and color to avoid layout thrashing
+    let cachedWidth = canvas.clientWidth || 300
+    let cachedHeight = canvas.clientHeight || 80
+    let cachedDpr = window.devicePixelRatio || 1
+    let cachedThemeColor = '#10b981'
+
+    const updateThemeColor = () => {
+      try {
+        const rawTheme = getComputedStyle(document.documentElement).getPropertyValue('--theme-10').trim()
+        if (rawTheme && (rawTheme.startsWith('#') || rawTheme.startsWith('rgb') || rawTheme.startsWith('hsl'))) {
+          cachedThemeColor = rawTheme
+        }
+      } catch (e) {}
+    }
+    updateThemeColor()
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect) {
+          cachedWidth = Math.floor(entry.contentRect.width)
+          cachedHeight = Math.floor(entry.contentRect.height)
+          cachedDpr = window.devicePixelRatio || 1
+          if (cachedWidth > 0 && cachedHeight > 0) {
+            canvas.width = Math.floor(cachedWidth * cachedDpr)
+            canvas.height = Math.floor(cachedHeight * cachedDpr)
+          }
+        }
+      }
+      updateThemeColor()
+    })
+
+    resizeObserver.observe(canvas)
+
+    // Initial setup of canvas dimensions
+    if (cachedWidth > 0 && cachedHeight > 0) {
+      canvas.width = Math.floor(cachedWidth * cachedDpr)
+      canvas.height = Math.floor(cachedHeight * cachedDpr)
+    }
+
     const draw = (now: number) => {
       reqAnimRef.current = requestAnimationFrame(draw)
 
@@ -45,20 +84,11 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
       if (elapsed < fpsInterval) return
       lastDrawTime = now - (elapsed % fpsInterval)
 
-      const dpr = window.devicePixelRatio || 1
-      const rect = canvas.getBoundingClientRect()
-      const width = rect.width
-      const height = rect.height
+      const width = cachedWidth
+      const height = cachedHeight
+      const dpr = cachedDpr
 
       if (width === 0 || height === 0) return
-
-      const targetW = Math.floor(width * dpr)
-      const targetH = Math.floor(height * dpr)
-
-      if (canvas.width !== targetW || canvas.height !== targetH) {
-        canvas.width = targetW
-        canvas.height = targetH
-      }
 
       ctx.save()
       ctx.scale(dpr, dpr)
@@ -94,7 +124,6 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
           }
           const rawVal = count > 0 ? (sum / count) / 255 : 0
 
-          // Phản hồi tăng tốc nhanh, hạ xuống mượt
           if (rawVal > smoothedValues[i]) {
             smoothedValues[i] = rawVal
           } else {
@@ -108,28 +137,21 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
           }
         }
       } else {
-        // Tắt dần khi dừng phát
         for (let i = 0; i < numBands; i++) {
           smoothedValues[i] = Math.max(0, smoothedValues[i] - 0.05)
           peakValues[i] = Math.max(0, peakValues[i] - 0.02)
         }
       }
 
-      // Lấy màu chủ đạo
-      const rawTheme = getComputedStyle(document.documentElement).getPropertyValue('--theme-10').trim()
-      const theme10Color = (rawTheme && (rawTheme.startsWith('#') || rawTheme.startsWith('rgb') || rawTheme.startsWith('hsl'))) ? rawTheme : '#10b981'
-
       const gap = 2
       const totalGap = (numBands - 1) * gap
       const barWidth = Math.max(2, (width - totalGap) / numBands)
 
-      // Gradient chung cho toàn bộ khung từ đáy lên đỉnh
       const gradient = ctx.createLinearGradient(0, height, 0, 0)
       gradient.addColorStop(0, 'rgba(16, 185, 129, 0.25)')
-      gradient.addColorStop(0.65, theme10Color)
+      gradient.addColorStop(0.65, cachedThemeColor)
       gradient.addColorStop(1, '#ffffff')
 
-      // Vẽ các cột phổ tần số
       for (let i = 0; i < numBands; i++) {
         const val = smoothedValues[i]
         const peak = peakValues[i]
@@ -146,7 +168,6 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
         }
         ctx.fill()
 
-        // Vẽ đỉnh peak
         if (peak > 0.05) {
           const peakY = Math.max(0, height - (peak * (height - 6)) - 4)
           ctx.fillStyle = '#ffffff'
@@ -166,6 +187,7 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
     reqAnimRef.current = requestAnimationFrame(draw)
 
     return () => {
+      resizeObserver.disconnect()
       if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
     }
   }, [isPlaying, isLite, showVisualizer, analyserNodeRef, barCount])

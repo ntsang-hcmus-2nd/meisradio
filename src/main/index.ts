@@ -50,6 +50,33 @@ if (!fs.existsSync(IMAGE_CACHE_DIR)) {
 const CONFIG_PATH = join(DATA_FOLDER, 'music-config.json');
 const METADATA_CACHE_PATH = join(DATA_FOLDER, 'metadata-cache.json');
 const LIBRARY_CACHE_PATH = join(DATA_FOLDER, 'library-cache.json');
+const USER_PLAYLISTS_PATH = join(DATA_FOLDER, 'user-playlists.json');
+
+export interface UserPlaylist {
+  id: string
+  name: string
+  description?: string
+  thumbnail?: string | null
+  trackIds: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+function getUserPlaylists(): UserPlaylist[] {
+  try {
+    if (fs.existsSync(USER_PLAYLISTS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(USER_PLAYLISTS_PATH, 'utf-8'))
+      if (Array.isArray(data)) return data
+    }
+  } catch (e) {}
+  return []
+}
+
+function saveUserPlaylists(playlists: UserPlaylist[]) {
+  try {
+    fs.writeFileSync(USER_PLAYLISTS_PATH, JSON.stringify(playlists, null, 2))
+  } catch (e) {}
+}
 
 let metadataCache: Record<string, { mtime: number; data: any }> = {};
 try {
@@ -108,18 +135,35 @@ function getConfig() {
           try { config.scOAuthToken = safeStorage.decryptString(Buffer.from(config.scOAuthToken.replace('ENC:', ''), 'base64')) } catch (e) { }
         }
       }
+      
+      const rawPaths = Array.isArray(config.libraryPaths) ? config.libraryPaths : (config.libraryPath ? [config.libraryPath] : [])
+      config.libraryPaths = rawPaths.filter((p: any) => typeof p === 'string' && p.trim() !== '')
+      config.libraryPath = config.libraryPaths[0] || null
       return config
     }
   } catch (e) {}
   return { 
-    libraryPath: null, crossfadeEnabled: false, crossfadeDuration: 3, 
-    volume: 1, eqBands: null, appMode: 'default' // <-- Thay liteMode bằng appMode
+    libraryPath: null, libraryPaths: [], crossfadeEnabled: false, crossfadeDuration: 3, 
+    volume: 1, eqBands: null, appMode: 'default'
   }
 }
 
 function saveConfig(data: any) {
   const currentConfig = getConfig()
   const newConfig = { ...currentConfig, ...data }
+
+  if (data.libraryPaths && Array.isArray(data.libraryPaths)) {
+    newConfig.libraryPaths = data.libraryPaths.filter((p: any) => typeof p === 'string' && p.trim() !== '')
+    newConfig.libraryPath = newConfig.libraryPaths[0] || null
+  } else if (data.libraryPath !== undefined) {
+    if (data.libraryPath) {
+      if (!newConfig.libraryPaths) newConfig.libraryPaths = []
+      if (!newConfig.libraryPaths.includes(data.libraryPath)) {
+        newConfig.libraryPaths = [data.libraryPath, ...newConfig.libraryPaths]
+      }
+      newConfig.libraryPath = data.libraryPath
+    }
+  }
 
   // Mã hóa API Key trước khi ghi đè xuống file JSON
   if (app.isReady() && safeStorage.isEncryptionAvailable()) {
@@ -309,25 +353,94 @@ app.whenReady().then(() => {
   ipcMain.handle('music:setLibraryFolder', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory'] })
     if (canceled || filePaths.length === 0) return { success: false }
-    saveConfig({ libraryPath: filePaths[0] })
-    return { success: true, path: filePaths[0] }
+    const selected = filePaths[0]
+    const config = getConfig()
+    const currentPaths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
+    if (!currentPaths.includes(selected)) {
+      currentPaths.push(selected)
+    }
+    saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || selected })
+    return { success: true, path: selected, libraryPaths: currentPaths }
   })
 
-  // 2. Đọc toàn bộ thư viện (Tất cả bài hát + Playlists) với cơ chế quét gia tăng (Incremental Scan)
+  // Thêm thư mục nhạc mới
+  ipcMain.handle('music:addLibraryFolder', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    if (canceled || filePaths.length === 0) return { success: false }
+    const selected = filePaths[0]
+    const config = getConfig()
+    const currentPaths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
+    if (!currentPaths.includes(selected)) {
+      currentPaths.push(selected)
+    }
+    saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || selected })
+    return { success: true, path: selected, libraryPaths: currentPaths }
+  })
+
+  // Xóa thư mục nhạc
+  ipcMain.handle('music:removeLibraryFolder', async (_, folderPath: string) => {
+    const config = getConfig()
+    let currentPaths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
+    currentPaths = currentPaths.filter(p => p !== folderPath)
+    saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || null })
+    return { success: true, libraryPaths: currentPaths }
+  })
+
+  // Cập nhật đường dẫn thư mục nhạc
+  ipcMain.handle('music:updateLibraryFolder', async (_, oldPath: string) => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    if (canceled || filePaths.length === 0) return { success: false }
+    const newPath = filePaths[0]
+    const config = getConfig()
+    let currentPaths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
+    const index = currentPaths.indexOf(oldPath)
+    if (index !== -1) {
+      currentPaths[index] = newPath
+    } else {
+      currentPaths.push(newPath)
+    }
+    saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || null })
+    return { success: true, oldPath, newPath, libraryPaths: currentPaths }
+  })
+
+  // 2. Đọc toàn bộ thư viện (Tất cả bài hát + Playlists đa thư mục) với cơ chế quét gia tăng (Incremental Scan)
   ipcMain.handle('music:getLibrary', async (_, forceRefresh: boolean = false) => {
     const config = getConfig()
-    if (!config.libraryPath || !fs.existsSync(config.libraryPath)) {
-      return { success: false, error: 'Chưa cài đặt thư viện' }
+    const libraryPaths: string[] = (config.libraryPaths && config.libraryPaths.length > 0) 
+      ? config.libraryPaths 
+      : (config.libraryPath ? [config.libraryPath] : [])
+    
+    const validPaths = libraryPaths.filter(p => typeof p === 'string' && fs.existsSync(p))
+    if (validPaths.length === 0) {
+      return { 
+        success: false, 
+        error: 'Chưa cài đặt thư viện', 
+        tracks: [], 
+        playlists: [], 
+        userPlaylists: getUserPlaylists(), 
+        libraryPaths: [] 
+      }
     }
     
-    const rootPath = config.libraryPath
+    const primaryRootPath = validPaths[0]
 
     // 1. NẾU MỞ APP BÌNH THƯỜNG (KHÔNG FORCE REFRESH): ĐỌC TRỰC TIẾP TỪ CACHE, 0% QUÉT Ổ CỨNG
     if (!forceRefresh && fs.existsSync(LIBRARY_CACHE_PATH)) {
       try {
         const cached = JSON.parse(fs.readFileSync(LIBRARY_CACHE_PATH, 'utf-8'))
-        if (cached && cached.libraryPath === rootPath && Array.isArray(cached.tracks) && cached.tracks.length > 0) {
-          return { success: true, fromCache: true, libraryPath: rootPath, tracks: cached.tracks, playlists: cached.playlists || [] }
+        const cachedPaths = Array.isArray(cached.libraryPaths) ? cached.libraryPaths : (cached.libraryPath ? [cached.libraryPath] : [])
+        const isSamePaths = cachedPaths.length === validPaths.length && cachedPaths.every((p: string, idx: number) => p === validPaths[idx])
+        const hasGenreInfo = Array.isArray(cached.tracks) && cached.tracks.length > 0 && cached.tracks.some((t: any) => t.genre !== undefined && t.genre !== 'Unknown')
+        if (cached && isSamePaths && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5)) {
+          return { 
+            success: true, 
+            fromCache: true, 
+            libraryPath: primaryRootPath, 
+            libraryPaths: validPaths, 
+            tracks: cached.tracks, 
+            playlists: cached.playlists || [],
+            userPlaylists: getUserPlaylists()
+          }
         }
       } catch (e) {}
     }
@@ -347,36 +460,31 @@ app.whenReady().then(() => {
       } catch (e) {}
     }
 
-    const items = fs.readdirSync(rootPath)
-    
     const tracks: any[] = []
     const playlists: any[] = []
     const supportedExts = SUPPORTED_AUDIO_EXTS
     const existingDiskPaths = new Set<string>()
-
-    // Khởi tạo thư mục ẩn để chứa ảnh Proxy (Thumbnail)
-    const thumbDir = join(rootPath, '.thumbnails')
-    if (!fs.existsSync(thumbDir)) {
-      try { fs.mkdirSync(thumbDir) } catch (e) {}
-    }
-
     let cacheModified = false
 
-    const parseOrGetTrack = async (trackPath: string, subItemName: string, stat: fs.Stats) => {
+    const parseOrGetTrack = async (trackPath: string, subItemName: string, stat: fs.Stats, currentThumbDir: string) => {
       existingDiskPaths.add(trackPath)
 
       const trackHash = crypto.createHash('md5').update(trackPath).digest('hex')
-      const thumbPath = join(thumbDir, `${trackHash}.jpg`)
+      const thumbPath = join(currentThumbDir, `${trackHash}.jpg`)
+      const centralThumbPath = join(IMAGE_CACHE_DIR, `${trackHash}.jpg`)
+
       let coverUrl: string | null = null
       if (fs.existsSync(thumbPath)) {
         coverUrl = pathToFileURL(thumbPath).href
+      } else if (fs.existsSync(centralThumbPath)) {
+        coverUrl = pathToFileURL(centralThumbPath).href
       }
 
       // KIỂM TRA CACHE: Nếu file đã có và mtime không đổi -> TÁI SỬ DỤNG HOÀN TOÀN, KHÔNG ĐỌC LẠI FILE
       const cached = metadataCache[trackPath]
-      if (cached && cached.mtime === stat.mtimeMs && cached.data) {
+      if (cached && cached.mtime === stat.mtimeMs && cached.data && cached.data.genre !== undefined && cached.data.genre !== 'Unknown') {
         const existingTrack = previousTrackMap.get(trackPath) || previousTrackMap.get(cached.data.filePath)
-        if (existingTrack) {
+        if (existingTrack && existingTrack.genre !== undefined && existingTrack.genre !== 'Unknown') {
           return existingTrack
         }
         return {
@@ -395,8 +503,75 @@ app.whenReady().then(() => {
             const resized = img.resize({ width: 128, height: 128, quality: 'good' })
             fs.writeFileSync(thumbPath, resized.toJPEG(80))
             coverUrl = pathToFileURL(thumbPath).href
-          } catch(e) {}
+          } catch(e) {
+            try {
+              const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
+              const resized = img.resize({ width: 128, height: 128, quality: 'good' })
+              fs.writeFileSync(centralThumbPath, resized.toJPEG(80))
+              coverUrl = pathToFileURL(centralThumbPath).href
+            } catch (err2) {}
+          }
         }
+
+        let genreStr = ''
+        if (metadata.common.genre && metadata.common.genre.length > 0) {
+          genreStr = Array.isArray(metadata.common.genre)
+            ? metadata.common.genre.map((g: any) => String(g).trim()).filter(Boolean).join(', ')
+            : String(metadata.common.genre).trim()
+        }
+        if (!genreStr || genreStr.toLowerCase() === 'unknown') {
+          if (metadata.native) {
+            for (const tagFormat of Object.keys(metadata.native)) {
+              const tagList = metadata.native[tagFormat]
+              if (Array.isArray(tagList)) {
+                for (const t of tagList) {
+                  const tid = String(t.id).toUpperCase()
+                  if (tid === 'TCON' || tid === 'GENRE' || tid === '©GEN' || tid === 'WM/GENRE' || tid === 'GEN') {
+                    if (t.value) {
+                      const val = Array.isArray(t.value) ? t.value.join(', ') : String(t.value).trim()
+                      if (val && val.toLowerCase() !== 'unknown') {
+                        genreStr = val
+                        break
+                      }
+                    }
+                  }
+                }
+              }
+              if (genreStr && genreStr.toLowerCase() !== 'unknown') break
+            }
+          }
+        }
+        // Phân giải ID3v1 genre index ví dụ (17) hoặc 17
+        const numMatch = genreStr.match(/^\(?(\d+)\)?$/)
+        if (numMatch) {
+          const idx = parseInt(numMatch[1])
+          const ID3_GENRES = [
+            'Blues', 'Classic Rock', 'Country', 'Dance', 'Disco', 'Funk', 'Grunge', 'Hip-Hop', 'Jazz', 'Metal',
+            'New Age', 'Oldies', 'Other', 'Pop', 'R&B', 'Rap', 'Reggae', 'Rock', 'Techno', 'Industrial',
+            'Alternative', 'Ska', 'Death Metal', 'Pranks', 'Soundtrack', 'Euro-Techno', 'Ambient', 'Trip-Hop',
+            'Vocal', 'Jazz+Funk', 'Fusion', 'Trance', 'Classical', 'Instrumental', 'Acid', 'House', 'Game',
+            'Sound Clip', 'Gospel', 'Noise', 'AlternRock', 'Bass', 'Soul', 'Punk', 'Space', 'Meditative',
+            'Instrumental Pop', 'Instrumental Rock', 'Ethnic', 'Gothic', 'Darkwave', 'Techno-Industrial', 'Electronic',
+            'Pop-Folk', 'Eurodance', 'Dream', 'Southern Rock', 'Comedy', 'Cult', 'Gangsta', 'Top 40', 'Christian Rap',
+            'Pop/Funk', 'Jungle', 'Native American', 'Cabaret', 'New Wave', 'Psychadelic', 'Rave', 'Showtunes',
+            'Trailer', 'Lo-Fi', 'Tribal', 'Acid Punk', 'Acid Jazz', 'Polka', 'Retro', 'Musical', 'Rock & Roll',
+            'Hard Rock', 'Folk', 'Folk-Rock', 'National Folk', 'Swing', 'Fast Fusion', 'Bebob', 'Latin', 'Revival',
+            'Celtic', 'Bluegrass', 'Avantgarde', 'Gothic Rock', 'Progressive Rock', 'Psychedelic Rock',
+            'Symphonic Rock', 'Slow Rock', 'Big Band', 'Chorus', 'Easy Listening', 'Acoustic', 'Humour', 'Speech',
+            'Chanson', 'Opera', 'Chamber Music', 'Sonata', 'Symphony', 'Booty Bass', 'Primus', 'Porn Groove',
+            'Satire', 'Slow Jam', 'Club', 'Tango', 'Samba', 'Folklore', 'Ballad', 'Power Ballad', 'Rhythmic Soul',
+            'Freestyle', 'Duet', 'Punk Rock', 'Drum Solo', 'A capella', 'Euro-House', 'Dance Hall', 'Goa',
+            'Drum & Bass', 'Club-House', 'Hardcore', 'Terror', 'Indie', 'BritPop', 'Afro-Punk', 'Polsk Punk',
+            'Beat', 'Christian Gangsta Rap', 'Heavy Metal', 'Black Metal', 'Crossover', 'Contemporary Christian',
+            'Christian Rock', 'Merengue', 'Salsa', 'Thrash Metal', 'Anime', 'JPop', 'Synthpop'
+          ]
+          if (ID3_GENRES[idx]) {
+            genreStr = ID3_GENRES[idx]
+          }
+        }
+        if (!genreStr) genreStr = 'Unknown'
+
+        const yearVal = metadata.common.year || (metadata.common.date ? parseInt(metadata.common.date) : null)
 
         const trackData = {
           id: trackPath,
@@ -404,6 +579,9 @@ app.whenReady().then(() => {
           title: metadata.common.title || subItemName.replace(/\.[^/.]+$/, ""),
           artist: metadata.common.artist || 'Unknown',
           album: metadata.common.album || 'Unknown',
+          genre: genreStr,
+          year: yearVal,
+          trackNo: metadata.common.track?.no || null,
           duration: metadata.format.duration,
           format: metadata.format.container || subItemName.split('.').pop()?.toUpperCase(),
           bitrate: metadata.format.bitrate,
@@ -428,6 +606,8 @@ app.whenReady().then(() => {
           title: subItemName,
           artist: 'Unknown',
           album: 'Unknown',
+          genre: 'Unknown',
+          year: null,
           isCloud: false,
           coverArt: coverUrl
         }
@@ -435,57 +615,66 @@ app.whenReady().then(() => {
       }
     }
 
-    for (const item of items) {
-      const itemPath = join(rootPath, item)
+    // Duyệt qua tất cả các thư mục trong validPaths
+    for (const folderRoot of validPaths) {
       try {
-        const stat = fs.statSync(itemPath)
+        const thumbDir = join(folderRoot, '.thumbnails')
+        if (!fs.existsSync(thumbDir)) {
+          try { fs.mkdirSync(thumbDir) } catch (e) {}
+        }
 
-        if (stat.isDirectory() && item !== '.thumbnails') {
-          const playlistTracks: any[] = []
-          const subItems = fs.readdirSync(itemPath)
-          for (const subItem of subItems) {
-            if (supportedExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
-              const trackPath = join(itemPath, subItem)
-              try {
-                const subStat = fs.statSync(trackPath)
-                const trackData = await parseOrGetTrack(trackPath, subItem, subStat)
-                playlistTracks.push(trackData)
-                tracks.push(trackData)
-              } catch (e) {}
-            }
-          }
-          
-          let thumbnailUrl: string | null = null
-          const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
-          const commonCoverNames = ['cover', 'folder', 'front', 'artwork', item, 'thumb', 'thumbnail', 'album']
+        const items = fs.readdirSync(folderRoot)
+        for (const item of items) {
+          const itemPath = join(folderRoot, item)
+          try {
+            const stat = fs.statSync(itemPath)
 
-          // 1. Kiểm tra các tên cover tiêu chuẩn
-          for (const name of commonCoverNames) {
-            for (const ext of possibleImageExts) {
-              const imgPath = join(itemPath, `${name}${ext}`)
-              if (fs.existsSync(imgPath)) {
-                thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
-                break
+            if (stat.isDirectory() && item !== '.thumbnails') {
+              const playlistTracks: any[] = []
+              const subItems = fs.readdirSync(itemPath)
+              for (const subItem of subItems) {
+                if (supportedExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
+                  const trackPath = join(itemPath, subItem)
+                  try {
+                    const subStat = fs.statSync(trackPath)
+                    const trackData = await parseOrGetTrack(trackPath, subItem, subStat, thumbDir)
+                    playlistTracks.push(trackData)
+                    tracks.push(trackData)
+                  } catch (e) {}
+                }
               }
-            }
-            if (thumbnailUrl) break
-          }
+              
+              let thumbnailUrl: string | null = null
+              const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
+              const commonCoverNames = ['cover', 'folder', 'front', 'artwork', item, 'thumb', 'thumbnail', 'album']
 
-          // 2. Nếu không có tên chuẩn, quét tìm bất kỳ file ảnh nào trong thư mục playlist
-          if (!thumbnailUrl) {
-            for (const subItem of subItems) {
-              if (possibleImageExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
-                const imgPath = join(itemPath, subItem)
-                thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
-                break
+              for (const name of commonCoverNames) {
+                for (const ext of possibleImageExts) {
+                  const imgPath = join(itemPath, `${name}${ext}`)
+                  if (fs.existsSync(imgPath)) {
+                    thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
+                    break
+                  }
+                }
+                if (thumbnailUrl) break
               }
-            }
-          }
 
-          playlists.push({ name: item, path: itemPath, tracks: playlistTracks, thumbnail: thumbnailUrl })
-        } else if (supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
-          const trackData = await parseOrGetTrack(itemPath, item, stat)
-          tracks.push(trackData)
+              if (!thumbnailUrl) {
+                for (const subItem of subItems) {
+                  if (possibleImageExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
+                    const imgPath = join(itemPath, subItem)
+                    thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
+                    break
+                  }
+                }
+              }
+
+              playlists.push({ name: item, path: itemPath, folderRoot, tracks: playlistTracks, thumbnail: thumbnailUrl })
+            } else if (supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
+              const trackData = await parseOrGetTrack(itemPath, item, stat, thumbDir)
+              tracks.push(trackData)
+            }
+          } catch (e) {}
         }
       } catch (e) {}
     }
@@ -502,19 +691,41 @@ app.whenReady().then(() => {
       saveMetadataCache()
     }
 
+    const userPlaylists = getUserPlaylists()
+
     try {
-      fs.writeFileSync(LIBRARY_CACHE_PATH, JSON.stringify({ libraryPath: rootPath, tracks, playlists }))
+      fs.writeFileSync(LIBRARY_CACHE_PATH, JSON.stringify({ 
+        libraryPath: primaryRootPath, 
+        libraryPaths: validPaths, 
+        tracks, 
+        playlists 
+      }))
     } catch (e) {}
 
-    return { success: true, libraryPath: rootPath, tracks, playlists }
+    return { 
+      success: true, 
+      libraryPath: primaryRootPath, 
+      libraryPaths: validPaths, 
+      tracks, 
+      playlists, 
+      userPlaylists 
+    }
   })
 
   // 3. Đổi tên Playlist (Thư mục & Ảnh)
   ipcMain.handle('music:renamePlaylist', async (_, oldName, newName) => {
-    const rootPath = getConfig().libraryPath
+    const config = getConfig()
+    const paths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
     try {
-      const oldDirPath = join(rootPath, oldName)
-      const newDirPath = join(rootPath, newName)
+      let targetRoot = paths[0]
+      for (const p of paths) {
+        if (fs.existsSync(join(p, oldName))) {
+          targetRoot = p
+          break
+        }
+      }
+      const oldDirPath = join(targetRoot, oldName)
+      const newDirPath = join(targetRoot, newName)
       fs.renameSync(oldDirPath, newDirPath)
       const exts = ['.jpg', '.png', '.jpeg', '.webp']
       for (const ext of exts) {
@@ -525,15 +736,23 @@ app.whenReady().then(() => {
     } catch (e: any) { return { success: false, error: e.message } }
   })
 
-  // 4. Chọn và lưu ảnh Thumbnail cho Playlist
+  // 4. Chọn và lưu ảnh Thumbnail cho Playlist thư mục
   ipcMain.handle('music:setPlaylistThumbnail', async (_, playlistName) => {
-    const rootPath = getConfig().libraryPath
+    const config = getConfig()
+    const paths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
     const { canceled, filePaths } = await dialog.showOpenDialog({ filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg', 'webp'] }] })
     if (canceled || filePaths.length === 0) return { success: false }
     try {
+      let targetRoot = paths[0]
+      for (const p of paths) {
+        if (fs.existsSync(join(p, playlistName))) {
+          targetRoot = p
+          break
+        }
+      }
       const sourcePath = filePaths[0]
       const ext = sourcePath.split('.').pop()?.toLowerCase() || 'jpg'
-      const playlistPath = join(rootPath, playlistName)
+      const playlistPath = join(targetRoot, playlistName)
       const destPath = join(playlistPath, `${playlistName}.${ext}`)
       const exts = ['jpg', 'png', 'jpeg', 'webp']
       for (const e of exts) {
@@ -543,6 +762,113 @@ app.whenReady().then(() => {
       fs.copyFileSync(sourcePath, destPath)
       return { success: true }
     } catch (e: any) { return { success: false, error: e.message } }
+  })
+
+  // ==========================================
+  // HỆ THỐNG VIRTUAL USER PLAYLISTS (KHÔNG NHÂN BẢN FILE VẬT LÝ)
+  // ==========================================
+  ipcMain.handle('music:getUserPlaylists', () => {
+    return { success: true, playlists: getUserPlaylists() }
+  })
+
+  ipcMain.handle('music:createUserPlaylist', async (_, name: string, description?: string, thumbnail?: string | null) => {
+    const trimmed = (name || '').trim()
+    if (!trimmed) return { success: false, error: 'Tên playlist không được để trống' }
+    const playlists = getUserPlaylists()
+    const newPlaylist: UserPlaylist = {
+      id: `upl_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      name: trimmed,
+      description: description?.trim() || '',
+      thumbnail: thumbnail || null,
+      trackIds: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+    playlists.unshift(newPlaylist)
+    saveUserPlaylists(playlists)
+    return { success: true, playlist: newPlaylist, playlists }
+  })
+
+  ipcMain.handle('music:deleteUserPlaylist', async (_, playlistId: string) => {
+    let playlists = getUserPlaylists()
+    playlists = playlists.filter(p => p.id !== playlistId)
+    saveUserPlaylists(playlists)
+    return { success: true, playlists }
+  })
+
+  ipcMain.handle('music:renameUserPlaylist', async (_, playlistId: string, newName: string) => {
+    const trimmed = (newName || '').trim()
+    if (!trimmed) return { success: false, error: 'Tên playlist không hợp lệ' }
+    const playlists = getUserPlaylists()
+    const target = playlists.find(p => p.id === playlistId)
+    if (target) {
+      target.name = trimmed
+      target.updatedAt = Date.now()
+      saveUserPlaylists(playlists)
+      return { success: true, playlists }
+    }
+    return { success: false, error: 'Không tìm thấy playlist' }
+  })
+
+  ipcMain.handle('music:setUserPlaylistThumbnail', async (_, playlistId: string, customPath?: string) => {
+    let imagePath = customPath
+    if (!imagePath) {
+      const { canceled, filePaths } = await dialog.showOpenDialog({
+        filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg', 'webp'] }]
+      })
+      if (canceled || filePaths.length === 0) return { success: false }
+      imagePath = filePaths[0]
+    }
+    const playlists = getUserPlaylists()
+    const target = playlists.find(p => p.id === playlistId)
+    if (target) {
+      target.thumbnail = pathToFileURL(imagePath).href + `?t=${Date.now()}`
+      target.updatedAt = Date.now()
+      saveUserPlaylists(playlists)
+      return { success: true, thumbnail: target.thumbnail, playlists }
+    }
+    return { success: false, error: 'Không tìm thấy playlist' }
+  })
+
+  ipcMain.handle('music:addTracksToUserPlaylist', async (_, playlistId: string, trackPaths: string[]) => {
+    if (!Array.isArray(trackPaths) || trackPaths.length === 0) return { success: true, playlists: getUserPlaylists() }
+    const playlists = getUserPlaylists()
+    const target = playlists.find(p => p.id === playlistId)
+    if (target) {
+      const set = new Set(target.trackIds)
+      for (const tp of trackPaths) {
+        if (tp) set.add(tp)
+      }
+      target.trackIds = Array.from(set)
+      target.updatedAt = Date.now()
+      saveUserPlaylists(playlists)
+      return { success: true, playlist: target, playlists }
+    }
+    return { success: false, error: 'Không tìm thấy playlist' }
+  })
+
+  ipcMain.handle('music:removeTrackFromUserPlaylist', async (_, playlistId: string, trackPath: string) => {
+    const playlists = getUserPlaylists()
+    const target = playlists.find(p => p.id === playlistId)
+    if (target) {
+      target.trackIds = target.trackIds.filter(id => id !== trackPath)
+      target.updatedAt = Date.now()
+      saveUserPlaylists(playlists)
+      return { success: true, playlist: target, playlists }
+    }
+    return { success: false, error: 'Không tìm thấy playlist' }
+  })
+
+  ipcMain.handle('music:reorderUserPlaylistTracks', async (_, playlistId: string, trackIds: string[]) => {
+    const playlists = getUserPlaylists()
+    const target = playlists.find(p => p.id === playlistId)
+    if (target) {
+      target.trackIds = trackIds
+      target.updatedAt = Date.now()
+      saveUserPlaylists(playlists)
+      return { success: true, playlist: target, playlists }
+    }
+    return { success: false, error: 'Không tìm thấy playlist' }
   })
 
   // 5. Tự động tạo Playlist từ Album
@@ -670,16 +996,17 @@ app.whenReady().then(() => {
         }
       }
 
-      // Cập nhật Thumbnail Proxy nếu có ảnh mới
-      const config = getConfig()
-      const rootPath = config.libraryPath || path.dirname(rawPath)
-      const thumbDir = join(rootPath, '.thumbnails')
-      if (!fs.existsSync(thumbDir)) {
-        try { fs.mkdirSync(thumbDir) } catch (e) {}
-      }
-
+      // Cập nhật Thumbnail Proxy nếu có ảnh mới hoặc ảnh nhúng
       const trackHash = crypto.createHash('md5').update(rawPath).digest('hex')
-      const thumbPath = join(thumbDir, `${trackHash}.jpg`)
+      const centralThumbPath = join(IMAGE_CACHE_DIR, `${trackHash}.jpg`)
+
+      const parentDir = path.dirname(rawPath)
+      const localThumbDir = join(parentDir, '.thumbnails')
+      if (!fs.existsSync(localThumbDir)) {
+        try { fs.mkdirSync(localThumbDir, { recursive: true }) } catch (e) {}
+      }
+      const localThumbPath = join(localThumbDir, `${trackHash}.jpg`)
+
       let coverUrl: string | null = null
 
       let rawImagePath = newImagePath
@@ -692,11 +1019,34 @@ app.whenReady().then(() => {
         try {
           const img = nativeImage.createFromPath(rawImagePath)
           const resized = img.resize({ width: 128, height: 128, quality: 'good' })
-          fs.writeFileSync(thumbPath, resized.toJPEG(80))
-          coverUrl = `${pathToFileURL(thumbPath).href}?t=${Date.now()}`
+          const jpegBuf = resized.toJPEG(80)
+          
+          try { fs.writeFileSync(centralThumbPath, jpegBuf) } catch (e) {}
+          try { fs.writeFileSync(localThumbPath, jpegBuf) } catch (e) {}
+          
+          coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
         } catch (e) {}
-      } else if (fs.existsSync(thumbPath)) {
-        coverUrl = `${pathToFileURL(thumbPath).href}?t=${Date.now()}`
+      } else {
+        // Kiểm tra xem file âm thanh có ảnh nhúng mới cập nhật hay không
+        try {
+          const freshMeta = await mm.parseFile(rawPath)
+          if (freshMeta.common.picture && freshMeta.common.picture.length > 0) {
+            const img = nativeImage.createFromBuffer(Buffer.from(freshMeta.common.picture[0].data))
+            const resized = img.resize({ width: 128, height: 128, quality: 'good' })
+            const jpegBuf = resized.toJPEG(80)
+            try { fs.writeFileSync(centralThumbPath, jpegBuf) } catch (e) {}
+            try { fs.writeFileSync(localThumbPath, jpegBuf) } catch (e) {}
+            coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
+          }
+        } catch (err) {}
+      }
+
+      if (!coverUrl) {
+        if (fs.existsSync(centralThumbPath)) {
+          coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
+        } else if (fs.existsSync(localThumbPath)) {
+          coverUrl = `${pathToFileURL(localThumbPath).href}?t=${Date.now()}`
+        }
       }
 
       // Cập nhật ngay vào Metadata Cache
@@ -711,11 +1061,35 @@ app.whenReady().then(() => {
           title: newTags.title || existingCached.title,
           artist: newTags.artist || existingCached.artist,
           album: newTags.album || existingCached.album,
+          genre: newTags.genre || existingCached.genre,
           lyrics: newTags.lyrics || existingCached.lyrics,
           coverArt: coverUrl || existingCached.coverArt
         }
       }
       saveMetadataCache()
+
+      // Cập nhật ngay lập tức vào library-cache.json
+      if (fs.existsSync(LIBRARY_CACHE_PATH)) {
+        try {
+          const libData = JSON.parse(fs.readFileSync(LIBRARY_CACHE_PATH, 'utf-8'))
+          if (libData && Array.isArray(libData.tracks)) {
+            for (let i = 0; i < libData.tracks.length; i++) {
+              if (libData.tracks[i].id === rawPath || libData.tracks[i].filePath === pathToFileURL(rawPath).href) {
+                libData.tracks[i] = {
+                  ...libData.tracks[i],
+                  title: newTags.title || libData.tracks[i].title,
+                  artist: newTags.artist || libData.tracks[i].artist,
+                  album: newTags.album || libData.tracks[i].album,
+                  genre: newTags.genre || libData.tracks[i].genre,
+                  lyrics: newTags.lyrics || libData.tracks[i].lyrics,
+                  coverArt: coverUrl || libData.tracks[i].coverArt
+                }
+              }
+            }
+            fs.writeFileSync(LIBRARY_CACHE_PATH, JSON.stringify(libData), 'utf-8')
+          }
+        } catch (err) {}
+      }
 
       return { success: true, coverUrl }
     } catch (e: any) {
