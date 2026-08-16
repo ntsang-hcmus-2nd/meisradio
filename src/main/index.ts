@@ -1,4 +1,5 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut, nativeImage, Tray, Menu } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut, nativeImage, Tray, Menu, session } from 'electron'
+import { spawn } from 'child_process'
 import crypto from 'crypto'
 import { join } from 'path'
 import * as path from 'path'
@@ -13,6 +14,15 @@ import axios from 'axios'
 import http from 'http'
 import { MpvManager } from './MpvManager'
 import { writeFlacMetadata } from './flacMetadata'
+import { 
+  getScUserProfile, 
+  getScTrendingCharts, 
+  getScUserStream, 
+  getScUserLikes, 
+  searchSoundCloud, 
+  getScPlaylistTracks, 
+  resolveScStreamUrl 
+} from './soundcloud'
 
 export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma']
 
@@ -94,6 +104,9 @@ function getConfig() {
         if (config.ytCookie && config.ytCookie.startsWith('ENC:')) {
           try { config.ytCookie = safeStorage.decryptString(Buffer.from(config.ytCookie.replace('ENC:', ''), 'base64')) } catch (e) { }
         }
+        if (config.scOAuthToken && config.scOAuthToken.startsWith('ENC:')) {
+          try { config.scOAuthToken = safeStorage.decryptString(Buffer.from(config.scOAuthToken.replace('ENC:', ''), 'base64')) } catch (e) { }
+        }
       }
       return config
     }
@@ -135,12 +148,30 @@ function saveConfig(data: any) {
       } catch (e) { console.error('Lỗi mã hóa YT Cookie', e) }
     }
 
+    // Mã hóa SoundCloud OAuth Token
+    if (data.scOAuthToken && !data.scOAuthToken.startsWith('ENC:')) {
+      try {
+        const encryptedBuffer = safeStorage.encryptString(data.scOAuthToken)
+        newConfig.scOAuthToken = `ENC:${encryptedBuffer.toString('base64')}`
+      } catch (e) { console.error('Lỗi mã hóa SoundCloud OAuth Token', e) }
+    }
+
   }
 
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2))
 }
 
 let mainWindow: BrowserWindow | null = null
+let isInMiniPlayer = false
+let preMiniPlayerState: { bounds: Electron.Rectangle; isMaximized: boolean; isFullScreen: boolean } | null = null
+
+// Lưu trạng thái cửa sổ khi thay đổi (chỉ lưu khi không ở chế độ Mini Player)
+const saveWindowState = () => {
+  if (!mainWindow || isInMiniPlayer) return
+  const bounds = mainWindow.getBounds()
+  const isMaximized = mainWindow.isMaximized()
+  saveConfig({ windowState: { ...bounds, isMaximized } })
+}
 
 function createWindow(): void {
   // Đọc cấu hình khi khởi tạo cửa sổ
@@ -174,14 +205,6 @@ function createWindow(): void {
 
   if (windowState.isMaximized) {
     mainWindow.maximize()
-  }
-  
-  // Lưu trạng thái cửa sổ khi thay đổi
-  const saveWindowState = () => {
-    if (!mainWindow) return
-    const bounds = mainWindow.getBounds()
-    const isMaximized = mainWindow.isMaximized()
-    saveConfig({ windowState: { ...bounds, isMaximized } })
   }
   
   mainWindow.on('resized', saveWindowState)
@@ -659,9 +682,15 @@ app.whenReady().then(() => {
       const thumbPath = join(thumbDir, `${trackHash}.jpg`)
       let coverUrl: string | null = null
 
-      if (newImagePath && fs.existsSync(newImagePath)) {
+      let rawImagePath = newImagePath
+      if (rawImagePath && rawImagePath.startsWith('file:///')) {
+        const { fileURLToPath } = require('url')
+        try { rawImagePath = fileURLToPath(rawImagePath) } catch(e){}
+      }
+
+      if (rawImagePath && fs.existsSync(rawImagePath)) {
         try {
-          const img = nativeImage.createFromPath(newImagePath)
+          const img = nativeImage.createFromPath(rawImagePath)
           const resized = img.resize({ width: 128, height: 128, quality: 'good' })
           fs.writeFileSync(thumbPath, resized.toJPEG(80))
           coverUrl = `${pathToFileURL(thumbPath).href}?t=${Date.now()}`
@@ -696,7 +725,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('music:selectImageFile', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({ 
-      filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg', 'webp'] }] 
+      filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg', 'webp', 'jfif', 'bmp', 'gif', 'avif', 'svg'] }] 
     })
     if (canceled || filePaths.length === 0) return null
     return filePaths[0]
@@ -1459,6 +1488,7 @@ app.whenReady().then(() => {
     // --- LUỒNG 1: TRUYỀN TẢI NHẠC ---
     if (parsedUrl.pathname === '/play') {
       const targetId = parsedUrl.searchParams.get('id');
+      const platform = parsedUrl.searchParams.get('platform') || (targetId?.startsWith('sc-') ? 'soundcloud' : 'youtube');
       if (!targetId) { res.writeHead(400).end('Thiếu ID bài hát'); return; }
 
       try {
@@ -1468,18 +1498,53 @@ app.whenReady().then(() => {
         if (cached && cached.expires > Date.now()) directUrl = cached.url;
         else {
           const config = getConfig();
-          const ytOptions: any = { 
-            dumpSingleJson: true, 
-            format: 'bestaudio/best', 
-            noWarnings: true,
-            extractorArgs: 'youtube:player-client=android' // Bổ sung API Android
-          };
-          // Bơm Cookie
-          if (config.ytCookie) ytOptions.addHeader = [`Cookie: ${config.ytCookie}`];
+          if (platform === 'soundcloud') {
+            const permalink = parsedUrl.searchParams.get('url') || undefined;
+            const rawScId = targetId.replace(/^sc-/, '');
+            directUrl = await resolveScStreamUrl(rawScId, permalink, config.scOAuthToken);
+            streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 });
+          } else {
+            const ytOptions: any = { 
+              dumpSingleJson: true, 
+              format: 'bestaudio/best', 
+              noWarnings: true,
+              extractorArgs: 'youtube:player-client=android' // Bổ sung API Android
+            };
+            // Bơm Cookie
+            if (config.ytCookie) ytOptions.addHeader = [`Cookie: ${config.ytCookie}`];
 
-          const info = await ytdlp(targetId, ytOptions as any) as any;
-          directUrl = info.url;
-          streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 });
+            const info = await ytdlp(targetId, ytOptions as any) as any;
+            directUrl = info.url;
+            streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 });
+          }
+        }
+
+        // Xử lý stream HLS (.m3u8) bằng FFmpeg chuyển đổi tức thì sang MP3 stream cho thẻ Audio
+        if (directUrl.includes('.m3u8') || directUrl.includes('/hls/')) {
+          const ffmpegExe = join(ffmpegDir, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+          const ffmpegProcess = spawn(ffmpegExe, [
+            '-reconnect', '1',
+            '-reconnect_streamed', '1',
+            '-reconnect_delay_max', '5',
+            '-i', directUrl,
+            '-f', 'mp3',
+            '-acodec', 'libmp3lame',
+            '-b:a', '192k',
+            '-vn',
+            'pipe:1'
+          ], { stdio: ['ignore', 'pipe', 'ignore'] });
+
+          res.writeHead(200, {
+            'Content-Type': 'audio/mpeg',
+            'Accept-Ranges': 'none',
+            'Cache-Control': 'no-cache'
+          });
+
+          ffmpegProcess.stdout.pipe(res);
+          req.on('close', () => {
+            try { ffmpegProcess.kill(); } catch (e) {}
+          });
+          return;
         }
 
         const requestHeaders: any = {};
@@ -1494,16 +1559,25 @@ app.whenReady().then(() => {
             
             // Cập nhật ytOptions cho luồng Retry
             const config = getConfig();
-            const ytOptions: any = { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true, extractorArgs: 'youtube:player-client=android' };
-            if (config.ytCookie) ytOptions.addHeader = [`Cookie: ${config.ytCookie}`];
+            if (platform === 'soundcloud') {
+              const permalink = parsedUrl.searchParams.get('url') || undefined;
+              const rawScId = targetId.replace(/^sc-/, '');
+              directUrl = await resolveScStreamUrl(rawScId, permalink, config.scOAuthToken);
+              streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 });
+            } else {
+              const ytOptions: any = { dumpSingleJson: true, format: 'bestaudio/best', noWarnings: true, extractorArgs: 'youtube:player-client=android' };
+              if (config.ytCookie) ytOptions.addHeader = [`Cookie: ${config.ytCookie}`];
 
-            const newInfo = await ytdlp(targetId, ytOptions as any) as any;
-            streamUrlCache.set(targetId, { url: newInfo.url, expires: Date.now() + 3600000 });
-            proxyRes = await axios({ method: 'GET', url: newInfo.url, headers: { ...requestHeaders, 'User-Agent': 'Mozilla/5.0' }, responseType: 'stream', decompress: false });
+              const newInfo = await ytdlp(targetId, ytOptions as any) as any;
+              directUrl = newInfo.url;
+              streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 });
+            }
+
+            proxyRes = await axios({ method: 'GET', url: directUrl, headers: { ...requestHeaders, 'User-Agent': 'Mozilla/5.0' }, responseType: 'stream', decompress: false });
           } else throw axiosErr;
         }
 
-        const responseHeaders: any = { 'Content-Type': proxyRes.headers['content-type'], 'Accept-Ranges': proxyRes.headers['accept-ranges'] || 'bytes', 'Cache-Control': 'no-cache' };
+        const responseHeaders: any = { 'Content-Type': proxyRes.headers['content-type'] || 'audio/mpeg', 'Accept-Ranges': proxyRes.headers['accept-ranges'] || 'bytes', 'Cache-Control': 'no-cache' };
         if (proxyRes.headers['content-length']) responseHeaders['Content-Length'] = proxyRes.headers['content-length'];
         if (proxyRes.headers['content-range']) responseHeaders['Content-Range'] = proxyRes.headers['content-range'];
 
@@ -1675,8 +1749,14 @@ app.whenReady().then(() => {
   // 2. API: Lấy Stream URL (Kết nối với Buffer Server)
   ipcMain.handle('music:getStreamUrl', (_, track: any) => {
     try {
-      if (track.platform === 'youtube') {
-        // Trả về ngay lập tức URL kết nối vào đường ống Buffer nội bộ
+      if (track.platform === 'soundcloud' || track.id?.startsWith('sc-')) {
+        const rawId = track.originalId || track.id.replace(/^sc-/, '');
+        return { 
+          success: true, 
+          url: `http://127.0.0.1:${streamPort}/play?id=sc-${rawId}&platform=soundcloud&url=${encodeURIComponent(track.permalinkUrl || '')}` 
+        }
+      }
+      if (track.platform === 'youtube' || !track.platform) {
         return { 
           success: true, 
           url: `http://127.0.0.1:${streamPort}/play?id=${track.originalId}` 
@@ -1725,14 +1805,18 @@ app.whenReady().then(() => {
     }
     
     try {
-      await ytdlp(track.originalId, {
+      const downloadTarget = track.platform === 'soundcloud'
+        ? (track.permalinkUrl || `https://api.soundcloud.com/tracks/${track.originalId}`)
+        : track.originalId;
+
+      await ytdlp(downloadTarget, {
         extractAudio: true,
         audioFormat: 'mp3',
         audioQuality: 0,
         output: destPath,
         embedMetadata: true,
         embedThumbnail: true,
-        extractorArgs: 'youtube:player-client=android', // <-- KHÔI PHỤC LẠI API ANDROID
+        extractorArgs: track.platform === 'soundcloud' ? undefined : 'youtube:player-client=android',
         ffmpegLocation: ffmpegDir 
       } as any);
       return { success: true, localPath: pathToFileURL(destPath).href };
@@ -1813,6 +1897,192 @@ app.whenReady().then(() => {
         }
       })
     })
+  })
+
+  // API Đăng xuất YouTube Music
+  ipcMain.handle('music:ytmLogout', async () => {
+    try {
+      saveConfig({ ytCookie: null })
+      const cookies = await session.defaultSession.cookies.get({ domain: '.youtube.com' })
+      for (const c of cookies) {
+        await session.defaultSession.cookies.remove('https://music.youtube.com', c.name).catch(() => {})
+      }
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // ==========================================
+  // HỆ THỐNG SOUNDCLOUD DASHBOARD & BẢO MẬT
+  // ==========================================
+
+  // 1. API: Mở cửa sổ đăng nhập SoundCloud và trích xuất OAuth Token
+  ipcMain.handle('music:scLogin', async () => {
+    return new Promise((resolve) => {
+      const authWindow = new BrowserWindow({
+        width: 800, height: 700,
+        title: 'Đăng nhập SoundCloud',
+        autoHideMenuBar: true,
+        webPreferences: { nodeIntegration: false, contextIsolation: true }
+      })
+
+      authWindow.loadURL('https://soundcloud.com/signin')
+
+      let capturedToken: string | null = null
+
+      authWindow.webContents.session.webRequest.onBeforeSendHeaders(
+        { urls: ['*://*.soundcloud.com/*'] },
+        (details, callback) => {
+          const auth = details.requestHeaders['Authorization'] || details.requestHeaders['authorization']
+          if (auth && auth.startsWith('OAuth ')) {
+            capturedToken = auth.replace('OAuth ', '').trim()
+          }
+          callback({ cancel: false, requestHeaders: details.requestHeaders })
+        }
+      )
+
+      authWindow.on('close', async () => {
+        try {
+          if (!capturedToken) {
+            const cookies = await authWindow.webContents.session.cookies.get({ domain: '.soundcloud.com' })
+            const oauthCookie = cookies.find(c => c.name === 'oauth_token')
+            if (oauthCookie) capturedToken = oauthCookie.value
+          }
+
+          if (capturedToken) {
+            saveConfig({ scOAuthToken: capturedToken })
+            try {
+              const userProfile = await getScUserProfile(capturedToken)
+              saveConfig({ scUserInfo: userProfile })
+              resolve({ success: true, user: userProfile })
+              return
+            } catch (err) {
+              resolve({ success: true })
+              return
+            }
+          }
+          resolve({ success: false, error: 'Chưa đăng nhập hoặc không tìm thấy mã xác thực SoundCloud' })
+        } catch (e: any) {
+          resolve({ success: false, error: e.message })
+        }
+      })
+    })
+  })
+
+  // 2. API: Đăng xuất SoundCloud
+  ipcMain.handle('music:scLogout', async () => {
+    try {
+      saveConfig({ scOAuthToken: null, scUserInfo: null })
+      const cookies = await session.defaultSession.cookies.get({ domain: '.soundcloud.com' })
+      for (const c of cookies) {
+        await session.defaultSession.cookies.remove('https://soundcloud.com', c.name).catch(() => {})
+      }
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 3. API: Lấy thông tin tài khoản SoundCloud
+  ipcMain.handle('music:getScUser', async () => {
+    const config = getConfig()
+    if (!config.scOAuthToken) return { success: false, error: 'Chưa đăng nhập SoundCloud' }
+    if (config.scUserInfo) return { success: true, user: config.scUserInfo }
+    try {
+      const user = await getScUserProfile(config.scOAuthToken)
+      saveConfig({ scUserInfo: user })
+      return { success: true, user }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 4. API: Lấy Dashboard SoundCloud (Trending, Liked Tracks, Stream)
+  ipcMain.handle('music:getScDashboard', async (_, genre: string = 'all-music') => {
+    const config = getConfig()
+    const oauthToken = config.scOAuthToken
+    const userInfo = config.scUserInfo
+
+    try {
+      const sections: any[] = []
+
+      // Nếu đã đăng nhập: Lấy Likes & Stream cá nhân
+      if (oauthToken && userInfo?.id) {
+        try {
+          const likedTracks = await getScUserLikes(userInfo.id, oauthToken, 30)
+          if (likedTracks.length > 0) {
+            sections.push({
+              title: 'Bài hát bạn đã thích (Liked Tracks)',
+              contents: likedTracks
+            })
+          }
+        } catch (e) {}
+
+        try {
+          const streamTracks = await getScUserStream(oauthToken, 30)
+          if (streamTracks.length > 0) {
+            sections.push({
+              title: 'Bản tin theo dõi (Your Stream)',
+              contents: streamTracks
+            })
+          }
+        } catch (e) {}
+      }
+
+      // Lấy Bảng xếp hạng Top Charts theo thể loại đang chọn
+      const trendingTracks = await getScTrendingCharts(genre, 30)
+      if (trendingTracks.length > 0) {
+        const genreLabel = genre === 'all-music' ? 'Tất cả' : genre.toUpperCase()
+        sections.push({
+          title: `Bảng xếp hạng Top SoundCloud (${genreLabel})`,
+          contents: trendingTracks
+        })
+      }
+
+      // Lấy thêm các thể loại phổ biến nếu danh sách còn ít
+      if (sections.length < 3) {
+        const extraGenres = ['electronic', 'hiphoprap', 'pop', 'chill']
+        for (const g of extraGenres) {
+          if (g === genre) continue
+          try {
+            const extra = await getScTrendingCharts(g, 15)
+            if (extra.length > 0) {
+              sections.push({
+                title: `SoundCloud ${g.charAt(0).toUpperCase() + g.slice(1)}`,
+                contents: extra
+              })
+            }
+          } catch (e) {}
+        }
+      }
+
+      return { success: true, data: sections }
+    } catch (e: any) {
+      return { success: false, error: 'Lỗi tải SoundCloud: ' + e.message }
+    }
+  })
+
+  // 5. API: Tìm kiếm SoundCloud
+  ipcMain.handle('music:searchScOnline', async (_, query: string) => {
+    const config = getConfig()
+    try {
+      const results = await searchSoundCloud(query, 30, config.scOAuthToken)
+      return { success: true, ...results }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 6. API: Lấy chi tiết Playlist SoundCloud
+  ipcMain.handle('music:getScPlaylist', async (_, playlistId: string) => {
+    const config = getConfig()
+    try {
+      const playlist = await getScPlaylistTracks(playlistId, config.scOAuthToken)
+      return { success: true, ...playlist }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
   })
 
   // 2. API: Lấy dữ liệu Dashboard (Home Sections) trực tiếp từ Google InnerTube API
@@ -2212,7 +2482,14 @@ app.whenReady().then(() => {
   ipcMain.handle('music:toggleMiniPlayer', (_, isMini: boolean) => {
     if (!mainWindow) return
     if (isMini) {
-      // MỚI: Bắt buộc thoát chế độ Toàn màn hình / Phóng to trước khi resize
+      isInMiniPlayer = true
+      preMiniPlayerState = {
+        bounds: mainWindow.getBounds(),
+        isMaximized: mainWindow.isMaximized(),
+        isFullScreen: mainWindow.isFullScreen()
+      }
+
+      // Thoát chế độ Toàn màn hình / Phóng to trước khi resize
       if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false)
       if (mainWindow.isMaximized()) mainWindow.unmaximize()
       
@@ -2220,10 +2497,32 @@ app.whenReady().then(() => {
       mainWindow.setAlwaysOnTop(true, 'floating') // Luôn nổi trên các cửa sổ khác
       mainWindow.setResizable(false) // Khóa kích thước
     } else {
+      isInMiniPlayer = false
       mainWindow.setAlwaysOnTop(false)
       mainWindow.setResizable(true)
-      mainWindow.setContentSize(1200, 800, true) // Trả về kích thước gốc
-      mainWindow.center()
+
+      if (preMiniPlayerState) {
+        mainWindow.setBounds(preMiniPlayerState.bounds)
+        if (preMiniPlayerState.isMaximized) {
+          mainWindow.maximize()
+        } else if (preMiniPlayerState.isFullScreen) {
+          mainWindow.setFullScreen(true)
+        }
+        preMiniPlayerState = null
+      } else {
+        const config = getConfig()
+        const ws = config.windowState || { width: 1200, height: 800 }
+        mainWindow.setBounds({
+          x: ws.x,
+          y: ws.y,
+          width: ws.width || 1200,
+          height: ws.height || 800
+        })
+        if (ws.isMaximized) {
+          mainWindow.maximize()
+        }
+      }
+      saveWindowState()
     }
   })
   app.on('activate', function () {

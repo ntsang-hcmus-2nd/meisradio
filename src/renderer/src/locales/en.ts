@@ -1,0 +1,330 @@
+import { TranslationDictionary } from './types'
+
+export const en: TranslationDictionary = {
+  common: {
+    appName: "Mei's Radio",
+    cancel: 'Cancel',
+    save: 'Save',
+    confirm: 'Confirm',
+    delete: 'Delete',
+    close: 'Close',
+    loading: 'Loading...',
+    search: 'Search',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing...',
+    options: 'Options',
+    error: 'Error',
+    success: 'Success',
+    unknown: 'Unknown',
+    songs: 'songs',
+    files: 'files',
+    tracks: 'tracks',
+    hours: 'hours',
+    minutes: 'minutes',
+    seconds: 'seconds'
+  },
+  sidebar: {
+    library: 'Library',
+    home: 'Home',
+    youtubeMusic: 'YouTube Music',
+    soundCloud: 'SoundCloud',
+    songList: 'All Songs',
+    myPlaylists: 'My Playlists',
+    cloudConnection: 'Cloud Storage',
+    googleDrive: 'Google Drive',
+    settings: 'Settings'
+  },
+  header: {
+    searchYtm: 'Search on YouTube Music...',
+    searchSc: 'Search on SoundCloud...',
+    searchLocal: 'Search songs, artists on device...',
+    refreshLibrary: 'Refresh Library',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing...'
+  },
+  trackTable: {
+    index: '#',
+    title: 'TITLE',
+    album: 'ALBUM',
+    format: 'FORMAT',
+    duration: 'DURATION',
+    actions: 'ACTIONS',
+    sortIndex: 'Sort by Index',
+    sortTitle: 'Sort by Title',
+    sortAlbum: 'Sort by Album',
+    sortFormat: 'Sort by Format',
+    sortDuration: 'Sort by Duration'
+  },
+  home: {
+    ytmTitle: 'YouTube Music',
+    ytmSubtitle: 'Discover music & personalized recommendations',
+    refreshYtm: 'Refresh YouTube Music',
+    ytmSynced: 'YTM Connected',
+    ytmLogout: 'Log out / Switch account',
+    ytmLogin: 'Log in to YouTube Music',
+    noRecommendationsTitle: 'No recommendations available',
+    noRecommendationsDesc: 'Please click the Login button above to load recommendations from YouTube Music.',
+    playNow: 'Play now',
+    downloadToLib: 'Download to library',
+    extractingYtm: 'Extracting tracks from YouTube Music...',
+    ytmPlaylist: 'YouTube Music • Playlist',
+    scTitle: 'SoundCloud',
+    scSubtitle: 'Stream music online & Explore charts',
+    scMember: 'SoundCloud Member',
+    scLogout: 'Log out / Switch account',
+    scLogin: 'Log in to SoundCloud',
+    refreshSc: 'Refresh SoundCloud',
+    loadingSc: 'Loading SoundCloud tracks...',
+    noScTracksTitle: 'No tracks found',
+    noScTracksDesc: 'Unable to load SoundCloud tracks or no tracks available in this genre.',
+    genres: {
+      all: 'All Music',
+      electronic: 'Electronic',
+      hiphoprap: 'Hip-Hop & Rap',
+      pop: 'Pop',
+      chill: 'Lo-fi & Chill',
+      rock: 'Rock',
+      ambient: 'Ambient',
+      danceedm: 'Dance & EDM'
+    }
+  },
+  songsView: {
+    searchResults: 'Search Results',
+    songList: 'All Songs',
+    addMusic: 'Add Music to Library',
+    noSongsMatched: 'No songs matching "{query}".',
+    libraryNotConfigured: 'Library Not Configured',
+    libraryNotConfiguredDesc: 'Please go to Settings to select your music folder.'
+  },
+  driveView: {
+    title: 'Google Drive',
+    enterFolderLink: 'Enter Folder Link',
+    folderLinkDesc: 'Paste the shared Google Drive music folder link (Must be set to "Anyone with the link").',
+    folderLinkPlaceholder: 'https://drive.google.com/drive/folders/...',
+    scanning: 'Scanning...',
+    scanData: 'Scan Drive',
+    emptyTitle: 'No Audio Files Found',
+    emptyDesc: 'Please paste a folder link and click Scan to load tracks from the Cloud.',
+    foundResults: 'Found {count} results for "{query}"',
+    foundAudioFiles: 'Found {count} audio files',
+    streamAll: 'Stream All',
+    downloadLossless: 'Download to Library (Lossless)',
+    processing: 'Processing...',
+    originalFormat: 'Original format:'
+  },
+  playlistsView: {
+    title: 'My Playlists',
+    searchResults: 'Search Results',
+    createPlaylist: 'Create New Playlist',
+    autoCategorize: 'Auto-categorize Albums',
+    noPlaylists: 'No playlists yet. Create subfolders in your root library to organize playlists.',
+    playlistsAndAlbums: 'Albums & Playlists ({count})',
+    chooseCover: 'Choose image from computer',
+    extractCover: 'Extract cover from first song',
+    addExistingSongs: 'Add existing songs',
+    importFromComputer: 'Import from computer',
+    noSongsMatched: 'No songs matching "{query}".',
+    noResultsFound: 'No results found for "{query}".'
+  },
+  settings: {
+    title: 'System Settings',
+    language: {
+      title: 'Language',
+      desc: 'Select display language for the application.',
+      english: 'English (Tiếng Anh)',
+      vietnamese: 'Vietnamese (Tiếng Việt)'
+    },
+    customBg: {
+      title: 'Custom Background',
+      useTrackCover: 'Use current track cover art as background (Auto-changes per track)',
+      placeholder: 'Enter image URL or select local file...',
+      applyLink: 'Apply URL',
+      chooseImage: 'Choose Image',
+      removeBg: 'Remove Background',
+      opacity: 'Background Opacity',
+      blur: 'Background Blur'
+    },
+    library: {
+      title: 'Root Folder (Library)',
+      desc: 'Select the folder containing your music. The app will automatically scan for audio tracks...',
+      notSet: 'Not configured',
+      change: 'Change'
+    },
+    bitPerfect: {
+      title: 'Bit-perfect (WASAPI Exclusive / ASIO)',
+      label: 'Bit-perfect Mode (Bypass Windows Mixer)',
+      note: 'Note: Enabling this mode takes exclusive audio control; other apps will have no sound. Changes will restart the audio stream.'
+    },
+    googleDrive: {
+      title: 'Google Drive API Key',
+      desc: 'Enter your API key to enable downloading and streaming from Google Drive Cloud.',
+      placeholder: 'AIzaSy...',
+      note: '*Your key is stored securely on your local computer.'
+    },
+    windowBehavior: {
+      title: 'Window Behavior',
+      onMinimize: 'When clicking Minimize',
+      onMinimizeDesc: 'Default behavior when clicking the minimize button',
+      minimizeTaskbar: 'Minimize to Taskbar',
+      minimizeTray: 'Minimize to System Tray',
+      onClose: 'When clicking Close',
+      onCloseDesc: 'Prevent accidental stopping when closing the window',
+      closeQuit: 'Quit Application Completely',
+      closeTray: 'Minimize to System Tray'
+    },
+    appMode: {
+      title: 'Operating Mode (Performance)',
+      desc: 'Adjust app resource consumption according to your hardware specs.',
+      standard: 'Standard',
+      lite: 'Power Saver (Lite)',
+      core: 'Core (Minimal)'
+    }
+  },
+  player: {
+    noTrack: 'No track playing',
+    unknownArtist: 'Unknown Artist',
+    spectrogram: 'Open Spectrogram Analyzer',
+    lyrics: 'Lyrics',
+    miniPlayer: 'Mini Player',
+    queue: 'Play Queue',
+    equalizer: 'Equalizer (EQ)',
+    volume: 'Volume',
+    shuffle: 'Shuffle',
+    repeatOff: 'Repeat Off',
+    repeatAll: 'Repeat All',
+    repeatOne: 'Repeat One',
+    play: 'Play',
+    pause: 'Pause',
+    next: 'Next',
+    prev: 'Previous'
+  },
+  lyrics: {
+    title: 'Lyrics',
+    noLyrics: 'No lyrics available.',
+    syncing: 'Synchronized Lyrics',
+    maximize: 'Fullscreen Lyrics',
+    minimize: 'Exit Fullscreen'
+  },
+  queue: {
+    title: 'Now Playing Queue',
+    empty: 'Queue is empty.'
+  },
+  contextMenu: {
+    play: 'Play track',
+    addQueue: 'Add to queue',
+    addToPlaylist: 'Add to Playlist...',
+    editTags: 'Edit Metadata (Tags)',
+    showInFolder: 'Show in File Explorer',
+    removeFromPlaylist: 'Remove from playlist "{name}"',
+    deleteFile: 'Delete File (Move to Trash)',
+    confirmDeleteFile: 'Are you sure you want to move "{title}" to the Trash?',
+    confirmRemoveFromPlaylist: 'Are you sure you want to remove "{title}" from playlist "{name}"?',
+    playAll: 'Play all tracks',
+    addSongs: 'Add songs to playlist',
+    renamePlaylist: 'Rename Playlist',
+    changeCover: 'Change Playlist Cover',
+    extractCover: 'Extract Cover from first song',
+    openPlaylistFolder: 'Open Playlist Folder in Explorer',
+    deletePlaylist: 'Delete playlist "{name}"',
+    confirmDeletePlaylist: 'Are you sure you want to delete Playlist "{name}" and move its folder to the Trash?',
+    downloadToLib: 'Download to library'
+  },
+  modals: {
+    addSongs: {
+      title: 'Add songs to "{name}"',
+      addCount: 'Add {count} songs'
+    },
+    cloudAction: {
+      desc: 'This file is stored on the Cloud. Would you like to stream directly or download to listen offline?',
+      streamDirect: 'Stream Directly',
+      downloadDirect: 'Download to Library',
+      downloading: 'Downloading...'
+    },
+    createPlaylist: {
+      title: 'Create New Playlist',
+      placeholder: 'Enter playlist name...',
+      create: 'Create'
+    },
+    renamePlaylist: {
+      title: 'Rename Playlist',
+      placeholder: 'Enter new name...',
+      save: 'Save Changes'
+    },
+    tagEditor: {
+      title: 'Edit Track Metadata',
+      flacTag: 'FLAC Vorbis Tag',
+      mp3Tag: 'MP3 ID3v2 Tag',
+      audioTag: 'Audio Tag',
+      chooseCover: 'Select Cover Art',
+      trackTitle: 'Track Title',
+      placeholderTitle: 'Enter track title...',
+      artist: 'Artist',
+      placeholderArtist: 'Enter artist name...',
+      album: 'Album',
+      placeholderAlbum: 'Enter album name...',
+      lyrics: 'Lyrics (LRC or plain text)',
+      lyricsFormatInfo: '[00:00.00] Lyrics',
+      lyricsPlaceholder: '[00:01.00] Paste synchronized LRC or plain lyrics here...',
+      saveDirect: 'Save Changes'
+    },
+    spectrogram: {
+      title: 'Full Track Spectrogram',
+      noTrack: 'No track selected',
+      closeWindow: 'Close window',
+      generating: 'Generating full track spectrogram...',
+      errorPrefix: 'Could not generate spectrogram: ',
+      ensureLocalFile: 'Please ensure the audio file is stored on local storage.',
+      seekInstruction: 'Click anywhere on the spectrogram canvas to seek the track to that position.',
+      intensityLegend: '*Bright scale indicates sound intensity: White (loudest) > Red/Yellow > Green > Blue > Black (silence).'
+    },
+    eq: {
+      title: 'Parametric Equalizer (EQ)',
+      enableEq: 'Enable EQ',
+      autoEq: 'AutoEQ - Headphone Profiles',
+      searchHeadphonePlaceholder: 'Search headphone model (e.g. Sony, Sennheiser, Moondrop)...',
+      importFile: 'Import Peace / APO (.txt)',
+      exportFile: 'Export Peace (.txt)',
+      reset: 'Reset EQ',
+      preamp: 'Preamp',
+      gain: 'Gain',
+      freq: 'Freq',
+      bandwidthQ: 'Q Factor',
+      type: 'Filter Type',
+      peaking: 'Peaking',
+      lowshelf: 'Low Shelf',
+      highshelf: 'High Shelf',
+      lowpass: 'Low Pass',
+      highpass: 'High Pass',
+      noBandsFound: 'No valid frequency bands found in the file!'
+    }
+  },
+  toasts: {
+    ytmLoginSuccess: 'Logged in to YouTube Music successfully!',
+    ytmLogout: 'Logged out of YouTube Music',
+    scLoginSuccess: 'Logged in to SoundCloud successfully!',
+    scLogout: 'Logged out of SoundCloud',
+    downloadFinished: 'Finished downloading "{title}"!',
+    albumDownloadFinished: 'Successfully downloaded {count}/{total} album tracks!',
+    playlistCreated: 'Playlist created successfully!',
+    tracksAddedToPlaylist: 'Added {count} songs to playlist!',
+    connectingStream: 'Connecting to audio stream...',
+    setLibraryFirst: 'Please configure the Root Library in Settings before downloading!',
+    driveDownloadFinished: 'Downloaded {count} tracks to device!',
+    systemError: 'System error: ',
+    downloadError: 'An error occurred while downloading files!',
+    tagSavedSuccess: 'Metadata tags saved successfully!',
+    addedToQueue: 'Added "{title}" to queue!',
+    addedToPlaylist: 'Added to playlist "{name}"!',
+    removedFromPlaylist: 'Removed song from playlist!',
+    movedToTrash: 'Moved "{title}" to Trash!',
+    playlistDeleted: 'Deleted playlist "{name}"!',
+    deleteTrackError: 'Error deleting track: ',
+    deletePlaylistError: 'Error deleting playlist: ',
+    downloadProgress: 'Downloading...',
+    librarySavedSuccess: 'Root library path saved!',
+    autoCategorizeConfirm: 'This action will automatically create folders and move songs with matching Album tags into them. Are you sure?',
+    autoCategorizeSuccess: 'Successfully moved {count} songs into Album Playlists!',
+    coverUpdatedSuccess: 'Cover image updated from first track!',
+    coverChangeSuccess: 'Cover image changed successfully!'
+  }
+}
