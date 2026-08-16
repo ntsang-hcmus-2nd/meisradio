@@ -231,11 +231,14 @@ export const en: TranslationDictionary = {
       closeTray: 'Minimize to System Tray'
     },
     appMode: {
-      title: 'Operating Mode (Performance)',
-      desc: 'Adjust app resource consumption according to your hardware specs.',
+      title: 'Performance Mode',
+      desc: 'Adjust the application resource consumption to match your device hardware.',
       standard: 'Standard',
-      lite: 'Power Saver (Lite)',
-      core: 'Core (Minimal)'
+      standardDesc: 'Full visual effects, dynamic visualizer, adaptive ambient colors, and online streaming features.',
+      lite: 'Power Saving (Lite)',
+      liteDesc: 'Battery saver mode: disables backdrop blur and visualizers, optimized for laptops and iGPUs.',
+      core: 'Minimal Core (Audiophile)',
+      coreDesc: 'Maximum performance: direct bit-perfect audio stream, zero album art decoding, offline only (RAM < 80MB).'
     }
   },
   player: {

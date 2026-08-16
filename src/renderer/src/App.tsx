@@ -7,7 +7,8 @@ import {
   Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown,
   Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw, PictureInPicture2,
   Home, ArrowLeft, Radio, BarChart2, LayoutGrid, Rows3, Disc, Tag, Music,
-  Folder, FolderOpen, MoreVertical, ChevronRight, ChevronDown, ChevronUp, Layers, ListPlus
+  Folder, FolderOpen, MoreVertical, ChevronRight, ChevronDown, ChevronUp, Layers, ListPlus,
+  Leaf, Cpu, Zap, BatteryCharging
 } from 'lucide-react'
 import { TableVirtuoso } from 'react-virtuoso'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -302,6 +303,10 @@ export default function App() {
   const [appMode, setAppMode] = useState<'default' | 'lite' | 'core'>('default')
   const isLite = appMode === 'lite' || appMode === 'core' // Dùng chung cho việc tắt ảnh bìa, màu sắc
   const isCore = appMode === 'core' // Chỉ định cắt luồng mảng Audio và UI mạng
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-mode', appMode)
+  }, [appMode])
   
   // UI & General App States
   const [activeView, setActiveView] = useState<'home' | 'home-ytm' | 'home-soundcloud' | 'songs' | 'playlists' | 'artists' | 'genres' | 'user-playlists' | 'settings' | 'drive'>('home-ytm')
@@ -2094,8 +2099,14 @@ export default function App() {
       const linearPreamp = isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0
       preampNodeRef.current.gain.value = linearPreamp
 
+      if (isCore) {
+        // CHẾ ĐỘ CỐT LÕI (CORE MODE): DIRECT STREAMING (0% DSP, 0% CPU, Bit-Perfect)
+        sourceNodeRef.current.connect(ctx.destination)
+        return
+      }
+
       let prevNode: AudioNode = sourceNodeRef.current
-      if (isEqEnabled && !isCore) {
+      if (isEqEnabled) {
         // Nối qua GainNode Preamp trước khi vào các BiquadFilter EQ
         prevNode.connect(preampNodeRef.current)
         prevNode = preampNodeRef.current
@@ -2116,7 +2127,7 @@ export default function App() {
       analyserNodeRef.current.connect(ctx.destination)
     }
     setupAudio().catch(e => console.error('[setupAudio error]', e))
-  }, [isEqEnabled, currentSampleRate]) // <-- Đã bỏ eqBands ra khỏi dependency
+  }, [isEqEnabled, currentSampleRate, isCore])
 
   // EFFECT 2: THAY ĐỔI EQ & PREAMP REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
   useEffect(() => {
@@ -2597,7 +2608,7 @@ export default function App() {
         </div>
       ) : (
         // --- GIAO DIỆN CHÍNH (FULL SCREEN) ---
-        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: effectiveBgImage ? 'transparent' : themeColor }}>
+        <div data-mode={appMode} className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: effectiveBgImage ? 'transparent' : (isCore ? '#121212' : themeColor) }}>
       {!isLite && !effectiveBgImage && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
 
       {/* OVERLAYS & MODALS */}
@@ -3563,29 +3574,102 @@ export default function App() {
                     <div className="border-t border-theme-30 pt-6 mt-6">
                       <h3 className="text-theme-10 font-semibold mb-2">{t('settings.appMode.title')}</h3>
                       <p className="text-sm text-zinc-400 mb-4">{t('settings.appMode.desc')}</p>
-                      <div className="w-full">
-                        <CustomSelect 
-                          value={appMode} 
-                          onChange={(val) => {
-                            setAppMode(val as any)
-                            if (val === 'lite' || val === 'core') {
-                              setShowVisualizer(false)
-                              setShowLyricsPanel(false)
-                              setIsLyricsMaximized(false)
-                              if (val === 'core') {
-                                setShowEQ(false)
-                                if (activeView === 'home' || activeView === 'online' || activeView === 'drive') setActiveView('songs')
-                              }
-                              // @ts-ignore
-                              if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* 1. Tiêu chuẩn (Standard) */}
+                        <div 
+                          onClick={() => {
+                            setAppMode('default')
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            appMode === 'default'
+                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
+                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-white flex items-center gap-2">
+                                <Sparkles size={16} className={appMode === 'default' ? 'text-theme-10' : 'text-zinc-400'} />
+                                {t('settings.appMode.standard')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                              {t('settings.appMode.standardDesc')}
+                            </p>
+                          </div>
+                          <div className="text-[11px] text-zinc-500 font-mono">
+                            RAM: ~250MB • GPU: Medium
+                          </div>
+                        </div>
+
+                        {/* 2. Tiết kiệm (Lite) */}
+                        <div 
+                          onClick={() => {
+                            setAppMode('lite')
+                            setShowVisualizer(false)
+                            setShowLyricsPanel(false)
+                            setIsLyricsMaximized(false)
+                            // @ts-ignore
+                            if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            appMode === 'lite'
+                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
+                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-white flex items-center gap-2">
+                                <Leaf size={16} className={appMode === 'lite' ? 'text-theme-10' : 'text-zinc-400'} />
+                                {t('settings.appMode.lite')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                              {t('settings.appMode.liteDesc')}
+                            </p>
+                          </div>
+                          <div className="text-[11px] text-zinc-500 font-mono">
+                            RAM: ~120MB • GPU: Low (No Blur)
+                          </div>
+                        </div>
+
+                        {/* 3. Cốt lõi (Core) */}
+                        <div 
+                          onClick={() => {
+                            setAppMode('core')
+                            setShowVisualizer(false)
+                            setShowLyricsPanel(false)
+                            setIsLyricsMaximized(false)
+                            setShowEQ(false)
+                            if (activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud' || activeView === 'online' || activeView === 'drive') {
+                              setActiveView('songs')
                             }
-                          }} 
-                          options={[
-                            { value: 'default', label: t('settings.appMode.standard') }, 
-                            { value: 'lite', label: t('settings.appMode.lite') },
-                            { value: 'core', label: t('settings.appMode.core') }
-                          ]} 
-                        />
+                            // @ts-ignore
+                            if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            appMode === 'core'
+                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
+                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-white flex items-center gap-2">
+                                <Cpu size={16} className={appMode === 'core' ? 'text-theme-10' : 'text-zinc-400'} />
+                                {t('settings.appMode.core')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                              {t('settings.appMode.coreDesc')}
+                            </p>
+                          </div>
+                          <div className="text-[11px] text-zinc-500 font-mono">
+                            RAM: &lt;80MB • Direct Bit-Perfect
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -233,9 +233,12 @@ export const vi: TranslationDictionary = {
     appMode: {
       title: 'Chế độ hoạt động (Hiệu suất)',
       desc: 'Điều chỉnh mức độ tiêu thụ tài nguyên của ứng dụng để phù hợp với cấu hình máy.',
-      standard: 'Tiêu chuẩn',
-      lite: 'Tiết kiệm',
-      core: 'Cốt lõi'
+      standard: 'Tiêu chuẩn (Standard)',
+      standardDesc: 'Đầy đủ hiệu ứng hình ảnh, Visualizer, chuyển màu nền thích ứng và tất cả các tính năng online.',
+      lite: 'Tiết kiệm (Lite Mode)',
+      liteDesc: 'Tiết kiệm pin, tắt hiệu ứng kính mờ và Visualizer, tối ưu GPU cho Laptop và card đồ họa tích hợp.',
+      core: 'Cốt lõi (Core Mode)',
+      coreDesc: 'Hiệu năng tối đa, phát âm thanh Bit-Perfect trực tiếp, tắt toàn bộ ảnh bìa và module online (RAM < 80MB).'
     }
   },
   player: {

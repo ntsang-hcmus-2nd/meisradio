@@ -234,8 +234,11 @@ export interface TranslationDictionary {
       title: string
       desc: string
       standard: string
+      standardDesc: string
       lite: string
+      liteDesc: string
       core: string
+      coreDesc: string
     }
   }
   player: {
