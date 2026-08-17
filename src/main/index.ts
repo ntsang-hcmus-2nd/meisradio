@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut, nativeImage, Tray, Menu, session } from 'electron'
 import { spawn } from 'child_process'
 import crypto from 'crypto'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import * as path from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -49,6 +49,7 @@ if (!fs.existsSync(IMAGE_CACHE_DIR)) {
 
 const CONFIG_PATH = join(DATA_FOLDER, 'music-config.json');
 const METADATA_CACHE_PATH = join(DATA_FOLDER, 'metadata-cache.json');
+const THEME_COLORS_CACHE_PATH = join(DATA_FOLDER, 'theme-colors-cache.json');
 const LIBRARY_CACHE_PATH = join(DATA_FOLDER, 'library-cache.json');
 const USER_PLAYLISTS_PATH = join(DATA_FOLDER, 'user-playlists.json');
 
@@ -91,6 +92,141 @@ function saveMetadataCache() {
   try {
     fs.writeFileSync(METADATA_CACHE_PATH, JSON.stringify(metadataCache));
   } catch (e) {}
+}
+
+let themeColorsCache: Record<string, { primary60: string; secondary30: string; accent10: string }> = {};
+try {
+  if (fs.existsSync(THEME_COLORS_CACHE_PATH)) {
+    themeColorsCache = JSON.parse(fs.readFileSync(THEME_COLORS_CACHE_PATH, 'utf-8'));
+  }
+} catch (e) {
+  themeColorsCache = {};
+}
+
+function saveThemeColorsCache() {
+  try {
+    fs.writeFileSync(THEME_COLORS_CACHE_PATH, JSON.stringify(themeColorsCache, null, 2));
+  } catch (e) {}
+}
+
+function extractThemeColorsFromImage(img: Electron.NativeImage): { primary60: string; secondary30: string; accent10: string } {
+  try {
+    const small = img.resize({ width: 32, height: 32, quality: 'good' })
+    const bitmap = small.toBitmap() // Buffer of 32 * 32 * 4 bytes (BGRA)
+    const pixels: { r: number; g: number; b: number }[] = []
+    
+    // Electron nativeImage.toBitmap() lưu dưới dạng BGRA
+    for (let i = 0; i < bitmap.length; i += 4) {
+      const b = bitmap[i]
+      const g = bitmap[i + 1]
+      const r = bitmap[i + 2]
+      const a = bitmap[i + 3]
+      if (a < 128) continue
+      pixels.push({ r, g, b })
+    }
+
+    if (pixels.length === 0) {
+      return { primary60: 'rgb(24, 24, 27)', secondary30: 'rgb(39, 39, 42)', accent10: 'rgb(16, 185, 129)' }
+    }
+
+    // 1. Tìm pixel có độ bão hòa (saturation) cao nhất để làm màu accent 10%
+    let mostVibrant = pixels[0]
+    let maxSat = -1
+    for (const p of pixels) {
+      const max = Math.max(p.r, p.g, p.b)
+      const min = Math.min(p.r, p.g, p.b)
+      const sat = max === 0 ? 0 : (max - min) / max
+      const score = sat * (max > 40 ? 1 : 0.3)
+      if (score > maxSat) {
+        maxSat = score
+        mostVibrant = p
+      }
+    }
+
+    // 2. Thuật toán K-Means K=3
+    const step = Math.floor(pixels.length / 3)
+    const centroids = [
+      { ...pixels[0] },
+      { ...pixels[Math.min(pixels.length - 1, step)] },
+      { ...pixels[Math.min(pixels.length - 1, step * 2)] }
+    ]
+
+    for (let iter = 0; iter < 5; iter++) {
+      const clusters: { r: number; g: number; b: number }[][] = [[], [], []]
+      for (const p of pixels) {
+        let minDist = Infinity
+        let minIdx = 0
+        for (let i = 0; i < 3; i++) {
+          const dist = Math.sqrt((p.r - centroids[i].r) ** 2 + (p.g - centroids[i].g) ** 2 + (p.b - centroids[i].b) ** 2)
+          if (dist < minDist) {
+            minDist = dist
+            minIdx = i
+          }
+        }
+        clusters[minIdx].push(p)
+      }
+      for (let i = 0; i < 3; i++) {
+        if (clusters[i].length === 0) continue
+        let r = 0, g = 0, b = 0
+        for (const p of clusters[i]) {
+          r += p.r; g += p.g; b += p.b
+        }
+        centroids[i] = {
+          r: Math.floor(r / clusters[i].length),
+          g: Math.floor(g / clusters[i].length),
+          b: Math.floor(b / clusters[i].length)
+        }
+      }
+    }
+
+    const counts = centroids.map(c => ({ c, count: pixels.filter(p => Math.abs(p.r - c.r) < 35).length }))
+    counts.sort((a, b) => b.count - a.count)
+
+    const dom = counts[0]?.c || pixels[0]
+    const sec = counts[1]?.c || dom
+
+    const enforceDark = (c: { r: number; g: number; b: number }, maxVal: number) => {
+      const highest = Math.max(c.r, c.g, c.b)
+      if (highest === 0) return { r: 18, g: 18, b: 24 }
+      if (highest > maxVal) {
+        const ratio = maxVal / highest
+        return {
+          r: Math.max(10, Math.floor(c.r * ratio)),
+          g: Math.max(10, Math.floor(c.g * ratio)),
+          b: Math.max(10, Math.floor(c.b * ratio))
+        }
+      }
+      return { r: Math.max(10, c.r), g: Math.max(10, c.g), b: Math.max(10, c.b) }
+    }
+
+    const enforceAccent = (c: { r: number; g: number; b: number }) => {
+      const highest = Math.max(c.r, c.g, c.b)
+      if (highest === 0) return { r: 16, g: 185, b: 129 }
+      const minVal = 190
+      if (highest < minVal) {
+        const ratio = minVal / highest
+        return {
+          r: Math.min(255, Math.floor(c.r * ratio)),
+          g: Math.min(255, Math.floor(c.g * ratio)),
+          b: Math.min(255, Math.floor(c.b * ratio))
+        }
+      }
+      return c
+    }
+
+    const c60 = enforceDark(dom, 35)
+    const c30 = enforceDark(sec, 65)
+    const c10_raw = maxSat > 0.15 ? mostVibrant : counts[2]?.c || sec
+    const c10 = enforceAccent(c10_raw)
+
+    return {
+      primary60: `rgb(${c60.r}, ${c60.g}, ${c60.b})`,
+      secondary30: `rgb(${c30.r}, ${c30.g}, ${c30.b})`,
+      accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
+    }
+  } catch (err) {
+    return { primary60: 'rgb(24, 24, 27)', secondary30: 'rgb(39, 39, 42)', accent10: 'rgb(16, 185, 129)' }
+  }
 }
 
 // 2. KHỞI TẠO YT-DLP AN TOÀN (Chống lỗi không tìm thấy file .exe trong app.asar)
@@ -518,27 +654,37 @@ app.whenReady().then(() => {
         return {
           ...cached.data,
           filePath: pathToFileURL(trackPath).href,
-          coverArt: coverUrl || cached.data.coverArt || null
+          coverArt: coverUrl || cached.data.coverArt || null,
+          themeColors: themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || cached.data.themeColors || null
         }
       }
 
       // CHỈ ĐỌC VÀ PHÂN TÍCH METADATA VỚI CÁC FILE MỚI ĐƯỢC THÊM HOẶC BỊ SỬA ĐỔI
       try {
         const metadata = await mm.parseFile(trackPath)
-        if (!coverUrl && metadata.common.picture && metadata.common.picture.length > 0) {
+        let calculatedColors = themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || null
+
+        if (metadata.common.picture && metadata.common.picture.length > 0) {
           try {
-            const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
-            const resized = img.resize({ width: 128, height: 128, quality: 'good' })
-            fs.writeFileSync(thumbPath, resized.toJPEG(80))
-            coverUrl = pathToFileURL(thumbPath).href
-          } catch(e) {
-            try {
-              const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
+            const rawBuf = Buffer.from(metadata.common.picture[0].data)
+            const img = nativeImage.createFromBuffer(rawBuf)
+            if (!coverUrl) {
               const resized = img.resize({ width: 128, height: 128, quality: 'good' })
-              fs.writeFileSync(centralThumbPath, resized.toJPEG(80))
-              coverUrl = pathToFileURL(centralThumbPath).href
-            } catch (err2) {}
-          }
+              try {
+                fs.writeFileSync(thumbPath, resized.toJPEG(80))
+                coverUrl = pathToFileURL(thumbPath).href
+              } catch(e) {
+                fs.writeFileSync(centralThumbPath, resized.toJPEG(80))
+                coverUrl = pathToFileURL(centralThumbPath).href
+              }
+            }
+            if (!calculatedColors) {
+              calculatedColors = extractThemeColorsFromImage(img)
+              themeColorsCache[trackPath] = calculatedColors
+              themeColorsCache[pathToFileURL(trackPath).href] = calculatedColors
+              cacheModified = true
+            }
+          } catch(e) {}
         }
 
         let genreStr = ''
@@ -618,6 +764,7 @@ app.whenReady().then(() => {
           lossless: metadata.format.lossless,
           isCloud: false,
           coverArt: coverUrl,
+          themeColors: themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || null,
           lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
         }
 
@@ -732,16 +879,19 @@ app.whenReady().then(() => {
       } catch (e) {}
     }
 
-    // DỌN DẸP CACHE: Loại bỏ các file đã bị xóa khỏi ổ đĩa khỏi metadataCache
+    // DỌN DẸP CACHE: Loại bỏ các file đã bị xóa khỏi ổ đĩa khỏi metadataCache & themeColorsCache
     for (const cachedPath of Object.keys(metadataCache)) {
       if (!existingDiskPaths.has(cachedPath)) {
         delete metadataCache[cachedPath]
+        delete themeColorsCache[cachedPath]
+        delete themeColorsCache[pathToFileURL(cachedPath).href]
         cacheModified = true
       }
     }
 
     if (cacheModified) {
       saveMetadataCache()
+      saveThemeColorsCache()
     }
 
     const userPlaylists = getUserPlaylists()
@@ -1161,16 +1311,36 @@ app.whenReady().then(() => {
         } catch (err) {}
       }
 
+      // Nếu thay đổi ảnh bìa, xóa cache themeColors cũ để nạp màu mới
+      if (rawImagePath) {
+        delete themeColorsCache[rawPath]
+        delete themeColorsCache[pathToFileURL(rawPath).href]
+        saveThemeColorsCache()
+      }
+
       return { success: true, coverUrl }
     } catch (e: any) {
       return { success: false, error: e.message }
     }
   })
 
+  ipcMain.handle('music:getThemeColorsCache', () => {
+    return themeColorsCache
+  })
+
   ipcMain.handle('music:cacheThemeColors', async (_, trackPath: string, colors: any) => {
     try {
+      if (!trackPath || !colors) return { success: false }
       let rawPath = trackPath.replace(/^file:\/\/\/?/, '')
-      if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
+      if (process.platform === 'win32') {
+        rawPath = decodeURIComponent(rawPath)
+        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+        rawPath = rawPath.replace(/\//g, '\\')
+      }
+      themeColorsCache[rawPath] = colors
+      themeColorsCache[trackPath] = colors
+      saveThemeColorsCache()
+
       if (metadataCache[rawPath] && metadataCache[rawPath].data) {
         metadataCache[rawPath].data.themeColors = colors
         saveMetadataCache()
@@ -1205,7 +1375,11 @@ app.whenReady().then(() => {
   ipcMain.handle('music:deleteTrack', async (_, trackPath: string, _deletePermanently: boolean = true) => {
     try {
       let rawPath = trackPath.replace(/^file:\/\/\/?/, '')
-      if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
+      if (process.platform === 'win32') {
+        rawPath = decodeURIComponent(rawPath)
+        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+        rawPath = rawPath.replace(/\//g, '\\')
+      }
 
       if (fs.existsSync(rawPath)) {
         fs.unlinkSync(rawPath)
@@ -1218,6 +1392,12 @@ app.whenReady().then(() => {
       if (metadataCache[rawPath]) {
         delete metadataCache[rawPath]
         saveMetadataCache()
+      }
+
+      if (themeColorsCache[rawPath] || themeColorsCache[trackPath]) {
+        delete themeColorsCache[rawPath]
+        delete themeColorsCache[trackPath]
+        saveThemeColorsCache()
       }
 
       return { success: true }
@@ -1248,13 +1428,20 @@ app.whenReady().then(() => {
         return { success: false, error: 'Không tìm thấy thư mục Playlist' }
       }
 
-      // Dọn dẹp cache metadata các bài hát trong thư mục đó
+      // Dọn dẹp cache metadata & theme colors các bài hát trong thư mục đó
       for (const cachedPath of Object.keys(metadataCache)) {
         if (cachedPath.includes(playlistName)) {
           delete metadataCache[cachedPath]
+          delete themeColorsCache[cachedPath]
+        }
+      }
+      for (const cachedPath of Object.keys(themeColorsCache)) {
+        if (cachedPath.includes(playlistName)) {
+          delete themeColorsCache[cachedPath]
         }
       }
       saveMetadataCache()
+      saveThemeColorsCache()
 
       return { success: true }
     } catch (e: any) {
@@ -1772,13 +1959,17 @@ app.whenReady().then(() => {
       if (filePath.startsWith('http')) return null
 
       let rawPath = filePath.replace(/^file:\/\/\/?/, '')
-      if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
+      if (process.platform === 'win32') {
+        rawPath = decodeURIComponent(rawPath)
+        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+        rawPath = rawPath.replace(/\//g, '\\')
+      }
 
       // 1. Khởi tạo thư mục proxy ảnh
       const rootPath = getConfig().libraryPath
       if (!rootPath) return null
       const thumbDir = join(rootPath, '.thumbnails')
-      if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir)
+      if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir, { recursive: true })
 
       // 2. Băm tên file để làm ID ảnh cache
       const trackHash = crypto.createHash('md5').update(rawPath).digest('hex')
@@ -1789,11 +1980,11 @@ app.whenReady().then(() => {
         return pathToFileURL(thumbPath).href
       }
 
-      // 4. Nếu chưa có, trích xuất, giảm dung lượng và lưu xuống ổ cứng
+      // 4. Nếu chưa có, trích xuất thumbnail 128px và lưu xuống ổ cứng
       const metadata = await mm.parseFile(rawPath)
       if (metadata.common.picture && metadata.common.picture.length > 0) {
         const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
-        const resized = img.resize({ width: 500, quality: 'good' })
+        const resized = img.resize({ width: 128, height: 128, quality: 'good' })
         fs.writeFileSync(thumbPath, resized.toJPEG(80))
         return pathToFileURL(thumbPath).href
       }
@@ -1802,19 +1993,21 @@ app.whenReady().then(() => {
   })
 
   // ==========================================
-  // API TRÍCH XUẤT ẢNH BÌA CHẤT LƯỢNG GỐC CHO LYRICS
+  // API TRÍCH XUẤT ẢNH BÌA CHẤT LƯỢNG GỐC CHO THEME & LYRICS (STREAM IN-MEMORY)
   // ==========================================
   ipcMain.handle('music:getOriginalTrackCover', async (_, filePath: string) => {
     try {
-      if (filePath.startsWith('http')) return null
+      if (!filePath || filePath.startsWith('http') || !streamPort) return null
       let rawPath = filePath.replace(/^file:\/\/\/?/, '')
-      if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
-
-      const metadata = await mm.parseFile(rawPath)
-      // Lấy trực tiếp ảnh Base64 chất lượng cao từ metadata mà không qua giảm dung lượng
-      if (metadata.common.picture && metadata.common.picture.length > 0) {
-        return `data:${metadata.common.picture[0].format};base64,${Buffer.from(metadata.common.picture[0].data).toString('base64')}`
+      if (process.platform === 'win32') {
+        rawPath = decodeURIComponent(rawPath)
+        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+        rawPath = rawPath.replace(/\//g, '\\')
       }
+
+      if (!fs.existsSync(rawPath)) return null
+
+      return `http://127.0.0.1:${streamPort}/cover?path=${encodeURIComponent(rawPath)}`
     } catch (e) {}
     return null
   })
@@ -1910,7 +2103,12 @@ app.whenReady().then(() => {
     if (!thumbnails || thumbnails.length === 0) return { coverArt: null, coverArtHighRes: null };
     const medIndex = thumbnails.length > 1 ? 1 : 0;
     const medUrl = thumbnails[medIndex].url;
-    const highUrl = thumbnails[thumbnails.length - 1].url.split('=w')[0];
+    let highUrl = thumbnails[thumbnails.length - 1].url;
+    if (highUrl.includes('=w') || highUrl.includes('=s')) {
+      highUrl = highUrl.split('=w')[0].split('=s')[0] + '=w1200-h1200-l90-rj';
+    } else if (highUrl.includes('hqdefault.jpg')) {
+      highUrl = highUrl.replace('hqdefault.jpg', 'maxresdefault.jpg');
+    }
     return {
       coverArt: getProxyImageUrl(medUrl, `med_${fallbackId}`),
       coverArtHighRes: getProxyImageUrl(highUrl, `high_${fallbackId}`)
@@ -2094,6 +2292,60 @@ app.whenReady().then(() => {
         imgRes.data.pipe(fileStream);
         imgRes.data.pipe(res);
       } catch (e) { if (!res.headersSent) res.writeHead(500).end(); }
+    }
+    // --- LUỒNG 3: TRUYỀN TẢI ẢNH BÌA GỐC IN-MEMORY (0 BYTES Ổ ĐĨA) ---
+    else if (parsedUrl.pathname === '/cover') {
+      const rawTrackPath = parsedUrl.searchParams.get('path');
+      if (!rawTrackPath) { res.writeHead(400).end('Thiếu đường dẫn bài hát'); return; }
+
+      let targetPath = rawTrackPath.replace(/^file:\/\/\/?/, '');
+      if (process.platform === 'win32') {
+        targetPath = decodeURIComponent(targetPath);
+        if (/^\/[a-zA-Z]:/.test(targetPath)) targetPath = targetPath.slice(1);
+        targetPath = targetPath.replace(/\//g, '\\');
+      }
+
+      if (!fs.existsSync(targetPath)) {
+        res.writeHead(404).end('File không tồn tại');
+        return;
+      }
+
+      try {
+        const metadata = await mm.parseFile(targetPath);
+        if (metadata.common.picture && metadata.common.picture.length > 0) {
+          const pic = metadata.common.picture[0];
+          let mime = pic.format || 'image/jpeg';
+          if (!mime.includes('/')) mime = `image/${mime}`;
+          
+          res.writeHead(200, {
+            'Content-Type': mime,
+            'Cache-Control': 'public, max-age=86400',
+            'Content-Length': pic.data.length
+          });
+          res.end(Buffer.from(pic.data));
+          return;
+        }
+
+        // Fallback tìm ảnh bìa trong cùng thư mục
+        const trackDir = dirname(targetPath);
+        const commonCoverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'album.png', 'front.jpg', 'front.png'];
+        for (const name of commonCoverNames) {
+          const candidate = join(trackDir, name);
+          if (fs.existsSync(candidate)) {
+            const ext = name.split('.').pop() || 'jpeg';
+            res.writeHead(200, {
+              'Content-Type': `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+              'Cache-Control': 'public, max-age=86400'
+            });
+            fs.createReadStream(candidate).pipe(res);
+            return;
+          }
+        }
+
+        res.writeHead(404).end('Không tìm thấy ảnh bìa');
+      } catch (e) {
+        if (!res.headersSent) res.writeHead(500).end();
+      }
     }
   });
 

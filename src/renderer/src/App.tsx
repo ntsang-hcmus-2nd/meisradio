@@ -31,7 +31,7 @@ import { VolumeSlider } from './components/VolumeSlider'
 import { SpectrogramModal } from './components/SpectrogramModal'
 import { ContextMenu, ContextMenuItem } from './components/ContextMenu'
 
-import { extractThemeColors } from './utils/colorUtils'
+import { extractThemeColors, initThemeColorCache } from './utils/colorUtils'
 
 // --- HELPER FUNCTIONS & INTERFACES (OUTSIDE COMPONENT) ---
 const formatDuration = (seconds: number) => {
@@ -91,7 +91,9 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
     return
   }
   const img = new Image()
-  img.crossOrigin = 'Anonymous'
+  if (imageSrc.startsWith('http://') || imageSrc.startsWith('https://')) {
+    img.crossOrigin = 'Anonymous'
+  }
   img.onload = () => {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
@@ -1585,12 +1587,106 @@ export default function App() {
     }
   }
 
+  // Nạp ảnh bìa chất lượng gốc siêu nét cho Background Theme và Lời bài hát
+  const [trackHighResCover, setTrackHighResCover] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!currentTrack || isCore) {
+      setTrackHighResCover(null)
+      return
+    }
+
+    if (currentTrack.isOnline) {
+      setTrackHighResCover(currentTrack.coverArtHighRes || currentTrack.coverArt || null)
+      return
+    }
+
+    if (!currentTrack.isCloud && (currentTrack.id || currentTrack.filePath)) {
+      let isCurrent = true
+      // @ts-ignore
+      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath).then((cover: string | null) => {
+        if (isCurrent) {
+          setTrackHighResCover(cover || currentTrack.coverArt || null)
+        }
+      }).catch(() => {
+        if (isCurrent) setTrackHighResCover(currentTrack.coverArt || null)
+      })
+      return () => { isCurrent = false }
+    } else {
+      setTrackHighResCover(currentTrack.coverArt || null)
+    }
+  }, [currentTrack?.id, currentTrack?.filePath, currentTrack?.coverArt, currentTrack?.coverArtHighRes, currentTrack?.isOnline, currentTrack?.isCloud, isCore])
+
   // Determine effective background image (Tắt hoàn toàn trong Core Mode)
   const effectiveBgImage = isCore
     ? null
     : useTrackCoverAsBg 
-    ? (currentTrack?.coverArtHighRes || currentTrack?.coverArt || null)
+    ? (trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt || null)
     : customBgImage
+
+  // Quản lý Dual-layer Background Crossfade cho chế độ Standard (Chống stutter khi chuyển bài)
+  const [bgLayerA, setBgLayerA] = useState<string | null>(null)
+  const [bgLayerB, setBgLayerB] = useState<string | null>(null)
+  const [activeBgLayer, setActiveBgLayer] = useState<'A' | 'B'>('A')
+
+  useEffect(() => {
+    if (isCore) {
+      setBgLayerA(null)
+      setBgLayerB(null)
+      return
+    }
+
+    if (!effectiveBgImage) {
+      setBgLayerA(null)
+      setBgLayerB(null)
+      return
+    }
+
+    if (isLite) {
+      // Chế độ Lite: Cập nhật trực tiếp 1 layer, không chạy animation crossfade
+      setBgLayerA(effectiveBgImage)
+      setActiveBgLayer('A')
+      return
+    }
+
+    // Chế độ Standard: Preload ảnh và Crossfade mượt mà giữa Layer A và Layer B
+    let isCancelled = false
+    const targetLayer = activeBgLayer === 'A' ? 'B' : 'A'
+
+    const applyTransition = () => {
+      if (isCancelled) return
+      if (targetLayer === 'B') {
+        setBgLayerB(effectiveBgImage)
+        setActiveBgLayer('B')
+      } else {
+        setBgLayerA(effectiveBgImage)
+        setActiveBgLayer('A')
+      }
+    }
+
+    const img = new Image()
+    if (effectiveBgImage.startsWith('http://') || effectiveBgImage.startsWith('https://')) {
+      img.crossOrigin = 'anonymous'
+    }
+    img.onload = applyTransition
+    img.onerror = applyTransition
+    img.src = effectiveBgImage
+
+    return () => {
+      isCancelled = true
+    }
+  }, [effectiveBgImage, isLite, isCore])
+
+  // Khởi tạo và nạp trước Theme Colors Cache từ JSON vào RAM
+  useEffect(() => {
+    if ((window as any).api?.getThemeColorsCache) {
+      (window as any).api.getThemeColorsCache().then((cachedColors: any) => {
+        if (cachedColors) {
+          initThemeColorCache(cachedColors)
+        }
+      }).catch(() => {})
+    }
+  }, [])
 
   // Apply Background & Extract Theme Colors (Quy luật 60/30/10 cho Standard & Lite mode)
   useEffect(() => {
@@ -1602,11 +1698,21 @@ export default function App() {
       return
     }
 
+    const trackKey = currentTrack?.id || currentTrack?.filePath
+
+    // 1. Áp dụng ngay lập tức màu từ cache JSON nếu đã có sẵn
+    if (currentTrack?.themeColors && !isCore) {
+      document.documentElement.style.setProperty('--theme-60', currentTrack.themeColors.primary60)
+      document.documentElement.style.setProperty('--theme-30', currentTrack.themeColors.secondary30)
+      document.documentElement.style.setProperty('--theme-10', currentTrack.themeColors.accent10)
+    }
+
+    // 2. Cập nhật ảnh nền giao diện
     if (effectiveBgImage) {
       const sanitizedUrl = effectiveBgImage.replace(/"/g, '\\"')
       document.documentElement.style.setProperty('--bg-image', `url("${sanitizedUrl}")`)
       
-      extractThemeColors(effectiveBgImage).then(colors => {
+      extractThemeColors(effectiveBgImage, trackKey || effectiveBgImage).then(colors => {
         if (colors && !isCore) {
           document.documentElement.style.setProperty('--theme-60', colors.primary60)
           document.documentElement.style.setProperty('--theme-30', colors.secondary30)
@@ -1616,24 +1722,23 @@ export default function App() {
     } else {
       document.documentElement.style.setProperty('--bg-image', 'none')
       
-      // Khi không sử dụng theme hay ảnh nền tự động, thay đổi theme theo dominant color quy luật 60/30/10 từ ảnh bìa bài hát
-      const trackCover = currentTrack?.coverArtHighRes || currentTrack?.coverArt
+      const trackCover = trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt
       if (trackCover) {
-        extractThemeColors(trackCover).then(colors => {
+        extractThemeColors(trackCover, trackKey || trackCover).then(colors => {
           if (colors && !isCore) {
             document.documentElement.style.setProperty('--theme-60', colors.primary60)
             document.documentElement.style.setProperty('--theme-30', colors.secondary30)
             document.documentElement.style.setProperty('--theme-10', colors.accent10)
           }
         })
-      } else {
+      } else if (!currentTrack?.themeColors) {
         // Fallback về mặc định
         document.documentElement.style.setProperty('--theme-60', '#18181b')
         document.documentElement.style.setProperty('--theme-30', '#27272a')
         document.documentElement.style.setProperty('--theme-10', '#10b981')
       }
     }
-  }, [effectiveBgImage, currentTrack?.coverArt, currentTrack?.coverArtHighRes, isCore])
+  }, [effectiveBgImage, trackHighResCover, currentTrack?.id, currentTrack?.filePath, currentTrack?.themeColors, currentTrack?.coverArt, currentTrack?.coverArtHighRes, isCore])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--bg-opacity', customBgOpacity.toString())
@@ -2900,10 +3005,26 @@ export default function App() {
     }
   };
 
-  // Giao diện chính (Full Screen)
- return (
+  return (
     <>
-      <div className="custom-bg" />
+      {!isCore && (
+        <div className="custom-bg-container">
+          <div 
+            className={`custom-bg-layer ${!isLite ? 'transition-all' : ''}`}
+            style={{
+              backgroundImage: bgLayerA ? `url("${bgLayerA.replace(/"/g, '\\"')}")` : 'none',
+              opacity: activeBgLayer === 'A' && bgLayerA ? customBgOpacity : 0
+            }}
+          />
+          <div 
+            className={`custom-bg-layer ${!isLite ? 'transition-all' : ''}`}
+            style={{
+              backgroundImage: bgLayerB ? `url("${bgLayerB.replace(/"/g, '\\"')}")` : 'none',
+              opacity: activeBgLayer === 'B' && bgLayerB ? customBgOpacity : 0
+            }}
+          />
+        </div>
+      )}
       {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG VÀ ÉP THAY ĐỔI SAMPLE RATE */}
       <audio
         key={currentSampleRate} // Tự động remount khi Sample Rate thay đổi

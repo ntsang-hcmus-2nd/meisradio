@@ -61,8 +61,17 @@ const enforceAccentBrightness = (c: RGB): RGB => {
   return c;
 };
 
-const MAX_THEME_CACHE = 50
+const MAX_THEME_CACHE = 500
 const themeColorCache = new Map<string, ThemeColors>()
+
+export const initThemeColorCache = (initialMap: Record<string, ThemeColors>) => {
+  if (!initialMap || typeof initialMap !== 'object') return
+  for (const [key, val] of Object.entries(initialMap)) {
+    if (val && val.primary60 && val.secondary30 && val.accent10) {
+      themeColorCache.set(key, val)
+    }
+  }
+}
 
 const saveThemeColorToCache = (key: string, val: ThemeColors) => {
   if (themeColorCache.size >= MAX_THEME_CACHE) {
@@ -72,23 +81,32 @@ const saveThemeColorToCache = (key: string, val: ThemeColors) => {
   themeColorCache.set(key, val)
 }
 
-export const extractThemeColors = (imageSrc: string): Promise<ThemeColors | null> => {
+export const extractThemeColors = (imageSrc: string, trackKey?: string): Promise<ThemeColors | null> => {
   return new Promise((resolve) => {
     if (!imageSrc) {
       resolve(null);
       return;
     }
 
-    if (themeColorCache.has(imageSrc)) {
+    const lookupKey = trackKey || imageSrc;
+    if (themeColorCache.has(lookupKey)) {
+      const cached = themeColorCache.get(lookupKey)!
+      themeColorCache.delete(lookupKey)
+      themeColorCache.set(lookupKey, cached) // Đưa lên đầu danh sách LRU
+      resolve(cached);
+      return;
+    }
+
+    if (trackKey && themeColorCache.has(imageSrc)) {
       const cached = themeColorCache.get(imageSrc)!
-      themeColorCache.delete(imageSrc)
-      themeColorCache.set(imageSrc, cached) // Đưa lên đầu danh sách LRU
       resolve(cached);
       return;
     }
 
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (imageSrc.startsWith('http://') || imageSrc.startsWith('https://')) {
+      img.crossOrigin = 'anonymous';
+    }
 
     const onLoad = () => {
       try {
@@ -229,7 +247,13 @@ export const extractThemeColors = (imageSrc: string): Promise<ThemeColors | null
           accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
         }
 
-        saveThemeColorToCache(imageSrc, result)
+        saveThemeColorToCache(lookupKey, result)
+        if (trackKey) saveThemeColorToCache(imageSrc, result)
+
+        if (typeof window !== 'undefined' && (window as any).api?.cacheThemeColors) {
+          (window as any).api.cacheThemeColors(trackKey || imageSrc, result)
+        }
+
         resolve(result)
       } catch (err) {
         console.warn('extractThemeColors error:', err)
