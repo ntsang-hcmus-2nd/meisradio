@@ -104,7 +104,7 @@ const ytdlp = is.dev
       process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
     ));
 
-app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=128 --optimize-for-size');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('disable-http-cache');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -256,6 +256,20 @@ function createWindow(): void {
   mainWindow.on('maximize', saveWindowState)
   mainWindow.on('unmaximize', saveWindowState)
 
+  const performDeepMemoryTrim = async () => {
+    try {
+      if (session.defaultSession) {
+        await session.defaultSession.clearCache()
+      }
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app:onDeepClean')
+      }
+      if (typeof (global as any).gc === 'function') {
+        (global as any).gc()
+      }
+    } catch (e) {}
+  }
+
   // MỚI: Bắt sự kiện khi bấm nút Thu nhỏ (Minimize - Dấu trừ)
   // @ts-ignore
   mainWindow.on('minimize', (event: Electron.Event) => {
@@ -263,6 +277,11 @@ function createWindow(): void {
       event.preventDefault()
       mainWindow?.hide() // Ẩn khỏi Taskbar, chỉ hiện ở System Tray
     }
+    performDeepMemoryTrim()
+  })
+
+  mainWindow.on('hide', () => {
+    performDeepMemoryTrim()
   })
 
   // MỚI: Bắt sự kiện khi bấm nút Đóng (Close - Dấu X)

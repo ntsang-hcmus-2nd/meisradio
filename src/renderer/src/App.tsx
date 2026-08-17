@@ -67,14 +67,26 @@ const normalizeImagePath = (input: string): string => {
   return `file:///${cleaned}`
 }
 
-// Bộ nhớ đệm màu chủ đạo trong RAM (0ms khi phát lại)
+// Bộ nhớ đệm màu chủ đạo trong RAM (LRU Cache tối đa 50 bài hát gần nhất)
+const MAX_DOMINANT_CACHE = 50
 const dominantColorCache = new Map<string, string>()
+
+const saveDominantColorToCache = (key: string, val: string) => {
+  if (dominantColorCache.size >= MAX_DOMINANT_CACHE) {
+    const oldestKey = dominantColorCache.keys().next().value
+    if (oldestKey) dominantColorCache.delete(oldestKey)
+  }
+  dominantColorCache.set(key, val)
+}
 
 // Hàm phân tích màu chủ đạo bằng Canvas (Tối ưu Cache)
 const getDominantColor = (imageSrc: string, callback: (color: string) => void) => {
   if (!imageSrc) return
   if (dominantColorCache.has(imageSrc)) {
-    callback(dominantColorCache.get(imageSrc)!)
+    const cached = dominantColorCache.get(imageSrc)!
+    dominantColorCache.delete(imageSrc)
+    dominantColorCache.set(imageSrc, cached) // Đưa lên đầu danh sách LRU
+    callback(cached)
     return
   }
   const img = new Image()
@@ -98,7 +110,7 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
     if (count === 0) count = 1
     r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count)
     const colorStr = `rgba(${Math.max(r-30, 0)}, ${Math.max(g-30, 0)}, ${Math.max(b-30, 0)}, 0.4)`
-    dominantColorCache.set(imageSrc, colorStr)
+    saveDominantColorToCache(imageSrc, colorStr)
     callback(colorStr)
   }
   img.src = imageSrc
@@ -2051,6 +2063,51 @@ export default function App() {
       setThemeColor('rgba(39, 39, 42, 0)')
     }
   }, [currentTrack, isLite, effectiveBgImage]) // Thêm isLite vào dependency
+
+  // SMART MEMORY RECOVERY (DỌN DẸP BỘ NHỚ THÔNG MINH - 0% GIẬT LAG)
+  // 1. Dọn dẹp khi đổi bài hát (trì hoãn 1.5s để UI ổn định trước)
+  useEffect(() => {
+    if (!currentTrack) return
+    const timer = setTimeout(() => {
+      // @ts-ignore
+      window.api?.clearMemoryCache?.()
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [currentTrack?.id])
+
+  // 2. Dọn dẹp sâu khi ứng dụng thu nhỏ hoặc nhận sự kiện onDeepClean từ Main Process
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // @ts-ignore
+        window.api?.clearMemoryCache?.()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // @ts-ignore
+    if (window.api?.onDeepClean) {
+      // @ts-ignore
+      window.api.onDeepClean(() => {
+        // @ts-ignore
+        window.api?.clearMemoryCache?.()
+      })
+    }
+
+    // 3. Chu kỳ kiểm tra dọn dẹp nhàn rỗi (mỗi 4 phút khi chạy ngầm)
+    const idleInterval = setInterval(() => {
+      if (document.hidden) {
+        // @ts-ignore
+        window.api?.clearMemoryCache?.()
+      }
+    }, 240000)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearInterval(idleInterval)
+    }
+  }, [])
 
   // Audio Context & Cấu trúc luồng Bit-perfect
   // EFFECT 1: CHỈ KHỞI TẠO LẠI BỘ LỌC KHI ĐỔI BÀI HOẶC BẬT/TẮT EQ (Tiết kiệm CPU)

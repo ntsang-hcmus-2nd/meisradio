@@ -61,7 +61,16 @@ const enforceAccentBrightness = (c: RGB): RGB => {
   return c;
 };
 
+const MAX_THEME_CACHE = 50
 const themeColorCache = new Map<string, ThemeColors>()
+
+const saveThemeColorToCache = (key: string, val: ThemeColors) => {
+  if (themeColorCache.size >= MAX_THEME_CACHE) {
+    const oldestKey = themeColorCache.keys().next().value
+    if (oldestKey) themeColorCache.delete(oldestKey)
+  }
+  themeColorCache.set(key, val)
+}
 
 export const extractThemeColors = (imageSrc: string): Promise<ThemeColors | null> => {
   return new Promise((resolve) => {
@@ -71,7 +80,10 @@ export const extractThemeColors = (imageSrc: string): Promise<ThemeColors | null
     }
 
     if (themeColorCache.has(imageSrc)) {
-      resolve(themeColorCache.get(imageSrc)!);
+      const cached = themeColorCache.get(imageSrc)!
+      themeColorCache.delete(imageSrc)
+      themeColorCache.set(imageSrc, cached) // Đưa lên đầu danh sách LRU
+      resolve(cached);
       return;
     }
 
@@ -217,7 +229,7 @@ export const extractThemeColors = (imageSrc: string): Promise<ThemeColors | null
           accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
         }
 
-        themeColorCache.set(imageSrc, result)
+        saveThemeColorToCache(imageSrc, result)
         resolve(result)
       } catch (err) {
         console.warn('extractThemeColors error:', err)
