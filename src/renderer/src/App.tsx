@@ -67,8 +67,16 @@ const normalizeImagePath = (input: string): string => {
   return `file:///${cleaned}`
 }
 
-// Hàm phân tích màu chủ đạo bằng Canvas
+// Bộ nhớ đệm màu chủ đạo trong RAM (0ms khi phát lại)
+const dominantColorCache = new Map<string, string>()
+
+// Hàm phân tích màu chủ đạo bằng Canvas (Tối ưu Cache)
 const getDominantColor = (imageSrc: string, callback: (color: string) => void) => {
+  if (!imageSrc) return
+  if (dominantColorCache.has(imageSrc)) {
+    callback(dominantColorCache.get(imageSrc)!)
+    return
+  }
   const img = new Image()
   img.crossOrigin = 'Anonymous'
   img.onload = () => {
@@ -76,21 +84,22 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return
     
-    // Tối ưu CPU/RAM: Thu nhỏ ảnh xuống 128x128
-    canvas.width = 128
-    canvas.height = 128
-    ctx.drawImage(img, 0, 0, 128, 128)
+    // Tối ưu CPU/RAM: Thu nhỏ ảnh xuống 64x64 để quét siêu tốc
+    canvas.width = 64
+    canvas.height = 64
+    ctx.drawImage(img, 0, 0, 64, 64)
     
-    const data = ctx.getImageData(0, 0, 128, 128).data
+    const data = ctx.getImageData(0, 0, 64, 64).data
     let r = 0, g = 0, b = 0, count = 0
-    // Lấy mẫu (sample) để tính màu trung bình
     for (let i = 0; i < data.length; i += 16) {
       r += data[i]; g += data[i + 1]; b += data[i + 2]
       count++
     }
     if (count === 0) count = 1
     r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count)
-    callback(`rgba(${Math.max(r-30, 0)}, ${Math.max(g-30, 0)}, ${Math.max(b-30, 0)}, 0.4)`)
+    const colorStr = `rgba(${Math.max(r-30, 0)}, ${Math.max(g-30, 0)}, ${Math.max(b-30, 0)}, 0.4)`
+    dominantColorCache.set(imageSrc, colorStr)
+    callback(colorStr)
   }
   img.src = imageSrc
 }
@@ -141,11 +150,11 @@ const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleR
               key={track.id || index}
               onClick={() => handleRowClick(track, tracks)}
               onContextMenu={(e) => onContextMenu?.(track, e)}
-              className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between"
+              className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between track-card-optimized"
             >
               <div className="aspect-square bg-theme-30/80 rounded-lg mb-3 overflow-hidden relative shadow-md">
                 {(!isLite && track.coverArt) ? (
-                  <img src={track.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                  <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
                     <Music size={32} />
@@ -191,13 +200,13 @@ const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, 
             key={track.id || index}
             onClick={() => handleRowClick(track, tracks)}
             onContextMenu={(e) => onContextMenu?.(track, e)}
-            className={`flex items-center gap-3 px-3 py-2 text-xs transition cursor-pointer group ${isThisTrackPlaying ? 'bg-theme-10/15' : 'hover:bg-white/5'}`}
+            className={`flex items-center gap-3 px-3 py-2 text-xs transition cursor-pointer group track-row-optimized ${isThisTrackPlaying ? 'bg-theme-10/15' : 'hover:bg-white/5'}`}
           >
             <span className="w-6 text-center text-zinc-500 font-mono text-[11px] group-hover:text-white">
               {isThisTrackPlaying && isPlaying ? <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" /> : index + 1}
             </span>
             <div className="w-7 h-7 bg-theme-30 rounded overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-              {(!isLite && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <Music size={12} className="text-zinc-500" />}
+              {(!isLite && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <Music size={12} className="text-zinc-500" />}
             </div>
             <div className="flex-1 min-w-0 flex items-center gap-3">
               <span className={`font-medium truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>
@@ -2258,8 +2267,8 @@ export default function App() {
     if (!audio) return
 
     const handleTimeUpdate = () => {
-      // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Giữ nguyên) ---
-      if (lyrics.length > 0) {
+      // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Chỉ cập nhật khi giao diện đang mở trên màn hình) ---
+      if (!document.hidden && lyrics.length > 0) {
         const visualTime = audio.currentTime + 0.3
         const index = lyrics.findIndex((line, i) => {
           const nextLine = lyrics[i + 1]
@@ -2267,7 +2276,7 @@ export default function App() {
           return visualTime >= line.time
         })
         if (index !== currentLyricIndex) setCurrentLyricIndex(index)
-      } else if (currentLyricIndex !== -1) {
+      } else if (!document.hidden && currentLyricIndex !== -1 && lyrics.length === 0) {
         setCurrentLyricIndex(-1)
       }
 
@@ -3598,9 +3607,6 @@ export default function App() {
                               {t('settings.appMode.standardDesc')}
                             </p>
                           </div>
-                          <div className="text-[11px] text-zinc-500 font-mono">
-                            RAM: ~250MB • GPU: Medium
-                          </div>
                         </div>
 
                         {/* 2. Tiết kiệm (Lite) */}
@@ -3629,9 +3635,6 @@ export default function App() {
                             <p className="text-xs text-zinc-400 leading-relaxed mb-3">
                               {t('settings.appMode.liteDesc')}
                             </p>
-                          </div>
-                          <div className="text-[11px] text-zinc-500 font-mono">
-                            RAM: ~120MB • GPU: Low (No Blur)
                           </div>
                         </div>
 
@@ -3665,9 +3668,6 @@ export default function App() {
                             <p className="text-xs text-zinc-400 leading-relaxed mb-3">
                               {t('settings.appMode.coreDesc')}
                             </p>
-                          </div>
-                          <div className="text-[11px] text-zinc-500 font-mono">
-                            RAM: &lt;80MB • Direct Bit-Perfect
                           </div>
                         </div>
                       </div>
@@ -3720,15 +3720,15 @@ export default function App() {
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {filteredArtists.map(artist => (
                               <div 
-                                key={artist.name}
+                                key={artist.name} 
                                 onClick={() => setActiveArtist(artist)}
                                 onContextMenu={(e) => handleArtistContextMenu(artist, e)}
-                                className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md"
+                                className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md track-card-optimized"
                               >
                                 <div className="flex items-center gap-4 min-w-0">
                                   <div className="w-14 h-14 rounded-full overflow-hidden bg-theme-30 border border-theme-30/80 shadow-md flex items-center justify-center flex-shrink-0">
                                     {(!isLite && artist.coverArt) ? (
-                                      <img src={artist.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                      <img loading="lazy" src={artist.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                                     ) : (
                                       <Mic2 size={24} className="text-theme-10" />
                                     )}
@@ -3773,15 +3773,15 @@ export default function App() {
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
                                 {grp.artists.map(artist => (
                                   <div 
-                                    key={artist.name}
+                                    key={artist.name} 
                                     onClick={() => setActiveArtist(artist)}
                                     onContextMenu={(e) => handleArtistContextMenu(artist, e)}
-                                    className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md"
+                                    className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md track-card-optimized"
                                   >
                                     <div className="flex items-center gap-4 min-w-0">
                                       <div className="w-14 h-14 rounded-full overflow-hidden bg-theme-30 border border-theme-30/80 shadow-md flex items-center justify-center flex-shrink-0">
                                         {(!isLite && artist.coverArt) ? (
-                                          <img src={artist.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                          <img loading="lazy" src={artist.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                                         ) : (
                                           <Mic2 size={24} className="text-theme-10" />
                                         )}
@@ -3954,7 +3954,7 @@ export default function App() {
                                 <div
                                   key={genre.name}
                                   onClick={() => setActiveGenre(genre)}
-                                  className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer"
+                                  className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
                                 >
                                   <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
                                     {idx + 1}
@@ -4009,7 +4009,7 @@ export default function App() {
                               <div
                                 key={genre.name}
                                 onClick={() => setActiveGenre(genre)}
-                                className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm"
+                                className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
                               >
                                 <div className="flex items-center gap-3.5 min-w-0 flex-1">
                                   <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
@@ -4045,13 +4045,13 @@ export default function App() {
                             <div 
                               key={genre.name}
                               onClick={() => setActiveGenre(genre)}
-                              className="bg-gradient-to-br from-theme-60/80 to-theme-30/40 hover:from-theme-10/20 hover:to-theme-30/70 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/50 transition duration-300 group cursor-pointer shadow-lg flex flex-col justify-between h-48"
+                              className="bg-gradient-to-br from-theme-60/80 to-theme-30/40 hover:from-theme-10/20 hover:to-theme-30/70 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/50 transition duration-300 group cursor-pointer shadow-lg flex flex-col justify-between h-48 track-card-optimized"
                             >
                               <div className="w-full aspect-video bg-theme-30/60 rounded-xl overflow-hidden relative mb-3 flex items-center justify-center">
                                 {(!isLite && genre.coverArts.length > 0) ? (
                                   <div className="w-full h-full grid grid-cols-2 gap-0.5">
                                     {genre.coverArts.slice(0, 4).map((c, i) => (
-                                      <img key={i} src={c} className="w-full h-full object-cover" />
+                                      <img key={i} loading="lazy" src={c} className="w-full h-full object-cover" />
                                     ))}
                                   </div>
                                 ) : (
@@ -4219,14 +4219,14 @@ export default function App() {
                                     key={pl.id}
                                     onClick={() => setActiveUserPlaylist(pl)}
                                     onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                                    className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer"
+                                    className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
                                   >
                                     <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
                                       {idx + 1}
                                     </div>
                                     <div className="col-span-6 flex items-center gap-3.5 min-w-0">
                                       <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-                                        {(!isLite && coverImg) ? <img src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={20} className="text-zinc-600" />}
+                                        {(!isLite && coverImg) ? <img loading="lazy" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={20} className="text-zinc-600" />}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                           <button
                                             onClick={(e) => {
@@ -4273,12 +4273,12 @@ export default function App() {
                                   key={pl.id}
                                   onClick={() => setActiveUserPlaylist(pl)}
                                   onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                                  className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm"
+                                  className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
                                 >
                                   <div className="flex items-center gap-3.5 min-w-0 flex-1">
                                     <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
                                     <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                                      {(!isLite && coverImg) ? <img src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={16} className="text-zinc-600" />}
+                                      {(!isLite && coverImg) ? <img loading="lazy" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={16} className="text-zinc-600" />}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
@@ -4318,14 +4318,14 @@ export default function App() {
 
                             return (
                               <div 
-                                key={pl.id}
+                                key={pl.id} 
                                 onClick={() => setActiveUserPlaylist(pl)}
                                 onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                                className="bg-theme-60/40 hover:bg-theme-30/50 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between shadow-lg"
+                                className="bg-theme-60/40 hover:bg-theme-30/50 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between shadow-lg track-card-optimized"
                               >
                                 <div className="aspect-square bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-md">
                                   {(!isLite && coverImg) ? (
-                                    <img src={coverImg} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                    <img loading="lazy" src={coverImg} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
                                       <ListPlus size={36} />
@@ -4537,14 +4537,14 @@ export default function App() {
                                       key={pl.name}
                                       onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
                                       onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                      className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer"
+                                      className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
                                     >
                                       <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
                                         {idx + 1}
                                       </div>
                                       <div className="col-span-7 flex items-center gap-3.5 min-w-0">
                                         <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-                                          {(!isLite && pl.thumbnail) ? <img src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={20} className="text-zinc-600" />}
+                                          {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={20} className="text-zinc-600" />}
                                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                             <button
                                               onClick={(e) => {
@@ -4583,12 +4583,12 @@ export default function App() {
                                     key={pl.name}
                                     onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
                                     onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                    className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm"
+                                    className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
                                   >
                                     <div className="flex items-center gap-3.5 min-w-0 flex-1">
                                       <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
                                       <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                                        {(!isLite && pl.thumbnail) ? <img src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
+                                        {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
                                       </div>
                                       <div className="min-w-0 flex-1">
                                         <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
@@ -4621,7 +4621,7 @@ export default function App() {
                                 {matchedPlaylists.map(pl => (
                                   <div 
                                     key={pl.name} 
-                                    className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer" 
+                                    className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer track-card-optimized" 
                                     onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
                                     onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
                                   >

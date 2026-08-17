@@ -61,10 +61,17 @@ const enforceAccentBrightness = (c: RGB): RGB => {
   return c;
 };
 
+const themeColorCache = new Map<string, ThemeColors>()
+
 export const extractThemeColors = (imageSrc: string): Promise<ThemeColors | null> => {
   return new Promise((resolve) => {
     if (!imageSrc) {
       resolve(null);
+      return;
+    }
+
+    if (themeColorCache.has(imageSrc)) {
+      resolve(themeColorCache.get(imageSrc)!);
       return;
     }
 
@@ -204,11 +211,14 @@ export const extractThemeColors = (imageSrc: string): Promise<ThemeColors | null
 
         const c10 = enforceAccentBrightness(c10_raw)
 
-        resolve({
+        const result: ThemeColors = {
           primary60: `rgb(${c60.r}, ${c60.g}, ${c60.b})`,
           secondary30: `rgb(${c30.r}, ${c30.g}, ${c30.b})`,
           accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
-        })
+        }
+
+        themeColorCache.set(imageSrc, result)
+        resolve(result)
       } catch (err) {
         console.warn('extractThemeColors error:', err)
         resolve(null)

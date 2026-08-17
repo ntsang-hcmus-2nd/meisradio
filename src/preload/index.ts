@@ -98,6 +98,8 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     ipcRenderer.removeAllListeners('mpv:ended')
     ipcRenderer.on('mpv:ended', () => callback())
   },
+  cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),
+  clearMemoryCache: () => ipcRenderer.invoke('app:clearMemoryCache'),
 }
 
 if (process.contextIsolated) {

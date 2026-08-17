@@ -127,3 +127,21 @@ body {
 [data-mode="core"] body {
   background-color: #121212 !important;
 }
+
+/* ==========================================================================
+   OFF-SCREEN RENDERING OPTIMIZATION (RAM & GPU SAVING)
+   ========================================================================== */
+
+/* Thẻ Card (Grid): Chỉ giải mã hình ảnh và render layout khi cuộn tới */
+.track-card-optimized {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 200px;
+  contain: layout style paint;
+}
+
+/* Hàng danh sách (Row/Compact): Bỏ qua tính toán reflow ngoài tầm nhìn */
+.track-row-optimized {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 48px;
+  contain: layout style paint;
+}

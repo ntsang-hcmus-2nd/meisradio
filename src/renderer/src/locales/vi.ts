@@ -238,7 +238,7 @@ export const vi: TranslationDictionary = {
       lite: 'Tiết kiệm (Lite Mode)',
       liteDesc: 'Tiết kiệm pin, tắt hiệu ứng kính mờ và Visualizer, tối ưu GPU cho Laptop và card đồ họa tích hợp.',
       core: 'Cốt lõi (Core Mode)',
-      coreDesc: 'Hiệu năng tối đa, phát âm thanh Bit-Perfect trực tiếp, tắt toàn bộ ảnh bìa và module online (RAM < 80MB).'
+      coreDesc: 'Hiệu năng tối đa, tắt toàn bộ ảnh bìa và module online.'
     }
   },
   player: {

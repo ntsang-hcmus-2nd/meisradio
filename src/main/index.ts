@@ -648,25 +648,50 @@ app.whenReady().then(() => {
               const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
               const commonCoverNames = ['cover', 'folder', 'front', 'artwork', item, 'thumb', 'thumbnail', 'album']
 
+              const playlistHash = crypto.createHash('md5').update('playlist_' + itemPath).digest('hex')
+              const plThumbPath = join(thumbDir, `pl_${playlistHash}.jpg`)
+              const plCentralThumbPath = join(IMAGE_CACHE_DIR, `pl_${playlistHash}.jpg`)
+
+              let rawCoverPath: string | null = null
               for (const name of commonCoverNames) {
                 for (const ext of possibleImageExts) {
                   const imgPath = join(itemPath, `${name}${ext}`)
                   if (fs.existsSync(imgPath)) {
-                    thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
+                    rawCoverPath = imgPath
                     break
                   }
                 }
-                if (thumbnailUrl) break
+                if (rawCoverPath) break
               }
 
-              if (!thumbnailUrl) {
+              if (!rawCoverPath) {
                 for (const subItem of subItems) {
                   if (possibleImageExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
-                    const imgPath = join(itemPath, subItem)
-                    thumbnailUrl = `${pathToFileURL(imgPath).href}?t=${Date.now()}`
+                    rawCoverPath = join(itemPath, subItem)
                     break
                   }
                 }
+              }
+
+              if (rawCoverPath) {
+                try {
+                  if (fs.existsSync(plThumbPath)) {
+                    thumbnailUrl = pathToFileURL(plThumbPath).href
+                  } else if (fs.existsSync(plCentralThumbPath)) {
+                    thumbnailUrl = pathToFileURL(plCentralThumbPath).href
+                  } else {
+                    const img = nativeImage.createFromPath(rawCoverPath)
+                    const resized = img.resize({ width: 200, height: 200, quality: 'good' })
+                    const jpegBuf = resized.toJPEG(80)
+                    try { fs.writeFileSync(plThumbPath, jpegBuf) } catch (e) {}
+                    try { fs.writeFileSync(plCentralThumbPath, jpegBuf) } catch (e) {}
+                    thumbnailUrl = pathToFileURL(plCentralThumbPath).href
+                  }
+                } catch (err) {
+                  thumbnailUrl = pathToFileURL(rawCoverPath).href
+                }
+              } else if (playlistTracks.length > 0 && playlistTracks[0].coverArt) {
+                thumbnailUrl = playlistTracks[0].coverArt
               }
 
               playlists.push({ name: item, path: itemPath, folderRoot, tracks: playlistTracks, thumbnail: thumbnailUrl })
@@ -759,6 +784,14 @@ app.whenReady().then(() => {
           const oldImg = join(playlistPath, `${playlistName}.${e}`)
           if (fs.existsSync(oldImg)) fs.unlinkSync(oldImg)
       }
+      const playlistHash = crypto.createHash('md5').update('playlist_' + playlistPath).digest('hex')
+      const plCentralThumbPath = join(IMAGE_CACHE_DIR, `pl_${playlistHash}.jpg`)
+      try {
+        const img = nativeImage.createFromPath(sourcePath)
+        const resized = img.resize({ width: 200, height: 200, quality: 'good' })
+        fs.writeFileSync(plCentralThumbPath, resized.toJPEG(80))
+      } catch (e) {}
+
       fs.copyFileSync(sourcePath, destPath)
       return { success: true }
     } catch (e: any) { return { success: false, error: e.message } }
@@ -822,7 +855,16 @@ app.whenReady().then(() => {
     const playlists = getUserPlaylists()
     const target = playlists.find(p => p.id === playlistId)
     if (target) {
-      target.thumbnail = pathToFileURL(imagePath).href + `?t=${Date.now()}`
+      const playlistHash = crypto.createHash('md5').update('user_pl_' + playlistId).digest('hex')
+      const plCentralThumbPath = join(IMAGE_CACHE_DIR, `upl_${playlistHash}.jpg`)
+      try {
+        const img = nativeImage.createFromPath(imagePath)
+        const resized = img.resize({ width: 200, height: 200, quality: 'good' })
+        fs.writeFileSync(plCentralThumbPath, resized.toJPEG(80))
+        target.thumbnail = `${pathToFileURL(plCentralThumbPath).href}?t=${Date.now()}`
+      } catch (e) {
+        target.thumbnail = `${pathToFileURL(imagePath).href}?t=${Date.now()}`
+      }
       target.updatedAt = Date.now()
       saveUserPlaylists(playlists)
       return { success: true, thumbnail: target.thumbnail, playlists }
@@ -1092,6 +1134,32 @@ app.whenReady().then(() => {
       }
 
       return { success: true, coverUrl }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  ipcMain.handle('music:cacheThemeColors', async (_, trackPath: string, colors: any) => {
+    try {
+      let rawPath = trackPath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
+      if (metadataCache[rawPath] && metadataCache[rawPath].data) {
+        metadataCache[rawPath].data.themeColors = colors
+        saveMetadataCache()
+      }
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  ipcMain.handle('app:clearMemoryCache', async () => {
+    try {
+      await session.defaultSession.clearCache()
+      if (typeof (global as any).gc === 'function') {
+        (global as any).gc()
+      }
+      return { success: true }
     } catch (e: any) {
       return { success: false, error: e.message }
     }

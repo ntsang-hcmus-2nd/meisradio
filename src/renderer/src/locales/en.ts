@@ -237,8 +237,8 @@ export const en: TranslationDictionary = {
       standardDesc: 'Full visual effects, dynamic visualizer, adaptive ambient colors, and online streaming features.',
       lite: 'Power Saving (Lite)',
       liteDesc: 'Battery saver mode: disables backdrop blur and visualizers, optimized for laptops and iGPUs.',
-      core: 'Minimal Core (Audiophile)',
-      coreDesc: 'Maximum performance: direct bit-perfect audio stream, zero album art decoding, offline only (RAM < 80MB).'
+      core: 'Minimal Core',
+      coreDesc: 'Maximum performance, zero album art decoding, offline only.'
     }
   },
   player: {
