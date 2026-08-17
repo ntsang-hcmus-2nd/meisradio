@@ -22,6 +22,10 @@ export interface TranslationDictionary {
     hours: string
     minutes: string
     seconds: string
+    deletePermanently: string
+    warning: string
+    notice: string
+    back: string
   }
   sidebar: {
     library: string
@@ -85,6 +89,7 @@ export interface TranslationDictionary {
     loadingSc: string
     noScTracksTitle: string
     noScTracksDesc: string
+    backToDashboard: string
     genres: {
       all: string
       electronic: string
@@ -203,10 +208,12 @@ export interface TranslationDictionary {
       change: string
       addFolder: string
       removeFolder: string
+      confirmRemoveFolder: string
       updateFolder: string
       openFolder: string
       folderCount: string
       rescan: string
+      autoCategorize: string
     }
     bitPerfect: {
       title: string
@@ -258,6 +265,9 @@ export interface TranslationDictionary {
     pause: string
     next: string
     prev: string
+    smartAutoplay: string
+    smartAutoplayDesc: string
+    smartAutoplayPlaying: string
   }
   lyrics: {
     title: string
@@ -294,6 +304,11 @@ export interface TranslationDictionary {
     addSongs: {
       title: string
       addCount: string
+      searchPlaceholder: string
+      noMatches: string
+      selectAll: string
+      clearAll: string
+      showingCount: string
     }
     cloudAction: {
       desc: string
@@ -378,6 +393,7 @@ export interface TranslationDictionary {
     addedToPlaylist: string
     removedFromPlaylist: string
     movedToTrash: string
+    deletedPermanently: string
     playlistDeleted: string
     deleteTrackError: string
     deletePlaylistError: string

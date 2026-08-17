@@ -117,6 +117,36 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   const sampleRate = currentTrack?.sampleRate || 44100
   const maxDisplayFreq = sampleRate
 
+  // Giải phóng tức thì bộ nhớ RAM và Cache khi đóng Spectrogram Modal
+  const releaseSpectrogramMemory = () => {
+    spectrogramCache.clear()
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d')
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      }
+      canvasRef.current.width = 1
+      canvasRef.current.height = 1
+    }
+    if (typeof (window as any).api?.clearMemoryCache === 'function') {
+      (window as any).api.clearMemoryCache()
+    }
+    if (typeof (window as any).api?.forceGC === 'function') {
+      (window as any).api.forceGC()
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      releaseSpectrogramMemory()
+    }
+  }, [])
+
+  const handleModalClose = () => {
+    releaseSpectrogramMemory()
+    onClose()
+  }
+
   // Track playback time for playhead
   useEffect(() => {
     if (!isOpen) return
@@ -371,7 +401,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
           </div>
 
           <button 
-            onClick={onClose} 
+            onClick={handleModalClose} 
             className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
             title={t('modals.spectrogram.closeWindow')}
           >

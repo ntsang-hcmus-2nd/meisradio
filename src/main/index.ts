@@ -297,6 +297,15 @@ function createWindow(): void {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+
+  // Lắng nghe các nút chuột mở rộng điều hướng OS (Browser Backward / Forward)
+  mainWindow.on('app-command', (_e: any, cmd: string) => {
+    if (cmd === 'browser-backward') {
+      mainWindow?.webContents.send('nav:back')
+    } else if (cmd === 'browser-forward') {
+      mainWindow?.webContents.send('nav:forward')
+    }
+  })
   
   app.on('before-quit', () => {
     isQuitting = true
@@ -1192,25 +1201,17 @@ app.whenReady().then(() => {
     return filePaths[0]
   })
 
-  // 8. Xóa bài hát (Xóa file / Chuyển vào Thùng rác)
-  ipcMain.handle('music:deleteTrack', async (_, trackPath: string, deletePermanently: boolean = false) => {
+  // 8. Xóa bài hát (Xóa file vĩnh viễn khỏi ổ đĩa - Không vào Recycle Bin)
+  ipcMain.handle('music:deleteTrack', async (_, trackPath: string, _deletePermanently: boolean = true) => {
     try {
       let rawPath = trackPath.replace(/^file:\/\/\/?/, '')
       if (process.platform === 'win32') rawPath = decodeURIComponent(rawPath)
 
       if (fs.existsSync(rawPath)) {
-        if (deletePermanently) {
-          await shell.trashItem(rawPath)
-          const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
-          if (fs.existsSync(lrcPath)) {
-            await shell.trashItem(lrcPath)
-          }
-        } else {
-          fs.unlinkSync(rawPath)
-          const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
-          if (fs.existsSync(lrcPath)) {
-            fs.unlinkSync(lrcPath)
-          }
+        fs.unlinkSync(rawPath)
+        const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
+        if (fs.existsSync(lrcPath)) {
+          try { fs.unlinkSync(lrcPath) } catch (e) {}
         }
       }
 
@@ -1225,15 +1226,36 @@ app.whenReady().then(() => {
     }
   })
 
-  // 9. Xóa Playlist (Chuyển thư mục Playlist vào Thùng rác)
+  // 9. Xóa Playlist (Xóa vĩnh viễn thư mục Playlist và toàn bộ tệp - Không vào Recycle Bin)
   ipcMain.handle('music:deletePlaylist', async (_, playlistName: string) => {
     try {
       const config = getConfig()
-      if (!config.libraryPath) return { success: false, error: 'Chưa cấu hình thư viện' }
-      const playlistFolder = join(config.libraryPath, playlistName)
-      if (fs.existsSync(playlistFolder)) {
-        await shell.trashItem(playlistFolder)
+      const searchDirs = [
+        ...(config.libraryPaths || []),
+        config.libraryPath
+      ].filter(Boolean) as string[]
+
+      let deleted = false
+      for (const dir of searchDirs) {
+        const playlistFolder = join(dir, playlistName)
+        if (fs.existsSync(playlistFolder)) {
+          fs.rmSync(playlistFolder, { recursive: true, force: true })
+          deleted = true
+        }
       }
+
+      if (!deleted) {
+        return { success: false, error: 'Không tìm thấy thư mục Playlist' }
+      }
+
+      // Dọn dẹp cache metadata các bài hát trong thư mục đó
+      for (const cachedPath of Object.keys(metadataCache)) {
+        if (cachedPath.includes(playlistName)) {
+          delete metadataCache[cachedPath]
+        }
+      }
+      saveMetadataCache()
+
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e.message }

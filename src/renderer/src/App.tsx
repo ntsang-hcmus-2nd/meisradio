@@ -23,6 +23,7 @@ import { CloudActionModal } from './components/modals/CloudActionModal'
 import { TagEditorModal } from './components/modals/TagEditorModal'
 import { CreatePlaylistModal } from './components/modals/CreatePlaylistModal'
 import { AddSongsModal } from './components/modals/AddSongsModal'
+import { CustomDialogModal, DialogOptions } from './components/modals/CustomDialogModal'
 import { PlayerProgressBar } from './components/PlayerProgressBar'
 import { Sidebar } from './components/Sidebar'
 import { EQPanel } from './components/EQPanel'
@@ -435,7 +436,195 @@ export default function App() {
   const [editingTrack, setEditingTrack] = useState<any | null>(null)
   const [editTags, setEditTags] = useState({ title: '', artist: '', album: '', genre: '', lyrics: '' })
   const [editImagePath, setEditImagePath] = useState<string | null>(null)
-  const [playlistRename, setPlaylistRename] = useState<{ isOpen: boolean, oldName: string, newName: string }>({ isOpen: false, oldName: '', newName: '' })
+  const [playlistRename, setPlaylistRename] = useState<{ isOpen: boolean, oldName: string, newName: string, id?: string }>({ isOpen: false, oldName: '', newName: '', id: undefined })
+
+  // Smart Autoplay State (Gợi ý thông minh)
+  const [smartAutoplay, setSmartAutoplay] = useState<boolean>(() => {
+    return localStorage.getItem('meis_smart_autoplay') === 'true'
+  })
+  useEffect(() => {
+    localStorage.setItem('meis_smart_autoplay', String(smartAutoplay))
+  }, [smartAutoplay])
+
+  // Custom Dialog Modal State (Hộp thoại xác nhận / cảnh báo đồng bộ giao diện)
+  const [customDialog, setCustomDialog] = useState<DialogOptions | null>(null)
+
+  const showConfirm = (options: {
+    title?: string
+    message: string | React.ReactNode
+    confirmText?: string
+    cancelText?: string
+    danger?: boolean
+    onConfirm: () => void
+    onCancel?: () => void
+  }) => {
+    setCustomDialog({
+      isOpen: true,
+      type: options.danger ? 'danger' : 'confirm',
+      title: options.title,
+      message: options.message,
+      confirmText: options.confirmText,
+      cancelText: options.cancelText,
+      onConfirm: () => {
+        setCustomDialog(null)
+        options.onConfirm()
+      },
+      onCancel: () => {
+        setCustomDialog(null)
+        options.onCancel?.()
+      }
+    })
+  }
+
+  const showAlert = (options: {
+    title?: string
+    message: string | React.ReactNode
+    confirmText?: string
+    onConfirm?: () => void
+  }) => {
+    setCustomDialog({
+      isOpen: true,
+      type: 'alert',
+      title: options.title,
+      message: options.message,
+      confirmText: options.confirmText || 'OK',
+      onConfirm: () => {
+        setCustomDialog(null)
+        options.onConfirm?.()
+      },
+      onCancel: () => {
+        setCustomDialog(null)
+      }
+    })
+  }
+
+  // Navigation History Stack (Quản lý nút chuột 4/5 và điều hướng lùi/tiến)
+  const navHistoryRef = useRef<any[]>([])
+  const navForwardRef = useRef<any[]>([])
+  const isNavigatingRef = useRef(false)
+
+  const captureNavState = () => ({
+    activeView,
+    activeAlbum,
+    activeArtist,
+    activeGenre,
+    activePlaylist,
+    activeUserPlaylist,
+    searchQuery,
+    searchInput
+  })
+
+  useEffect(() => {
+    if (isNavigatingRef.current) {
+      isNavigatingRef.current = false
+      return
+    }
+    const current = captureNavState()
+    const last = navHistoryRef.current[navHistoryRef.current.length - 1]
+    if (!last || last.activeView !== current.activeView || last.activeAlbum !== current.activeAlbum || last.activeArtist !== current.activeArtist || last.activeGenre !== current.activeGenre || last.activePlaylist !== current.activePlaylist || last.activeUserPlaylist !== current.activeUserPlaylist || last.searchQuery !== current.searchQuery) {
+      navHistoryRef.current.push(current)
+      navForwardRef.current = []
+      if (navHistoryRef.current.length > 50) {
+        navHistoryRef.current.shift()
+      }
+    }
+  }, [activeView, activeAlbum, activeArtist, activeGenre, activePlaylist, activeUserPlaylist, searchQuery])
+
+  const handleNavBack = () => {
+    if (activeAlbum) {
+      setActiveAlbum(null)
+      return
+    }
+    if (activeArtist) {
+      setActiveArtist(null)
+      return
+    }
+    if (activeGenre) {
+      setActiveGenre(null)
+      return
+    }
+    if (activePlaylist) {
+      setActivePlaylist(null)
+      return
+    }
+    if (activeUserPlaylist) {
+      setActiveUserPlaylist(null)
+      return
+    }
+    if ((activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud') && (searchQuery || searchInput)) {
+      setSearchInput('')
+      setSearchQuery('')
+      if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard()
+      if (activeView === 'home-soundcloud') fetchScDashboard()
+      return
+    }
+
+    if (navHistoryRef.current.length > 1) {
+      const currentState = navHistoryRef.current.pop()
+      if (currentState) {
+        navForwardRef.current.push(currentState)
+      }
+      const prevState = navHistoryRef.current[navHistoryRef.current.length - 1]
+      if (prevState) {
+        isNavigatingRef.current = true
+        setActiveView(prevState.activeView)
+        setActiveAlbum(prevState.activeAlbum)
+        setActiveArtist(prevState.activeArtist)
+        setActiveGenre(prevState.activeGenre)
+        setActivePlaylist(prevState.activePlaylist)
+        setActiveUserPlaylist(prevState.activeUserPlaylist)
+        setSearchQuery(prevState.searchQuery)
+        setSearchInput(prevState.searchInput)
+      }
+    }
+  }
+
+  const handleNavForward = () => {
+    if (navForwardRef.current.length > 0) {
+      const nextState = navForwardRef.current.pop()
+      if (nextState) {
+        isNavigatingRef.current = true
+        navHistoryRef.current.push(nextState)
+        setActiveView(nextState.activeView)
+        setActiveAlbum(nextState.activeAlbum)
+        setActiveArtist(nextState.activeArtist)
+        setActiveGenre(nextState.activeGenre)
+        setActivePlaylist(nextState.activePlaylist)
+        setActiveUserPlaylist(nextState.activeUserPlaylist)
+        setSearchQuery(nextState.searchQuery)
+        setSearchInput(nextState.searchInput)
+      }
+    }
+  }
+
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleNavBack()
+      } else if (e.button === 4) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleNavForward()
+      }
+    }
+
+    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('auxclick', handleMouseUp)
+
+    // @ts-ignore
+    let unlistenBack = window.api?.onNavBack?.(handleNavBack)
+    // @ts-ignore
+    let unlistenForward = window.api?.onNavForward?.(handleNavForward)
+
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('auxclick', handleMouseUp)
+      if (typeof unlistenBack === 'function') unlistenBack()
+      if (typeof unlistenForward === 'function') unlistenForward()
+    }
+  }, [activeAlbum, activeArtist, activeGenre, activePlaylist, activeUserPlaylist, searchQuery, searchInput, activeView])
 
   // Cloud & Google Drive States
   const [googleDriveApiKey, setGoogleDriveApiKey] = useState('')
@@ -492,7 +681,7 @@ export default function App() {
       showToast(t('toasts.ytmLoginSuccess'), 'success')
       fetchDashboard()
     } else {
-      alert('Error: ' + res.error)
+      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
     }
   }
 
@@ -532,7 +721,7 @@ export default function App() {
       if (res.user) setScUser(res.user)
       fetchScDashboard()
     } else {
-      alert('Error: ' + res.error)
+      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
     }
   }
 
@@ -553,7 +742,7 @@ export default function App() {
       // @ts-ignore
       const res = await window.api.getScPlaylist(item.playlistId)
       if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
-      else { alert(res.error); setActiveAlbum(null); }
+      else { showAlert({ title: t('common.error'), message: res.error }); setActiveAlbum(null); }
       setIsAlbumLoading(false)
     } else {
       const track = {
@@ -594,7 +783,7 @@ export default function App() {
       // @ts-ignore
       const res = await window.api.getYtmArtist(item.playlistId);
       if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks });
-      else { alert(res.error); setActiveAlbum(null); }
+      else { showAlert({ title: t('common.error'), message: res.error }); setActiveAlbum(null); }
       setIsAlbumLoading(false);
 
     } else if (item.playlistId) {
@@ -604,7 +793,7 @@ export default function App() {
       // @ts-ignore
       const res = await window.api.getYtmPlaylist(item.playlistId);
       if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks });
-      else { alert(res.error); setActiveAlbum(null); }
+      else { showAlert({ title: t('common.error'), message: res.error }); setActiveAlbum(null); }
       setIsAlbumLoading(false);
     }
   }
@@ -670,46 +859,49 @@ export default function App() {
         showToast(t('toasts.downloadFinished', { title: item.title }), 'success'); 
         loadLibrary(); 
       } else if (!res.canceled) { 
-        alert('Download Error: ' + res.error); 
+        showAlert({ title: t('common.error'), message: 'Download Error: ' + res.error }); 
       }
 
     } else if (item.playlistId) {
       // 2. TẢI TOÀN BỘ ALBUM / PLAYLIST
-      const confirmDownload = confirm(`Do you want to download all tracks from "${item.title}"? (This might take a while)`);
-      if (!confirmDownload) return;
-      
-      setIsDownloading(true);
-      setDownloadProgress({ current: 0, total: 0, fileName: t('common.loading') });
-      
-      // Lấy danh sách track trong Album
-      // @ts-ignore
-      const res = item.platform === 'soundcloud'
-        ? await window.api.getScPlaylist(item.playlistId)
-        : await window.api.getYtmPlaylist(item.playlistId);
+      showConfirm({
+        title: t('common.confirm'),
+        message: `Do you want to download all tracks from "${item.title}"? (This might take a while)`,
+        onConfirm: async () => {
+          setIsDownloading(true);
+          setDownloadProgress({ current: 0, total: 0, fileName: t('common.loading') });
+          
+          // Lấy danh sách track trong Album
+          // @ts-ignore
+          const res = item.platform === 'soundcloud'
+            ? await window.api.getScPlaylist(item.playlistId)
+            : await window.api.getYtmPlaylist(item.playlistId);
 
-      if (res.success && res.tracks) {
-         const tracks = res.tracks;
-         let successCount = 0;
-         
-         for (let i = 0; i < tracks.length; i++) {
-            setDownloadProgress({ current: i + 1, total: tracks.length, fileName: tracks[i].title });
-            
-            // Ép tên Album cho bài hát để gom chung vào 1 thư mục
-            const trackToDl = { ...tracks[i], album: item.title, platform: item.platform || 'youtube' };
-            
-            // @ts-ignore
-            const dlRes = await window.api.downloadOnline(trackToDl);
-            if (dlRes.success) successCount++;
-         }
-         
-         showToast(t('toasts.albumDownloadFinished', { count: successCount, total: tracks.length }), 'success');
-         loadLibrary();
-      } else {
-         alert('Error getting album tracks: ' + res.error);
-      }
-      
-      setIsDownloading(false);
-      setDownloadProgress(null);
+          if (res.success && res.tracks) {
+             const tracks = res.tracks;
+             let successCount = 0;
+             
+             for (let i = 0; i < tracks.length; i++) {
+                setDownloadProgress({ current: i + 1, total: tracks.length, fileName: tracks[i].title });
+                
+                // Ép tên Album cho bài hát để gom chung vào 1 thư mục
+                const trackToDl = { ...tracks[i], album: item.title, platform: item.platform || 'youtube' };
+                
+                // @ts-ignore
+                const dlRes = await window.api.downloadOnline(trackToDl);
+                if (dlRes.success) successCount++;
+             }
+             
+             showToast(t('toasts.albumDownloadFinished', { count: successCount, total: tracks.length }), 'success');
+             loadLibrary();
+          } else {
+             showAlert({ title: t('common.error'), message: 'Error getting album tracks: ' + res.error });
+          }
+          
+          setIsDownloading(false);
+          setDownloadProgress(null);
+        }
+      });
     }
   }
 
@@ -728,7 +920,7 @@ export default function App() {
       setShowCreateModal(false)
       loadLibrary()
     } else {
-      alert('Error: ' + res.error)
+      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
     }
   }
 
@@ -737,11 +929,13 @@ export default function App() {
     for (const track of tracksToAdd) {
       // Lấy chính xác đường dẫn gốc thực tế của bài hát (loại bỏ tiền tố file:// nếu có)
       const rawTrackPath = track.id || track.filePath
-      
-      // @ts-ignore
-      await window.api.addTrackToPlaylist(activePlaylist.name, rawTrackPath)
+      if (rawTrackPath) {
+        // @ts-ignore
+        await window.api.addTrackToPlaylist(activePlaylist.name, rawTrackPath)
+      }
     }
     showToast(t('toasts.tracksAddedToPlaylist', { count: tracksToAdd.length }), 'success')
+    setShowAddSongsModal(false)
     loadLibrary()
   }
 
@@ -810,7 +1004,21 @@ export default function App() {
 
   const handleRemoveLibraryFolder = async (folderPath: string) => {
     if (libraryPaths.length <= 1) {
-      if (!confirm(t('settings.library.removeFolder') + '?')) return
+      showConfirm({
+        title: t('common.warning'),
+        message: t('settings.library.removeFolder') + '?',
+        danger: true,
+        onConfirm: async () => {
+          // @ts-ignore
+          const res = await window.api.removeLibraryFolder(folderPath)
+          if (res && res.success) {
+            setLibraryPaths(res.libraryPaths)
+            showToast(t('toasts.removedFromPlaylist'), 'success')
+            loadLibrary(true)
+          }
+        }
+      })
+      return
     }
     // @ts-ignore
     const res = await window.api.removeLibraryFolder(folderPath)
@@ -842,21 +1050,27 @@ export default function App() {
       setActiveUserPlaylist(res.playlist)
       setActiveView('user-playlists')
     } else if (res && res.error) {
-      alert(res.error)
+      showAlert({ title: t('common.error'), message: res.error })
     }
   }
 
   const handleDeleteUserPlaylist = async (playlist: any) => {
-    if (!confirm(t('userPlaylistsView.confirmDelete', { name: playlist.name }))) return
-    // @ts-ignore
-    const res = await window.api.deleteUserPlaylist(playlist.id)
-    if (res && res.success) {
-      setUserPlaylists(res.playlists)
-      if (activeUserPlaylist?.id === playlist.id) {
-        setActiveUserPlaylist(null)
+    showConfirm({
+      title: t('userPlaylistsView.deletePlaylist'),
+      message: t('userPlaylistsView.confirmDelete', { name: playlist.name }),
+      danger: true,
+      onConfirm: async () => {
+        // @ts-ignore
+        const res = await window.api.deleteUserPlaylist(playlist.id)
+        if (res && res.success) {
+          setUserPlaylists(res.playlists)
+          if (activeUserPlaylist?.id === playlist.id) {
+            setActiveUserPlaylist(null)
+          }
+          showToast(t('toasts.playlistDeleted', { name: playlist.name }), 'success')
+        }
       }
-      showToast(t('toasts.playlistDeleted', { name: playlist.name }), 'success')
-    }
+    })
   }
 
   const handleChangeUserPlaylistCover = async (playlistId: string) => {
@@ -881,13 +1095,18 @@ export default function App() {
   }
 
   const handleAutoGeneratePlaylists = async () => {
-    if (!confirm(t('toasts.autoCategorizeConfirm'))) return
-    // @ts-ignore
-    const res = await window.api.autoGeneratePlaylists()
-    if (res.success) {
-      showToast(t('toasts.autoCategorizeSuccess', { count: res.movedCount }), 'success')
-      loadLibrary()
-    }
+    showConfirm({
+      title: t('settings.library.autoCategorize'),
+      message: t('toasts.autoCategorizeConfirm'),
+      onConfirm: async () => {
+        // @ts-ignore
+        const res = await window.api.autoGeneratePlaylists()
+        if (res.success) {
+          showToast(t('toasts.autoCategorizeSuccess', { count: res.movedCount }), 'success')
+          loadLibrary()
+        }
+      }
+    })
   }
 
   const handleImportFiles = async () => {
@@ -900,22 +1119,34 @@ export default function App() {
         loadLibrary()
       }
     } else if (res && res.error) {
-      alert(res.error)
+      showAlert({ title: t('common.error'), message: res.error })
     }
   }
 
   const handleRenameSubmit = async () => {
     if (!playlistRename.newName || playlistRename.newName === playlistRename.oldName) {
-      setPlaylistRename({ isOpen: false, oldName: '', newName: '' })
+      setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
       return
     }
-    // @ts-ignore
-    const res = await window.api.renamePlaylist(playlistRename.oldName, playlistRename.newName)
-    if (res.success) {
-      setPlaylistRename({ isOpen: false, oldName: '', newName: '' })
-      loadLibrary()
+    if (playlistRename.id) {
+      // @ts-ignore
+      const res = await window.api.renameUserPlaylist(playlistRename.id, playlistRename.newName.trim())
+      if (res && res.success) {
+        setUserPlaylists(res.playlists)
+        setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
+        showToast(t('toasts.playlistRenamedSuccess'), 'success')
+      } else {
+        showAlert({ title: t('common.error'), message: res?.error || 'Error renaming playlist' })
+      }
     } else {
-      alert('Error renaming playlist: ' + res.error)
+      // @ts-ignore
+      const res = await window.api.renamePlaylist(playlistRename.oldName, playlistRename.newName.trim())
+      if (res.success) {
+        setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
+        loadLibrary()
+      } else {
+        showAlert({ title: t('common.error'), message: 'Error renaming playlist: ' + res.error })
+      }
     }
   }
 
@@ -926,7 +1157,7 @@ export default function App() {
       showToast(t('toasts.coverUpdatedSuccess'), 'success')
       loadLibrary()
     } else {
-      alert(res.error)
+      showAlert({ title: t('common.error'), message: res.error })
     }
   }
 
@@ -1012,7 +1243,7 @@ export default function App() {
         // @ts-ignore
         if (window.api.logWatchHistory && trackToPlay.platform === 'youtube') window.api.logWatchHistory(trackToPlay.originalId);
       } else {
-        alert('Stream error: ' + (res.error || 'Unknown'));
+        showAlert({ title: t('common.error'), message: 'Stream error: ' + (res.error || 'Unknown') });
         return;
       }
     }
@@ -1024,6 +1255,46 @@ export default function App() {
     }
   }
 
+  // Thuật toán tìm bài hát gợi ý thông minh dựa trên Thể loại / Nghệ sĩ
+  const findRecommendedTrack = (current: any, queue: any[], allTracks: any[]) => {
+    if (!current || !allTracks || allTracks.length === 0) return null
+
+    const queueIds = new Set(queue.map(t => t.id || t.filePath))
+    let pool = allTracks.filter(t => (t.id || t.filePath) !== (current.id || current.filePath) && !queueIds.has(t.id || t.filePath))
+    if (pool.length === 0) {
+      pool = allTracks.filter(t => (t.id || t.filePath) !== (current.id || current.filePath))
+    }
+    if (pool.length === 0) return null
+
+    const currentGenre = (current.genre || '').toString().toLowerCase().trim()
+    const currentArtist = (current.artist || '').toString().toLowerCase().trim()
+
+    // 1. Khớp thể loại (Genre)
+    if (currentGenre && currentGenre !== 'unknown') {
+      const genreMatches = pool.filter(t => {
+        const g = (t.genre || '').toString().toLowerCase().trim()
+        return g && g !== 'unknown' && (g.includes(currentGenre) || currentGenre.includes(g))
+      })
+      if (genreMatches.length > 0) {
+        return genreMatches[Math.floor(Math.random() * genreMatches.length)]
+      }
+    }
+
+    // 2. Khớp nghệ sĩ (Artist)
+    if (currentArtist && currentArtist !== 'unknown' && currentArtist !== 'various artists') {
+      const artistMatches = pool.filter(t => {
+        const a = (t.artist || '').toString().toLowerCase().trim()
+        return a && a !== 'unknown' && (a.includes(currentArtist) || currentArtist.includes(a))
+      })
+      if (artistMatches.length > 0) {
+        return artistMatches[Math.floor(Math.random() * artistMatches.length)]
+      }
+    }
+
+    // 3. Ngẫu nhiên từ kho nhạc
+    return pool[Math.floor(Math.random() * pool.length)]
+  }
+
   const handleNext = () => {
     if (audioRef.current) audioRef.current.currentTime = 0;
     if (!currentTrack) return
@@ -1033,8 +1304,22 @@ export default function App() {
     let nextIndex = currentIndex + 1
 
     if (nextIndex >= playQueue.length) {
-      if (repeatMode === 1 || repeatMode === 2) nextIndex = 0
-      else {
+      if (repeatMode === 1 || repeatMode === 2) {
+        nextIndex = 0
+      } else if (smartAutoplay) {
+        const candidate = findRecommendedTrack(currentTrack, playQueue, libraryTracks)
+        if (candidate) {
+          const newQueue = [...playQueue, candidate]
+          setPlayQueue(newQueue)
+          setOriginalQueue(prev => [...prev, candidate])
+          handlePlayTrack(candidate)
+          showToast(t('player.smartAutoplayPlaying', { title: candidate.title, artist: candidate.artist || t('player.unknownArtist') }), 'info')
+          return
+        } else {
+          setIsPlaying(false)
+          return
+        }
+      } else {
         setIsPlaying(false)
         return
       }
@@ -1227,7 +1512,7 @@ export default function App() {
   const handleDriveSubmit = async () => {
     const match = driveLink.match(/folders\/([-\w]+)/) || driveLink.match(/id=([-\w]+)/)
     if (!match) {
-      alert('Vui lòng nhập link thư mục Google Drive hợp lệ!')
+      showAlert({ title: t('common.warning'), message: 'Vui lòng nhập link thư mục Google Drive hợp lệ!' })
       return
     }
     setIsFetchingDrive(true)
@@ -1236,11 +1521,11 @@ export default function App() {
       // @ts-ignore
       const result = await window.api.fetchDriveFiles(folderId) 
       if (result.success) {
-        if (result.tracks.length === 0) alert('Không tìm thấy file âm thanh nào. Hãy đảm bảo thư mục đã bật "Bất kỳ ai có liên kết"!')
+        if (result.tracks.length === 0) showAlert({ title: t('common.notice'), message: 'Không tìm thấy file âm thanh nào. Hãy đảm bảo thư mục đã bật "Bất kỳ ai có liên kết"!' })
         else setDriveFiles(result.tracks)
-      } else alert('Lỗi từ hệ thống: ' + result.error)
+      } else showAlert({ title: t('common.error'), message: 'Lỗi từ hệ thống: ' + result.error })
     } catch (err) {
-      alert('Lỗi kết nối tới hệ thống!')
+      showAlert({ title: t('common.error'), message: 'Lỗi kết nối tới hệ thống!' })
     }
     setIsFetchingDrive(false)
   }
@@ -1286,13 +1571,13 @@ export default function App() {
         // @ts-ignore
         const result = await window.api.downloadCloudFile(cloudActionTrack.url, `${cloudActionTrack.title}.${ext}`, libraryTracks)
         if (result.success) {
-          alert('Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.')
+          showAlert({ title: t('common.notice'), message: 'Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.' })
           handlePlayTrack({ ...cloudActionTrack, filePath: result.localPath, isCloud: false })
           loadLibrary()
         } else if (result.canceled) {
           // Cancelled
         } else {
-          alert('Lỗi tải file: ' + result.error)
+          showAlert({ title: t('common.error'), message: 'Lỗi tải file: ' + result.error })
         }
       } catch (e) {}
       setIsDownloading(false)
@@ -1300,19 +1585,29 @@ export default function App() {
     }
   }
 
-  // Determine effective background image
-  const effectiveBgImage = useTrackCoverAsBg 
+  // Determine effective background image (Tắt hoàn toàn trong Core Mode)
+  const effectiveBgImage = isCore
+    ? null
+    : useTrackCoverAsBg 
     ? (currentTrack?.coverArtHighRes || currentTrack?.coverArt || null)
     : customBgImage
 
-  // Apply Background & Extract Theme
+  // Apply Background & Extract Theme Colors (Quy luật 60/30/10 cho Standard & Lite mode)
   useEffect(() => {
+    if (isCore) {
+      document.documentElement.style.setProperty('--bg-image', 'none')
+      document.documentElement.style.setProperty('--theme-60', '#18181b')
+      document.documentElement.style.setProperty('--theme-30', '#27272a')
+      document.documentElement.style.setProperty('--theme-10', '#10b981')
+      return
+    }
+
     if (effectiveBgImage) {
       const sanitizedUrl = effectiveBgImage.replace(/"/g, '\\"')
       document.documentElement.style.setProperty('--bg-image', `url("${sanitizedUrl}")`)
       
       extractThemeColors(effectiveBgImage).then(colors => {
-        if (colors) {
+        if (colors && !isCore) {
           document.documentElement.style.setProperty('--theme-60', colors.primary60)
           document.documentElement.style.setProperty('--theme-30', colors.secondary30)
           document.documentElement.style.setProperty('--theme-10', colors.accent10)
@@ -1320,12 +1615,25 @@ export default function App() {
       })
     } else {
       document.documentElement.style.setProperty('--bg-image', 'none')
-      // Reset to default
-      document.documentElement.style.setProperty('--theme-60', '#18181b')
-      document.documentElement.style.setProperty('--theme-30', '#27272a')
-      document.documentElement.style.setProperty('--theme-10', '#10b981')
+      
+      // Khi không sử dụng theme hay ảnh nền tự động, thay đổi theme theo dominant color quy luật 60/30/10 từ ảnh bìa bài hát
+      const trackCover = currentTrack?.coverArtHighRes || currentTrack?.coverArt
+      if (trackCover) {
+        extractThemeColors(trackCover).then(colors => {
+          if (colors && !isCore) {
+            document.documentElement.style.setProperty('--theme-60', colors.primary60)
+            document.documentElement.style.setProperty('--theme-30', colors.secondary30)
+            document.documentElement.style.setProperty('--theme-10', colors.accent10)
+          }
+        })
+      } else {
+        // Fallback về mặc định
+        document.documentElement.style.setProperty('--theme-60', '#18181b')
+        document.documentElement.style.setProperty('--theme-30', '#27272a')
+        document.documentElement.style.setProperty('--theme-10', '#10b981')
+      }
     }
-  }, [effectiveBgImage])
+  }, [effectiveBgImage, currentTrack?.coverArt, currentTrack?.coverArtHighRes, isCore])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--bg-opacity', customBgOpacity.toString())
@@ -1517,15 +1825,21 @@ export default function App() {
         label: t('userPlaylistsView.removeFromPlaylist'),
         icon: <Trash2 size={14} />,
         danger: true,
-        onClick: async () => {
-          if (!confirm(t('userPlaylistsView.confirmRemove', { title: track.title }))) return
-          const rawTrackPath = track.id || track.filePath
-          // @ts-ignore
-          const res = await window.api.removeTrackFromUserPlaylist(activeUserPlaylist.id, rawTrackPath)
-          if (res && res.success) {
-            setUserPlaylists(res.playlists)
-            showToast(t('toasts.removedFromPlaylist'), 'success')
-          }
+        onClick: () => {
+          showConfirm({
+            title: t('userPlaylistsView.removeFromPlaylist'),
+            message: t('userPlaylistsView.confirmRemove', { title: track.title }),
+            danger: true,
+            onConfirm: async () => {
+              const rawTrackPath = track.id || track.filePath
+              // @ts-ignore
+              const res = await window.api.removeTrackFromUserPlaylist(activeUserPlaylist.id, rawTrackPath)
+              if (res && res.success) {
+                setUserPlaylists(res.playlists)
+                showToast(t('toasts.removedFromPlaylist'), 'success')
+              }
+            }
+          })
         }
       })
     } else if (isInsidePlaylist) {
@@ -1534,13 +1848,19 @@ export default function App() {
         label: t('contextMenu.removeFromPlaylist', { name: activePlaylist.name }),
         icon: <Trash2 size={14} />,
         danger: true,
-        onClick: async () => {
-          if (!confirm(t('contextMenu.confirmRemoveFromPlaylist', { title: track.title, name: activePlaylist.name }))) return
-          const rawTrackPath = track.id || track.filePath
-          // @ts-ignore
-          await window.api.deleteTrack(rawTrackPath, false)
-          showToast(t('toasts.removedFromPlaylist'), 'success')
-          loadLibrary()
+        onClick: () => {
+          showConfirm({
+            title: t('contextMenu.removeFromPlaylist', { name: activePlaylist.name }),
+            message: t('contextMenu.confirmRemoveFromPlaylist', { title: track.title, name: activePlaylist.name }),
+            danger: true,
+            onConfirm: async () => {
+              const rawTrackPath = track.id || track.filePath
+              // @ts-ignore
+              await window.api.deleteTrack(rawTrackPath, false)
+              showToast(t('toasts.removedFromPlaylist'), 'success')
+              loadLibrary()
+            }
+          })
         }
       })
     }
@@ -1551,17 +1871,23 @@ export default function App() {
       icon: <Trash2 size={14} />,
       danger: true,
       disabled: track.isCloud,
-      onClick: async () => {
-        if (!confirm(t('contextMenu.confirmDeleteFile', { title: track.title }))) return
-        const rawTrackPath = track.id || track.filePath
-        // @ts-ignore
-        const res = await window.api.deleteTrack(rawTrackPath, true)
-        if (res && res.success) {
-          showToast(t('toasts.movedToTrash', { title: track.title }), 'success')
-          loadLibrary()
-        } else {
-          alert('Error deleting track: ' + res?.error)
-        }
+      onClick: () => {
+        showConfirm({
+          title: t('contextMenu.deleteFile'),
+          message: t('contextMenu.confirmDeleteFile', { title: track.title }),
+          danger: true,
+          onConfirm: async () => {
+            const rawTrackPath = track.id || track.filePath
+            // @ts-ignore
+            const res = await window.api.deleteTrack(rawTrackPath, true)
+            if (res && res.success) {
+              showToast(t('toasts.movedToTrash', { title: track.title }), 'success')
+              loadLibrary()
+            } else {
+              showAlert({ title: t('common.error'), message: 'Error deleting track: ' + res?.error })
+            }
+          }
+        })
       }
     })
 
@@ -1598,7 +1924,7 @@ export default function App() {
         id: 'rename-playlist',
         label: t('contextMenu.renamePlaylist'),
         icon: <Edit2 size={14} />,
-        onClick: () => setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name })
+        onClick: () => setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name, id: undefined })
       },
       {
         id: 'change-cover',
@@ -1628,17 +1954,23 @@ export default function App() {
         label: t('contextMenu.deletePlaylist', { name: pl.name }),
         icon: <Trash2 size={14} />,
         danger: true,
-        onClick: async () => {
-          if (!confirm(t('contextMenu.confirmDeletePlaylist', { name: pl.name }))) return
-          // @ts-ignore
-          const res = await window.api.deletePlaylist(pl.name)
-          if (res && res.success) {
-            showToast(t('toasts.playlistDeleted', { name: pl.name }), 'success')
-            if (activePlaylist?.name === pl.name) setActivePlaylist(null)
-            loadLibrary()
-          } else {
-            alert('Error deleting playlist: ' + res?.error)
-          }
+        onClick: () => {
+          showConfirm({
+            title: t('contextMenu.deletePlaylist', { name: pl.name }),
+            message: t('contextMenu.confirmDeletePlaylist', { name: pl.name }),
+            danger: true,
+            onConfirm: async () => {
+              // @ts-ignore
+              const res = await window.api.deletePlaylist(pl.name)
+              if (res && res.success) {
+                showToast(t('toasts.playlistDeleted', { name: pl.name }), 'success')
+                if (activePlaylist?.name === pl.name) setActivePlaylist(null)
+                loadLibrary()
+              } else {
+                showAlert({ title: t('common.error'), message: 'Error deleting playlist: ' + res?.error })
+              }
+            }
+          })
         }
       }
     ]
@@ -1678,18 +2010,7 @@ export default function App() {
         id: 'rename-playlist',
         label: t('userPlaylistsView.rename'),
         icon: <Edit2 size={14} />,
-        onClick: () => {
-          const newName = prompt(t('userPlaylistsView.rename'), upl.name)
-          if (newName && newName.trim() && newName.trim() !== upl.name) {
-            // @ts-ignore
-            window.api.renameUserPlaylist(upl.id, newName.trim()).then(res => {
-              if (res && res.success) {
-                setUserPlaylists(res.playlists)
-                showToast(t('toasts.playlistRenamedSuccess'), 'success')
-              }
-            })
-          }
-        }
+        onClick: () => setPlaylistRename({ isOpen: true, oldName: upl.name, newName: upl.name, id: upl.id })
       },
       {
         id: 'change-cover',
@@ -2051,9 +2372,9 @@ export default function App() {
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
   }, [volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode, customBgImage, customBgOpacity, customBgBlur, useTrackCoverAsBg, isConfigLoaded])
 
-  // Dominant Color
+  // Dominant Color (Bỏ qua hoàn toàn trong Core Mode và Lite Mode)
   useEffect(() => {
-    if (isLite || effectiveBgImage) {
+    if (isLite || isCore || effectiveBgImage) {
       setThemeColor('transparent') // Không dùng màu nền đè lên ảnh nền
       return
     }
@@ -2062,7 +2383,7 @@ export default function App() {
     } else {
       setThemeColor('rgba(39, 39, 42, 0)')
     }
-  }, [currentTrack, isLite, effectiveBgImage]) // Thêm isLite vào dependency
+  }, [currentTrack, isLite, isCore, effectiveBgImage])
 
   // SMART MEMORY RECOVERY (DỌN DẸP BỘ NHỚ THÔNG MINH - 0% GIẬT LAG)
   // 1. Dọn dẹp khi đổi bài hát (trì hoãn 1.5s để UI ổn định trước)
@@ -2790,6 +3111,11 @@ export default function App() {
         audioRef={audioRef}
       />
 
+      <CustomDialogModal 
+        dialog={customDialog} 
+        onClose={() => setCustomDialog(null)} 
+      />
+
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
@@ -2827,8 +3153,8 @@ export default function App() {
         <main className={`flex-1 flex flex-col bg-transparent overflow-hidden ${(isLyricsMaximized && showLyricsPanel) ? 'hidden' : ''}`}>
           
           <header className="h-20 px-8 flex items-center justify-between border-b border-theme-30/50 flex-shrink-0 w-full">
-            <div className="relative w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+            <div className="relative w-96 flex items-center">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={18} />
               <input 
                 type="text" 
                 value={searchInput}
@@ -2858,7 +3184,7 @@ export default function App() {
                             setDashboardData(res.data);
                           }
                         } else {
-                          alert('Lỗi tìm kiếm YouTube Music: ' + res.error);
+                          showAlert({ title: t('common.error'), message: 'Lỗi tìm kiếm YouTube Music: ' + res.error });
                         }
                       });
                     } else if (activeView === 'home-soundcloud') {
@@ -2880,7 +3206,7 @@ export default function App() {
                           }
                           setScDashboardData(sections);
                         } else {
-                          alert('Lỗi tìm kiếm SoundCloud: ' + res.error);
+                          showAlert({ title: t('common.error'), message: 'Lỗi tìm kiếm SoundCloud: ' + res.error });
                         }
                       });
                     } else {
@@ -2895,8 +3221,22 @@ export default function App() {
                     ? t('header.searchSc')
                     : t('header.searchLocal')
                 } 
-                className="w-full bg-theme-60/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors" 
+                className="w-full bg-theme-60/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-9 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors placeholder:text-zinc-500" 
               />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearchQuery('');
+                    if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard();
+                    if (activeView === 'home-soundcloud') fetchScDashboard();
+                  }}
+                  className="absolute right-3 text-zinc-400 hover:text-white p-0.5 rounded transition"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
             
             <div className="flex items-center gap-3">
@@ -2972,6 +3312,19 @@ export default function App() {
                     <>
                       <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">
+                          {(searchInput.trim() || searchQuery.trim()) && (
+                            <button 
+                              onClick={() => {
+                                setSearchInput('');
+                                setSearchQuery('');
+                                fetchDashboard();
+                              }}
+                              title={t('home.backToDashboard')}
+                              className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition cursor-pointer shrink-0"
+                            >
+                              <ArrowLeft size={18} />
+                            </button>
+                          )}
                           <button 
                             onClick={() => {
                               setSearchInput('');
@@ -3126,6 +3479,19 @@ export default function App() {
                     <>
                       <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
+                          {(searchInput.trim() || searchQuery.trim()) && (
+                            <button 
+                              onClick={() => {
+                                setSearchInput('');
+                                setSearchQuery('');
+                                fetchScDashboard();
+                              }}
+                              title={t('home.backToDashboard')}
+                              className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition cursor-pointer shrink-0"
+                            >
+                              <ArrowLeft size={18} />
+                            </button>
+                          )}
                           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center">
                             <Cloud size={22} className="fill-current" />
                           </div>
@@ -3433,87 +3799,107 @@ export default function App() {
                     <div className="border-t border-theme-30 pt-6 mt-6">
                       <h3 className="text-theme-10 font-semibold mb-3">{t('settings.customBg.title')}</h3>
                       
-                      {/* Checkbox tùy chọn dùng ảnh bìa bài hát */}
-                      <label className="flex items-center gap-3 cursor-pointer mb-4 select-none group w-fit">
-                        <input 
-                          type="checkbox" 
-                          checked={useTrackCoverAsBg} 
-                          onChange={(e) => setUseTrackCoverAsBg(e.target.checked)}
-                          className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
-                        />
-                        <span className="text-sm text-zinc-300 group-hover:text-white transition">
-                          {t('settings.customBg.useTrackCover')}
-                        </span>
-                      </label>
+                      {isCore ? (
+                        <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
+                          {language === 'vi' ? 'Tính năng hình nền & giao diện màu sắc bị tắt hoàn toàn ở Chế độ cốt lõi (Core Mode) để tối ưu hiệu năng.' : 'Background and dynamic theme are completely disabled in Core Mode for maximum performance.'}
+                        </p>
+                      ) : (
+                        <>
+                          {/* Checkbox tùy chọn dùng ảnh bìa bài hát */}
+                          <label className="flex items-center gap-3 cursor-pointer mb-4 select-none group w-fit">
+                            <input 
+                              type="checkbox" 
+                              checked={useTrackCoverAsBg} 
+                              onChange={(e) => setUseTrackCoverAsBg(e.target.checked)}
+                              className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
+                            />
+                            <span className="text-sm text-zinc-300 group-hover:text-white transition">
+                              {t('settings.customBg.useTrackCover')}
+                            </span>
+                          </label>
 
-                      {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
-                      {!useTrackCoverAsBg && (
-                        <div className="flex gap-3 items-center mb-4">
-                          <input 
-                            type="text" 
-                            value={bgImageInput} 
-                            onChange={(e) => setBgImageInput(e.target.value)} 
-                            placeholder={t('settings.customBg.placeholder')} 
-                            className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
-                          />
-                          <button 
-                            onClick={() => {
-                              const normalized = normalizeImagePath(bgImageInput)
-                              if (normalized) {
-                                setBgImageInput(normalized)
-                                setCustomBgImage(normalized)
-                              }
-                            }}
-                            className="bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition"
-                          >
-                            {t('settings.customBg.applyLink')}
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              const filePath = await window.api.selectImageFile()
-                              if (filePath) {
-                                const normalized = normalizeImagePath(filePath)
-                                setBgImageInput(normalized)
-                                setCustomBgImage(normalized)
-                              }
-                            }}
-                            className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                          >
-                            {t('settings.customBg.chooseImage')}
-                          </button>
-                          <button 
-                            onClick={() => { setCustomBgImage(null); setBgImageInput(''); }}
-                            className="bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-medium transition"
-                          >
-                            {t('settings.customBg.removeBg')}
-                          </button>
-                        </div>
+                          {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
+                          {!useTrackCoverAsBg && (
+                            <div className="flex gap-3 items-center mb-4">
+                              <input 
+                                type="text" 
+                                value={bgImageInput} 
+                                onChange={(e) => setBgImageInput(e.target.value)} 
+                                placeholder={t('settings.customBg.placeholder')} 
+                                className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
+                              />
+                              <button 
+                                onClick={() => {
+                                  const normalized = normalizeImagePath(bgImageInput)
+                                  if (normalized) {
+                                    setBgImageInput(normalized)
+                                    setCustomBgImage(normalized)
+                                  }
+                                }}
+                                className="bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                              >
+                                {t('settings.customBg.applyLink')}
+                              </button>
+                              <button 
+                                onClick={async () => {
+                                  const filePath = await window.api.selectImageFile()
+                                  if (filePath) {
+                                    const normalized = normalizeImagePath(filePath)
+                                    setBgImageInput(normalized)
+                                    setCustomBgImage(normalized)
+                                  }
+                                }}
+                                className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                              >
+                                {t('settings.customBg.chooseImage')}
+                              </button>
+                              <button 
+                                onClick={() => { setCustomBgImage(null); setBgImageInput(''); }}
+                                className="bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                              >
+                                {t('settings.customBg.removeBg')}
+                              </button>
+                            </div>
+                          )}
+                          
+                          <div className="flex flex-col gap-4">
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.opacity')}:</span>
+                              <input 
+                                type="range" 
+                                min="0" max="1" step="0.05" 
+                                value={customBgOpacity} 
+                                onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))}
+                                onWheel={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  const delta = e.deltaY < 0 ? 0.05 : -0.05
+                                  setCustomBgOpacity(prev => Math.max(0, Math.min(1, Math.round((prev + delta) * 100) / 100)))
+                                }}
+                                className="flex-1 accent-theme-10"
+                              />
+                              <span className="text-sm font-mono text-zinc-400 w-12 text-right">{Math.round(customBgOpacity * 100)}%</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.blur')}:</span>
+                              <input 
+                                type="range" 
+                                min="0" max="100" step="1" 
+                                value={customBgBlur} 
+                                onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
+                                onWheel={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  const delta = e.deltaY < 0 ? 2 : -2
+                                  setCustomBgBlur(prev => Math.max(0, Math.min(100, prev + delta)))
+                                }}
+                                className="flex-1 accent-theme-10"
+                              />
+                              <span className="text-sm font-mono text-zinc-400 w-12 text-right">{customBgBlur}px</span>
+                            </div>
+                          </div>
+                        </>
                       )}
-                      
-                      <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.opacity')}:</span>
-                          <input 
-                            type="range" 
-                            min="0" max="1" step="0.05" 
-                            value={customBgOpacity} 
-                            onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))}
-                            className="flex-1 accent-theme-10"
-                          />
-                          <span className="text-sm font-mono text-zinc-400 w-12 text-right">{Math.round(customBgOpacity * 100)}%</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.blur')}:</span>
-                          <input 
-                            type="range" 
-                            min="0" max="100" step="1" 
-                            value={customBgBlur} 
-                            onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
-                            className="flex-1 accent-theme-10"
-                          />
-                          <span className="text-sm font-mono text-zinc-400 w-12 text-right">{customBgBlur}px</span>
-                        </div>
-                      </div>
                     </div>
 
                     {/* QUẢN LÝ ĐA THƯ MỤC NHẠC */}
@@ -4726,7 +5112,14 @@ export default function App() {
                 <>
                   <div className="flex items-end justify-between mb-8" onContextMenu={(e) => handlePlaylistContextMenu(activePlaylist, e)}>
                     <div className="flex items-end gap-6">
-                      <div className="w-40 h-40 bg-theme-30 rounded-xl overflow-hidden shadow-2xl relative group">
+                      <button 
+                        onClick={() => setActivePlaylist(null)} 
+                        className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition cursor-pointer mb-2 shrink-0"
+                        title={t('common.back')}
+                      >
+                        <ArrowLeft size={20}/>
+                      </button>
+                      <div className="w-40 h-40 bg-theme-30 rounded-xl overflow-hidden shadow-2xl relative group shrink-0">
                         {(!isLite && activePlaylist.thumbnail) ? <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                       </div>
                       <div>
@@ -4903,15 +5296,39 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center w-1/3 max-w-md">
-          <div className="flex items-center gap-6 mb-2">
-            <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
-            <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
-            <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
-              {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current translate-x-[2px]" />}
-            </button>
-            <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={20} /></button>
-            <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+        <div className="flex flex-col items-center justify-center w-1/3 max-w-md relative">
+          <div className="relative w-full flex items-center justify-center mb-2">
+            {/* 5 nút điều khiển đối xứng tuyệt đối qua nút Play ở giữa */}
+            <div className="flex items-center gap-6 justify-center">
+              <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
+              <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
+              <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
+                {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current translate-x-[2px]" />}
+              </button>
+              <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={20} /></button>
+              <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+            </div>
+
+            {/* YouTube-style Smart Autoplay Switch đặt absolute ở lề phải để không làm lệch tâm nút Play */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1.5" title={smartAutoplay ? t('player.smartAutoplay') : t('player.smartAutoplayDesc')}>
+              <button
+                type="button"
+                onClick={() => setSmartAutoplay(prev => !prev)}
+                className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  smartAutoplay ? 'bg-theme-10' : 'bg-zinc-700'
+                }`}
+                role="switch"
+                aria-checked={smartAutoplay}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
+                    smartAutoplay ? 'translate-x-3 text-zinc-950' : 'translate-x-0 text-zinc-500'
+                  }`}
+                >
+                  {smartAutoplay ? <Sparkles size={7} className="text-zinc-950 fill-current" /> : <div className="w-1 h-1 rounded-full bg-zinc-400" />}
+                </span>
+              </button>
+            </div>
           </div>
           <PlayerProgressBar 
             audioRef={audioRef} 

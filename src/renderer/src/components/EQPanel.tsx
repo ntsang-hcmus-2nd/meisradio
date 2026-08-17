@@ -341,7 +341,16 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         <canvas ref={eqCanvasRef} width={800} height={160} className="w-full h-36 bg-zinc-950 rounded-xl border border-zinc-800 mb-4 shrink-0 shadow-inner" />
         
         {/* PREAMP BAR */}
-        <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 mb-4 flex items-center justify-between gap-4 text-xs shrink-0">
+        <div 
+          className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 mb-4 flex items-center justify-between gap-4 text-xs shrink-0"
+          onWheel={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            const delta = e.deltaY < 0 ? 0.5 : -0.5
+            const nextPreamp = Math.max(-20, Math.min(10, Math.round((preampGain + delta) * 10) / 10))
+            setPreampGain(nextPreamp)
+          }}
+        >
           <div className="flex items-center gap-2">
             <span className="font-semibold text-zinc-300">{t('modals.eq.preamp')}:</span>
             <span className="font-mono text-theme-10 font-bold">{preampGain > 0 ? `+${preampGain.toFixed(1)}` : preampGain.toFixed(1)} dB</span>
@@ -354,6 +363,13 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             step="0.5" 
             value={preampGain} 
             onChange={(e) => setPreampGain(Number(e.target.value))}
+            onWheel={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              const delta = e.deltaY < 0 ? 0.5 : -0.5
+              const nextPreamp = Math.max(-20, Math.min(10, Math.round((preampGain + delta) * 10) / 10))
+              setPreampGain(nextPreamp)
+            }}
             className="w-48 h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" 
           />
         </div>
@@ -435,24 +451,37 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                 </div>
 
                 {/* Gain Slider */}
-                <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+                <div 
+                  className="flex flex-col gap-1 flex-1 min-w-[180px]"
+                  onWheel={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    const delta = e.deltaY < 0 ? 0.5 : -0.5
+                    const nextGain = Math.max(-20, Math.min(20, Math.round((band.gain + delta) * 10) / 10))
+                    handleUpdateBand(band.id, 'gain', nextGain)
+                    if (filterNodesRef && filterNodesRef.current) {
+                      const nodeIndex = eqBands.findIndex(b => b.id === band.id)
+                      if (filterNodesRef.current[nodeIndex]) {
+                        filterNodesRef.current[nodeIndex].gain.value = nextGain
+                      }
+                    }
+                    requestAnimationFrame(drawEQCanvas)
+                  }}
+                >
                   <div className="flex justify-between text-zinc-400">
                     <span>{t('modals.eq.gain')}</span>
                     <span className="font-mono text-theme-10 font-bold">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
                   </div>
                   <input 
-                    key={band.id}
+                    key={`${band.id}-${band.gain}`}
                     type="range" 
                     min="-20" 
                     max="20" 
                     step="0.5" 
-                    defaultValue={band.gain} 
+                    value={band.gain} 
                     onChange={(e) => {
                       const val = Number(e.target.value)
-                      e.target.style.background = `linear-gradient(to right, var(--theme-10) ${((val + 20) / 40) * 100}%, #27272a ${((val + 20) / 40) * 100}%)`
-                      const textElem = e.target.previousElementSibling?.children[1]
-                      if (textElem) textElem.textContent = `${val > 0 ? '+' : ''}${val} dB`
-                      
+                      handleUpdateBand(band.id, 'gain', val)
                       if (filterNodesRef && filterNodesRef.current) {
                         const nodeIndex = eqBands.findIndex(b => b.id === band.id)
                         if (filterNodesRef.current[nodeIndex]) {
@@ -461,8 +490,20 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                       }
                       requestAnimationFrame(drawEQCanvas)
                     }} 
-                    onMouseUp={(e) => handleUpdateBand(band.id, 'gain', Number((e.target as HTMLInputElement).value))}
-                    onTouchEnd={(e) => handleUpdateBand(band.id, 'gain', Number((e.target as HTMLInputElement).value))}
+                    onWheel={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      const delta = e.deltaY < 0 ? 0.5 : -0.5
+                      const nextGain = Math.max(-20, Math.min(20, Math.round((band.gain + delta) * 10) / 10))
+                      handleUpdateBand(band.id, 'gain', nextGain)
+                      if (filterNodesRef && filterNodesRef.current) {
+                        const nodeIndex = eqBands.findIndex(b => b.id === band.id)
+                        if (filterNodesRef.current[nodeIndex]) {
+                          filterNodesRef.current[nodeIndex].gain.value = nextGain
+                        }
+                      }
+                      requestAnimationFrame(drawEQCanvas)
+                    }}
                     className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" 
                     style={{ background: `linear-gradient(to right, var(--theme-10) ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)` }} 
                   />

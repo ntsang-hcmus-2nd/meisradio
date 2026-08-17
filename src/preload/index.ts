@@ -104,6 +104,14 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     ipcRenderer.removeAllListeners('app:onDeepClean')
     ipcRenderer.on('app:onDeepClean', () => callback())
   },
+  onNavBack: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('nav:back')
+    ipcRenderer.on('nav:back', () => callback())
+  },
+  onNavForward: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('nav:forward')
+    ipcRenderer.on('nav:forward', () => callback())
+  },
 }
 
 if (process.contextIsolated) {

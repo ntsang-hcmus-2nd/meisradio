@@ -68,6 +68,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
         min={0} max={Math.floor(duration || 0)} 
         value={Math.floor(currentTime)} 
         onChange={handleSeekChange}
+        onWheel={(e) => { e.preventDefault(); e.stopPropagation(); }}
         onMouseDown={() => setIsDragging(true)}
         onMouseUp={handleSeekCommit}
         onTouchStart={() => setIsDragging(true)}
