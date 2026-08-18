@@ -21,20 +21,34 @@ export const vi: TranslationDictionary = {
     tracks: 'bản nhạc',
     hours: 'giờ',
     minutes: 'phút',
-    seconds: 'giây'
+    seconds: 'giây',
+    deletePermanently: 'Xóa vĩnh viễn',
+    warning: 'Cảnh báo',
+    notice: 'Thông báo',
+    back: 'Quay lại'
   },
   sidebar: {
     library: 'Thư viện',
     home: 'Trang chủ',
+    dashboard: 'Tổng quan',
     youtubeMusic: 'YouTube Music',
     soundCloud: 'SoundCloud',
     songList: 'Danh sách bài hát',
-    myPlaylists: 'Playlist của tôi',
+    myPlaylists: 'Danh sách phát',
+    artists: 'Nghệ sĩ',
+    genres: 'Thể loại',
+    userPlaylists: 'Playlist của tôi',
     cloudConnection: 'Liên kết Cloud',
     googleDrive: 'Google Drive',
     settings: 'Cài đặt'
   },
+  viewOptions: {
+    table: 'Danh sách chi tiết',
+    grid: 'Lưới bìa thẻ',
+    compact: 'Danh sách thu gọn'
+  },
   header: {
+    searchDashboard: 'Tìm bài hát, nghệ sĩ trong thư viện...',
     searchYtm: 'Tìm kiếm nhạc trên YouTube Music...',
     searchSc: 'Tìm kiếm nhạc trên SoundCloud...',
     searchLocal: 'Tìm bài hát, nghệ sĩ trong máy...',
@@ -56,6 +70,23 @@ export const vi: TranslationDictionary = {
     sortDuration: 'Sắp xếp theo thời lượng'
   },
   home: {
+    dashboardTitle: 'Tổng quan',
+    dashboardSubtitle: 'Khám phá bài hát, tuyển tập và gợi ý dành riêng cho bạn',
+    forYouTitle: 'Gợi ý dành riêng cho bạn',
+    forYouSubtitle: 'Tuyển tập từ thư mục nhạc dựa trên nghệ sĩ & thể loại bạn nghe gần đây',
+    recentlyPlayedTitle: 'Đã nghe gần đây',
+    recentlyPlayedSubtitle: 'Tiếp tục thưởng thức những bản nhạc bạn vừa phát',
+    discoverFolderTitle: 'Khám phá từ thư mục nhạc',
+    discoverFolderSubtitle: 'Giai điệu ngẫu nhiên từ kho nhạc trên máy tính của bạn',
+    playAllRecommendations: 'Phát gợi ý',
+    shuffleAllLibrary: 'Trộn bài toàn bộ thư mục',
+    refreshDashboard: 'Làm mới gợi ý',
+    statsSongs: 'Bài hát',
+    statsPlaylists: 'Playlist',
+    statsArtists: 'Nghệ sĩ',
+    statsRecent: 'Đã nghe',
+    noRecentTitle: 'Bắt đầu nghe nhạc để nhận gợi ý thông minh',
+    noRecentDesc: 'Khi bạn nghe các bài hát trong thư mục, Mei\'s Radio sẽ tự động phân tích và gợi ý những bản nhạc phù hợp nhất với gu âm nhạc của bạn.',
     ytmTitle: 'YouTube Music',
     ytmSubtitle: 'Khám phá và đề xuất cá nhân hóa',
     refreshYtm: 'Làm mới YouTube Music',
@@ -77,6 +108,7 @@ export const vi: TranslationDictionary = {
     loadingSc: 'Đang tải nhạc SoundCloud...',
     noScTracksTitle: 'Không có bài hát',
     noScTracksDesc: 'Không thể tải dữ liệu SoundCloud hoặc không có bài hát nào trong thể loại này.',
+    backToDashboard: 'Quay lại trang chủ',
     genres: {
       all: 'Tất cả',
       electronic: 'Electronic',
@@ -92,63 +124,116 @@ export const vi: TranslationDictionary = {
     searchResults: 'Kết quả tìm kiếm',
     songList: 'Danh sách bài hát',
     addMusic: 'Thêm nhạc vào Thư viện',
-    noSongsMatched: 'Không tìm thấy bài hát nào khớp với "{query}".',
-    libraryNotConfigured: 'Chưa cấu hình Thư viện',
-    libraryNotConfiguredDesc: 'Vui lòng vào phần Cài đặt để chọn Thư mục chứa nhạc của bạn.'
+    randomPlay: 'Phát ngẫu nhiên',
+    noSongsMatched: 'Không tìm thấy bài hát nào phù hợp với từ khóa',
+    libraryNotConfigured: 'Chưa chọn thư mục nhạc',
+    libraryNotConfiguredDesc: 'Vui lòng bấm vào nút bên dưới để chọn thư mục chứa nhạc trên máy tính của bạn.'
+  },
+  artistsView: {
+    title: 'Nghệ sĩ',
+    searchResults: 'Kết quả tìm kiếm Nghệ sĩ',
+    allArtists: 'Tất cả nghệ sĩ',
+    albums: 'Album phát hành',
+    singlesAndTracks: 'Đĩa đơn & Bài hát',
+    noArtists: 'Không tìm thấy nghệ sĩ nào phù hợp với từ khóa.',
+    playAll: 'Phát tất cả',
+    shuffle: 'Trộn bài',
+    artistCount: 'nghệ sĩ',
+    trackCount: 'bài hát',
+    albumCount: 'album',
+    backToArtists: 'Quay lại danh sách Nghệ sĩ'
+  },
+  genresView: {
+    title: 'Thể loại âm nhạc',
+    searchResults: 'Kết quả tìm kiếm Thể loại',
+    allGenres: 'Tất cả thể loại',
+    noGenres: 'Không tìm thấy thể loại nào phù hợp với từ khóa.',
+    genreCount: 'thể loại',
+    playAll: 'Phát tất cả',
+    shuffle: 'Trộn bài',
+    songsInGenre: 'Bài hát thuộc thể loại',
+    topArtists: 'Nghệ sĩ tiêu biểu',
+    backToGenres: 'Quay lại danh sách Thể loại'
+  },
+  userPlaylistsView: {
+    title: 'Playlist của tôi',
+    searchResults: 'Kết quả tìm kiếm Playlist',
+    createPlaylist: 'Tạo Playlist mới',
+    playlistCount: 'playlist',
+    noPlaylists: 'Bạn chưa tạo playlist nào. Nhấn nút "Tạo Playlist mới" để bắt đầu!',
+    empty: 'Chưa có playlist nào',
+    emptyPlaylist: 'Playlist này chưa có bài hát nào.',
+    addSongs: 'Thêm bài hát',
+    chooseCover: 'Đổi ảnh bìa',
+    deletePlaylist: 'Xóa Playlist',
+    confirmDelete: 'Bạn có chắc chắn muốn xóa vĩnh viễn playlist "{name}" không? (Các tệp bài hát gốc sẽ không bị xóa)',
+    rename: 'Đổi tên',
+    playAll: 'Phát tất cả',
+    shuffle: 'Trộn bài',
+    removeFromPlaylist: 'Xóa khỏi playlist',
+    confirmRemove: 'Bạn có chắc chắn muốn xóa bài hát "{title}" khỏi playlist này?'
   },
   driveView: {
-    title: 'Google Drive',
-    enterFolderLink: 'Nhập liên kết thư mục',
-    folderLinkDesc: 'Dán liên kết thư mục Drive chứa nhạc của bạn (Yêu cầu bật chế độ "Bất kỳ ai có liên kết").',
+    title: 'Đồng bộ Google Drive',
+    enterFolderLink: 'Nhập liên kết thư mục Google Drive chứa nhạc',
+    folderLinkDesc: 'Đảm bảo thư mục Drive đã được chia sẻ ở chế độ "Bất kỳ ai có liên kết" (Anyone with the link can view)',
     folderLinkPlaceholder: 'https://drive.google.com/drive/folders/...',
-    scanning: 'Đang quét...',
+    scanning: 'Đang quét thư mục Drive...',
     scanData: 'Quét dữ liệu',
-    emptyTitle: 'Danh sách bài hát trống',
-    emptyDesc: 'Vui lòng dán liên kết và nhấn quét để lấy danh sách từ Cloud.',
-    foundResults: 'Tìm thấy {count} kết quả cho "{query}"',
-    foundAudioFiles: 'Đã tìm thấy {count} tệp âm thanh',
-    streamAll: 'Stream tất cả',
-    downloadLossless: 'Tải về Thư viện (Lossless)',
+    emptyTitle: 'Chưa có dữ liệu thư mục Google Drive',
+    emptyDesc: 'Dán đường dẫn thư mục công khai ở ô phía trên và bấm "Quét dữ liệu" để khám phá danh sách nhạc.',
+    foundResults: 'Đã tìm thấy',
+    foundAudioFiles: 'tệp âm thanh hợp lệ trong thư mục Google Drive.',
+    streamAll: 'Phát toàn bộ danh sách (Stream Online)',
+    downloadLossless: 'Tải toàn bộ Album về máy (Lossless)',
     processing: 'Đang xử lý...',
-    originalFormat: 'Định dạng gốc:'
+    originalFormat: 'Định dạng gốc'
   },
   playlistsView: {
-    title: 'Playlist của tôi',
-    searchResults: 'Kết quả tìm kiếm',
-    createPlaylist: 'Tạo Playlist mới',
+    title: 'Danh sách phát',
+    searchResults: 'Kết quả tìm kiếm Playlist',
+    createPlaylist: 'Tạo Playlist Thư mục',
     autoCategorize: 'Tự động phân loại Album',
-    noPlaylists: 'Chưa có danh sách phát nào. Hãy tạo các thư mục con trong Thư viện gốc.',
-    playlistsAndAlbums: 'Album & Danh sách phát ({count})',
-    chooseCover: 'Chọn ảnh từ máy tính',
-    extractCover: 'Lấy ảnh từ bài hát đầu tiên',
+    noPlaylists: 'Không tìm thấy playlist thư mục nào trong thư viện.',
+    playlistsAndAlbums: 'Playlist & Album',
+    chooseCover: 'Đổi ảnh bìa',
+    extractCover: 'Trích xuất ảnh từ bài hát',
     addExistingSongs: 'Thêm bài hát có sẵn',
-    importFromComputer: 'Tải file từ máy tính',
-    noSongsMatched: 'Không tìm thấy bài hát nào khớp với "{query}".',
-    noResultsFound: 'Không tìm thấy kết quả nào cho "{query}".'
+    importFromComputer: 'Nhập bài hát từ máy tính',
+    noSongsMatched: 'Không tìm thấy bài hát nào phù hợp với từ khóa',
+    noResultsFound: 'Không tìm thấy kết quả phù hợp'
   },
   settings: {
     title: 'Cài đặt hệ thống',
     language: {
-      title: 'Ngôn ngữ (Language)',
-      desc: 'Chọn ngôn ngữ hiển thị cho giao diện ứng dụng.',
+      title: 'Ngôn ngữ giao diện (Language)',
+      desc: 'Chọn ngôn ngữ hiển thị cho toàn bộ ứng dụng',
       english: 'English (Tiếng Anh)',
       vietnamese: 'Tiếng Việt (Vietnamese)'
     },
     customBg: {
-      title: 'Hình nền tuỳ chỉnh',
-      useTrackCover: 'Sử dụng ảnh bìa bài hát làm hình nền (Tự động đổi theo bài hát)',
-      placeholder: 'Nhập đường dẫn ảnh web (URL) hoặc chọn file...',
-      applyLink: 'Áp dụng link',
-      chooseImage: 'Chọn ảnh',
-      removeBg: 'Xoá nền',
-      opacity: 'Độ sáng hình nền',
-      blur: 'Độ mờ (Blur)'
+      title: 'Tùy chỉnh hình nền & Giao diện thích ứng',
+      useTrackCover: 'Tự động dùng ảnh bìa bài hát đang phát làm hình nền (Dynamic Cover Background)',
+      placeholder: 'Dán link hình ảnh (https://... hoặc đường dẫn file cục bộ)...',
+      applyLink: 'Áp dụng Link',
+      chooseImage: 'Chọn ảnh từ máy',
+      removeBg: 'Xóa ảnh nền',
+      opacity: 'Độ trong suốt nền (Opacity)',
+      blur: 'Độ mờ / Nhòe nền (Blur)'
     },
     library: {
-      title: 'Thư mục gốc (Thư viện)',
-      desc: 'Chọn thư mục chứa nhạc. Ứng dụng sẽ tự động quét bài hát...',
-      notSet: 'Chưa thiết lập',
-      change: 'Thay đổi'
+      title: 'Thư mục nhạc (Thư viện)',
+      desc: 'Quản lý các thư mục chứa nhạc trên máy tính. Ứng dụng sẽ tự động quét và gom bài hát từ tất cả thư mục.',
+      notSet: 'Chưa thiết lập thư mục',
+      change: 'Đổi đường dẫn',
+      addFolder: 'Thêm thư mục nhạc',
+      removeFolder: 'Xóa thư mục',
+      confirmRemoveFolder: 'Bạn có chắc chắn muốn xóa thư mục nhạc này khỏi thư viện?',
+      updateFolder: 'Thay đổi thư mục',
+      openFolder: 'Mở trong File Explorer',
+      folderCount: 'thư mục nhạc đã thêm',
+      rescan: 'Quét lại toàn bộ thư viện',
+      autoCategorize: 'Tự động phân loại Album'
     },
     bitPerfect: {
       title: 'Bit-perfect (WASAPI Exclusive/ASIO)',
@@ -175,9 +260,12 @@ export const vi: TranslationDictionary = {
     appMode: {
       title: 'Chế độ hoạt động (Hiệu suất)',
       desc: 'Điều chỉnh mức độ tiêu thụ tài nguyên của ứng dụng để phù hợp với cấu hình máy.',
-      standard: 'Tiêu chuẩn',
-      lite: 'Tiết kiệm',
-      core: 'Cốt lõi'
+      standard: 'Tiêu chuẩn (Standard)',
+      standardDesc: 'Đầy đủ hiệu ứng hình ảnh, Visualizer, chuyển màu nền thích ứng và tất cả các tính năng online.',
+      lite: 'Tiết kiệm (Lite Mode)',
+      liteDesc: 'Tiết kiệm pin, tắt hiệu ứng kính mờ và Visualizer, tối ưu GPU cho Laptop và card đồ họa tích hợp.',
+      core: 'Cốt lõi (Core Mode)',
+      coreDesc: 'Hiệu năng tối đa, tắt toàn bộ ảnh bìa và module online.'
     }
   },
   player: {
@@ -196,7 +284,10 @@ export const vi: TranslationDictionary = {
     play: 'Phát',
     pause: 'Tạm dừng',
     next: 'Bài tiếp theo',
-    prev: 'Bài trước đó'
+    prev: 'Bài trước đó',
+    smartAutoplay: 'Tự động phát gợi ý (Smart Autoplay)',
+    smartAutoplayDesc: 'Tự động phát bài hát gợi ý theo nghệ sĩ/thể loại khi hết danh sách',
+    smartAutoplayPlaying: 'Đang phát gợi ý: {title} - {artist}'
   },
   lyrics: {
     title: 'Lời bài hát',
@@ -216,8 +307,8 @@ export const vi: TranslationDictionary = {
     editTags: 'Chỉnh sửa thẻ (Metadata)',
     showInFolder: 'Mở vị trí tệp trong Explorer',
     removeFromPlaylist: 'Xóa khỏi playlist "{name}"',
-    deleteFile: 'Xóa tệp (Chuyển vào Thùng rác)',
-    confirmDeleteFile: 'Bạn có chắc chắn muốn chuyển tệp "{title}" vào Thùng rác máy tính?',
+    deleteFile: 'Xóa tệp vĩnh viễn',
+    confirmDeleteFile: 'Bạn có chắc chắn muốn xóa vĩnh viễn tệp "{title}" khỏi ổ đĩa không? Thao tác này không thể hoàn tác!',
     confirmRemoveFromPlaylist: 'Bạn có chắc muốn xóa bài hát "{title}" khỏi playlist "{name}"?',
     playAll: 'Phát toàn bộ danh sách',
     addSongs: 'Thêm bài hát vào playlist',
@@ -226,13 +317,18 @@ export const vi: TranslationDictionary = {
     extractCover: 'Lấy ảnh từ bài hát đầu tiên',
     openPlaylistFolder: 'Mở thư mục Playlist trong Explorer',
     deletePlaylist: 'Xóa playlist "{name}"',
-    confirmDeletePlaylist: 'Bạn có chắc chắn muốn xóa Playlist "{name}" và chuyển thư mục vào Thùng rác?',
+    confirmDeletePlaylist: 'Bạn có chắc chắn muốn xóa vĩnh viễn Playlist "{name}" và toàn bộ tệp bên trong không? Thao tác này không thể hoàn tác!',
     downloadToLib: 'Tải về thư viện'
   },
   modals: {
     addSongs: {
       title: 'Thêm bài hát vào "{name}"',
-      addCount: 'Thêm {count} bài hát'
+      addCount: 'Thêm {count} bài hát',
+      searchPlaceholder: 'Tìm kiếm bài hát, nghệ sĩ, album...',
+      noMatches: 'Không tìm thấy bài hát nào phù hợp',
+      selectAll: 'Chọn tất cả',
+      clearAll: 'Bỏ chọn',
+      showingCount: 'Hiển thị {shown}/{total} bài hát'
     },
     cloudAction: {
       desc: 'Đây là file lưu trên Cloud. Bạn muốn phát trực tiếp hay tải về máy để nghe Offline?',
@@ -244,6 +340,18 @@ export const vi: TranslationDictionary = {
       title: 'Tạo Playlist Mới',
       placeholder: 'Nhập tên playlist...',
       create: 'Tạo mới'
+    },
+    editPlaylist: {
+      title: 'Chỉnh sửa thông tin Playlist',
+      nameLabel: 'Tên Playlist',
+      namePlaceholder: 'Nhập tên playlist...',
+      descLabel: 'Mô tả Playlist (tùy chọn)',
+      descPlaceholder: 'Nhập mô tả về playlist này...',
+      coverLabel: 'Ảnh bìa Playlist',
+      chooseImage: 'Chọn ảnh từ máy tính',
+      removeImage: 'Xóa ảnh tùy chỉnh',
+      save: 'Lưu thay đổi',
+      cancel: 'Hủy'
     },
     renamePlaylist: {
       title: 'Đổi tên Playlist',
@@ -306,6 +414,8 @@ export const vi: TranslationDictionary = {
     downloadFinished: 'Đã tải xong "{title}"!',
     albumDownloadFinished: 'Đã tải hoàn tất {count}/{total} bài hát của Album!',
     playlistCreated: 'Đã tạo playlist thành công!',
+    playlistUpdatedSuccess: 'Đã cập nhật thông tin playlist thành công!',
+    playlistRenamedSuccess: 'Đã đổi tên playlist thành công!',
     tracksAddedToPlaylist: 'Đã thêm {count} bài hát vào playlist!',
     connectingStream: 'Đang kết nối luồng phát...',
     setLibraryFirst: 'Vui lòng vào Cài đặt để thiết lập Thư viện gốc trước khi tải!',
@@ -317,14 +427,16 @@ export const vi: TranslationDictionary = {
     addedToPlaylist: 'Đã thêm vào playlist "{name}"!',
     removedFromPlaylist: 'Đã xóa bài hát khỏi playlist!',
     movedToTrash: 'Đã chuyển "{title}" vào Thùng rác!',
-    playlistDeleted: 'Đã xóa playlist "{name}"!',
+    deletedPermanently: 'Đã xóa vĩnh viễn "{title}" khỏi máy tính!',
+    playlistDeleted: 'Đã xóa vĩnh viễn playlist "{name}"!',
     deleteTrackError: 'Lỗi khi xóa bài hát: ',
     deletePlaylistError: 'Lỗi khi xóa playlist: ',
     downloadProgress: 'Đang tải...',
     librarySavedSuccess: 'Đã lưu thư mục thư viện gốc!',
-    autoCategorizeConfirm: 'Hành động này sẽ tự động tạo thư mục và di chuyển các bài hát có chung Album vào đó. Bạn có chắc chắn?',
+    autoCategorizeConfirm: 'Hành động này sẽ tự động tạo thư mục và di chuyển các bài hát có chung Album vào đó. Bạn có chắc chắn muốn thực hiện?',
     autoCategorizeSuccess: 'Đã di chuyển thành công {count} bài hát vào các Playlist Album!',
     coverUpdatedSuccess: 'Đã cập nhật ảnh bìa từ bài hát đầu tiên thành công!',
-    coverChangeSuccess: 'Đã thay đổi ảnh bìa thành công! Đang tải lại thư viện...'
+    coverChangeSuccess: 'Đã thay đổi ảnh bìa thành công! Đang tải lại thư viện...',
+    coverChangedSuccess: 'Đã cập nhật ảnh bìa playlist!'
   }
 }

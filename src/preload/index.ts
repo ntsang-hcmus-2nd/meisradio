@@ -13,10 +13,25 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   downloadMultipleFiles: (files: any[], existingTracks?: any[]) => ipcRenderer.invoke('music:downloadMultipleFiles', files, existingTracks),
   fetchDriveFiles: (folderId: string) => ipcRenderer.invoke('music:fetchDriveFiles', folderId),
   setLibraryFolder: () => ipcRenderer.invoke('music:setLibraryFolder'),
+  addLibraryFolder: () => ipcRenderer.invoke('music:addLibraryFolder'),
+  removeLibraryFolder: (folderPath: string) => ipcRenderer.invoke('music:removeLibraryFolder', folderPath),
+  updateLibraryFolder: (oldPath: string) => ipcRenderer.invoke('music:updateLibraryFolder', oldPath),
   getLibrary: (forceRefresh?: boolean) => ipcRenderer.invoke('music:getLibrary', forceRefresh),
   renamePlaylist: (oldName: string, newName: string) => ipcRenderer.invoke('music:renamePlaylist', oldName, newName),
   setPlaylistThumbnail: (playlistName: string) => ipcRenderer.invoke('music:setPlaylistThumbnail', playlistName),
   autoGeneratePlaylists: () => ipcRenderer.invoke('music:autoGeneratePlaylists'),
+  
+  // User Playlists (Virtual, Zero disk duplication)
+  getUserPlaylists: () => ipcRenderer.invoke('music:getUserPlaylists'),
+  createUserPlaylist: (name: string, description?: string, thumbnail?: string | null) => ipcRenderer.invoke('music:createUserPlaylist', name, description, thumbnail),
+  deleteUserPlaylist: (playlistId: string) => ipcRenderer.invoke('music:deleteUserPlaylist', playlistId),
+  renameUserPlaylist: (playlistId: string, newName: string) => ipcRenderer.invoke('music:renameUserPlaylist', playlistId, newName),
+  updateUserPlaylist: (playlistId: string, updates: { name?: string; description?: string; thumbnail?: string | null; customImagePath?: string }) => ipcRenderer.invoke('music:updateUserPlaylist', playlistId, updates),
+  pickImage: () => ipcRenderer.invoke('music:pickImage'),
+  setUserPlaylistThumbnail: (playlistId: string, customPath?: string) => ipcRenderer.invoke('music:setUserPlaylistThumbnail', playlistId, customPath),
+  addTracksToUserPlaylist: (playlistId: string, trackPaths: string[]) => ipcRenderer.invoke('music:addTracksToUserPlaylist', playlistId, trackPaths),
+  removeTrackFromUserPlaylist: (playlistId: string, trackPath: string) => ipcRenderer.invoke('music:removeTrackFromUserPlaylist', playlistId, trackPath),
+  reorderUserPlaylistTracks: (playlistId: string, trackIds: string[]) => ipcRenderer.invoke('music:reorderUserPlaylistTracks', playlistId, trackIds),
   readLrcFile: (filePath: string) => ipcRenderer.invoke('music:read-lyrics', filePath),
   readAudioBuffer: (filePath: string) => ipcRenderer.invoke('music:readAudioBuffer', filePath),
   extractPlaylistThumbnail: (playlistName: string) => ipcRenderer.invoke('music:extractPlaylistThumbnail', playlistName),
@@ -70,20 +85,39 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
   
   onMpvTime: (callback: (val: number) => void) => {
-    ipcRenderer.removeAllListeners('mpv:time')
-    ipcRenderer.on('mpv:time', (_e, val) => callback(val))
+    const handler = (_e: any, val: number) => callback(val)
+    ipcRenderer.on('mpv:time', handler)
+    return () => ipcRenderer.removeListener('mpv:time', handler)
   },
   onMpvDuration: (callback: (val: number) => void) => {
-    ipcRenderer.removeAllListeners('mpv:duration')
-    ipcRenderer.on('mpv:duration', (_e, val) => callback(val))
+    const handler = (_e: any, val: number) => callback(val)
+    ipcRenderer.on('mpv:duration', handler)
+    return () => ipcRenderer.removeListener('mpv:duration', handler)
   },
   onMpvPaused: (callback: (val: boolean) => void) => {
-    ipcRenderer.removeAllListeners('mpv:paused')
-    ipcRenderer.on('mpv:paused', (_e, val) => callback(val))
+    const handler = (_e: any, val: boolean) => callback(val)
+    ipcRenderer.on('mpv:paused', handler)
+    return () => ipcRenderer.removeListener('mpv:paused', handler)
   },
   onMpvEnded: (callback: () => void) => {
-    ipcRenderer.removeAllListeners('mpv:ended')
-    ipcRenderer.on('mpv:ended', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('mpv:ended', handler)
+    return () => ipcRenderer.removeListener('mpv:ended', handler)
+  },
+  getThemeColorsCache: () => ipcRenderer.invoke('music:getThemeColorsCache'),
+  cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),
+  clearMemoryCache: () => ipcRenderer.invoke('app:clearMemoryCache'),
+  onDeepClean: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('app:onDeepClean')
+    ipcRenderer.on('app:onDeepClean', () => callback())
+  },
+  onNavBack: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('nav:back')
+    ipcRenderer.on('nav:back', () => callback())
+  },
+  onNavForward: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('nav:forward')
+    ipcRenderer.on('nav:forward', () => callback())
   },
 }
 

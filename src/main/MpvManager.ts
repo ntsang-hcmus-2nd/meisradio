@@ -3,7 +3,6 @@ import net from 'net'
 import path from 'path'
 import fs from 'fs'
 import { app } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import { EventEmitter } from 'events'
 
 const getPipeName = () => {
@@ -30,9 +29,25 @@ export class MpvInstance extends EventEmitter {
 
   public async init(audioDevice?: string, bitPerfect: boolean = false) {
     const binName = process.platform === 'win32' ? 'mpv.exe' : 'mpv'
-    const binPath = is.dev
-      ? path.join(app.getAppPath(), 'resources', 'bin', binName)
-      : path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'resources', 'bin', binName)
+    const candidateDirs = [
+      path.join(process.resourcesPath, 'bin'),
+      path.join(process.resourcesPath, 'resources', 'bin'),
+      path.join(app.getAppPath(), 'resources', 'bin'),
+      path.join(process.cwd(), 'resources', 'bin'),
+      path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'resources', 'bin'),
+      path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'bin'),
+      path.join(path.dirname(app.getPath('exe')), 'resources', 'bin'),
+      path.join(path.dirname(app.getPath('exe')), 'bin')
+    ]
+
+    let binPath = path.join(app.getAppPath(), 'resources', 'bin', binName)
+    for (const dir of candidateDirs) {
+      const candidate = path.join(dir, binName)
+      if (fs.existsSync(candidate)) {
+        binPath = candidate
+        break
+      }
+    }
 
     if (!fs.existsSync(binPath)) {
       throw new Error(`MPV binary not found at ${binPath}`)
@@ -43,77 +58,119 @@ export class MpvInstance extends EventEmitter {
       '--keep-open=yes',
       `--input-ipc-server=${this.pipeName}`,
       '--no-video',
-      '--hwdec=auto',
+      '--gapless-audio=yes',
       '--msg-level=all=no'
     ]
 
-    // WASAPI/ASIO Exclusive
+    // WASAPI Exclusive Bit-perfect
     if (bitPerfect) {
-      if (audioDevice) {
+      if (process.platform === 'win32') {
+        args.push('--ao=wasapi')
         args.push('--audio-exclusive=yes')
+      }
+      if (audioDevice && audioDevice !== 'default' && audioDevice.startsWith('wasapi/')) {
         args.push(`--audio-device=${audioDevice}`)
       } else {
-        // Default to exclusive on Windows if nothing specified to ensure bit-perfect
-        if (process.platform === 'win32') {
-          args.push('--audio-exclusive=yes')
-          args.push('--audio-device=wasapi')
-        }
+        args.push('--audio-device=auto')
       }
     } else {
-      if (audioDevice) {
+      if (audioDevice && audioDevice !== 'default' && audioDevice.startsWith('wasapi/')) {
         args.push(`--audio-device=${audioDevice}`)
       }
     }
 
     this.mpvProcess = spawn(binPath, args, { stdio: 'ignore' })
 
-    // Wait for pipe to be ready
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    // Wait for pipe to be ready with retry
     await this.connectSocket()
   }
 
-  private connectSocket(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.socket = net.createConnection(this.pipeName)
-      
-      this.socket.on('connect', () => {
-        this.isConnected = true
-        // Observe properties
-        this.sendCommand(['observe_property', 1, 'time-pos'])
-        this.sendCommand(['observe_property', 2, 'eof-reached'])
-        this.sendCommand(['observe_property', 3, 'pause'])
-        this.sendCommand(['observe_property', 4, 'duration'])
-        resolve()
-      })
+  private commandQueue: any[][] = []
 
-      this.socket.on('data', (data) => {
-        this.buffer += data.toString()
-        let parts = this.buffer.split('\n')
-        this.buffer = parts.pop() || ''
-        
-        for (const part of parts) {
-          if (!part.trim()) continue
-          try {
-            const msg = JSON.parse(part)
-            if (msg.event === 'property-change') {
-              if (msg.name === 'time-pos') this.emit('time-pos', msg.data)
-              if (msg.name === 'eof-reached' && msg.data === true) this.emit('eof')
-              if (msg.name === 'pause') this.emit('pause', msg.data)
-              if (msg.name === 'duration') this.emit('duration', msg.data)
+  private async connectSocket(): Promise<void> {
+    const maxRetries = 15
+    const retryDelay = 150
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const socket = net.createConnection(this.pipeName)
+
+          const onConnect = () => {
+            this.socket = socket
+            this.isConnected = true
+            socket.removeListener('error', onError)
+
+            // Setup persistent handlers
+            socket.on('data', (data) => {
+              this.buffer += data.toString()
+              let parts = this.buffer.split('\n')
+              this.buffer = parts.pop() || ''
+              
+              for (const part of parts) {
+                if (!part.trim()) continue
+                try {
+                  const msg = JSON.parse(part)
+                  if (msg.event === 'property-change') {
+                    if (msg.name === 'time-pos') this.emit('time-pos', msg.data)
+                    if (msg.name === 'eof-reached' && msg.data === true) this.emit('eof')
+                    if (msg.name === 'pause') this.emit('pause', msg.data)
+                    if (msg.name === 'duration') this.emit('duration', msg.data)
+                  }
+                } catch (e) {}
+              }
+            })
+
+            socket.on('error', (err) => {
+              console.warn('MPV Socket runtime warning:', err.message)
+            })
+
+            socket.on('close', () => {
+              this.isConnected = false
+            })
+
+            // Observe properties
+            this.sendCommand(['observe_property', 1, 'time-pos'])
+            this.sendCommand(['observe_property', 2, 'eof-reached'])
+            this.sendCommand(['observe_property', 3, 'pause'])
+            this.sendCommand(['observe_property', 4, 'duration'])
+
+            // Flush queued commands
+            while (this.commandQueue.length > 0) {
+              const cmd = this.commandQueue.shift()
+              if (cmd) {
+                const msg = { command: cmd, request_id: this.reqId++ }
+                socket.write(JSON.stringify(msg) + '\n')
+              }
             }
-          } catch (e) {}
-        }
-      })
 
-      this.socket.on('error', (err) => {
-        console.error('MPV Socket error:', err)
-        reject(err)
-      })
-    })
+            resolve()
+          }
+
+          const onError = (err: Error) => {
+            socket.destroy()
+            reject(err)
+          }
+
+          socket.once('connect', onConnect)
+          socket.once('error', onError)
+        })
+        return
+      } catch (err) {
+        if (attempt === maxRetries) {
+          console.error(`Failed to connect to MPV pipe after ${maxRetries} attempts:`, err)
+          throw err
+        }
+        await new Promise((r) => setTimeout(r, retryDelay))
+      }
+    }
   }
 
   public sendCommand(cmd: any[]) {
-    if (!this.isConnected || !this.socket) return
+    if (!this.isConnected || !this.socket) {
+      this.commandQueue.push(cmd)
+      return
+    }
     const msg = { command: cmd, request_id: this.reqId++ }
     this.socket.write(JSON.stringify(msg) + '\n')
   }
@@ -162,11 +219,18 @@ export class MpvInstance extends EventEmitter {
 
   public kill() {
     if (this.socket) {
-      this.socket.destroy()
+      try {
+        this.socket.destroy()
+      } catch (e) {}
+      this.socket = null
     }
     if (this.mpvProcess) {
-      this.mpvProcess.kill()
+      try {
+        this.mpvProcess.kill()
+      } catch (e) {}
+      this.mpvProcess = null
     }
+    this.isConnected = false
   }
 }
 
@@ -177,19 +241,29 @@ export class MpvManager extends EventEmitter {
 
   private currentAudioDevice?: string
   private currentBitPerfect: boolean = false
+  private currentVolume: number = 1.0
 
   public async init(audioDevice?: string, bitPerfect: boolean = false) {
     if (this.activeInstance) {
       this.activeInstance.kill()
+      this.activeInstance = null
     }
     if (this.nextInstance) {
       this.nextInstance.kill()
+      this.nextInstance = null
     }
 
     this.currentAudioDevice = audioDevice
     this.currentBitPerfect = bitPerfect
+
+    if (!bitPerfect) {
+      // Khi tắt Bit-perfect, giải phóng hoàn toàn tiến trình MPV và khóa phần cứng WASAPI
+      return
+    }
+
     this.activeInstance = new MpvInstance()
     await this.activeInstance.init(audioDevice, bitPerfect)
+    this.activeInstance.setVolume(this.currentVolume)
     
     this.setupListeners(this.activeInstance)
   }

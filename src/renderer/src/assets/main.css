@@ -84,7 +84,35 @@ body {
   overflow: hidden;
 }
 
-/* Lớp phủ background */
+/* Lớp phủ background container & layers */
+.custom-bg-container {
+  position: fixed;
+  top: -50px;
+  left: -50px;
+  width: calc(100vw + 100px);
+  height: calc(100vh + 100px);
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.custom-bg-layer {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(var(--bg-blur));
+  transform: translateZ(0);
+  image-rendering: -webkit-optimize-contrast;
+  will-change: opacity;
+}
+
+/* Chế độ Standard: Transition mượt mà 0.75s chống giật/stutter khi chuyển bài */
+.custom-bg-layer.transition-all {
+  transition: opacity 0.75s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .custom-bg {
   position: fixed;
   top: -50px;
@@ -94,8 +122,57 @@ body {
   background-image: var(--bg-image);
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
   opacity: var(--bg-opacity);
   filter: blur(var(--bg-blur));
   z-index: -1;
   pointer-events: none;
+  transform: translateZ(0);
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* ==========================================================================
+   PERFORMANCE MODES (TIẾT KIỆM & CỐT LÕI)
+   ========================================================================== */
+
+/* Chế độ Tiết kiệm (Lite Mode): Tắt backdrop-blur nặng để giảm tải GPU iGPU/Laptop */
+[data-mode="lite"] *,
+[data-mode="lite"] ::before,
+[data-mode="lite"] ::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Chế độ Cốt lõi (Core Mode): Loại bỏ toàn bộ Blur, Shadow, Transitions, Animations (0ms Latency) */
+[data-mode="core"] *,
+[data-mode="core"] ::before,
+[data-mode="core"] ::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+[data-mode="core"] body {
+  background-color: #121212 !important;
+}
+
+/* ==========================================================================
+   OFF-SCREEN RENDERING OPTIMIZATION (RAM & GPU SAVING)
+   ========================================================================== */
+
+/* Thẻ Card (Grid): Chỉ giải mã hình ảnh và render layout khi cuộn tới */
+.track-card-optimized {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 200px;
+  contain: layout style paint;
+}
+
+/* Hàng danh sách (Row/Compact): Bỏ qua tính toán reflow ngoài tầm nhìn */
+.track-row-optimized {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 48px;
+  contain: layout style paint;
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Home, Library, ListMusic, Cloud, Settings, ChevronDown, ChevronRight } from 'lucide-react'
+import { Home, Library, Disc, Mic2, Tag, ListPlus, Cloud, Settings, ChevronDown, ChevronRight } from 'lucide-react'
 import logoImg from '../../../../resources/HoT_Chibi_Icon.png'
 import { useTranslation } from '../locales'
 
@@ -10,6 +10,9 @@ interface SidebarProps {
   setSearchInput: (q: string) => void
   setActiveAlbum: (a: any) => void
   setActivePlaylist: (p: any) => void
+  setActiveArtist?: (a: any) => void
+  setActiveGenre?: (g: any) => void
+  setActiveUserPlaylist?: (p: any) => void
   fetchDashboard: () => void
   fetchScDashboard?: () => void
   isCore: boolean // <-- MỚI: Nhận trạng thái Core Mode
@@ -17,16 +20,18 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   activeView, setActiveView, setSearchQuery, setSearchInput, 
-  setActiveAlbum, setActivePlaylist, fetchDashboard, fetchScDashboard, isCore 
+  setActiveAlbum, setActivePlaylist, setActiveArtist, setActiveGenre, setActiveUserPlaylist,
+  fetchDashboard, fetchScDashboard, isCore 
 }) => {
   const { t } = useTranslation()
   const isHomeActive = activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud'
   const [isHomeExpanded, setIsHomeExpanded] = useState<boolean>(true)
 
   const handleHomeParentClick = () => {
-    setIsHomeExpanded(prev => !prev)
-    if (!isHomeActive) {
-      handleNavClick('home-ytm')
+    if (activeView !== 'home') {
+      handleNavClick('home')
+    } else {
+      setIsHomeExpanded(prev => !prev)
     }
   }
 
@@ -34,7 +39,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setActiveView(view)
     setSearchQuery('')
     setSearchInput('')
-    if (view === 'home' || view === 'home-ytm') { 
+    if (view === 'home') {
+      setActiveAlbum(null)
+    }
+    if (view === 'home-ytm') { 
       setActiveAlbum(null)
       fetchDashboard() 
     }
@@ -43,6 +51,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (fetchScDashboard) fetchScDashboard()
     }
     if (view === 'playlists') setActivePlaylist(null)
+    if (setActiveArtist && view === 'artists') setActiveArtist(null)
+    if (setActiveGenre && view === 'genres') setActiveGenre(null)
+    if (setActiveUserPlaylist && view === 'user-playlists') setActiveUserPlaylist(null)
   }
 
   return (
@@ -56,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <p className="text-xs font-semibold text-theme-30 tracking-widest uppercase mb-3">{t('sidebar.library')}</p>
             <ul className="space-y-1">
-              {!isCore && (
+              {!isCore ? (
                 <li className="space-y-1">
                   <div 
                     onClick={handleHomeParentClick} 
@@ -68,16 +79,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <Home size={18} /> 
                       <span>{t('sidebar.home')}</span>
                     </div>
-                    {isHomeExpanded ? <ChevronDown size={15} className="text-zinc-500" /> : <ChevronRight size={15} className="text-zinc-500" />}
+                    <button 
+                      type="button" 
+                      onClick={(e) => { e.stopPropagation(); setIsHomeExpanded(prev => !prev); }} 
+                      className="p-1 hover:text-white transition"
+                    >
+                      {isHomeExpanded ? <ChevronDown size={15} className="text-zinc-500 hover:text-zinc-300" /> : <ChevronRight size={15} className="text-zinc-500 hover:text-zinc-300" />}
+                    </button>
                   </div>
 
-                  {/* Mục con mở rộng: YouTube Music & SoundCloud */}
+                  {/* Mục con mở rộng: Dashboard, YouTube Music & SoundCloud */}
                   {isHomeExpanded && (
                     <div className="pl-6 space-y-1 pt-1 animate-fade-in">
                       <div 
+                        onClick={() => handleNavClick('home')}
+                        className={`flex items-center gap-2.5 cursor-pointer py-1.5 px-2.5 rounded-md text-xs font-medium transition-all ${
+                          activeView === 'home'
+                            ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30' 
+                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-theme-10 shrink-0"></span>
+                        <span className="truncate">{t('sidebar.dashboard')}</span>
+                      </div>
+
+                      <div 
                         onClick={() => handleNavClick('home-ytm')}
                         className={`flex items-center gap-2.5 cursor-pointer py-1.5 px-2.5 rounded-md text-xs font-medium transition-all ${
-                          (activeView === 'home' || activeView === 'home-ytm')
+                          activeView === 'home-ytm'
                             ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
                             : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
                         }`}
@@ -100,9 +129,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   )}
                 </li>
+              ) : (
+                <li onClick={() => handleNavClick('home')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'home' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}>
+                  <Home size={18} /> {t('sidebar.home')}
+                </li>
               )}
               <li onClick={() => handleNavClick('songs')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'songs' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Library size={18} /> {t('sidebar.songList')}</li>
-              <li onClick={() => handleNavClick('playlists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'playlists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><ListMusic size={18} /> {t('sidebar.myPlaylists')}</li>
+              <li onClick={() => handleNavClick('playlists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'playlists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Disc size={18} /> {t('sidebar.myPlaylists')}</li>
+              <li onClick={() => handleNavClick('artists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'artists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Mic2 size={18} /> {t('sidebar.artists')}</li>
+              <li onClick={() => handleNavClick('genres')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'genres' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Tag size={18} /> {t('sidebar.genres')}</li>
+              <li onClick={() => handleNavClick('user-playlists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'user-playlists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><ListPlus size={18} /> {t('sidebar.userPlaylists')}</li>
               
               {/* Ẩn tab Stream trực tuyến nếu ở chế độ Core */}
             </ul>

@@ -6,7 +6,9 @@ import {
   ListMusic, Settings, FolderPlus, Download, Wifi, Link, Edit2, Image as ImageIcon,
   Sparkles, Plus, Trash2, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown,
   Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw, PictureInPicture2,
-  Home, ArrowLeft, Radio, BarChart2,
+  Home, ArrowLeft, Radio, BarChart2, LayoutGrid, Rows3, Disc, Tag, Music,
+  Folder, FolderOpen, MoreVertical, ChevronRight, ChevronDown, ChevronUp, Layers, ListPlus,
+  Leaf, Cpu, Zap, BatteryCharging, History, Compass
 } from 'lucide-react'
 import { TableVirtuoso } from 'react-virtuoso'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -17,10 +19,12 @@ import meiSingingPlaceholder from '../../../resources/Mei singing.webp'
 import { CustomNumberInput } from './components/CustomNumberInput'
 import { CustomSelect } from './components/CustomSelect'
 import { PlaylistRenameModal } from './components/modals/PlaylistRenameModal'
+import { EditPlaylistModal } from './components/modals/EditPlaylistModal'
 import { CloudActionModal } from './components/modals/CloudActionModal'
 import { TagEditorModal } from './components/modals/TagEditorModal'
 import { CreatePlaylistModal } from './components/modals/CreatePlaylistModal'
 import { AddSongsModal } from './components/modals/AddSongsModal'
+import { CustomDialogModal, DialogOptions } from './components/modals/CustomDialogModal'
 import { PlayerProgressBar } from './components/PlayerProgressBar'
 import { Sidebar } from './components/Sidebar'
 import { EQPanel } from './components/EQPanel'
@@ -28,7 +32,7 @@ import { VolumeSlider } from './components/VolumeSlider'
 import { SpectrogramModal } from './components/SpectrogramModal'
 import { ContextMenu, ContextMenuItem } from './components/ContextMenu'
 
-import { extractThemeColors } from './utils/colorUtils'
+import { extractThemeColors, initThemeColorCache } from './utils/colorUtils'
 
 // --- HELPER FUNCTIONS & INTERFACES (OUTSIDE COMPONENT) ---
 const formatDuration = (seconds: number) => {
@@ -58,38 +62,60 @@ interface LyricLine {
 // Chuẩn hóa đường dẫn hình ảnh cho Background
 const normalizeImagePath = (input: string): string => {
   if (!input) return ''
-  let trimmed = input.trim().replace(/^["']|["']$/g, '')
-  if (/^[a-zA-Z]:[/\\]/.test(trimmed)) {
-    const forwardSlashes = trimmed.replace(/\\/g, '/')
-    return 'file:///' + encodeURI(forwardSlashes).replace(/#/g, '%23').replace(/\?/g, '%3F')
-  }
-  return trimmed
+  let cleaned = input.trim()
+  if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) return cleaned
+  cleaned = cleaned.replace(/^file:\/\/\/?/, '')
+  if (navigator.userAgent.includes('Windows')) cleaned = decodeURIComponent(cleaned).replace(/\\/g, '/')
+  return `file:///${cleaned}`
 }
 
-// Hàm phân tích màu chủ đạo bằng Canvas
+// Bộ nhớ đệm màu chủ đạo trong RAM (LRU Cache tối đa 50 bài hát gần nhất)
+const MAX_DOMINANT_CACHE = 50
+const dominantColorCache = new Map<string, string>()
+
+const saveDominantColorToCache = (key: string, val: string) => {
+  if (dominantColorCache.size >= MAX_DOMINANT_CACHE) {
+    const oldestKey = dominantColorCache.keys().next().value
+    if (oldestKey) dominantColorCache.delete(oldestKey)
+  }
+  dominantColorCache.set(key, val)
+}
+
+// Hàm phân tích màu chủ đạo bằng Canvas (Tối ưu Cache)
 const getDominantColor = (imageSrc: string, callback: (color: string) => void) => {
+  if (!imageSrc) return
+  if (dominantColorCache.has(imageSrc)) {
+    const cached = dominantColorCache.get(imageSrc)!
+    dominantColorCache.delete(imageSrc)
+    dominantColorCache.set(imageSrc, cached) // Đưa lên đầu danh sách LRU
+    callback(cached)
+    return
+  }
   const img = new Image()
-  img.crossOrigin = 'Anonymous'
+  if (imageSrc.startsWith('http://') || imageSrc.startsWith('https://')) {
+    img.crossOrigin = 'Anonymous'
+  }
   img.onload = () => {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return
     
-    // Tối ưu CPU/RAM: Thu nhỏ ảnh xuống 128x128
-    canvas.width = 128
-    canvas.height = 128
-    ctx.drawImage(img, 0, 0, 128, 128)
+    // Tối ưu CPU/RAM: Thu nhỏ ảnh xuống 64x64 để quét siêu tốc
+    canvas.width = 64
+    canvas.height = 64
+    ctx.drawImage(img, 0, 0, 64, 64)
     
-    const data = ctx.getImageData(0, 0, 128, 128).data
+    const data = ctx.getImageData(0, 0, 64, 64).data
     let r = 0, g = 0, b = 0, count = 0
-    // Lấy mẫu (sample) để tính màu trung bình
     for (let i = 0; i < data.length; i += 16) {
       r += data[i]; g += data[i + 1]; b += data[i + 2]
       count++
     }
     if (count === 0) count = 1
     r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count)
-    callback(`rgba(${Math.max(r-30, 0)}, ${Math.max(g-30, 0)}, ${Math.max(b-30, 0)}, 0.4)`)
+    const colorStr = `rgba(${Math.max(r-30, 0)}, ${Math.max(g-30, 0)}, ${Math.max(b-30, 0)}, 0.4)`
+    saveDominantColorToCache(imageSrc, colorStr)
+    callback(colorStr)
   }
   img.src = imageSrc
 }
@@ -125,6 +151,108 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
       <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
       <td onContextMenu={(e) => onContextMenu?.(track, e)} className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
     </>
+  )
+});
+
+// Chế độ xem Lưới thẻ bìa (Grid View)
+const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor }: any) => {
+  return (
+    <div className="flex-1 overflow-y-auto pr-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-1">
+        {tracks.map((track: any, index: number) => {
+          const isThisTrackPlaying = currentTrack?.id === track.id
+          return (
+            <div 
+              key={track.id || index}
+              onClick={() => handleRowClick(track, tracks)}
+              onContextMenu={(e) => onContextMenu?.(track, e)}
+              className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between track-card-optimized"
+            >
+              <div className="aspect-square bg-theme-30/80 rounded-lg mb-3 overflow-hidden relative shadow-md">
+                {(!isLite && track.coverArt) ? (
+                  <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
+                    <Music size={32} />
+                  </div>
+                )}
+                <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${isThisTrackPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                  <div className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition">
+                    {isThisTrackPlaying && isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+                  </div>
+                </div>
+                {track.format && (
+                  <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-black/60 backdrop-blur-md text-zinc-300 uppercase">
+                    {track.format}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h4 className={`font-semibold text-sm truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'} transition-colors`}>
+                  {track.title}
+                </h4>
+                <p className="text-xs text-zinc-400 truncate mt-0.5">{track.artist}</p>
+                <div className="flex items-center justify-between text-[11px] text-zinc-500 mt-2 pt-2 border-t border-theme-30/30">
+                  <span className="truncate max-w-[90px]">{track.album || 'Unknown'}</span>
+                  <span>{formatDuration(track.duration)}</span>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+});
+
+// Chế độ xem Danh sách thu gọn (Compact View)
+const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor }: any) => {
+  return (
+    <div className="flex-1 overflow-y-auto divide-y divide-theme-30/20 bg-theme-60/20 rounded-lg border border-theme-30/50">
+      {tracks.map((track: any, index: number) => {
+        const isThisTrackPlaying = currentTrack?.id === track.id
+        return (
+          <div 
+            key={track.id || index}
+            onClick={() => handleRowClick(track, tracks)}
+            onContextMenu={(e) => onContextMenu?.(track, e)}
+            className={`flex items-center gap-3 px-3 py-2 text-xs transition cursor-pointer group track-row-optimized ${isThisTrackPlaying ? 'bg-theme-10/15' : 'hover:bg-white/5'}`}
+          >
+            <span className="w-6 text-center text-zinc-500 font-mono text-[11px] group-hover:text-white">
+              {isThisTrackPlaying && isPlaying ? <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" /> : index + 1}
+            </span>
+            <div className="w-7 h-7 bg-theme-30 rounded overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+              {(!isLite && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <Music size={12} className="text-zinc-500" />}
+            </div>
+            <div className="flex-1 min-w-0 flex items-center gap-3">
+              <span className={`font-medium truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>
+                {track.title}
+              </span>
+              <span className="text-zinc-400 truncate text-[11px]">
+                • {track.artist}
+              </span>
+            </div>
+            <span className="text-zinc-500 truncate max-w-[140px] hidden md:block">
+              {track.album || ''}
+            </span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-30/80 text-zinc-300 uppercase font-mono">
+              {track.format || 'MP3'}
+            </span>
+            <span className="w-12 text-right text-zinc-400 font-mono text-[11px]">
+              {formatDuration(track.duration)}
+            </span>
+            {!track.isCloud && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); openTagEditor(track, e); }}
+                className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-theme-10 p-1 transition"
+              >
+                <Edit2 size={13} />
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 });
 
@@ -200,9 +328,13 @@ export default function App() {
   const [appMode, setAppMode] = useState<'default' | 'lite' | 'core'>('default')
   const isLite = appMode === 'lite' || appMode === 'core' // Dùng chung cho việc tắt ảnh bìa, màu sắc
   const isCore = appMode === 'core' // Chỉ định cắt luồng mảng Audio và UI mạng
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-mode', appMode)
+  }, [appMode])
   
   // UI & General App States
-  const [activeView, setActiveView] = useState<'home' | 'home-ytm' | 'home-soundcloud' | 'songs' | 'playlists' | 'settings' | 'drive'>('home-ytm')
+  const [activeView, setActiveView] = useState<'home' | 'home-ytm' | 'home-soundcloud' | 'songs' | 'playlists' | 'artists' | 'genres' | 'user-playlists' | 'settings' | 'drive'>('home')
   const [themeColor, setThemeColor] = useState('rgba(39, 39, 42, 0)')
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({message: '', type: 'info', visible: false})
   const [customBgImage, setCustomBgImage] = useState<string | null>(null)
@@ -213,17 +345,42 @@ export default function App() {
   const [isReloading, setIsReloading] = useState(false)
   const [isConfigLoaded, setIsConfigLoaded] = useState(false) // Flag để ngăn ghi đè config
 
+  // Recently Played State (Lưu lịch sử bài hát đã nghe)
+  const [recentlyPlayed, setRecentlyPlayed] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('meis_recent_played')
+      return saved ? JSON.parse(saved) : []
+    } catch (e) {
+      return []
+    }
+  })
+
   // SoundCloud & YTM Auth States
   const [scDashboardData, setScDashboardData] = useState<any[]>([])
   const [isScLoading, setIsScLoading] = useState<boolean>(false)
   const [scUser, setScUser] = useState<any | null>(null)
   const [selectedScGenre, setSelectedScGenre] = useState<string>('all-music')
   const [isYtmLoggedIn, setIsYtmLoggedIn] = useState<boolean>(false)
+  
   // Library & Search States
   const [libraryPath, setLibraryPath] = useState<string | null>(null)
+  const [libraryPaths, setLibraryPaths] = useState<string[]>([])
   const [libraryTracks, setLibraryTracks] = useState<any[]>([])
   const [playlists, setPlaylists] = useState<any[]>([])
+  const [userPlaylists, setUserPlaylists] = useState<any[]>([])
   const [activePlaylist, setActivePlaylist] = useState<any | null>(null)
+  const [activeUserPlaylist, setActiveUserPlaylist] = useState<any | null>(null)
+  const [activeArtist, setActiveArtist] = useState<any | null>(null)
+  const [activeGenre, setActiveGenre] = useState<any | null>(null)
+  const [viewMode, setViewMode] = useState<'table' | 'grid' | 'compact'>(() => {
+    return (localStorage.getItem('meis_view_mode') as any) || 'table'
+  })
+  const [showCreateUserPlaylistModal, setShowCreateUserPlaylistModal] = useState(false)
+  const [showAddSongsToUserPlaylistModal, setShowAddSongsToUserPlaylistModal] = useState(false)
+  const [editingUserPlaylist, setEditingUserPlaylist] = useState<any | null>(null)
+  const [showEditUserPlaylistModal, setShowEditUserPlaylistModal] = useState(false)
+  const [collapsedArtistLetters, setCollapsedArtistLetters] = useState<Record<string, boolean>>({})
+  
   const [sortField, setSortField] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [searchQuery, setSearchQuery] = useState('')
@@ -292,9 +449,197 @@ export default function App() {
 
   // Tag Editor & Renaming States
   const [editingTrack, setEditingTrack] = useState<any | null>(null)
-  const [editTags, setEditTags] = useState({ title: '', artist: '', album: '', lyrics: '' })
+  const [editTags, setEditTags] = useState({ title: '', artist: '', album: '', genre: '', lyrics: '' })
   const [editImagePath, setEditImagePath] = useState<string | null>(null)
-  const [playlistRename, setPlaylistRename] = useState<{ isOpen: boolean, oldName: string, newName: string }>({ isOpen: false, oldName: '', newName: '' })
+  const [playlistRename, setPlaylistRename] = useState<{ isOpen: boolean, oldName: string, newName: string, id?: string }>({ isOpen: false, oldName: '', newName: '', id: undefined })
+
+  // Smart Autoplay State (Gợi ý thông minh)
+  const [smartAutoplay, setSmartAutoplay] = useState<boolean>(() => {
+    return localStorage.getItem('meis_smart_autoplay') === 'true'
+  })
+  useEffect(() => {
+    localStorage.setItem('meis_smart_autoplay', String(smartAutoplay))
+  }, [smartAutoplay])
+
+  // Custom Dialog Modal State (Hộp thoại xác nhận / cảnh báo đồng bộ giao diện)
+  const [customDialog, setCustomDialog] = useState<DialogOptions | null>(null)
+
+  const showConfirm = (options: {
+    title?: string
+    message: string | React.ReactNode
+    confirmText?: string
+    cancelText?: string
+    danger?: boolean
+    onConfirm: () => void
+    onCancel?: () => void
+  }) => {
+    setCustomDialog({
+      isOpen: true,
+      type: options.danger ? 'danger' : 'confirm',
+      title: options.title,
+      message: options.message,
+      confirmText: options.confirmText,
+      cancelText: options.cancelText,
+      onConfirm: () => {
+        setCustomDialog(null)
+        options.onConfirm()
+      },
+      onCancel: () => {
+        setCustomDialog(null)
+        options.onCancel?.()
+      }
+    })
+  }
+
+  const showAlert = (options: {
+    title?: string
+    message: string | React.ReactNode
+    confirmText?: string
+    onConfirm?: () => void
+  }) => {
+    setCustomDialog({
+      isOpen: true,
+      type: 'alert',
+      title: options.title,
+      message: options.message,
+      confirmText: options.confirmText || 'OK',
+      onConfirm: () => {
+        setCustomDialog(null)
+        options.onConfirm?.()
+      },
+      onCancel: () => {
+        setCustomDialog(null)
+      }
+    })
+  }
+
+  // Navigation History Stack (Quản lý nút chuột 4/5 và điều hướng lùi/tiến)
+  const navHistoryRef = useRef<any[]>([])
+  const navForwardRef = useRef<any[]>([])
+  const isNavigatingRef = useRef(false)
+
+  const captureNavState = () => ({
+    activeView,
+    activeAlbum,
+    activeArtist,
+    activeGenre,
+    activePlaylist,
+    activeUserPlaylist,
+    searchQuery,
+    searchInput
+  })
+
+  useEffect(() => {
+    if (isNavigatingRef.current) {
+      isNavigatingRef.current = false
+      return
+    }
+    const current = captureNavState()
+    const last = navHistoryRef.current[navHistoryRef.current.length - 1]
+    if (!last || last.activeView !== current.activeView || last.activeAlbum !== current.activeAlbum || last.activeArtist !== current.activeArtist || last.activeGenre !== current.activeGenre || last.activePlaylist !== current.activePlaylist || last.activeUserPlaylist !== current.activeUserPlaylist || last.searchQuery !== current.searchQuery) {
+      navHistoryRef.current.push(current)
+      navForwardRef.current = []
+      if (navHistoryRef.current.length > 50) {
+        navHistoryRef.current.shift()
+      }
+    }
+  }, [activeView, activeAlbum, activeArtist, activeGenre, activePlaylist, activeUserPlaylist, searchQuery])
+
+  const handleNavBack = () => {
+    if (activeAlbum) {
+      setActiveAlbum(null)
+      return
+    }
+    if (activeArtist) {
+      setActiveArtist(null)
+      return
+    }
+    if (activeGenre) {
+      setActiveGenre(null)
+      return
+    }
+    if (activePlaylist) {
+      setActivePlaylist(null)
+      return
+    }
+    if (activeUserPlaylist) {
+      setActiveUserPlaylist(null)
+      return
+    }
+    if ((activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud') && (searchQuery || searchInput)) {
+      setSearchInput('')
+      setSearchQuery('')
+      if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard()
+      if (activeView === 'home-soundcloud') fetchScDashboard()
+      return
+    }
+
+    if (navHistoryRef.current.length > 1) {
+      const currentState = navHistoryRef.current.pop()
+      if (currentState) {
+        navForwardRef.current.push(currentState)
+      }
+      const prevState = navHistoryRef.current[navHistoryRef.current.length - 1]
+      if (prevState) {
+        isNavigatingRef.current = true
+        setActiveView(prevState.activeView)
+        setActiveAlbum(prevState.activeAlbum)
+        setActiveArtist(prevState.activeArtist)
+        setActiveGenre(prevState.activeGenre)
+        setActivePlaylist(prevState.activePlaylist)
+        setActiveUserPlaylist(prevState.activeUserPlaylist)
+        setSearchQuery(prevState.searchQuery)
+        setSearchInput(prevState.searchInput)
+      }
+    }
+  }
+
+  const handleNavForward = () => {
+    if (navForwardRef.current.length > 0) {
+      const nextState = navForwardRef.current.pop()
+      if (nextState) {
+        isNavigatingRef.current = true
+        navHistoryRef.current.push(nextState)
+        setActiveView(nextState.activeView)
+        setActiveAlbum(nextState.activeAlbum)
+        setActiveArtist(nextState.activeArtist)
+        setActiveGenre(nextState.activeGenre)
+        setActivePlaylist(nextState.activePlaylist)
+        setActiveUserPlaylist(nextState.activeUserPlaylist)
+        setSearchQuery(nextState.searchQuery)
+        setSearchInput(nextState.searchInput)
+      }
+    }
+  }
+
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleNavBack()
+      } else if (e.button === 4) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleNavForward()
+      }
+    }
+
+    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('auxclick', handleMouseUp)
+
+    // @ts-ignore
+    let unlistenBack = window.api?.onNavBack?.(handleNavBack)
+    // @ts-ignore
+    let unlistenForward = window.api?.onNavForward?.(handleNavForward)
+
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('auxclick', handleMouseUp)
+      if (typeof unlistenBack === 'function') unlistenBack()
+      if (typeof unlistenForward === 'function') unlistenForward()
+    }
+  }, [activeAlbum, activeArtist, activeGenre, activePlaylist, activeUserPlaylist, searchQuery, searchInput, activeView])
 
   // Cloud & Google Drive States
   const [googleDriveApiKey, setGoogleDriveApiKey] = useState('')
@@ -351,7 +696,7 @@ export default function App() {
       showToast(t('toasts.ytmLoginSuccess'), 'success')
       fetchDashboard()
     } else {
-      alert('Error: ' + res.error)
+      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
     }
   }
 
@@ -391,7 +736,7 @@ export default function App() {
       if (res.user) setScUser(res.user)
       fetchScDashboard()
     } else {
-      alert('Error: ' + res.error)
+      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
     }
   }
 
@@ -412,7 +757,7 @@ export default function App() {
       // @ts-ignore
       const res = await window.api.getScPlaylist(item.playlistId)
       if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
-      else { alert(res.error); setActiveAlbum(null); }
+      else { showAlert({ title: t('common.error'), message: res.error }); setActiveAlbum(null); }
       setIsAlbumLoading(false)
     } else {
       const track = {
@@ -453,7 +798,7 @@ export default function App() {
       // @ts-ignore
       const res = await window.api.getYtmArtist(item.playlistId);
       if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks });
-      else { alert(res.error); setActiveAlbum(null); }
+      else { showAlert({ title: t('common.error'), message: res.error }); setActiveAlbum(null); }
       setIsAlbumLoading(false);
 
     } else if (item.playlistId) {
@@ -463,7 +808,7 @@ export default function App() {
       // @ts-ignore
       const res = await window.api.getYtmPlaylist(item.playlistId);
       if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks });
-      else { alert(res.error); setActiveAlbum(null); }
+      else { showAlert({ title: t('common.error'), message: res.error }); setActiveAlbum(null); }
       setIsAlbumLoading(false);
     }
   }
@@ -529,46 +874,49 @@ export default function App() {
         showToast(t('toasts.downloadFinished', { title: item.title }), 'success'); 
         loadLibrary(); 
       } else if (!res.canceled) { 
-        alert('Download Error: ' + res.error); 
+        showAlert({ title: t('common.error'), message: 'Download Error: ' + res.error }); 
       }
 
     } else if (item.playlistId) {
       // 2. TẢI TOÀN BỘ ALBUM / PLAYLIST
-      const confirmDownload = confirm(`Do you want to download all tracks from "${item.title}"? (This might take a while)`);
-      if (!confirmDownload) return;
-      
-      setIsDownloading(true);
-      setDownloadProgress({ current: 0, total: 0, fileName: t('common.loading') });
-      
-      // Lấy danh sách track trong Album
-      // @ts-ignore
-      const res = item.platform === 'soundcloud'
-        ? await window.api.getScPlaylist(item.playlistId)
-        : await window.api.getYtmPlaylist(item.playlistId);
+      showConfirm({
+        title: t('common.confirm'),
+        message: `Do you want to download all tracks from "${item.title}"? (This might take a while)`,
+        onConfirm: async () => {
+          setIsDownloading(true);
+          setDownloadProgress({ current: 0, total: 0, fileName: t('common.loading') });
+          
+          // Lấy danh sách track trong Album
+          // @ts-ignore
+          const res = item.platform === 'soundcloud'
+            ? await window.api.getScPlaylist(item.playlistId)
+            : await window.api.getYtmPlaylist(item.playlistId);
 
-      if (res.success && res.tracks) {
-         const tracks = res.tracks;
-         let successCount = 0;
-         
-         for (let i = 0; i < tracks.length; i++) {
-            setDownloadProgress({ current: i + 1, total: tracks.length, fileName: tracks[i].title });
-            
-            // Ép tên Album cho bài hát để gom chung vào 1 thư mục
-            const trackToDl = { ...tracks[i], album: item.title, platform: item.platform || 'youtube' };
-            
-            // @ts-ignore
-            const dlRes = await window.api.downloadOnline(trackToDl);
-            if (dlRes.success) successCount++;
-         }
-         
-         showToast(t('toasts.albumDownloadFinished', { count: successCount, total: tracks.length }), 'success');
-         loadLibrary();
-      } else {
-         alert('Error getting album tracks: ' + res.error);
-      }
-      
-      setIsDownloading(false);
-      setDownloadProgress(null);
+          if (res.success && res.tracks) {
+             const tracks = res.tracks;
+             let successCount = 0;
+             
+             for (let i = 0; i < tracks.length; i++) {
+                setDownloadProgress({ current: i + 1, total: tracks.length, fileName: tracks[i].title });
+                
+                // Ép tên Album cho bài hát để gom chung vào 1 thư mục
+                const trackToDl = { ...tracks[i], album: item.title, platform: item.platform || 'youtube' };
+                
+                // @ts-ignore
+                const dlRes = await window.api.downloadOnline(trackToDl);
+                if (dlRes.success) successCount++;
+             }
+             
+             showToast(t('toasts.albumDownloadFinished', { count: successCount, total: tracks.length }), 'success');
+             loadLibrary();
+          } else {
+             showAlert({ title: t('common.error'), message: 'Error getting album tracks: ' + res.error });
+          }
+          
+          setIsDownloading(false);
+          setDownloadProgress(null);
+        }
+      });
     }
   }
 
@@ -587,7 +935,7 @@ export default function App() {
       setShowCreateModal(false)
       loadLibrary()
     } else {
-      alert('Error: ' + res.error)
+      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
     }
   }
 
@@ -596,11 +944,13 @@ export default function App() {
     for (const track of tracksToAdd) {
       // Lấy chính xác đường dẫn gốc thực tế của bài hát (loại bỏ tiền tố file:// nếu có)
       const rawTrackPath = track.id || track.filePath
-      
-      // @ts-ignore
-      await window.api.addTrackToPlaylist(activePlaylist.name, rawTrackPath)
+      if (rawTrackPath) {
+        // @ts-ignore
+        await window.api.addTrackToPlaylist(activePlaylist.name, rawTrackPath)
+      }
     }
     showToast(t('toasts.tracksAddedToPlaylist', { count: tracksToAdd.length }), 'success')
+    setShowAddSongsModal(false)
     loadLibrary()
   }
 
@@ -610,8 +960,10 @@ export default function App() {
     const res = await window.api.getLibrary(forceRefresh)
     if (res.success) {
       setLibraryPath(res.libraryPath)
-      setLibraryTracks(res.tracks)
-      setPlaylists(res.playlists)
+      setLibraryPaths(res.libraryPaths || (res.libraryPath ? [res.libraryPath] : []))
+      setLibraryTracks(res.tracks || [])
+      setPlaylists(res.playlists || [])
+      setUserPlaylists(res.userPlaylists || [])
     }
   }
 
@@ -624,6 +976,16 @@ export default function App() {
       }
     }
   }, [playlists]);
+
+  // Tự động đồng bộ Active User Playlist
+  useEffect(() => {
+    if (activeUserPlaylist) {
+      const updated = userPlaylists.find(p => p.id === activeUserPlaylist.id);
+      if (updated) {
+        setActiveUserPlaylist(updated);
+      }
+    }
+  }, [userPlaylists]);
 
   const handleReloadLibrary = async () => {
     setIsReloading(true)
@@ -641,18 +1003,145 @@ export default function App() {
     const res = await window.api.setLibraryFolder()
     if (res.success) {
       showToast(t('toasts.librarySavedSuccess'), 'success')
-      loadLibrary()
+      loadLibrary(true)
+    }
+  }
+
+  const handleAddLibraryFolder = async () => {
+    // @ts-ignore
+    const res = await window.api.addLibraryFolder()
+    if (res && res.success) {
+      setLibraryPaths(res.libraryPaths)
+      showToast(t('toasts.librarySavedSuccess'), 'success')
+      loadLibrary(true)
+    }
+  }
+
+  const handleRemoveLibraryFolder = async (folderPath: string) => {
+    if (libraryPaths.length <= 1) {
+      showConfirm({
+        title: t('common.warning'),
+        message: t('settings.library.removeFolder') + '?',
+        danger: true,
+        onConfirm: async () => {
+          // @ts-ignore
+          const res = await window.api.removeLibraryFolder(folderPath)
+          if (res && res.success) {
+            setLibraryPaths(res.libraryPaths)
+            showToast(t('toasts.removedFromPlaylist'), 'success')
+            loadLibrary(true)
+          }
+        }
+      })
+      return
+    }
+    // @ts-ignore
+    const res = await window.api.removeLibraryFolder(folderPath)
+    if (res && res.success) {
+      setLibraryPaths(res.libraryPaths)
+      showToast(t('toasts.removedFromPlaylist'), 'success')
+      loadLibrary(true)
+    }
+  }
+
+  const handleUpdateLibraryFolder = async (oldPath: string) => {
+    // @ts-ignore
+    const res = await window.api.updateLibraryFolder(oldPath)
+    if (res && res.success) {
+      setLibraryPaths(res.libraryPaths)
+      showToast(t('toasts.librarySavedSuccess'), 'success')
+      loadLibrary(true)
+    }
+  }
+
+  // --- Virtual User Playlists Handlers ---
+  const handleCreateUserPlaylist = async (name: string) => {
+    // @ts-ignore
+    const res = await window.api.createUserPlaylist(name)
+    if (res && res.success) {
+      setUserPlaylists(res.playlists)
+      setShowCreateUserPlaylistModal(false)
+      showToast(t('toasts.playlistCreatedSuccess', { name }), 'success')
+      setActiveUserPlaylist(res.playlist)
+      setActiveView('user-playlists')
+    } else if (res && res.error) {
+      showAlert({ title: t('common.error'), message: res.error })
+    }
+  }
+
+  const handleDeleteUserPlaylist = async (playlist: any) => {
+    showConfirm({
+      title: t('userPlaylistsView.deletePlaylist'),
+      message: t('userPlaylistsView.confirmDelete', { name: playlist.name }),
+      danger: true,
+      onConfirm: async () => {
+        // @ts-ignore
+        const res = await window.api.deleteUserPlaylist(playlist.id)
+        if (res && res.success) {
+          setUserPlaylists(res.playlists)
+          if (activeUserPlaylist?.id === playlist.id) {
+            setActiveUserPlaylist(null)
+          }
+          showToast(t('toasts.playlistDeleted', { name: playlist.name }), 'success')
+        }
+      }
+    })
+  }
+
+  const handleChangeUserPlaylistCover = async (playlistId: string) => {
+    // @ts-ignore
+    const res = await window.api.setUserPlaylistThumbnail(playlistId)
+    if (res && res.success) {
+      setUserPlaylists(res.playlists)
+      if (activeUserPlaylist && activeUserPlaylist.id === playlistId && res.playlist) {
+        setActiveUserPlaylist(res.playlist)
+      }
+      showToast(t('toasts.coverChangedSuccess'), 'success')
+    }
+  }
+
+  const handleSaveEditUserPlaylist = async (
+    playlistId: string, 
+    updates: { name: string; description: string; thumbnail?: string | null; customImagePath?: string }
+  ) => {
+    // @ts-ignore
+    const res = await window.api.updateUserPlaylist(playlistId, updates)
+    if (res && res.success) {
+      setUserPlaylists(res.playlists)
+      if (activeUserPlaylist && activeUserPlaylist.id === playlistId) {
+        setActiveUserPlaylist(res.playlist)
+      }
+      showToast(t('toasts.playlistUpdatedSuccess'), 'success')
+    } else {
+      showAlert({ title: t('common.error'), message: res?.error || 'Lỗi cập nhật playlist' })
+    }
+  }
+
+  const handleAddSongsToUserPlaylist = async (selectedTracks: any[]) => {
+    if (!activeUserPlaylist) return
+    const trackPaths = selectedTracks.map(t => t.id || t.filePath)
+    // @ts-ignore
+    const res = await window.api.addTracksToUserPlaylist(activeUserPlaylist.id, trackPaths)
+    if (res && res.success) {
+      setUserPlaylists(res.playlists)
+      setShowAddSongsToUserPlaylistModal(false)
+      showToast(t('toasts.tracksAddedToPlaylist', { count: selectedTracks.length }), 'success')
     }
   }
 
   const handleAutoGeneratePlaylists = async () => {
-    if (!confirm(t('toasts.autoCategorizeConfirm'))) return
-    // @ts-ignore
-    const res = await window.api.autoGeneratePlaylists()
-    if (res.success) {
-      showToast(t('toasts.autoCategorizeSuccess', { count: res.movedCount }), 'success')
-      loadLibrary()
-    }
+    showConfirm({
+      title: t('settings.library.autoCategorize'),
+      message: t('toasts.autoCategorizeConfirm'),
+      onConfirm: async () => {
+        // @ts-ignore
+        const res = await window.api.autoGeneratePlaylists()
+        if (res.success) {
+          showToast(t('toasts.autoCategorizeSuccess', { count: res.movedCount }), 'success')
+          loadLibrary()
+        }
+      }
+    })
   }
 
   const handleImportFiles = async () => {
@@ -665,22 +1154,34 @@ export default function App() {
         loadLibrary()
       }
     } else if (res && res.error) {
-      alert(res.error)
+      showAlert({ title: t('common.error'), message: res.error })
     }
   }
 
   const handleRenameSubmit = async () => {
     if (!playlistRename.newName || playlistRename.newName === playlistRename.oldName) {
-      setPlaylistRename({ isOpen: false, oldName: '', newName: '' })
+      setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
       return
     }
-    // @ts-ignore
-    const res = await window.api.renamePlaylist(playlistRename.oldName, playlistRename.newName)
-    if (res.success) {
-      setPlaylistRename({ isOpen: false, oldName: '', newName: '' })
-      loadLibrary()
+    if (playlistRename.id) {
+      // @ts-ignore
+      const res = await window.api.renameUserPlaylist(playlistRename.id, playlistRename.newName.trim())
+      if (res && res.success) {
+        setUserPlaylists(res.playlists)
+        setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
+        showToast(t('toasts.playlistRenamedSuccess'), 'success')
+      } else {
+        showAlert({ title: t('common.error'), message: res?.error || 'Error renaming playlist' })
+      }
     } else {
-      alert('Error renaming playlist: ' + res.error)
+      // @ts-ignore
+      const res = await window.api.renamePlaylist(playlistRename.oldName, playlistRename.newName.trim())
+      if (res.success) {
+        setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
+        loadLibrary()
+      } else {
+        showAlert({ title: t('common.error'), message: 'Error renaming playlist: ' + res.error })
+      }
     }
   }
 
@@ -691,7 +1192,7 @@ export default function App() {
       showToast(t('toasts.coverUpdatedSuccess'), 'success')
       loadLibrary()
     } else {
-      alert(res.error)
+      showAlert({ title: t('common.error'), message: res.error })
     }
   }
 
@@ -777,7 +1278,7 @@ export default function App() {
         // @ts-ignore
         if (window.api.logWatchHistory && trackToPlay.platform === 'youtube') window.api.logWatchHistory(trackToPlay.originalId);
       } else {
-        alert('Stream error: ' + (res.error || 'Unknown'));
+        showAlert({ title: t('common.error'), message: 'Stream error: ' + (res.error || 'Unknown') });
         return;
       }
     }
@@ -787,6 +1288,137 @@ export default function App() {
     if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
       await audioCtxRef.current.resume().catch(() => {});
     }
+
+    // Ghi nhận vào Lịch sử nghe gần đây (Recently Played)
+    setRecentlyPlayed(prev => {
+      const trackId = trackToPlay.id || trackToPlay.filePath
+      const filtered = prev.filter(t => (t.id || t.filePath) !== trackId)
+      const updated = [{
+        id: trackId,
+        title: trackToPlay.title || 'Unknown Title',
+        artist: trackToPlay.artist || 'Unknown Artist',
+        album: trackToPlay.album || 'Unknown Album',
+        duration: trackToPlay.duration || 0,
+        filePath: trackToPlay.filePath,
+        coverArt: trackToPlay.coverArt,
+        genre: trackToPlay.genre,
+        isOnline: trackToPlay.isOnline,
+        platform: trackToPlay.platform,
+        playedAt: Date.now()
+      }, ...filtered].slice(0, 50)
+      try {
+        localStorage.setItem('meis_recent_played', JSON.stringify(updated))
+      } catch (e) {}
+      return updated
+    })
+  }
+
+  // --- THUẬT TOÁN GỢI Ý BÀI HÁT CHO DASHBOARD TỪ THƯ MỤC NHẠC ---
+  const dashboardRecommendations = useMemo(() => {
+    if (!libraryTracks || libraryTracks.length === 0) return []
+
+    // 1. Thu thập các nghệ sĩ và thể loại từ các bài hát nghe gần đây
+    const recentArtists = new Map<string, number>()
+    const recentGenres = new Map<string, number>()
+
+    const recentSample = recentlyPlayed.slice(0, 20)
+    recentSample.forEach((t, idx) => {
+      const weight = 20 - idx
+      const a = (t.artist || '').toString().toLowerCase().trim()
+      if (a && a !== 'unknown' && a !== 'various artists' && a !== 'không rõ') {
+        recentArtists.set(a, (recentArtists.get(a) || 0) + weight)
+      }
+      const g = (t.genre || '').toString().toLowerCase().trim()
+      if (g && g !== 'unknown' && g !== 'không rõ') {
+        recentGenres.set(g, (recentGenres.get(g) || 0) + weight)
+      }
+    })
+
+    const topArtists = Array.from(recentArtists.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0])
+    const topGenres = Array.from(recentGenres.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0])
+    const recentIds = new Set(recentSample.map(t => t.id || t.filePath))
+
+    if (topArtists.length === 0 && topGenres.length === 0) {
+      // Nếu chưa có lịch sử nghe, gợi ý các bài hát phong phú từ thư viện
+      return [...libraryTracks].slice(0, 20)
+    }
+
+    const scoredTracks = libraryTracks.map(t => {
+      let score = 0
+      const tArtist = (t.artist || '').toString().toLowerCase().trim()
+      const tGenre = (t.genre || '').toString().toLowerCase().trim()
+      const tId = t.id || t.filePath
+
+      // Khớp nghệ sĩ hàng đầu
+      topArtists.forEach((a, idx) => {
+        if (tArtist && (tArtist.includes(a) || a.includes(tArtist))) {
+          score += (topArtists.length - idx) * 12
+        }
+      })
+
+      // Khớp thể loại hàng đầu
+      topGenres.forEach((g, idx) => {
+        if (tGenre && (tGenre.includes(g) || g.includes(tGenre))) {
+          score += (topGenres.length - idx) * 8
+        }
+      })
+
+      // Trừ điểm nhẹ cho bài vừa nghe để ưu tiên khám phá thêm bài mới trong thư mục
+      if (recentIds.has(tId)) {
+        score -= 5
+      }
+
+      return { track: t, score }
+    })
+
+    scoredTracks.sort((a, b) => b.score - a.score)
+    return scoredTracks.filter(st => st.score > 0).slice(0, 24).map(st => st.track)
+  }, [libraryTracks, recentlyPlayed])
+
+  // Tuyển tập ngẫu nhiên "Khám phá từ thư mục nhạc"
+  const randomDiscoverTracks = useMemo(() => {
+    if (!libraryTracks || libraryTracks.length === 0) return []
+    return [...libraryTracks].sort(() => Math.random() - 0.5).slice(0, 12)
+  }, [libraryTracks])
+
+  // Thuật toán tìm bài hát gợi ý thông minh dựa trên Thể loại / Nghệ sĩ
+  const findRecommendedTrack = (current: any, queue: any[], allTracks: any[]) => {
+    if (!current || !allTracks || allTracks.length === 0) return null
+
+    const queueIds = new Set(queue.map(t => t.id || t.filePath))
+    let pool = allTracks.filter(t => (t.id || t.filePath) !== (current.id || current.filePath) && !queueIds.has(t.id || t.filePath))
+    if (pool.length === 0) {
+      pool = allTracks.filter(t => (t.id || t.filePath) !== (current.id || current.filePath))
+    }
+    if (pool.length === 0) return null
+
+    const currentGenre = (current.genre || '').toString().toLowerCase().trim()
+    const currentArtist = (current.artist || '').toString().toLowerCase().trim()
+
+    // 1. Khớp thể loại (Genre)
+    if (currentGenre && currentGenre !== 'unknown') {
+      const genreMatches = pool.filter(t => {
+        const g = (t.genre || '').toString().toLowerCase().trim()
+        return g && g !== 'unknown' && (g.includes(currentGenre) || currentGenre.includes(g))
+      })
+      if (genreMatches.length > 0) {
+        return genreMatches[Math.floor(Math.random() * genreMatches.length)]
+      }
+    }
+
+    // 2. Khớp nghệ sĩ (Artist)
+    if (currentArtist && currentArtist !== 'unknown' && currentArtist !== 'various artists') {
+      const artistMatches = pool.filter(t => {
+        const a = (t.artist || '').toString().toLowerCase().trim()
+        return a && a !== 'unknown' && (a.includes(currentArtist) || currentArtist.includes(a))
+      })
+      if (artistMatches.length > 0) {
+        return artistMatches[Math.floor(Math.random() * artistMatches.length)]
+      }
+    }
+
+    // 3. Ngẫu nhiên từ kho nhạc
+    return pool[Math.floor(Math.random() * pool.length)]
   }
 
   const handleNext = () => {
@@ -798,8 +1430,22 @@ export default function App() {
     let nextIndex = currentIndex + 1
 
     if (nextIndex >= playQueue.length) {
-      if (repeatMode === 1 || repeatMode === 2) nextIndex = 0
-      else {
+      if (repeatMode === 1 || repeatMode === 2) {
+        nextIndex = 0
+      } else if (smartAutoplay) {
+        const candidate = findRecommendedTrack(currentTrack, playQueue, libraryTracks)
+        if (candidate) {
+          const newQueue = [...playQueue, candidate]
+          setPlayQueue(newQueue)
+          setOriginalQueue(prev => [...prev, candidate])
+          handlePlayTrack(candidate)
+          showToast(t('player.smartAutoplayPlaying', { title: candidate.title, artist: candidate.artist || t('player.unknownArtist') }), 'info')
+          return
+        } else {
+          setIsPlaying(false)
+          return
+        }
+      } else {
         setIsPlaying(false)
         return
       }
@@ -825,10 +1471,56 @@ export default function App() {
     handlePlayTrack(playQueue[prevIndex])
   }
 
+  const handlePlayPause = () => {
+    if (!currentTrack) {
+      if (libraryTracks.length > 0) {
+        handleRowClick(libraryTracks[0], libraryTracks)
+      }
+      return
+    }
+    
+    if (bitPerfectEnabled) {
+      if (isPlaying) {
+        window.api.mpvPause()
+        setIsPlaying(false)
+      } else {
+        window.api.mpvResume()
+        setIsPlaying(true)
+      }
+    } else if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause()
+        setIsPlaying(false)
+      } else {
+        audioRef.current.play().catch(console.warn)
+        setIsPlaying(true)
+      }
+    }
+  }
+
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value)
     setVolume(val)
     if (audioRef.current) audioRef.current.volume = val
+    if (bitPerfectEnabled) window.api.mpvSetVolume(val)
+  }
+
+  const handleVolumeUp = () => {
+    setVolume(prev => {
+      const newVol = Math.min(1, Math.round((prev + 0.05) * 100) / 100)
+      if (audioRef.current) audioRef.current.volume = newVol
+      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
+      return newVol
+    })
+  }
+
+  const handleVolumeDown = () => {
+    setVolume(prev => {
+      const newVol = Math.max(0, Math.round((prev - 0.05) * 100) / 100)
+      if (audioRef.current) audioRef.current.volume = newVol
+      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
+      return newVol
+    })
   }
 
   const toggleMute = () => {
@@ -836,10 +1528,12 @@ export default function App() {
       setPrevVolume(volume)
       setVolume(0)
       if (audioRef.current) audioRef.current.volume = 0
+      if (bitPerfectEnabled) window.api.mpvSetVolume(0)
     } else {
       const newVol = prevVolume > 0 ? prevVolume : 1
       setVolume(newVol)
       if (audioRef.current) audioRef.current.volume = newVol
+      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
     }
   }
 
@@ -992,7 +1686,7 @@ export default function App() {
   const handleDriveSubmit = async () => {
     const match = driveLink.match(/folders\/([-\w]+)/) || driveLink.match(/id=([-\w]+)/)
     if (!match) {
-      alert('Vui lòng nhập link thư mục Google Drive hợp lệ!')
+      showAlert({ title: t('common.warning'), message: 'Vui lòng nhập link thư mục Google Drive hợp lệ!' })
       return
     }
     setIsFetchingDrive(true)
@@ -1001,11 +1695,11 @@ export default function App() {
       // @ts-ignore
       const result = await window.api.fetchDriveFiles(folderId) 
       if (result.success) {
-        if (result.tracks.length === 0) alert('Không tìm thấy file âm thanh nào. Hãy đảm bảo thư mục đã bật "Bất kỳ ai có liên kết"!')
+        if (result.tracks.length === 0) showAlert({ title: t('common.notice'), message: 'Không tìm thấy file âm thanh nào. Hãy đảm bảo thư mục đã bật "Bất kỳ ai có liên kết"!' })
         else setDriveFiles(result.tracks)
-      } else alert('Lỗi từ hệ thống: ' + result.error)
+      } else showAlert({ title: t('common.error'), message: 'Lỗi từ hệ thống: ' + result.error })
     } catch (err) {
-      alert('Lỗi kết nối tới hệ thống!')
+      showAlert({ title: t('common.error'), message: 'Lỗi kết nối tới hệ thống!' })
     }
     setIsFetchingDrive(false)
   }
@@ -1051,13 +1745,13 @@ export default function App() {
         // @ts-ignore
         const result = await window.api.downloadCloudFile(cloudActionTrack.url, `${cloudActionTrack.title}.${ext}`, libraryTracks)
         if (result.success) {
-          alert('Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.')
+          showAlert({ title: t('common.notice'), message: 'Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.' })
           handlePlayTrack({ ...cloudActionTrack, filePath: result.localPath, isCloud: false })
           loadLibrary()
         } else if (result.canceled) {
           // Cancelled
         } else {
-          alert('Lỗi tải file: ' + result.error)
+          showAlert({ title: t('common.error'), message: 'Lỗi tải file: ' + result.error })
         }
       } catch (e) {}
       setIsDownloading(false)
@@ -1065,19 +1759,133 @@ export default function App() {
     }
   }
 
-  // Determine effective background image
-  const effectiveBgImage = useTrackCoverAsBg 
-    ? (currentTrack?.coverArtHighRes || currentTrack?.coverArt || null)
+  // Nạp ảnh bìa chất lượng gốc siêu nét cho Background Theme và Lời bài hát
+  const [trackHighResCover, setTrackHighResCover] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!currentTrack || isCore) {
+      setTrackHighResCover(null)
+      return
+    }
+
+    if (currentTrack.isOnline) {
+      setTrackHighResCover(currentTrack.coverArtHighRes || currentTrack.coverArt || null)
+      return
+    }
+
+    if (!currentTrack.isCloud && (currentTrack.id || currentTrack.filePath)) {
+      let isCurrent = true
+      // @ts-ignore
+      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath).then((cover: string | null) => {
+        if (isCurrent) {
+          setTrackHighResCover(cover || currentTrack.coverArt || null)
+        }
+      }).catch(() => {
+        if (isCurrent) setTrackHighResCover(currentTrack.coverArt || null)
+      })
+      return () => { isCurrent = false }
+    } else {
+      setTrackHighResCover(currentTrack.coverArt || null)
+    }
+  }, [currentTrack?.id, currentTrack?.filePath, currentTrack?.coverArt, currentTrack?.coverArtHighRes, currentTrack?.isOnline, currentTrack?.isCloud, isCore])
+
+  // Determine effective background image (Tắt hoàn toàn trong Core Mode)
+  const effectiveBgImage = isCore
+    ? null
+    : useTrackCoverAsBg 
+    ? (trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt || null)
     : customBgImage
 
-  // Apply Background & Extract Theme
+  // Quản lý Dual-layer Background Crossfade cho chế độ Standard (Chống stutter khi chuyển bài)
+  const [bgLayerA, setBgLayerA] = useState<string | null>(null)
+  const [bgLayerB, setBgLayerB] = useState<string | null>(null)
+  const [activeBgLayer, setActiveBgLayer] = useState<'A' | 'B'>('A')
+
   useEffect(() => {
+    if (isCore) {
+      setBgLayerA(null)
+      setBgLayerB(null)
+      return
+    }
+
+    if (!effectiveBgImage) {
+      setBgLayerA(null)
+      setBgLayerB(null)
+      return
+    }
+
+    if (isLite) {
+      // Chế độ Lite: Cập nhật trực tiếp 1 layer, không chạy animation crossfade
+      setBgLayerA(effectiveBgImage)
+      setActiveBgLayer('A')
+      return
+    }
+
+    // Chế độ Standard: Preload ảnh và Crossfade mượt mà giữa Layer A và Layer B
+    let isCancelled = false
+    const targetLayer = activeBgLayer === 'A' ? 'B' : 'A'
+
+    const applyTransition = () => {
+      if (isCancelled) return
+      if (targetLayer === 'B') {
+        setBgLayerB(effectiveBgImage)
+        setActiveBgLayer('B')
+      } else {
+        setBgLayerA(effectiveBgImage)
+        setActiveBgLayer('A')
+      }
+    }
+
+    const img = new Image()
+    if (effectiveBgImage.startsWith('http://') || effectiveBgImage.startsWith('https://')) {
+      img.crossOrigin = 'anonymous'
+    }
+    img.onload = applyTransition
+    img.onerror = applyTransition
+    img.src = effectiveBgImage
+
+    return () => {
+      isCancelled = true
+    }
+  }, [effectiveBgImage, isLite, isCore])
+
+  // Khởi tạo và nạp trước Theme Colors Cache từ JSON vào RAM
+  useEffect(() => {
+    if ((window as any).api?.getThemeColorsCache) {
+      (window as any).api.getThemeColorsCache().then((cachedColors: any) => {
+        if (cachedColors) {
+          initThemeColorCache(cachedColors)
+        }
+      }).catch(() => {})
+    }
+  }, [])
+
+  // Apply Background & Extract Theme Colors (Quy luật 60/30/10 cho Standard & Lite mode)
+  useEffect(() => {
+    if (isCore) {
+      document.documentElement.style.setProperty('--bg-image', 'none')
+      document.documentElement.style.setProperty('--theme-60', '#18181b')
+      document.documentElement.style.setProperty('--theme-30', '#27272a')
+      document.documentElement.style.setProperty('--theme-10', '#10b981')
+      return
+    }
+
+    const trackKey = currentTrack?.id || currentTrack?.filePath
+
+    // 1. Áp dụng ngay lập tức màu từ cache JSON nếu đã có sẵn
+    if (currentTrack?.themeColors && !isCore) {
+      document.documentElement.style.setProperty('--theme-60', currentTrack.themeColors.primary60)
+      document.documentElement.style.setProperty('--theme-30', currentTrack.themeColors.secondary30)
+      document.documentElement.style.setProperty('--theme-10', currentTrack.themeColors.accent10)
+    }
+
+    // 2. Cập nhật ảnh nền giao diện
     if (effectiveBgImage) {
       const sanitizedUrl = effectiveBgImage.replace(/"/g, '\\"')
       document.documentElement.style.setProperty('--bg-image', `url("${sanitizedUrl}")`)
       
-      extractThemeColors(effectiveBgImage).then(colors => {
-        if (colors) {
+      extractThemeColors(effectiveBgImage, trackKey || effectiveBgImage).then(colors => {
+        if (colors && !isCore) {
           document.documentElement.style.setProperty('--theme-60', colors.primary60)
           document.documentElement.style.setProperty('--theme-30', colors.secondary30)
           document.documentElement.style.setProperty('--theme-10', colors.accent10)
@@ -1085,12 +1893,24 @@ export default function App() {
       })
     } else {
       document.documentElement.style.setProperty('--bg-image', 'none')
-      // Reset to default
-      document.documentElement.style.setProperty('--theme-60', '#18181b')
-      document.documentElement.style.setProperty('--theme-30', '#27272a')
-      document.documentElement.style.setProperty('--theme-10', '#10b981')
+      
+      const trackCover = trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt
+      if (trackCover) {
+        extractThemeColors(trackCover, trackKey || trackCover).then(colors => {
+          if (colors && !isCore) {
+            document.documentElement.style.setProperty('--theme-60', colors.primary60)
+            document.documentElement.style.setProperty('--theme-30', colors.secondary30)
+            document.documentElement.style.setProperty('--theme-10', colors.accent10)
+          }
+        })
+      } else if (!currentTrack?.themeColors) {
+        // Fallback về mặc định
+        document.documentElement.style.setProperty('--theme-60', '#18181b')
+        document.documentElement.style.setProperty('--theme-30', '#27272a')
+        document.documentElement.style.setProperty('--theme-10', '#10b981')
+      }
     }
-  }, [effectiveBgImage])
+  }, [effectiveBgImage, trackHighResCover, currentTrack?.id, currentTrack?.filePath, currentTrack?.themeColors, currentTrack?.coverArt, currentTrack?.coverArtHighRes, isCore])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--bg-opacity', customBgOpacity.toString())
@@ -1129,6 +1949,7 @@ export default function App() {
       title: track.title || '', 
       artist: track.artist || '', 
       album: track.album || '', 
+      genre: (track.genre && track.genre !== 'Unknown' && track.genre !== 'Chưa phân loại') ? track.genre : '',
       lyrics: rawLyrics 
     })
     setEditImagePath(null)
@@ -1145,14 +1966,30 @@ export default function App() {
     const res = await window.api.updateTags(editingTrack.id, editTags, editImagePath)
     if (res.success) {
       showToast(res.note || t('toasts.tagSavedSuccess'), 'success')
-      if (currentTrack && currentTrack.id === editingTrack.id) {
+      const newCover = res.coverUrl || currentTrack?.coverArt
+      setLibraryTracks(prev => prev.map(t => {
+        if (t.id === editingTrack.id || t.filePath === editingTrack.filePath) {
+          return {
+            ...t,
+            title: editTags.title,
+            artist: editTags.artist,
+            album: editTags.album,
+            genre: editTags.genre,
+            lyrics: editTags.lyrics,
+            coverArt: newCover || t.coverArt
+          }
+        }
+        return t
+      }))
+      if (currentTrack && (currentTrack.id === editingTrack.id || currentTrack.filePath === editingTrack.filePath)) {
         setCurrentTrack({
           ...currentTrack,
           title: editTags.title,
           artist: editTags.artist,
           album: editTags.album,
+          genre: editTags.genre,
           lyrics: editTags.lyrics,
-          coverArt: res.coverUrl || currentTrack.coverArt
+          coverArt: newCover || currentTrack.coverArt
         })
       }
       setEditingTrack(null)
@@ -1172,6 +2009,48 @@ export default function App() {
     e.stopPropagation()
 
     const isInsidePlaylist = activeView === 'playlists' && activePlaylist
+    const isInsideUserPlaylist = activeView === 'user-playlists' && activeUserPlaylist
+
+    const userPlaylistSubItems = userPlaylists.map(upl => ({
+      id: `upl-${upl.id}`,
+      label: upl.name,
+      icon: <ListPlus size={14} />,
+      onClick: async () => {
+        const rawTrackPath = track.id || track.filePath
+        // @ts-ignore
+        const res = await window.api.addTracksToUserPlaylist(upl.id, [rawTrackPath])
+        if (res && res.success) {
+          setUserPlaylists(res.playlists)
+          showToast(t('toasts.addedToPlaylist', { name: upl.name }), 'success')
+        }
+      }
+    }))
+
+    const folderPlaylistSubItems = playlists.map(pl => ({
+      id: `pl-${pl.name}`,
+      label: pl.name,
+      icon: <Disc size={14} />,
+      onClick: async () => {
+        const rawTrackPath = track.id || track.filePath
+        // @ts-ignore
+        await window.api.addTrackToPlaylist(pl.name, rawTrackPath)
+        showToast(t('toasts.addedToPlaylist', { name: pl.name }), 'success')
+        loadLibrary()
+      }
+    }))
+
+    const playlistSubItems = [
+      {
+        id: 'new-user-playlist',
+        label: '+ ' + t('userPlaylistsView.createPlaylist'),
+        icon: <Plus size={14} className="text-theme-10" />,
+        onClick: () => {
+          setShowCreateUserPlaylistModal(true)
+        }
+      },
+      ...(userPlaylistSubItems.length > 0 ? [{ id: 'div-upl', label: '', divider: true }, ...userPlaylistSubItems] : []),
+      ...(folderPlaylistSubItems.length > 0 ? [{ id: 'div-fpl', label: '', divider: true }, ...folderPlaylistSubItems] : [])
+    ]
 
     const items: ContextMenuItem[] = [
       {
@@ -1188,30 +2067,13 @@ export default function App() {
           setPlayQueue(prev => [...prev, track])
           showToast(t('toasts.addedToQueue', { title: track.title }), 'success')
         }
-      }
-    ]
-
-    if (playlists && playlists.length > 0) {
-      items.push({
+      },
+      {
         id: 'add-to-playlist',
         label: t('contextMenu.addToPlaylist'),
         icon: <FolderPlus size={14} />,
-        subItems: playlists.map(pl => ({
-          id: `pl-${pl.name}`,
-          label: pl.name,
-          icon: <FolderPlus size={14} />,
-          onClick: async () => {
-            const rawTrackPath = track.id || track.filePath
-            // @ts-ignore
-            await window.api.addTrackToPlaylist(pl.name, rawTrackPath)
-            showToast(t('toasts.addedToPlaylist', { name: pl.name }), 'success')
-            loadLibrary()
-          }
-        }))
-      })
-    }
-
-    items.push(
+        subItems: playlistSubItems
+      },
       { id: 'div-1', label: '', divider: true },
       {
         id: 'edit-tags',
@@ -1232,21 +2094,50 @@ export default function App() {
         }
       },
       { id: 'div-2', label: '', divider: true }
-    )
+    ]
 
-    if (isInsidePlaylist) {
+    if (isInsideUserPlaylist) {
+      items.push({
+        id: 'remove-from-user-playlist',
+        label: t('userPlaylistsView.removeFromPlaylist'),
+        icon: <Trash2 size={14} />,
+        danger: true,
+        onClick: () => {
+          showConfirm({
+            title: t('userPlaylistsView.removeFromPlaylist'),
+            message: t('userPlaylistsView.confirmRemove', { title: track.title }),
+            danger: true,
+            onConfirm: async () => {
+              const rawTrackPath = track.id || track.filePath
+              // @ts-ignore
+              const res = await window.api.removeTrackFromUserPlaylist(activeUserPlaylist.id, rawTrackPath)
+              if (res && res.success) {
+                setUserPlaylists(res.playlists)
+                showToast(t('toasts.removedFromPlaylist'), 'success')
+              }
+            }
+          })
+        }
+      })
+    } else if (isInsidePlaylist) {
       items.push({
         id: 'remove-from-playlist',
         label: t('contextMenu.removeFromPlaylist', { name: activePlaylist.name }),
         icon: <Trash2 size={14} />,
         danger: true,
-        onClick: async () => {
-          if (!confirm(t('contextMenu.confirmRemoveFromPlaylist', { title: track.title, name: activePlaylist.name }))) return
-          const rawTrackPath = track.id || track.filePath
-          // @ts-ignore
-          await window.api.deleteTrack(rawTrackPath, false)
-          showToast(t('toasts.removedFromPlaylist'), 'success')
-          loadLibrary()
+        onClick: () => {
+          showConfirm({
+            title: t('contextMenu.removeFromPlaylist', { name: activePlaylist.name }),
+            message: t('contextMenu.confirmRemoveFromPlaylist', { title: track.title, name: activePlaylist.name }),
+            danger: true,
+            onConfirm: async () => {
+              const rawTrackPath = track.id || track.filePath
+              // @ts-ignore
+              await window.api.deleteTrack(rawTrackPath, false)
+              showToast(t('toasts.removedFromPlaylist'), 'success')
+              loadLibrary()
+            }
+          })
         }
       })
     }
@@ -1257,17 +2148,23 @@ export default function App() {
       icon: <Trash2 size={14} />,
       danger: true,
       disabled: track.isCloud,
-      onClick: async () => {
-        if (!confirm(t('contextMenu.confirmDeleteFile', { title: track.title }))) return
-        const rawTrackPath = track.id || track.filePath
-        // @ts-ignore
-        const res = await window.api.deleteTrack(rawTrackPath, true)
-        if (res && res.success) {
-          showToast(t('toasts.movedToTrash', { title: track.title }), 'success')
-          loadLibrary()
-        } else {
-          alert('Error deleting track: ' + res?.error)
-        }
+      onClick: () => {
+        showConfirm({
+          title: t('contextMenu.deleteFile'),
+          message: t('contextMenu.confirmDeleteFile', { title: track.title }),
+          danger: true,
+          onConfirm: async () => {
+            const rawTrackPath = track.id || track.filePath
+            // @ts-ignore
+            const res = await window.api.deleteTrack(rawTrackPath, true)
+            if (res && res.success) {
+              showToast(t('toasts.movedToTrash', { title: track.title }), 'success')
+              loadLibrary()
+            } else {
+              showAlert({ title: t('common.error'), message: 'Error deleting track: ' + res?.error })
+            }
+          }
+        })
       }
     })
 
@@ -1304,7 +2201,7 @@ export default function App() {
         id: 'rename-playlist',
         label: t('contextMenu.renamePlaylist'),
         icon: <Edit2 size={14} />,
-        onClick: () => setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name })
+        onClick: () => setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name, id: undefined })
       },
       {
         id: 'change-cover',
@@ -1334,17 +2231,103 @@ export default function App() {
         label: t('contextMenu.deletePlaylist', { name: pl.name }),
         icon: <Trash2 size={14} />,
         danger: true,
-        onClick: async () => {
-          if (!confirm(t('contextMenu.confirmDeletePlaylist', { name: pl.name }))) return
-          // @ts-ignore
-          const res = await window.api.deletePlaylist(pl.name)
-          if (res && res.success) {
-            showToast(t('toasts.playlistDeleted', { name: pl.name }), 'success')
-            if (activePlaylist?.name === pl.name) setActivePlaylist(null)
-            loadLibrary()
-          } else {
-            alert('Error deleting playlist: ' + res?.error)
+        onClick: () => {
+          showConfirm({
+            title: t('contextMenu.deletePlaylist', { name: pl.name }),
+            message: t('contextMenu.confirmDeletePlaylist', { name: pl.name }),
+            danger: true,
+            onConfirm: async () => {
+              // @ts-ignore
+              const res = await window.api.deletePlaylist(pl.name)
+              if (res && res.success) {
+                showToast(t('toasts.playlistDeleted', { name: pl.name }), 'success')
+                if (activePlaylist?.name === pl.name) setActivePlaylist(null)
+                loadLibrary()
+              } else {
+                showAlert({ title: t('common.error'), message: 'Error deleting playlist: ' + res?.error })
+              }
+            }
+          })
+        }
+      }
+    ]
+
+    setContextMenu({ x: e.clientX, y: e.clientY, items })
+  }
+
+  const handleUserPlaylistContextMenu = (upl: any, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const resolvedTracks = getResolvedUserPlaylistTracks(upl)
+
+    const items: ContextMenuItem[] = [
+      {
+        id: 'play-all',
+        label: t('userPlaylistsView.playAll'),
+        icon: <Play size={14} />,
+        disabled: resolvedTracks.length === 0,
+        onClick: () => {
+          if (resolvedTracks.length > 0) {
+            handleRowClick(resolvedTracks[0], resolvedTracks)
           }
+        }
+      },
+      {
+        id: 'add-songs',
+        label: t('userPlaylistsView.addSongs'),
+        icon: <Plus size={14} />,
+        onClick: () => {
+          setActiveUserPlaylist(upl)
+          setShowAddSongsToUserPlaylistModal(true)
+        }
+      },
+      { id: 'div-1', label: '', divider: true },
+      {
+        id: 'edit-playlist',
+        label: t('modals.editPlaylist.title'),
+        icon: <Edit2 size={14} />,
+        onClick: () => {
+          setEditingUserPlaylist(upl)
+          setShowEditUserPlaylistModal(true)
+        }
+      },
+      { id: 'div-2', label: '', divider: true },
+      {
+        id: 'delete-playlist',
+        label: t('userPlaylistsView.deletePlaylist'),
+        icon: <Trash2 size={14} />,
+        danger: true,
+        onClick: () => handleDeleteUserPlaylist(upl)
+      }
+    ]
+
+    setContextMenu({ x: e.clientX, y: e.clientY, items })
+  }
+
+  const handleArtistContextMenu = (artist: any, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const items: ContextMenuItem[] = [
+      {
+        id: 'play-all',
+        label: t('artistsView.playAll'),
+        icon: <Play size={14} />,
+        disabled: !artist.tracks || artist.tracks.length === 0,
+        onClick: () => {
+          if (artist.tracks && artist.tracks.length > 0) {
+            handleRowClick(artist.tracks[0], artist.tracks)
+          }
+        }
+      },
+      {
+        id: 'add-queue',
+        label: t('contextMenu.addQueue'),
+        icon: <ListPlus size={14} />,
+        onClick: () => {
+          setPlayQueue(prev => [...prev, ...(artist.tracks || [])])
+          showToast(t('toasts.addedToQueue', { title: artist.name }), 'success')
         }
       }
     ]
@@ -1355,6 +2338,176 @@ export default function App() {
   // ==========================================
   // 4. MEMOS
   // ==========================================
+  const getResolvedUserPlaylistTracks = (upl: any) => {
+    if (!upl || !Array.isArray(upl.trackIds)) return []
+    const trackMap = new Map<string, any>()
+    for (const t of libraryTracks) {
+      if (t.id) trackMap.set(t.id, t)
+      if (t.filePath) trackMap.set(t.filePath, t)
+    }
+    const resolved: any[] = []
+    for (const trackId of upl.trackIds) {
+      const found = trackMap.get(trackId)
+      if (found) {
+        resolved.push(found)
+      } else {
+        const title = trackId.split('/').pop()?.split('\\').pop() || trackId
+        resolved.push({
+          id: trackId,
+          filePath: trackId,
+          title: title.replace(/\.[^/.]+$/, ''),
+          artist: 'Unknown',
+          album: 'Unknown',
+          duration: 0,
+          isCloud: false
+        })
+      }
+    }
+    return resolved
+  }
+
+  const activeUserPlaylistTracks = useMemo(() => {
+    if (!activeUserPlaylist) return []
+    const resolved = getResolvedUserPlaylistTracks(activeUserPlaylist)
+    const filtered = getFilteredTracks(resolved)
+    return getSortedTracks(filtered)
+  }, [activeUserPlaylist, libraryTracks, searchQuery, sortField, sortOrder])
+
+  const artistsData = useMemo(() => {
+    const artistMap = new Map<string, {
+      name: string
+      tracks: any[]
+      albums: Map<string, any[]>
+      coverArt: string | null
+    }>()
+
+    for (const track of libraryTracks) {
+      const artistName = (track.artist && track.artist.trim() && track.artist.toLowerCase() !== 'unknown') ? track.artist.trim() : (language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')
+      if (!artistMap.has(artistName)) {
+        artistMap.set(artistName, {
+          name: artistName,
+          tracks: [],
+          albums: new Map(),
+          coverArt: null
+        })
+      }
+      const item = artistMap.get(artistName)!
+      item.tracks.push(track)
+      if (!item.coverArt && track.coverArt) {
+        item.coverArt = track.coverArt
+      }
+      const albumName = (track.album && track.album.trim() && track.album.toLowerCase() !== 'unknown') ? track.album.trim() : null
+      if (albumName) {
+        if (!item.albums.has(albumName)) {
+          item.albums.set(albumName, [])
+        }
+        item.albums.get(albumName)!.push(track)
+      }
+    }
+
+    const artistsList = Array.from(artistMap.values()).map(a => ({
+      name: a.name,
+      tracks: a.tracks,
+      albums: Array.from(a.albums.entries()).map(([title, tracks]) => ({
+        title,
+        tracks,
+        coverArt: tracks.find(t => t.coverArt)?.coverArt || a.coverArt,
+        year: tracks.find(t => t.year)?.year || null
+      })),
+      albumCount: a.albums.size,
+      trackCount: a.tracks.length,
+      coverArt: a.coverArt
+    }))
+
+    // Sắp xếp theo thứ tự bảng chữ cái
+    artistsList.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+
+    // Gom nhóm theo chữ cái đầu (A-Z, 0-9, #)
+    const letterMap = new Map<string, typeof artistsList>()
+    for (const artist of artistsList) {
+      let firstChar = artist.name.charAt(0).toUpperCase()
+      const normalized = firstChar.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      const groupKey = /[A-Z]/.test(normalized) ? normalized : (/[0-9]/.test(firstChar) ? '0-9' : '#')
+      if (!letterMap.has(groupKey)) {
+        letterMap.set(groupKey, [])
+      }
+      letterMap.get(groupKey)!.push(artist)
+    }
+
+    const alphabetGroups = Array.from(letterMap.entries()).map(([letter, list]) => ({
+      letter,
+      count: list.length,
+      artists: list
+    }))
+
+    alphabetGroups.sort((a, b) => {
+      if (a.letter === '#') return 1
+      if (b.letter === '#') return -1
+      if (a.letter === '0-9') return 1
+      if (b.letter === '0-9') return -1
+      return a.letter.localeCompare(b.letter)
+    })
+
+    return { artistsList, alphabetGroups }
+  }, [libraryTracks, language])
+
+  const genresData = useMemo(() => {
+    const genreMap = new Map<string, {
+      name: string
+      tracks: any[]
+      artists: Set<string>
+      albums: Set<string>
+      coverArts: string[]
+    }>()
+
+    for (const track of libraryTracks) {
+      const rawGenre = track.genre || 'Unknown'
+      const splitGenres = String(rawGenre).split(/[,;/|]+/).map(g => g.trim()).filter(Boolean)
+      const list = splitGenres.length > 0 ? splitGenres : ['Unknown']
+
+      for (const g of list) {
+        const normalized = g.toLowerCase() === 'unknown' ? (language === 'vi' ? 'Chưa phân loại' : 'Unknown') : g
+        if (!genreMap.has(normalized)) {
+          genreMap.set(normalized, {
+            name: normalized,
+            tracks: [],
+            artists: new Set(),
+            albums: new Set(),
+            coverArts: []
+          })
+        }
+        const item = genreMap.get(normalized)!
+        item.tracks.push(track)
+        if (track.artist && track.artist !== 'Unknown') item.artists.add(track.artist)
+        if (track.album && track.album !== 'Unknown') item.albums.add(track.album)
+        if (track.coverArt && item.coverArts.length < 4 && !item.coverArts.includes(track.coverArt)) {
+          item.coverArts.push(track.coverArt)
+        }
+      }
+    }
+
+    const genresList = Array.from(genreMap.values()).map(g => ({
+      name: g.name,
+      tracks: g.tracks,
+      artistCount: g.artists.size,
+      albumCount: g.albums.size,
+      trackCount: g.tracks.length,
+      coverArts: g.coverArts,
+      artists: Array.from(g.artists)
+    }))
+
+    // Sắp xếp theo số lượng bài hát giảm dần, đưa 'Chưa phân loại'/'Unknown' về cuối
+    genresList.sort((a, b) => {
+      const isAUnknown = a.name === 'Unknown' || a.name === 'Chưa phân loại'
+      const isBUnknown = b.name === 'Unknown' || b.name === 'Chưa phân loại'
+      if (isAUnknown && !isBUnknown) return 1
+      if (!isAUnknown && isBUnknown) return -1
+      return b.trackCount - a.trackCount
+    })
+
+    return genresList
+  }, [libraryTracks, language])
+
   const processedLibraryTracks = useMemo(() => {
     const filtered = getFilteredTracks(libraryTracks)
     return getSortedTracks(filtered)
@@ -1493,9 +2646,9 @@ export default function App() {
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
   }, [volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode, customBgImage, customBgOpacity, customBgBlur, useTrackCoverAsBg, isConfigLoaded])
 
-  // Dominant Color
+  // Dominant Color (Bỏ qua hoàn toàn trong Core Mode và Lite Mode)
   useEffect(() => {
-    if (isLite || effectiveBgImage) {
+    if (isLite || isCore || effectiveBgImage) {
       setThemeColor('transparent') // Không dùng màu nền đè lên ảnh nền
       return
     }
@@ -1504,7 +2657,52 @@ export default function App() {
     } else {
       setThemeColor('rgba(39, 39, 42, 0)')
     }
-  }, [currentTrack, isLite, effectiveBgImage]) // Thêm isLite vào dependency
+  }, [currentTrack, isLite, isCore, effectiveBgImage])
+
+  // SMART MEMORY RECOVERY (DỌN DẸP BỘ NHỚ THÔNG MINH - 0% GIẬT LAG)
+  // 1. Dọn dẹp khi đổi bài hát (trì hoãn 1.5s để UI ổn định trước)
+  useEffect(() => {
+    if (!currentTrack) return
+    const timer = setTimeout(() => {
+      // @ts-ignore
+      window.api?.clearMemoryCache?.()
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [currentTrack?.id])
+
+  // 2. Dọn dẹp sâu khi ứng dụng thu nhỏ hoặc nhận sự kiện onDeepClean từ Main Process
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // @ts-ignore
+        window.api?.clearMemoryCache?.()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // @ts-ignore
+    if (window.api?.onDeepClean) {
+      // @ts-ignore
+      window.api.onDeepClean(() => {
+        // @ts-ignore
+        window.api?.clearMemoryCache?.()
+      })
+    }
+
+    // 3. Chu kỳ kiểm tra dọn dẹp nhàn rỗi (mỗi 4 phút khi chạy ngầm)
+    const idleInterval = setInterval(() => {
+      if (document.hidden) {
+        // @ts-ignore
+        window.api?.clearMemoryCache?.()
+      }
+    }, 240000)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearInterval(idleInterval)
+    }
+  }, [])
 
   // Audio Context & Cấu trúc luồng Bit-perfect
   // EFFECT 1: CHỈ KHỞI TẠO LẠI BỘ LỌC KHI ĐỔI BÀI HOẶC BẬT/TẮT EQ (Tiết kiệm CPU)
@@ -1562,8 +2760,14 @@ export default function App() {
       const linearPreamp = isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0
       preampNodeRef.current.gain.value = linearPreamp
 
+      if (isCore) {
+        // CHẾ ĐỘ CỐT LÕI (CORE MODE): DIRECT STREAMING (0% DSP, 0% CPU, Bit-Perfect)
+        sourceNodeRef.current.connect(ctx.destination)
+        return
+      }
+
       let prevNode: AudioNode = sourceNodeRef.current
-      if (isEqEnabled && !isCore) {
+      if (isEqEnabled) {
         // Nối qua GainNode Preamp trước khi vào các BiquadFilter EQ
         prevNode.connect(preampNodeRef.current)
         prevNode = preampNodeRef.current
@@ -1584,7 +2788,7 @@ export default function App() {
       analyserNodeRef.current.connect(ctx.destination)
     }
     setupAudio().catch(e => console.error('[setupAudio error]', e))
-  }, [isEqEnabled, currentSampleRate]) // <-- Đã bỏ eqBands ra khỏi dependency
+  }, [isEqEnabled, currentSampleRate, isCore])
 
   // EFFECT 2: THAY ĐỔI EQ & PREAMP REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
   useEffect(() => {
@@ -1715,8 +2919,8 @@ export default function App() {
     if (!audio) return
 
     const handleTimeUpdate = () => {
-      // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Giữ nguyên) ---
-      if (lyrics.length > 0) {
+      // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Chỉ cập nhật khi giao diện đang mở trên màn hình) ---
+      if (!document.hidden && lyrics.length > 0) {
         const visualTime = audio.currentTime + 0.3
         const index = lyrics.findIndex((line, i) => {
           const nextLine = lyrics[i + 1]
@@ -1724,7 +2928,7 @@ export default function App() {
           return visualTime >= line.time
         })
         if (index !== currentLyricIndex) setCurrentLyricIndex(index)
-      } else if (currentLyricIndex !== -1) {
+      } else if (!document.hidden && currentLyricIndex !== -1 && lyrics.length === 0) {
         setCurrentLyricIndex(-1)
       }
 
@@ -1758,56 +2962,144 @@ export default function App() {
     }
   }, [currentLyricIndex])
 
-  // Spacebar Play/Pause
+  // In-App Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
-      if (e.code === 'Space' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault() 
-        if (currentTrack) setIsPlaying(prev => !prev)
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+
+      // Space / K -> Play / Pause
+      if (e.code === 'Space' || e.code === 'KeyK') {
+        e.preventDefault()
+        handlePlayPause()
+        return
+      }
+
+      // ArrowRight -> Seek +5s
+      if (e.code === 'ArrowRight' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault()
+        if (bitPerfectEnabled) {
+          window.api.mpvSeek(5)
+        } else if (audioRef.current && currentTrack) {
+          audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
+        }
+        return
+      }
+
+      // ArrowLeft -> Seek -5s
+      if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault()
+        if (bitPerfectEnabled) {
+          window.api.mpvSeek(-5)
+        } else if (audioRef.current && currentTrack) {
+          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
+        }
+        return
+      }
+
+      // Ctrl+Right / Shift+N / KeyN -> Next track
+      if ((e.ctrlKey && e.code === 'ArrowRight') || (e.shiftKey && e.code === 'KeyN') || (e.code === 'KeyN' && !e.ctrlKey && !e.altKey)) {
+        e.preventDefault()
+        handleNext()
+        return
+      }
+
+      // Ctrl+Left / Shift+P / KeyP -> Previous track
+      if ((e.ctrlKey && e.code === 'ArrowLeft') || (e.shiftKey && e.code === 'KeyP') || (e.code === 'KeyP' && !e.ctrlKey && !e.altKey)) {
+        e.preventDefault()
+        handlePrev()
+        return
+      }
+
+      // ArrowUp / Ctrl+Up -> Volume Up
+      if (e.code === 'ArrowUp') {
+        e.preventDefault()
+        handleVolumeUp()
+        return
+      }
+
+      // ArrowDown / Ctrl+Down -> Volume Down
+      if (e.code === 'ArrowDown') {
+        e.preventDefault()
+        handleVolumeDown()
+        return
+      }
+
+      // M -> Mute toggle
+      if (e.code === 'KeyM' && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        toggleMute()
+        return
+      }
+
+      // S -> Shuffle toggle
+      if (e.code === 'KeyS' && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        toggleShuffle()
+        return
+      }
+
+      // R -> Repeat toggle
+      if (e.code === 'KeyR' && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        toggleRepeat()
+        return
+      }
+
+      // / or Ctrl+F -> Focus Search
+      if ((e.code === 'Slash' && !e.ctrlKey && !e.shiftKey) || (e.ctrlKey && e.code === 'KeyF')) {
+        e.preventDefault()
+        const searchEl = document.querySelector('header input[type="text"]') as HTMLInputElement
+        if (searchEl) {
+          searchEl.focus()
+          searchEl.select()
+        }
+        return
       }
     }
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [currentTrack])
+  }, [currentTrack, isPlaying, bitPerfectEnabled, playQueue, repeatMode, volume, prevVolume, isShuffle, originalQueue])
 
   // Global Shortcuts
   useEffect(() => {
     if ((window as any).api?.onGlobalShortcut) {
       (window as any).api.onGlobalShortcut((action: string) => {
         switch (action) {
-          case 'play-pause': setIsPlaying(prev => !prev); break;
-          case 'next': handleNext(); break;
-          case 'prev': handlePrev(); break;
+          case 'play-pause':
+            handlePlayPause()
+            break
+          case 'next':
+            handleNext()
+            break
+          case 'prev':
+            handlePrev()
+            break
           case 'vol-up':
-            setVolume(prev => {
-              const newVol = Math.min(1, prev + 0.1)
-              if (audioRef.current) audioRef.current.volume = newVol
-              return newVol
-            }); break;
+            handleVolumeUp()
+            break
           case 'vol-down':
-            setVolume(prev => {
-              const newVol = Math.max(0, prev - 0.1)
-              if (audioRef.current) audioRef.current.volume = newVol
-              return newVol
-            }); break;
+            handleVolumeDown()
+            break
           case 'seek-forward':
-            if (audioRef.current) {
-              const newTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + 5)
-              audioRef.current.currentTime = newTime
+            if (bitPerfectEnabled) {
+              window.api.mpvSeek(5)
+            } else if (audioRef.current && currentTrack) {
+              audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
             }
-            break;
+            break
           case 'seek-backward':
-            if (audioRef.current) {
-              const newTime = Math.max(0, audioRef.current.currentTime - 5)
-              audioRef.current.currentTime = newTime
+            if (bitPerfectEnabled) {
+              window.api.mpvSeek(-5)
+            } else if (audioRef.current && currentTrack) {
+              audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
             }
-            break;
+            break
         }
       })
     }
-  }, [currentTrack, playQueue, isPlaying, repeatMode, volume])
+  }, [currentTrack, isPlaying, bitPerfectEnabled, playQueue, repeatMode, volume, prevVolume])
 
 
   // ==========================================
@@ -1817,6 +3109,36 @@ export default function App() {
   // 6. RENDERERS (VIRTUALIZED TABLE)
   // ==========================================
   const renderTrackTable = (tracks: any[]) => {
+    if (!tracks || tracks.length === 0) return null;
+
+    if (viewMode === 'grid') {
+      return (
+        <TrackGrid 
+          tracks={tracks}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          isLite={isLite}
+          handleRowClick={handleRowClick}
+          onContextMenu={handleTrackContextMenu}
+          openTagEditor={openTagEditor}
+        />
+      );
+    }
+
+    if (viewMode === 'compact') {
+      return (
+        <TrackCompactList 
+          tracks={tracks}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          isLite={isLite}
+          handleRowClick={handleRowClick}
+          onContextMenu={handleTrackContextMenu}
+          openTagEditor={openTagEditor}
+        />
+      );
+    }
+
     return (
       <div className="flex-1 flex flex-col min-h-[300px] h-full w-full bg-theme-60/20 rounded-lg border border-theme-30/50 overflow-hidden">
         <TableVirtuoso
@@ -1883,25 +3205,31 @@ export default function App() {
 
   // MPV Listeners
   useEffect(() => {
-    window.api.onMpvTime((val) => {
+    const unTime = window.api.onMpvTime((val) => {
       if (bitPerfectEnabled && audioRef.current) {
-        (audioRef.current as any)._currentTime = val;
+        (audioRef.current as any)._currentTime = val
       }
-    });
-    window.api.onMpvDuration((val) => {
+    })
+    const unDuration = window.api.onMpvDuration((val) => {
       if (bitPerfectEnabled && audioRef.current) {
-        (audioRef.current as any)._duration = val;
+        (audioRef.current as any)._duration = val
       }
-    });
-    window.api.onMpvPaused((val) => {
+    })
+    const unPaused = window.api.onMpvPaused((val) => {
       if (bitPerfectEnabled) {
         setIsPlaying(!val)
       }
-    });
-    window.api.onMpvEnded(() => {
+    })
+    const unEnded = window.api.onMpvEnded(() => {
       if (bitPerfectEnabled && !crossfadeEnabled) handleNext()
-    });
-  }, [handleNext, crossfadeEnabled, bitPerfectEnabled]);
+    })
+    return () => {
+      if (typeof unTime === 'function') unTime()
+      if (typeof unDuration === 'function') unDuration()
+      if (typeof unPaused === 'function') unPaused()
+      if (typeof unEnded === 'function') unEnded()
+    }
+  }, [handleNext, crossfadeEnabled, bitPerfectEnabled])
 
   // Watch currentTrack
   useEffect(() => {
@@ -1911,10 +3239,10 @@ export default function App() {
         if (audioRef.current) audioRef.current.pause()
       } else {
         // Dừng mpv khi phát bằng HTML Audio
-        window.api.mpvPause(true)
+        window.api.mpvPause()
       }
     }
-  }, [currentTrack, bitPerfectEnabled]);
+  }, [currentTrack, bitPerfectEnabled, crossfadeEnabled, crossfadeDuration])
 
   // Watch EQ & Preamp
   useEffect(() => {
@@ -1923,27 +3251,35 @@ export default function App() {
     } else {
       window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0], 0)
     }
-  }, [eqBands, isEqEnabled, preampGain]);
+  }, [eqBands, isEqEnabled, preampGain])
 
-  const handlePlayPause = () => {
-    if (!currentTrack) return;
-    
+  // Watch Volume
+  useEffect(() => {
     if (bitPerfectEnabled) {
-      window.api.mpvPause();
-    } else if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play().catch(console.warn);
-      }
-      setIsPlaying(!isPlaying);
+      window.api.mpvSetVolume(volume)
     }
-  };
+  }, [volume, bitPerfectEnabled])
 
-  // Giao diện chính (Full Screen)
- return (
+  return (
     <>
-      <div className="custom-bg" />
+      {!isCore && (
+        <div className="custom-bg-container">
+          <div 
+            className={`custom-bg-layer ${!isLite ? 'transition-all' : ''}`}
+            style={{
+              backgroundImage: bgLayerA ? `url("${bgLayerA.replace(/"/g, '\\"')}")` : 'none',
+              opacity: activeBgLayer === 'A' && bgLayerA ? customBgOpacity : 0
+            }}
+          />
+          <div 
+            className={`custom-bg-layer ${!isLite ? 'transition-all' : ''}`}
+            style={{
+              backgroundImage: bgLayerB ? `url("${bgLayerB.replace(/"/g, '\\"')}")` : 'none',
+              opacity: activeBgLayer === 'B' && bgLayerB ? customBgOpacity : 0
+            }}
+          />
+        </div>
+      )}
       {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG VÀ ÉP THAY ĐỔI SAMPLE RATE */}
       <audio
         key={currentSampleRate} // Tự động remount khi Sample Rate thay đổi
@@ -2035,7 +3371,7 @@ export default function App() {
         </div>
       ) : (
         // --- GIAO DIỆN CHÍNH (FULL SCREEN) ---
-        <div className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: effectiveBgImage ? 'transparent' : themeColor }}>
+        <div data-mode={appMode} className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`} style={{ backgroundColor: effectiveBgImage ? 'transparent' : (isCore ? '#121212' : themeColor) }}>
       {!isLite && !effectiveBgImage && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
 
       {/* OVERLAYS & MODALS */}
@@ -2101,10 +3437,26 @@ export default function App() {
         onSubmit={handleRenameSubmit}
       />
 
+      <EditPlaylistModal
+        isOpen={showEditUserPlaylistModal}
+        playlist={editingUserPlaylist}
+        onClose={() => {
+          setShowEditUserPlaylistModal(false)
+          setEditingUserPlaylist(null)
+        }}
+        onSave={handleSaveEditUserPlaylist}
+      />
+
       <CreatePlaylistModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreate={handleCreatePlaylistSubmit}
+      />
+
+      <CreatePlaylistModal
+        isOpen={showCreateUserPlaylistModal}
+        onClose={() => setShowCreateUserPlaylistModal(false)}
+        onCreate={handleCreateUserPlaylist}
       />
 
       <AddSongsModal
@@ -2113,6 +3465,14 @@ export default function App() {
         playlistName={activePlaylist?.name || ''}
         onClose={() => setShowAddSongsModal(false)}
         onAddTracks={handleAddTracksToActivePlaylist}
+      />
+
+      <AddSongsModal
+        isOpen={showAddSongsToUserPlaylistModal}
+        tracks={libraryTracks}
+        playlistName={activeUserPlaylist?.name || ''}
+        onClose={() => setShowAddSongsToUserPlaylistModal(false)}
+        onAddTracks={handleAddSongsToUserPlaylist}
       />
 
       <EQPanel 
@@ -2135,6 +3495,11 @@ export default function App() {
         isLite={isLite} 
         currentTrack={currentTrack} 
         audioRef={audioRef}
+      />
+
+      <CustomDialogModal 
+        dialog={customDialog} 
+        onClose={() => setCustomDialog(null)} 
       />
 
       {contextMenu && (
@@ -2163,6 +3528,8 @@ export default function App() {
         activeView={activeView} setActiveView={setActiveView}
         setSearchQuery={setSearchQuery} setSearchInput={setSearchInput}
         setActiveAlbum={setActiveAlbum} setActivePlaylist={setActivePlaylist}
+        setActiveArtist={setActiveArtist} setActiveGenre={setActiveGenre}
+        setActiveUserPlaylist={setActiveUserPlaylist}
         fetchDashboard={fetchDashboard}
         fetchScDashboard={fetchScDashboard}
         isCore={isCore}
@@ -2172,8 +3539,8 @@ export default function App() {
         <main className={`flex-1 flex flex-col bg-transparent overflow-hidden ${(isLyricsMaximized && showLyricsPanel) ? 'hidden' : ''}`}>
           
           <header className="h-20 px-8 flex items-center justify-between border-b border-theme-30/50 flex-shrink-0 w-full">
-            <div className="relative w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+            <div className="relative w-96 flex items-center">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={18} />
               <input 
                 type="text" 
                 value={searchInput}
@@ -2203,7 +3570,7 @@ export default function App() {
                             setDashboardData(res.data);
                           }
                         } else {
-                          alert('Lỗi tìm kiếm YouTube Music: ' + res.error);
+                          showAlert({ title: t('common.error'), message: 'Lỗi tìm kiếm YouTube Music: ' + res.error });
                         }
                       });
                     } else if (activeView === 'home-soundcloud') {
@@ -2225,7 +3592,7 @@ export default function App() {
                           }
                           setScDashboardData(sections);
                         } else {
-                          alert('Lỗi tìm kiếm SoundCloud: ' + res.error);
+                          showAlert({ title: t('common.error'), message: 'Lỗi tìm kiếm SoundCloud: ' + res.error });
                         }
                       });
                     } else {
@@ -2240,34 +3607,411 @@ export default function App() {
                     ? t('header.searchSc')
                     : t('header.searchLocal')
                 } 
-                className="w-full bg-theme-60/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors" 
+                className="w-full bg-theme-60/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-9 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors placeholder:text-zinc-500" 
               />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearchQuery('');
+                    if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard();
+                    if (activeView === 'home-soundcloud') fetchScDashboard();
+                  }}
+                  className="absolute right-3 text-zinc-400 hover:text-white p-0.5 rounded transition"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
             
-            <button onClick={handleReloadLibrary} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-theme-60/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title={t('header.refreshLibrary')}>
-              <RefreshCw size={16} className={isReloading ? 'animate-spin' : ''} />
-              {isReloading ? t('header.refreshing') : t('header.refresh')}
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Tùy chọn chuyển đổi kiểu hiển thị (View Mode Switcher) */}
+              {(activeView === 'songs' || activeView === 'playlists' || activeView === 'artists' || activeView === 'genres' || activeView === 'user-playlists') && (
+                <div className="flex items-center bg-theme-60/50 p-1 rounded-full border border-zinc-700/50">
+                  <button 
+                    onClick={() => { setViewMode('table'); localStorage.setItem('meis_view_mode', 'table'); }} 
+                    className={`p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'table' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
+                    title={t('viewOptions.table')}
+                  >
+                    <List size={14} />
+                    <span className="hidden xl:inline">{t('viewOptions.table')}</span>
+                  </button>
+                  <button 
+                    onClick={() => { setViewMode('grid'); localStorage.setItem('meis_view_mode', 'grid'); }} 
+                    className={`p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'grid' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
+                    title={t('viewOptions.grid')}
+                  >
+                    <LayoutGrid size={14} />
+                    <span className="hidden xl:inline">{t('viewOptions.grid')}</span>
+                  </button>
+                  <button 
+                    onClick={() => { setViewMode('compact'); localStorage.setItem('meis_view_mode', 'compact'); }} 
+                    className={`p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'compact' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
+                    title={t('viewOptions.compact')}
+                  >
+                    <Rows3 size={14} />
+                    <span className="hidden xl:inline">{t('viewOptions.compact')}</span>
+                  </button>
+                </div>
+              )}
+
+              <button onClick={handleReloadLibrary} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-theme-60/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title={t('header.refreshLibrary')}>
+                <RefreshCw size={16} className={isReloading ? 'animate-spin' : ''} />
+                {isReloading ? t('header.refreshing') : t('header.refresh')}
+              </button>
+            </div>
           </header>
 
           <div className="flex-1 flex overflow-hidden">
             
             {/* CỘT TRÁI: DATA VIEW */}
-            <div key={activeView} className={`${isLite ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || (activeView === 'playlists' && !activePlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+            <div 
+              key={`${activeView}-${activeAlbum ? (activeAlbum.browseId || activeAlbum.title || 'album') : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.name || ''}-${activeUserPlaylist?.id || ''}`}
+              className={`${isLite || isCore ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || activeView === 'home' || (activeView === 'playlists' && !activePlaylist) || activeView === 'artists' || (activeView === 'genres' && !activeGenre) || (activeView === 'user-playlists' && !activeUserPlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}
+            >
+              
+              {/* VIEW: TRANG CHỦ TỔNG QUAN (DASHBOARD) */}
+              {activeView === 'home' && (
+                <div className="flex flex-col space-y-8 pb-16">
+                  {/* HERO HEADER */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-theme-10/15 border border-theme-10/30 text-theme-10 flex items-center justify-center shadow-lg shadow-theme-10/10">
+                        <Sparkles size={24} className="fill-current" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl lg:text-3xl font-extrabold text-white">
+                          {t('home.dashboardTitle')}
+                        </h2>
+                        <p className="text-xs text-zinc-400">{t('home.dashboardSubtitle')}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => {
+                          if (dashboardRecommendations.length > 0) {
+                            handleRowClick(dashboardRecommendations[0], dashboardRecommendations)
+                          } else if (libraryTracks.length > 0) {
+                            handleRowClick(libraryTracks[0], libraryTracks)
+                          }
+                        }}
+                        disabled={libraryTracks.length === 0}
+                        className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10/90 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                      >
+                        <Play size={16} className="fill-current" />
+                        <span>{t('home.playAllRecommendations')}</span>
+                      </button>
+
+                      <button 
+                        onClick={() => {
+                          if (libraryTracks.length > 0) {
+                            const shuffled = [...libraryTracks].sort(() => Math.random() - 0.5)
+                            handleRowClick(shuffled[0], shuffled)
+                          }
+                        }}
+                        disabled={libraryTracks.length === 0}
+                        className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                      >
+                        <Shuffle size={16} />
+                        <span>{t('home.shuffleAllLibrary')}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* STATS OVERVIEW CARDS */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div 
+                      onClick={() => setActiveView('songs')} 
+                      className="bg-theme-60/40 hover:bg-theme-30/40 border border-theme-30/60 hover:border-theme-10/40 rounded-2xl p-4 flex items-center gap-4 transition cursor-pointer group shadow-sm"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-theme-10 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                        <Library size={22} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-2xl font-black text-white group-hover:text-theme-10 transition">{libraryTracks.length}</p>
+                        <p className="text-xs text-zinc-400 truncate">{t('home.statsSongs')}</p>
+                      </div>
+                    </div>
+
+                    <div 
+                      onClick={() => setActiveView('playlists')} 
+                      className="bg-theme-60/40 hover:bg-theme-30/40 border border-theme-30/60 hover:border-theme-10/40 rounded-2xl p-4 flex items-center gap-4 transition cursor-pointer group shadow-sm"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                        <Disc size={22} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-2xl font-black text-white group-hover:text-blue-400 transition">{playlists.length + userPlaylists.length}</p>
+                        <p className="text-xs text-zinc-400 truncate">{t('home.statsPlaylists')}</p>
+                      </div>
+                    </div>
+
+                    <div 
+                      onClick={() => setActiveView('artists')} 
+                      className="bg-theme-60/40 hover:bg-theme-30/40 border border-theme-30/60 hover:border-theme-10/40 rounded-2xl p-4 flex items-center gap-4 transition cursor-pointer group shadow-sm"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                        <Mic2 size={22} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-2xl font-black text-white group-hover:text-purple-400 transition">{new Set(libraryTracks.map(t => t.artist).filter(Boolean)).size}</p>
+                        <p className="text-xs text-zinc-400 truncate">{t('home.statsArtists')}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-theme-60/40 border border-theme-30/60 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
+                      <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+                        <History size={22} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-2xl font-black text-white">{recentlyPlayed.length}</p>
+                        <p className="text-xs text-zinc-400 truncate">{t('home.statsRecent')}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KHỐI 1: GỢI Ý BÀI HÁT TỪ THƯ MỤC NHẠC (DỰA TRÊN LỊCH SỬ NGHE VÀ THƯ VIỆN) */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                          <Sparkles size={18} className="text-theme-10" />
+                          {t('home.forYouTitle')}
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-0.5">{t('home.forYouSubtitle')}</p>
+                      </div>
+                      {dashboardRecommendations.length > 0 && (
+                        <button 
+                          onClick={() => handleRowClick(dashboardRecommendations[0], dashboardRecommendations)}
+                          className="text-xs font-medium text-theme-10 hover:underline flex items-center gap-1 transition"
+                        >
+                          <Play size={12} className="fill-current" /> {t('userPlaylistsView.playAll')}
+                        </button>
+                      )}
+                    </div>
+
+                    {dashboardRecommendations.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {dashboardRecommendations.map((track, idx) => {
+                          const isCurrent = currentTrack?.id === track.id || currentTrack?.filePath === track.filePath
+                          return (
+                            <div 
+                              key={track.id || track.filePath || idx}
+                              onClick={() => handleRowClick(track, dashboardRecommendations)}
+                              onContextMenu={(e) => handleTrackContextMenu(track, e)}
+                              className={`flex items-center gap-3.5 p-2.5 rounded-2xl border transition group cursor-pointer ${
+                                isCurrent 
+                                  ? 'bg-theme-10/15 border-theme-10/40 text-theme-10' 
+                                  : 'bg-theme-60/40 hover:bg-theme-30/50 border-theme-30/40 hover:border-theme-30 text-white'
+                              }`}
+                            >
+                              <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden relative shrink-0 shadow-md">
+                                {track.coverArt ? (
+                                  <img src={track.coverArt} alt={track.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
+                                    <Music size={18} />
+                                  </div>
+                                )}
+                                <div className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                  {isCurrent && isPlaying ? (
+                                    <span className="w-3.5 h-3.5 rounded-full bg-theme-10 animate-pulse"></span>
+                                  ) : (
+                                    <Play size={16} className="text-white fill-current ml-0.5" />
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}>
+                                  {track.title || t('common.unknown')}
+                                </p>
+                                <p className="text-xs text-zinc-400 truncate mt-0.5">
+                                  {track.artist || t('player.unknownArtist')}
+                                </p>
+                              </div>
+
+                              <span className="text-[11px] text-zinc-500 shrink-0 pr-2">
+                                {formatDuration(track.duration)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-theme-60/30 border border-theme-30/40 rounded-2xl p-8 text-center flex flex-col items-center justify-center">
+                        <Music size={40} className="text-zinc-600 mb-3" />
+                        <p className="text-sm font-medium text-zinc-300">{t('home.noRecentTitle')}</p>
+                        <p className="text-xs text-zinc-500 max-w-md mt-1">{t('home.noRecentDesc')}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* KHỐI 2: ĐÃ NGHE GẦN ĐÂY (RECENTLY PLAYED) */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                          <History size={18} className="text-amber-400" />
+                          {t('home.recentlyPlayedTitle')}
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-0.5">{t('home.recentlyPlayedSubtitle')}</p>
+                      </div>
+                    </div>
+
+                    {recentlyPlayed.length > 0 ? (
+                      <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide snap-x">
+                        {recentlyPlayed.slice(0, 15).map((track, idx) => {
+                          const isCurrent = currentTrack?.id === track.id || currentTrack?.filePath === track.filePath
+                          return (
+                            <div 
+                              key={idx}
+                              onClick={() => handleRowClick(track, recentlyPlayed)}
+                              onContextMenu={(e) => handleTrackContextMenu(track, e)}
+                              className="min-w-[140px] max-w-[140px] snap-start group cursor-pointer"
+                            >
+                              <div className="w-full aspect-square rounded-2xl bg-theme-30 mb-2.5 overflow-hidden relative shadow-lg border border-theme-30/40">
+                                {track.coverArt ? (
+                                  <img src={track.coverArt} alt={track.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
+                                    <Music size={28} />
+                                  </div>
+                                )}
+                                <div className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                  {isCurrent && isPlaying ? (
+                                    <span className="w-5 h-5 rounded-full bg-theme-10 animate-pulse"></span>
+                                  ) : (
+                                    <div className="w-9 h-9 rounded-full bg-theme-10 flex items-center justify-center shadow-lg text-white">
+                                      <Play size={16} className="fill-current ml-0.5" />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <p className={`text-xs font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}>
+                                {track.title}
+                              </p>
+                              <p className="text-[11px] text-zinc-500 truncate mt-0.5">{track.artist}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-theme-60/20 border border-theme-30/30 rounded-2xl p-6 text-center text-zinc-500 text-xs">
+                        {t('home.noRecentDesc')}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* KHỐI 3: KHÁM PHÁ TỪ THƯ MỤC NHẠC */}
+                  {randomDiscoverTracks.length > 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <Compass size={18} className="text-blue-400" />
+                            {t('home.discoverFolderTitle')}
+                          </h3>
+                          <p className="text-xs text-zinc-400 mt-0.5">{t('home.discoverFolderSubtitle')}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {randomDiscoverTracks.map((track, idx) => {
+                          const isCurrent = currentTrack?.id === track.id || currentTrack?.filePath === track.filePath
+                          return (
+                            <div 
+                              key={track.id || track.filePath || idx}
+                              onClick={() => handleRowClick(track, randomDiscoverTracks)}
+                              onContextMenu={(e) => handleTrackContextMenu(track, e)}
+                              className={`flex items-center gap-3.5 p-2.5 rounded-2xl border transition group cursor-pointer ${
+                                isCurrent 
+                                  ? 'bg-theme-10/15 border-theme-10/40 text-theme-10' 
+                                  : 'bg-theme-60/40 hover:bg-theme-30/50 border-theme-30/40 hover:border-theme-30 text-white'
+                              }`}
+                            >
+                              <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden relative shrink-0 shadow-md">
+                                {track.coverArt ? (
+                                  <img src={track.coverArt} alt={track.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
+                                    <Music size={18} />
+                                  </div>
+                                )}
+                                <div className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                  {isCurrent && isPlaying ? (
+                                    <span className="w-3.5 h-3.5 rounded-full bg-theme-10 animate-pulse"></span>
+                                  ) : (
+                                    <Play size={16} className="text-white fill-current ml-0.5" />
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}>
+                                  {track.title || t('common.unknown')}
+                                </p>
+                                <p className="text-xs text-zinc-400 truncate mt-0.5">
+                                  {track.artist || t('player.unknownArtist')}
+                                </p>
+                              </div>
+
+                              <span className="text-[11px] text-zinc-500 shrink-0 pr-2">
+                                {formatDuration(track.duration)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               
               {/* VIEW: TRANG CHỦ YOUTUBE MUSIC */}
-              {(activeView === 'home' || activeView === 'home-ytm') && (
+              {activeView === 'home-ytm' && (
                 <div className="flex flex-col h-full">
                   {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST --- */}
                   {activeAlbum ? (
-                    <div className="flex flex-col h-full animate-fade-in">
-                      <div className="flex items-center gap-4 mb-8">
-                        <button onClick={() => setActiveAlbum(null)} className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition">
-                          <ArrowLeft size={20}/>
+                    <div className="flex flex-col h-full animate-fade-in space-y-6">
+                      <div>
+                        <button onClick={() => setActiveAlbum(null)} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer">
+                          <ArrowLeft size={16}/> {t('home.backToDashboard')}
                         </button>
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-1">{t('home.ytmPlaylist')}</p>
-                          <h2 className="text-3xl font-extrabold text-white">{activeAlbum.title}</h2>
+                        <div className="flex items-end justify-between gap-6 mb-6">
+                          <div className="flex items-end gap-6 min-w-0">
+                            {activeAlbum.thumbnail && (
+                              <div className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl flex-shrink-0">
+                                <img src={activeAlbum.thumbnail} className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-2">{t('home.ytmPlaylist')}</p>
+                              <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-3 truncate">{activeAlbum.title}</h2>
+                              <p className="text-sm text-zinc-400 mb-4">{activeAlbum.tracks?.length || 0} {t('common.songs')}</p>
+                              {activeAlbum.tracks && activeAlbum.tracks.length > 0 && (
+                                <div className="flex items-center gap-3">
+                                  <button 
+                                    onClick={() => handleRowClick(activeAlbum.tracks[0], activeAlbum.tracks)}
+                                    className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-red-600/20 cursor-pointer"
+                                  >
+                                    <Play size={16} className="fill-current" /> {t('userPlaylistsView.playAll')}
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      const shuffled = [...activeAlbum.tracks].sort(() => Math.random() - 0.5)
+                                      handleRowClick(shuffled[0], shuffled)
+                                    }}
+                                    className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                                  >
+                                    <Shuffle size={16} /> {t('artistsView.shuffle')}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                       
@@ -2285,6 +4029,19 @@ export default function App() {
                     <>
                       <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">
+                          {(searchInput.trim() || searchQuery.trim()) && (
+                            <button 
+                              onClick={() => {
+                                setSearchInput('');
+                                setSearchQuery('');
+                                fetchDashboard();
+                              }}
+                              title={t('home.backToDashboard')}
+                              className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition cursor-pointer shrink-0"
+                            >
+                              <ArrowLeft size={18} />
+                            </button>
+                          )}
                           <button 
                             onClick={() => {
                               setSearchInput('');
@@ -2414,14 +4171,43 @@ export default function App() {
                 <div className="flex flex-col h-full">
                   {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST SOUNDCLOUD --- */}
                   {activeAlbum ? (
-                    <div className="flex flex-col h-full animate-fade-in">
-                      <div className="flex items-center gap-4 mb-8">
-                        <button onClick={() => setActiveAlbum(null)} className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition">
-                          <ArrowLeft size={20}/>
+                    <div className="flex flex-col h-full animate-fade-in space-y-6">
+                      <div>
+                        <button onClick={() => setActiveAlbum(null)} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer">
+                          <ArrowLeft size={16}/> {t('home.backToDashboard')}
                         </button>
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-1">{t('home.scPlaylist')}</p>
-                          <h2 className="text-3xl font-extrabold text-white">{activeAlbum.title}</h2>
+                        <div className="flex items-end justify-between gap-6 mb-6">
+                          <div className="flex items-end gap-6 min-w-0">
+                            {activeAlbum.thumbnail && (
+                              <div className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl flex-shrink-0">
+                                <img src={activeAlbum.thumbnail} className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">{t('home.scPlaylist')}</p>
+                              <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-3 truncate">{activeAlbum.title}</h2>
+                              <p className="text-sm text-zinc-400 mb-4">{activeAlbum.tracks?.length || 0} {t('common.songs')}</p>
+                              {activeAlbum.tracks && activeAlbum.tracks.length > 0 && (
+                                <div className="flex items-center gap-3">
+                                  <button 
+                                    onClick={() => handleRowClick(activeAlbum.tracks[0], activeAlbum.tracks)}
+                                    className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-amber-500/20 cursor-pointer"
+                                  >
+                                    <Play size={16} className="fill-current" /> {t('userPlaylistsView.playAll')}
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      const shuffled = [...activeAlbum.tracks].sort(() => Math.random() - 0.5)
+                                      handleRowClick(shuffled[0], shuffled)
+                                    }}
+                                    className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                                  >
+                                    <Shuffle size={16} /> {t('artistsView.shuffle')}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                       
@@ -2439,6 +4225,19 @@ export default function App() {
                     <>
                       <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
+                          {(searchInput.trim() || searchQuery.trim()) && (
+                            <button 
+                              onClick={() => {
+                                setSearchInput('');
+                                setSearchQuery('');
+                                fetchScDashboard();
+                              }}
+                              title={t('home.backToDashboard')}
+                              className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition cursor-pointer shrink-0"
+                            >
+                              <ArrowLeft size={18} />
+                            </button>
+                          )}
                           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center">
                             <Cloud size={22} className="fill-current" />
                           </div>
@@ -2626,9 +4425,25 @@ export default function App() {
                       <h2 className="text-3xl font-bold text-white">{searchQuery ? t('songsView.searchResults') : t('songsView.songList')}</h2>
                       <span className="text-zinc-500 text-sm mb-1">{processedLibraryTracks.length} {t('common.songs')}</span>
                     </div>
-                    <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
-                      <Plus size={18} /> {t('songsView.addMusic')}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => {
+                          if (processedLibraryTracks.length > 0) {
+                            setIsShuffle(true)
+                            const shuffled = [...processedLibraryTracks].sort(() => Math.random() - 0.5)
+                            handleRowClick(shuffled[0], shuffled)
+                          }
+                        }}
+                        disabled={processedLibraryTracks.length === 0}
+                        className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        title={t('songsView.randomPlay')}
+                      >
+                        <Shuffle size={16} /> {t('songsView.randomPlay')}
+                      </button>
+                      <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer">
+                        <Plus size={18} /> {t('songsView.addMusic')}
+                      </button>
+                    </div>
                   </div>
                   {libraryPath ? (
                     processedLibraryTracks.length > 0 ? renderTrackTable(processedLibraryTracks) : <p className="text-zinc-500 mt-10 text-center">{t('songsView.noSongsMatched', { query: searchQuery })}</p>
@@ -2746,95 +4561,174 @@ export default function App() {
                     <div className="border-t border-theme-30 pt-6 mt-6">
                       <h3 className="text-theme-10 font-semibold mb-3">{t('settings.customBg.title')}</h3>
                       
-                      {/* Checkbox tùy chọn dùng ảnh bìa bài hát */}
-                      <label className="flex items-center gap-3 cursor-pointer mb-4 select-none group w-fit">
-                        <input 
-                          type="checkbox" 
-                          checked={useTrackCoverAsBg} 
-                          onChange={(e) => setUseTrackCoverAsBg(e.target.checked)}
-                          className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
-                        />
-                        <span className="text-sm text-zinc-300 group-hover:text-white transition">
-                          {t('settings.customBg.useTrackCover')}
-                        </span>
-                      </label>
+                      {isCore ? (
+                        <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
+                          {language === 'vi' ? 'Tính năng hình nền & giao diện màu sắc bị tắt hoàn toàn ở Chế độ cốt lõi (Core Mode) để tối ưu hiệu năng.' : 'Background and dynamic theme are completely disabled in Core Mode for maximum performance.'}
+                        </p>
+                      ) : (
+                        <>
+                          {/* Checkbox tùy chọn dùng ảnh bìa bài hát */}
+                          <label className="flex items-center gap-3 cursor-pointer mb-4 select-none group w-fit">
+                            <input 
+                              type="checkbox" 
+                              checked={useTrackCoverAsBg} 
+                              onChange={(e) => setUseTrackCoverAsBg(e.target.checked)}
+                              className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
+                            />
+                            <span className="text-sm text-zinc-300 group-hover:text-white transition">
+                              {t('settings.customBg.useTrackCover')}
+                            </span>
+                          </label>
 
-                      {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
-                      {!useTrackCoverAsBg && (
-                        <div className="flex gap-3 items-center mb-4">
-                          <input 
-                            type="text" 
-                            value={bgImageInput} 
-                            onChange={(e) => setBgImageInput(e.target.value)} 
-                            placeholder={t('settings.customBg.placeholder')} 
-                            className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
-                          />
-                          <button 
-                            onClick={() => {
-                              const normalized = normalizeImagePath(bgImageInput)
-                              if (normalized) {
-                                setBgImageInput(normalized)
-                                setCustomBgImage(normalized)
-                              }
-                            }}
-                            className="bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition"
-                          >
-                            {t('settings.customBg.applyLink')}
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              const filePath = await window.api.selectImageFile()
-                              if (filePath) {
-                                const normalized = normalizeImagePath(filePath)
-                                setBgImageInput(normalized)
-                                setCustomBgImage(normalized)
-                              }
-                            }}
-                            className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                          >
-                            {t('settings.customBg.chooseImage')}
-                          </button>
-                          <button 
-                            onClick={() => { setCustomBgImage(null); setBgImageInput(''); }}
-                            className="bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-medium transition"
-                          >
-                            {t('settings.customBg.removeBg')}
-                          </button>
-                        </div>
+                          {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
+                          {!useTrackCoverAsBg && (
+                            <div className="flex gap-3 items-center mb-4">
+                              <input 
+                                type="text" 
+                                value={bgImageInput} 
+                                onChange={(e) => setBgImageInput(e.target.value)} 
+                                placeholder={t('settings.customBg.placeholder')} 
+                                className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
+                              />
+                              <button 
+                                onClick={() => {
+                                  const normalized = normalizeImagePath(bgImageInput)
+                                  if (normalized) {
+                                    setBgImageInput(normalized)
+                                    setCustomBgImage(normalized)
+                                  }
+                                }}
+                                className="bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                              >
+                                {t('settings.customBg.applyLink')}
+                              </button>
+                              <button 
+                                onClick={async () => {
+                                  const filePath = await window.api.selectImageFile()
+                                  if (filePath) {
+                                    const normalized = normalizeImagePath(filePath)
+                                    setBgImageInput(normalized)
+                                    setCustomBgImage(normalized)
+                                  }
+                                }}
+                                className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                              >
+                                {t('settings.customBg.chooseImage')}
+                              </button>
+                              <button 
+                                onClick={() => { setCustomBgImage(null); setBgImageInput(''); }}
+                                className="bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                              >
+                                {t('settings.customBg.removeBg')}
+                              </button>
+                            </div>
+                          )}
+                          
+                          <div className="flex flex-col gap-4">
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.opacity')}:</span>
+                              <input 
+                                type="range" 
+                                min="0" max="1" step="0.05" 
+                                value={customBgOpacity} 
+                                onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))}
+                                onWheel={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  const delta = e.deltaY < 0 ? 0.05 : -0.05
+                                  setCustomBgOpacity(prev => Math.max(0, Math.min(1, Math.round((prev + delta) * 100) / 100)))
+                                }}
+                                className="flex-1 accent-theme-10"
+                              />
+                              <span className="text-sm font-mono text-zinc-400 w-12 text-right">{Math.round(customBgOpacity * 100)}%</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.blur')}:</span>
+                              <input 
+                                type="range" 
+                                min="0" max="100" step="1" 
+                                value={customBgBlur} 
+                                onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
+                                onWheel={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  const delta = e.deltaY < 0 ? 2 : -2
+                                  setCustomBgBlur(prev => Math.max(0, Math.min(100, prev + delta)))
+                                }}
+                                className="flex-1 accent-theme-10"
+                              />
+                              <span className="text-sm font-mono text-zinc-400 w-12 text-right">{customBgBlur}px</span>
+                            </div>
+                          </div>
+                        </>
                       )}
-                      
-                      <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.opacity')}:</span>
-                          <input 
-                            type="range" 
-                            min="0" max="1" step="0.05" 
-                            value={customBgOpacity} 
-                            onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))}
-                            className="flex-1 accent-theme-10"
-                          />
-                          <span className="text-sm font-mono text-zinc-400 w-12 text-right">{Math.round(customBgOpacity * 100)}%</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm text-zinc-300 w-32">{t('settings.customBg.blur')}:</span>
-                          <input 
-                            type="range" 
-                            min="0" max="100" step="1" 
-                            value={customBgBlur} 
-                            onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
-                            className="flex-1 accent-theme-10"
-                          />
-                          <span className="text-sm font-mono text-zinc-400 w-12 text-right">{customBgBlur}px</span>
-                        </div>
-                      </div>
                     </div>
 
+                    {/* QUẢN LÝ ĐA THƯ MỤC NHẠC */}
                     <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.library.title')}</h3>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-theme-10 font-semibold">{t('settings.library.title')}</h3>
+                        <span className="text-xs text-zinc-400">
+                          {libraryPaths.length} {t('settings.library.folderCount')} • {libraryTracks.length} {t('common.songs')}
+                        </span>
+                      </div>
                       <p className="text-sm text-zinc-400 mb-4">{t('settings.library.desc')}</p>
-                      <div className="flex gap-3 items-center">
-                        <input type="text" readOnly value={libraryPath || t('settings.library.notSet')} className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300" />
-                        <button onClick={handleSelectLibrary} className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition">{t('settings.library.change')}</button>
+                      
+                      <div className="space-y-2.5 mb-4">
+                        {libraryPaths.length === 0 ? (
+                          <p className="text-zinc-500 italic text-sm p-3 bg-zinc-950/60 rounded-lg border border-zinc-800">{t('settings.library.notSet')}</p>
+                        ) : (
+                          libraryPaths.map((fPath, idx) => (
+                            <div key={idx} className="flex items-center justify-between gap-3 bg-zinc-950/80 p-3 rounded-xl border border-zinc-800/80 hover:border-zinc-700 transition">
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <Folder size={18} className="text-theme-10 shrink-0" />
+                                <span className="text-sm text-zinc-200 truncate font-mono">{fPath}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button 
+                                  onClick={() => handleUpdateLibraryFolder(fPath)}
+                                  className="px-3 py-1.5 bg-theme-30/60 hover:bg-theme-30 text-xs font-medium text-zinc-300 hover:text-white rounded-lg transition"
+                                  title={t('settings.library.updateFolder')}
+                                >
+                                  {t('settings.library.change')}
+                                </button>
+                                <button 
+                                  onClick={async () => {
+                                    // @ts-ignore
+                                    await window.api.showInFolder(fPath)
+                                  }}
+                                  className="p-1.5 bg-theme-30/60 hover:bg-theme-30 text-zinc-400 hover:text-white rounded-lg transition"
+                                  title={t('settings.library.openFolder')}
+                                >
+                                  <FolderOpen size={15} />
+                                </button>
+                                <button 
+                                  onClick={() => handleRemoveLibraryFolder(fPath)}
+                                  className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition"
+                                  title={t('settings.library.removeFolder')}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={handleAddLibraryFolder} 
+                          className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20"
+                        >
+                          <Plus size={16} /> {t('settings.library.addFolder')}
+                        </button>
+                        <button 
+                          onClick={handleReloadLibrary} 
+                          disabled={isReloading}
+                          className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                        >
+                          <RefreshCw size={15} className={isReloading ? 'animate-spin' : ''} /> {t('settings.library.rescan')}
+                        </button>
                       </div>
                     </div>
 
@@ -2845,10 +4739,36 @@ export default function App() {
                         <input 
                           type="checkbox" 
                           checked={bitPerfectEnabled} 
-                          onChange={e => {
+                          onChange={async (e) => {
                             const val = e.target.checked
+                            const prevTrack = currentTrack
+                            const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
+                            const wasPlaying = isPlaying
+
                             setBitPerfectEnabled(val)
-                            window.api.setBitPerfect(val)
+                            await window.api.setBitPerfect(val)
+
+                            if (prevTrack && prevTrack.filePath) {
+                              if (val) {
+                                if (audioRef.current) audioRef.current.pause()
+                                if (wasPlaying) {
+                                  await window.api.mpvPlay(prevTrack.filePath, 0)
+                                  if (currentPlaybackTime > 0) {
+                                    window.api.mpvSeek(currentPlaybackTime)
+                                  }
+                                }
+                              } else {
+                                if (audioRef.current) {
+                                  audioRef.current.currentTime = currentPlaybackTime
+                                  if (wasPlaying) {
+                                    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+                                      await audioCtxRef.current.resume().catch(() => {})
+                                    }
+                                    audioRef.current.play().catch(console.warn)
+                                  }
+                                }
+                              }
+                            }
                           }} 
                           className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
                         />
@@ -2894,38 +4814,914 @@ export default function App() {
                     <div className="border-t border-theme-30 pt-6 mt-6">
                       <h3 className="text-theme-10 font-semibold mb-2">{t('settings.appMode.title')}</h3>
                       <p className="text-sm text-zinc-400 mb-4">{t('settings.appMode.desc')}</p>
-                      <div className="w-full">
-                        <CustomSelect 
-                          value={appMode} 
-                          onChange={(val) => {
-                            setAppMode(val as any)
-                            if (val === 'lite' || val === 'core') {
-                              setShowVisualizer(false)
-                              setShowLyricsPanel(false)
-                              setIsLyricsMaximized(false)
-                              if (val === 'core') {
-                                setShowEQ(false)
-                                // Tự động đóng tab mạng nếu đang xem
-                                if (activeView === 'home' || activeView === 'online' || activeView === 'drive') setActiveView('songs')
-                              }
-                              // Ép thu gom rác ngay lập tức
-                              // @ts-ignore
-                              if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* 1. Tiêu chuẩn (Standard) */}
+                        <div 
+                          onClick={() => {
+                            setAppMode('default')
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            appMode === 'default'
+                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
+                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-white flex items-center gap-2">
+                                <Sparkles size={16} className={appMode === 'default' ? 'text-theme-10' : 'text-zinc-400'} />
+                                {t('settings.appMode.standard')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                              {t('settings.appMode.standardDesc')}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 2. Tiết kiệm (Lite) */}
+                        <div 
+                          onClick={() => {
+                            setAppMode('lite')
+                            setShowVisualizer(false)
+                            setShowLyricsPanel(false)
+                            setIsLyricsMaximized(false)
+                            // @ts-ignore
+                            if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            appMode === 'lite'
+                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
+                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-white flex items-center gap-2">
+                                <Leaf size={16} className={appMode === 'lite' ? 'text-theme-10' : 'text-zinc-400'} />
+                                {t('settings.appMode.lite')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                              {t('settings.appMode.liteDesc')}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 3. Cốt lõi (Core) */}
+                        <div 
+                          onClick={() => {
+                            setAppMode('core')
+                            setShowVisualizer(false)
+                            setShowLyricsPanel(false)
+                            setIsLyricsMaximized(false)
+                            setShowEQ(false)
+                            if (activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud' || activeView === 'online' || activeView === 'drive') {
+                              setActiveView('songs')
                             }
-                          }} 
-                          options={[
-                            { value: 'default', label: t('settings.appMode.standard') }, 
-                            { value: 'lite', label: t('settings.appMode.lite') },
-                            { value: 'core', label: t('settings.appMode.core') }
-                          ]} 
-                        />
+                            // @ts-ignore
+                            if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
+                          }}
+                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            appMode === 'core'
+                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
+                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-white flex items-center gap-2">
+                                <Cpu size={16} className={appMode === 'core' ? 'text-theme-10' : 'text-zinc-400'} />
+                                {t('settings.appMode.core')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                              {t('settings.appMode.coreDesc')}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* VIEW: PLAYLISTS */}
+              {/* VIEW: NGHỆ SĨ (ARTISTS LIST) */}
+              {activeView === 'artists' && !activeArtist && (
+                <div className="flex flex-col h-full space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-3xl font-bold text-white">{searchQuery ? t('artistsView.searchResults') : t('artistsView.title')}</h2>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        {artistsData.artistsList.length} {t('artistsView.artistCount')} • {libraryTracks.length} {t('common.songs')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Alphabet fast jump bar */}
+                  <div className="flex items-center gap-1.5 flex-wrap pb-2 border-b border-theme-30/40">
+                    {artistsData.alphabetGroups.map(grp => (
+                      <button
+                        key={grp.letter}
+                        onClick={() => {
+                          const el = document.getElementById(`artist-group-${grp.letter}`)
+                          if (el) el.scrollIntoView({ behavior: 'smooth' })
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-theme-60/40 hover:bg-theme-10 hover:text-white text-zinc-400 transition"
+                      >
+                        {grp.letter} <span className="text-[10px] opacity-60">({grp.count})</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Danh sách nhóm theo Alphabet A-Z */}
+                  <div className="flex-1 overflow-y-auto space-y-8 pr-2">
+                    {(() => {
+                      const lowerQuery = searchQuery.toLowerCase().trim()
+                      const filteredArtists = searchQuery 
+                        ? artistsData.artistsList.filter(a => a.name.toLowerCase().includes(lowerQuery))
+                        : null
+
+                      if (filteredArtists) {
+                        if (filteredArtists.length === 0) {
+                          return <p className="text-zinc-500 text-center mt-10">{t('artistsView.noArtists')}</p>
+                        }
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {filteredArtists.map(artist => (
+                              <div 
+                                key={artist.name} 
+                                onClick={() => setActiveArtist(artist)}
+                                onContextMenu={(e) => handleArtistContextMenu(artist, e)}
+                                className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md track-card-optimized"
+                              >
+                                <div className="flex items-center gap-4 min-w-0">
+                                  <div className="w-14 h-14 rounded-full overflow-hidden bg-theme-30 border border-theme-30/80 shadow-md flex items-center justify-center flex-shrink-0">
+                                    {(!isLite && artist.coverArt) ? (
+                                      <img loading="lazy" src={artist.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                    ) : (
+                                      <Mic2 size={24} className="text-theme-10" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">{artist.name}</h3>
+                                    <p className="text-xs text-zinc-400 mt-1">
+                                      {artist.albumCount} {t('artistsView.albumCount')} • {artist.trackCount} {t('artistsView.trackCount')}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleArtistContextMenu(artist, e); }}
+                                  className="text-zinc-500 hover:text-white p-2 rounded-lg transition opacity-0 group-hover:opacity-100"
+                                >
+                                  <MoreVertical size={16} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+
+                      if (artistsData.alphabetGroups.length === 0) {
+                        return <p className="text-zinc-500 text-center mt-10">{t('artistsView.noArtists')}</p>
+                      }
+
+                      return artistsData.alphabetGroups.map(grp => {
+                        const isCollapsed = collapsedArtistLetters[grp.letter]
+                        return (
+                          <div key={grp.letter} id={`artist-group-${grp.letter}`} className="space-y-3">
+                            <div 
+                              onClick={() => setCollapsedArtistLetters(prev => ({ ...prev, [grp.letter]: !prev[grp.letter] }))}
+                              className="flex items-center gap-3 cursor-pointer py-1 select-none border-b border-theme-30/30 group w-fit"
+                            >
+                              <span className="text-2xl font-black text-theme-10">{grp.letter}</span>
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-10/10 text-theme-10">{grp.count}</span>
+                              {isCollapsed ? <ChevronRight size={16} className="text-zinc-500 group-hover:text-white" /> : <ChevronDown size={16} className="text-zinc-500 group-hover:text-white" />}
+                            </div>
+
+                            {!isCollapsed && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                                {grp.artists.map(artist => (
+                                  <div 
+                                    key={artist.name} 
+                                    onClick={() => setActiveArtist(artist)}
+                                    onContextMenu={(e) => handleArtistContextMenu(artist, e)}
+                                    className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md track-card-optimized"
+                                  >
+                                    <div className="flex items-center gap-4 min-w-0">
+                                      <div className="w-14 h-14 rounded-full overflow-hidden bg-theme-30 border border-theme-30/80 shadow-md flex items-center justify-center flex-shrink-0">
+                                        {(!isLite && artist.coverArt) ? (
+                                          <img loading="lazy" src={artist.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                        ) : (
+                                          <Mic2 size={24} className="text-theme-10" />
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">{artist.name}</h3>
+                                        <p className="text-xs text-zinc-400 mt-1">
+                                          {artist.albumCount} {t('artistsView.albumCount')} • {artist.trackCount} {t('artistsView.trackCount')}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleArtistContextMenu(artist, e); }}
+                                      className="text-zinc-500 hover:text-white p-2 rounded-lg transition opacity-0 group-hover:opacity-100"
+                                    >
+                                      <MoreVertical size={16} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: CHI TIẾT NGHỆ SĨ (ARTIST DETAIL) */}
+              {activeView === 'artists' && activeArtist && (
+                <div className="flex flex-col space-y-8 pb-16">
+                  <div>
+                    <button 
+                      onClick={() => setActiveArtist(null)} 
+                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
+                    >
+                      <ArrowLeft size={16} /> {t('artistsView.backToArtists')}
+                    </button>
+
+                    <div className="flex items-end gap-6 mb-6">
+                      <div className="w-36 h-36 rounded-full overflow-hidden bg-theme-30 border-2 border-theme-10/40 shadow-2xl flex items-center justify-center flex-shrink-0">
+                        {(!isLite && activeArtist.coverArt) ? (
+                          <img src={activeArtist.coverArt} className="w-full h-full object-cover" />
+                        ) : (
+                          <Mic2 size={48} className="text-theme-10" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Nghệ sĩ</p>
+                        <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">{activeArtist.name}</h2>
+                        <p className="text-sm text-zinc-400 mb-4">
+                          {activeArtist.albums.length} {t('artistsView.albumCount')} • {activeArtist.tracks.length} {t('artistsView.trackCount')}
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            onClick={() => {
+                              if (activeArtist.tracks.length > 0) {
+                                handleRowClick(activeArtist.tracks[0], activeArtist.tracks)
+                              }
+                            }}
+                            className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20"
+                          >
+                            <Play size={16} className="fill-current" /> {t('artistsView.playAll')}
+                          </button>
+                          <button 
+                            onClick={() => {
+                              if (activeArtist.tracks.length > 0) {
+                                const shuffled = [...activeArtist.tracks].sort(() => Math.random() - 0.5)
+                                handleRowClick(shuffled[0], shuffled)
+                              }
+                            }}
+                            className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
+                          >
+                            <Shuffle size={16} /> {t('artistsView.shuffle')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section: Albums & Danh sách phát của nghệ sĩ */}
+                  {activeArtist.albums && activeArtist.albums.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Disc size={18} className="text-theme-10" /> {t('artistsView.albums')} ({activeArtist.albums.length})
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                        {activeArtist.albums.map((alb: any) => (
+                          <div 
+                            key={alb.title}
+                            onClick={() => {
+                              if (alb.tracks.length > 0) {
+                                handleRowClick(alb.tracks[0], alb.tracks)
+                              }
+                            }}
+                            className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between"
+                          >
+                            <div className="aspect-square bg-theme-30 rounded-lg mb-2.5 overflow-hidden relative shadow-md">
+                              {(!isLite && alb.coverArt) ? (
+                                <img src={alb.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
+                                  <Disc size={32} />
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <div className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg">
+                                  <Play size={18} className="ml-0.5 fill-current" />
+                                </div>
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-sm text-white group-hover:text-theme-10 transition truncate">{alb.title}</h4>
+                              <p className="text-xs text-zinc-400 truncate mt-0.5">
+                                {alb.year ? `${alb.year} • ` : ''}{alb.tracks.length} {t('artistsView.trackCount')}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Section: Tất cả bài hát / Singles */}
+                  <div className="space-y-3 min-h-[500px]">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Music size={18} className="text-theme-10" /> {t('artistsView.singlesAndTracks')} ({activeArtist.tracks.length})
+                    </h3>
+                    <div className="w-full h-[540px]">
+                      {renderTrackTable(activeArtist.tracks)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: THỂ LOẠI (GENRES LIST) */}
+              {activeView === 'genres' && !activeGenre && (
+                <div className="flex flex-col h-full space-y-6">
+                  <div>
+                    <h2 className="text-3xl font-bold text-white">{searchQuery ? t('genresView.searchResults') : t('genresView.title')}</h2>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      {genresData.length} {t('genresView.genreCount')} • {libraryTracks.length} {t('common.songs')}
+                    </p>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto pr-2">
+                    {(() => {
+                      const lowerQuery = searchQuery.toLowerCase().trim()
+                      const filteredGenres = searchQuery 
+                        ? genresData.filter(g => g.name.toLowerCase().includes(lowerQuery))
+                        : genresData
+
+                      if (filteredGenres.length === 0) {
+                        return <p className="text-zinc-500 text-center mt-10">{t('genresView.noGenres')}</p>
+                      }
+
+                      if (viewMode === 'table') {
+                        return (
+                          <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
+                            <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                              <div className="col-span-1 text-center">#</div>
+                              <div className="col-span-5">{t('genresView.title')}</div>
+                              <div className="col-span-4">{t('genresView.topArtists')}</div>
+                              <div className="col-span-1 text-center">{t('common.songs')}</div>
+                              <div className="col-span-1 text-right">Phát</div>
+                            </div>
+                            <div className="divide-y divide-theme-30/20">
+                              {filteredGenres.map((genre, idx) => (
+                                <div
+                                  key={genre.name}
+                                  onClick={() => setActiveGenre(genre)}
+                                  className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+                                >
+                                  <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
+                                    {idx + 1}
+                                  </div>
+                                  <div className="col-span-5 flex items-center gap-3.5 min-w-0">
+                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-theme-10/30 to-theme-30 border border-theme-10/30 flex items-center justify-center shrink-0 shadow-md">
+                                      <Tag size={20} className="text-theme-10" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{genre.name}</h4>
+                                      <p className="text-xs text-zinc-500 truncate mt-0.5">{genre.artistCount} {t('artistsView.artistCount')}</p>
+                                    </div>
+                                  </div>
+                                  <div className="col-span-4 flex items-center gap-1.5 overflow-hidden">
+                                    {genre.artists.slice(0, 3).map((art: string) => (
+                                      <span key={art} className="px-2 py-0.5 bg-theme-30/50 text-[11px] text-zinc-300 rounded-md truncate max-w-[120px]">
+                                        {art}
+                                      </span>
+                                    ))}
+                                    {genre.artists.length > 3 && (
+                                      <span className="text-[10px] text-zinc-500">+{genre.artists.length - 3}</span>
+                                    )}
+                                  </div>
+                                  <div className="col-span-1 text-center">
+                                    <span className="px-2 py-0.5 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
+                                      {genre.trackCount}
+                                    </span>
+                                  </div>
+                                  <div className="col-span-1 text-right">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
+                                      }}
+                                      className="p-2 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition"
+                                      title={t('artistsView.playAll')}
+                                    >
+                                      <Play size={14} className="ml-0.5 fill-current" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      if (viewMode === 'compact') {
+                        return (
+                          <div className="w-full space-y-1.5">
+                            {filteredGenres.map((genre, idx) => (
+                              <div
+                                key={genre.name}
+                                onClick={() => setActiveGenre(genre)}
+                                className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
+                              >
+                                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                  <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
+                                  <div className="w-8 h-8 rounded-lg bg-theme-10/20 border border-theme-10/30 flex items-center justify-center shrink-0">
+                                    <Tag size={15} className="text-theme-10" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{genre.name}</h4>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4 shrink-0">
+                                  <span className="text-xs text-zinc-400 font-mono">{genre.trackCount} {t('common.songs')} • {genre.artistCount} {t('artistsView.artistCount')}</span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
+                                    }}
+                                    className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
+                                    title={t('artistsView.playAll')}
+                                  >
+                                    <Play size={13} className="ml-0.5 fill-current" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+                          {filteredGenres.map(genre => (
+                            <div 
+                              key={genre.name}
+                              onClick={() => setActiveGenre(genre)}
+                              className="bg-gradient-to-br from-theme-60/80 to-theme-30/40 hover:from-theme-10/20 hover:to-theme-30/70 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/50 transition duration-300 group cursor-pointer shadow-lg flex flex-col justify-between h-48 track-card-optimized"
+                            >
+                              <div className="w-full aspect-video bg-theme-30/60 rounded-xl overflow-hidden relative mb-3 flex items-center justify-center">
+                                {(!isLite && genre.coverArts.length > 0) ? (
+                                  <div className="w-full h-full grid grid-cols-2 gap-0.5">
+                                    {genre.coverArts.slice(0, 4).map((c, i) => (
+                                      <img key={i} loading="lazy" src={c} className="w-full h-full object-cover" />
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <Tag size={32} className="text-theme-10/80" />
+                                )}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
+                                    }}
+                                    className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition"
+                                  >
+                                    <Play size={18} className="ml-0.5 fill-current" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">{genre.name}</h3>
+                                <p className="text-xs text-zinc-400 mt-1">
+                                  {genre.trackCount} {t('common.songs')} • {genre.artistCount} {t('artistsView.artistCount')}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: CHI TIẾT THỂ LOẠI (GENRE DETAIL) */}
+              {activeView === 'genres' && activeGenre && (
+                <div className="flex flex-col h-full space-y-6">
+                  <div>
+                    <button 
+                      onClick={() => setActiveGenre(null)} 
+                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
+                    >
+                      <ArrowLeft size={16} /> {t('genresView.backToGenres')}
+                    </button>
+
+                    <div className="flex items-end gap-6 mb-6">
+                      <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-theme-10/30 to-theme-30 border border-theme-10/40 shadow-2xl flex items-center justify-center flex-shrink-0">
+                        <Tag size={48} className="text-theme-10" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Thể loại</p>
+                        <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">{activeGenre.name}</h2>
+                        <p className="text-sm text-zinc-400 mb-4">
+                          {activeGenre.tracks.length} {t('common.songs')} • {activeGenre.artistCount} {t('artistsView.artistCount')}
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <button 
+                            onClick={() => {
+                              if (activeGenre.tracks.length > 0) {
+                                handleRowClick(activeGenre.tracks[0], activeGenre.tracks)
+                              }
+                            }}
+                            className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20"
+                          >
+                            <Play size={16} className="fill-current" /> {t('artistsView.playAll')}
+                          </button>
+                          <button 
+                            onClick={() => {
+                              if (activeGenre.tracks.length > 0) {
+                                const shuffled = [...activeGenre.tracks].sort(() => Math.random() - 0.5)
+                                handleRowClick(shuffled[0], shuffled)
+                              }
+                            }}
+                            className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
+                          >
+                            <Shuffle size={16} /> {t('artistsView.shuffle')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Top nghệ sĩ trong thể loại */}
+                    {activeGenre.artists && activeGenre.artists.length > 0 && (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        <span className="text-xs text-zinc-500 shrink-0">{t('genresView.topArtists')}:</span>
+                        {activeGenre.artists.slice(0, 10).map((art: string) => (
+                          <span 
+                            key={art} 
+                            onClick={() => {
+                              const found = artistsData.artistsList.find(a => a.name.toLowerCase() === art.toLowerCase())
+                              if (found) {
+                                setActiveArtist(found)
+                                setActiveView('artists')
+                              }
+                            }}
+                            className="px-3 py-1 bg-theme-60/60 hover:bg-theme-10/20 hover:text-theme-10 rounded-full text-xs text-zinc-300 font-medium transition border border-theme-30/50 cursor-pointer shrink-0"
+                          >
+                            {art}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    {renderTrackTable(activeGenre.tracks)}
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: PLAYLIST CỦA NGƯỜI DÙNG (USER PLAYLISTS LIST) */}
+              {activeView === 'user-playlists' && !activeUserPlaylist && (
+                <div className="flex flex-col h-full space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-3xl font-bold text-white">{searchQuery ? t('userPlaylistsView.searchResults') : t('userPlaylistsView.title')}</h2>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        {userPlaylists.length} {t('userPlaylistsView.playlistCount')}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setShowCreateUserPlaylistModal(true)} 
+                      className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20"
+                    >
+                      <Plus size={16} /> {t('userPlaylistsView.createPlaylist')}
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto pr-2">
+                    {(() => {
+                      const lowerQuery = searchQuery.toLowerCase().trim()
+                      const matchedUserPlaylists = searchQuery 
+                        ? userPlaylists.filter(pl => pl.name.toLowerCase().includes(lowerQuery))
+                        : userPlaylists
+
+                      if (matchedUserPlaylists.length === 0) {
+                        return (
+                          <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
+                            <ListPlus size={56} className="mb-4 opacity-20" />
+                            <p className="text-lg">{t('userPlaylistsView.noPlaylists')}</p>
+                            <button 
+                              onClick={() => setShowCreateUserPlaylistModal(true)}
+                              className="mt-4 px-4 py-2 bg-theme-10 text-white rounded-lg text-sm font-medium transition"
+                            >
+                              {t('userPlaylistsView.createPlaylist')}
+                            </button>
+                          </div>
+                        )
+                      }
+
+                      if (viewMode === 'table') {
+                        return (
+                          <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
+                            <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                              <div className="col-span-1 text-center">#</div>
+                              <div className="col-span-6">{t('userPlaylistsView.title')}</div>
+                              <div className="col-span-3 text-center">{t('common.songs')}</div>
+                              <div className="col-span-2 text-right">Thao tác</div>
+                            </div>
+                            <div className="divide-y divide-theme-30/20">
+                              {matchedUserPlaylists.map((pl, idx) => {
+                                const resolved = getResolvedUserPlaylistTracks(pl)
+                                const coverImg = pl.thumbnail || resolved.find(t => t.coverArt)?.coverArt
+
+                                return (
+                                  <div
+                                    key={pl.id}
+                                    onClick={() => setActiveUserPlaylist(pl)}
+                                    onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
+                                    className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+                                  >
+                                    <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
+                                      {idx + 1}
+                                    </div>
+                                    <div className="col-span-6 flex items-center gap-3.5 min-w-0">
+                                      <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
+                                        {(!isLite && coverImg) ? <img loading="lazy" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={20} className="text-zinc-600" />}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (resolved.length > 0) handleRowClick(resolved[0], resolved);
+                                            }}
+                                            className="text-white hover:scale-110 transition"
+                                          >
+                                            <Play size={16} className="fill-current" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
+                                        <p className="text-xs text-zinc-500 truncate mt-0.5">Playlist của tôi</p>
+                                      </div>
+                                    </div>
+                                    <div className="col-span-3 text-center">
+                                      <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
+                                        {pl.trackIds?.length || 0} {t('common.songs')}
+                                      </span>
+                                    </div>
+                                    <div className="col-span-2 flex items-center justify-end gap-2">
+                                      <button onClick={(e) => { e.stopPropagation(); handleChangeUserPlaylistCover(pl.id); }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('userPlaylistsView.chooseCover')}><ImageIcon size={15}/></button>
+                                      <button onClick={(e) => { e.stopPropagation(); handleUserPlaylistContextMenu(pl, e) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition"><MoreVertical size={15}/></button>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      if (viewMode === 'compact') {
+                        return (
+                          <div className="w-full space-y-1.5">
+                            {matchedUserPlaylists.map((pl, idx) => {
+                              const resolved = getResolvedUserPlaylistTracks(pl)
+                              const coverImg = pl.thumbnail || resolved.find(t => t.coverArt)?.coverArt
+
+                              return (
+                                <div
+                                  key={pl.id}
+                                  onClick={() => setActiveUserPlaylist(pl)}
+                                  onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
+                                  className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
+                                >
+                                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                    <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
+                                    <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
+                                      {(!isLite && coverImg) ? <img loading="lazy" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={16} className="text-zinc-600" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-4 shrink-0">
+                                    <span className="text-xs text-zinc-400 font-mono">{pl.trackIds?.length || 0} {t('common.songs')}</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (resolved.length > 0) handleRowClick(resolved[0], resolved);
+                                      }}
+                                      className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
+                                      title={t('artistsView.playAll')}
+                                    >
+                                      <Play size={13} className="ml-0.5 fill-current" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleUserPlaylistContextMenu(pl, e); }}
+                                      className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
+                                    >
+                                      <MoreVertical size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+                          {matchedUserPlaylists.map(pl => {
+                            const resolved = getResolvedUserPlaylistTracks(pl)
+                            const coverImg = pl.thumbnail || resolved.find(t => t.coverArt)?.coverArt
+
+                            return (
+                              <div 
+                                key={pl.id} 
+                                onClick={() => setActiveUserPlaylist(pl)}
+                                onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
+                                className="bg-theme-60/40 hover:bg-theme-30/50 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between shadow-lg track-card-optimized"
+                              >
+                                <div className="aspect-square bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-md">
+                                  {(!isLite && coverImg) ? (
+                                    <img loading="lazy" src={coverImg} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
+                                      <ListPlus size={36} />
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (resolved.length > 0) handleRowClick(resolved[0], resolved);
+                                      }}
+                                      className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg"
+                                    >
+                                      <Play size={18} className="ml-0.5 fill-current" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleChangeUserPlaylistCover(pl.id); }}
+                                      className="w-8 h-8 rounded-full bg-black/70 text-white hover:bg-theme-10 flex items-center justify-center transition"
+                                      title={t('userPlaylistsView.chooseCover')}
+                                    >
+                                      <ImageIcon size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div className="min-w-0 flex-1 pr-2">
+                                    <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">{pl.name}</h3>
+                                    <p className="text-xs text-zinc-400 mt-0.5">{pl.trackIds?.length || 0} {t('common.songs')}</p>
+                                  </div>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleUserPlaylistContextMenu(pl, e); }}
+                                    className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
+                                  >
+                                    <MoreVertical size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: CHI TIẾT PLAYLIST NGƯỜI DÙNG (USER PLAYLIST DETAIL) */}
+              {activeView === 'user-playlists' && activeUserPlaylist && (
+                <div className="flex flex-col h-full space-y-6">
+                  <div>
+                    <button 
+                      onClick={() => setActiveUserPlaylist(null)} 
+                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
+                    >
+                      <ArrowLeft size={16} /> {t('userPlaylistsView.title')}
+                    </button>
+
+                    <div className="flex items-end justify-between gap-6 mb-6">
+                      <div className="flex items-end gap-6 min-w-0">
+                        <div 
+                          onClick={() => {
+                            setEditingUserPlaylist(activeUserPlaylist)
+                            setShowEditUserPlaylistModal(true)
+                          }}
+                          className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl relative group cursor-pointer flex-shrink-0"
+                          title={t('modals.editPlaylist.title')}
+                        >
+                          {(!isLite && (activeUserPlaylist.thumbnail || activeUserPlaylistTracks.find(t => t.coverArt)?.coverArt)) ? (
+                            <img 
+                              src={activeUserPlaylist.thumbnail || activeUserPlaylistTracks.find(t => t.coverArt)?.coverArt} 
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
+                              <ListPlus size={44} />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1">
+                            <ImageIcon size={18} />
+                            <span>{t('modals.editPlaylist.title')}</span>
+                          </div>
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">{t('userPlaylistsView.title')}</p>
+                          <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-2 truncate">{activeUserPlaylist.name}</h2>
+                          {activeUserPlaylist.description && (
+                            <p className="text-sm text-zinc-300 line-clamp-2 max-w-xl mb-3">{activeUserPlaylist.description}</p>
+                          )}
+                          <p className="text-sm text-zinc-400 mb-4">{activeUserPlaylistTracks.length} {t('common.songs')}</p>
+                          
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => {
+                                if (activeUserPlaylistTracks.length > 0) {
+                                  handleRowClick(activeUserPlaylistTracks[0], activeUserPlaylistTracks)
+                                }
+                              }}
+                              className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                            >
+                              <Play size={16} className="fill-current" /> {t('userPlaylistsView.playAll')}
+                            </button>
+                            <button 
+                              onClick={() => {
+                                if (activeUserPlaylistTracks.length > 0) {
+                                  const shuffled = [...activeUserPlaylistTracks].sort(() => Math.random() - 0.5)
+                                  handleRowClick(shuffled[0], shuffled)
+                                }
+                              }}
+                              className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                            >
+                              <Shuffle size={16} /> {t('artistsView.shuffle')}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <button 
+                          onClick={() => setShowAddSongsToUserPlaylistModal(true)} 
+                          className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                        >
+                          <Plus size={16} /> {t('userPlaylistsView.addSongs')}
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setEditingUserPlaylist(activeUserPlaylist)
+                            setShowEditUserPlaylistModal(true)
+                          }}
+                          className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition cursor-pointer"
+                          title={t('modals.editPlaylist.title')}
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteUserPlaylist(activeUserPlaylist)} 
+                          className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition cursor-pointer"
+                          title={t('userPlaylistsView.deletePlaylist')}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    {activeUserPlaylistTracks.length > 0 ? (
+                      renderTrackTable(activeUserPlaylistTracks)
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-10">
+                        <ListPlus size={48} className="mb-3 opacity-20" />
+                        <p className="text-base">{t('userPlaylistsView.empty')}</p>
+                        <button 
+                          onClick={() => setShowAddSongsToUserPlaylistModal(true)} 
+                          className="mt-4 px-4 py-2 bg-theme-10 text-white rounded-lg text-sm font-medium transition"
+                        >
+                          {t('userPlaylistsView.addSongs')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: PLAYLISTS THƯ MỤC / ALBUMS */}
               {activeView === 'playlists' && !activePlaylist && (
                 <>
                   <div className="flex items-center justify-between mb-8">
@@ -2955,29 +5751,125 @@ export default function App() {
                         {(matchedPlaylists.length > 0 || !searchQuery) && (
                           <div>
                             {searchQuery && <h3 className="text-xl font-bold text-white mb-6">{t('playlistsView.playlistsAndAlbums', { count: matchedPlaylists.length })}</h3>}
-                            <div className="grid grid-cols-4 gap-6">
-                              {matchedPlaylists.map(pl => (
-                                <div 
-                                  key={pl.name} 
-                                  className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer" 
-                                  onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
-                                  onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                >
-                                  <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative">
-                                    {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
-                                    <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.chooseCover')}><ImageIcon size={16}/></button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.extractCover')}><Sparkles size={16}/></button>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <div className="min-w-0 flex-1 pr-2">
-                                      <h3 className="font-bold text-white truncate">{pl.name}</h3>
-                                      <p className="text-xs text-zinc-500">{pl.tracks.length} {t('common.songs')}</p>
-                                    </div>
-                                    <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
-                                  </div>
+                            
+                            {viewMode === 'table' ? (
+                              <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
+                                <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                                  <div className="col-span-1 text-center">#</div>
+                                  <div className="col-span-7">{t('playlistsView.title')}</div>
+                                  <div className="col-span-2 text-center">{t('common.songs')}</div>
+                                  <div className="col-span-2 text-right">Thao tác</div>
                                 </div>
-                              ))}
-                            </div>
+                                <div className="divide-y divide-theme-30/20">
+                                  {matchedPlaylists.map((pl, idx) => (
+                                    <div
+                                      key={pl.name}
+                                      onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
+                                      onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
+                                      className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+                                    >
+                                      <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
+                                        {idx + 1}
+                                      </div>
+                                      <div className="col-span-7 flex items-center gap-3.5 min-w-0">
+                                        <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
+                                          {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={20} className="text-zinc-600" />}
+                                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (pl.tracks.length > 0) handleRowClick(pl.tracks[0], pl.tracks);
+                                              }}
+                                              className="text-white hover:scale-110 transition"
+                                            >
+                                              <Play size={16} className="fill-current" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <div className="min-w-0">
+                                          <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
+                                          <p className="text-xs text-zinc-500 truncate mt-0.5">Playlist thư mục</p>
+                                        </div>
+                                      </div>
+                                      <div className="col-span-2 text-center">
+                                        <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
+                                          {pl.tracks.length} {t('common.songs')}
+                                        </span>
+                                      </div>
+                                      <div className="col-span-2 flex items-center justify-end gap-2">
+                                        <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('playlistsView.chooseCover')}><ImageIcon size={15}/></button>
+                                        <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('modals.playlistRename.title')}><Edit2 size={15}/></button>
+                                        <button onClick={(e) => { e.stopPropagation(); handlePlaylistContextMenu(pl, e) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition"><MoreVertical size={15}/></button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : viewMode === 'compact' ? (
+                              <div className="w-full space-y-1.5">
+                                {matchedPlaylists.map((pl, idx) => (
+                                  <div
+                                    key={pl.name}
+                                    onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
+                                    onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
+                                    className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
+                                  >
+                                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                      <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
+                                      <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
+                                        {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 shrink-0">
+                                      <span className="text-xs text-zinc-400 font-mono">{pl.tracks.length} {t('common.songs')}</span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (pl.tracks.length > 0) handleRowClick(pl.tracks[0], pl.tracks);
+                                        }}
+                                        className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
+                                        title={t('artistsView.playAll')}
+                                      >
+                                        <Play size={13} className="ml-0.5 fill-current" />
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handlePlaylistContextMenu(pl, e); }}
+                                        className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
+                                      >
+                                        <MoreVertical size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+                                {matchedPlaylists.map(pl => (
+                                  <div 
+                                    key={pl.name} 
+                                    className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer track-card-optimized" 
+                                    onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
+                                    onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
+                                  >
+                                    <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative shadow-md">
+                                      {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                                      <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.chooseCover')}><ImageIcon size={16}/></button>
+                                      <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.extractCover')}><Sparkles size={16}/></button>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <div className="min-w-0 flex-1 pr-2">
+                                        <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">{pl.name}</h3>
+                                        <p className="text-xs text-zinc-500 mt-0.5">{pl.tracks.length} {t('common.songs')}</p>
+                                      </div>
+                                      <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                         {searchQuery && (
@@ -3001,32 +5893,74 @@ export default function App() {
                 </>
               )}
 
-              {/* VIEW: CHI TIẾT PLAYLIST */}
+              {/* VIEW: CHI TIẾT PLAYLIST THƯ MỤC */}
               {activeView === 'playlists' && activePlaylist && (
-                <>
-                  <div className="flex items-end justify-between mb-8" onContextMenu={(e) => handlePlaylistContextMenu(activePlaylist, e)}>
-                    <div className="flex items-end gap-6">
-                      <div className="w-40 h-40 bg-theme-30 rounded-xl overflow-hidden shadow-2xl relative group">
-                        {(!isLite && activePlaylist.thumbnail) ? <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                <div className="flex flex-col h-full space-y-6">
+                  <div>
+                    <button 
+                      onClick={() => setActivePlaylist(null)} 
+                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
+                    >
+                      <ArrowLeft size={16} /> {t('sidebar.myPlaylists')}
+                    </button>
+
+                    <div className="flex items-end justify-between gap-6 mb-6" onContextMenu={(e) => handlePlaylistContextMenu(activePlaylist, e)}>
+                      <div className="flex items-end gap-6 min-w-0">
+                        <div className="w-36 h-36 bg-theme-30 rounded-2xl overflow-hidden shadow-2xl relative group shrink-0 border border-theme-30/80">
+                          {(!isLite && activePlaylist.thumbnail) ? (
+                            <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                              <FolderPlus size={40} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Playlist</p>
+                          <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">{activePlaylist.name}</h2>
+                          <p className="text-sm text-zinc-400 mb-4">{processedPlaylistTracks.length} {t('common.songs')}</p>
+                          
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => {
+                                if (processedPlaylistTracks.length > 0) {
+                                  handleRowClick(processedPlaylistTracks[0], processedPlaylistTracks)
+                                }
+                              }}
+                              className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                            >
+                              <Play size={16} className="fill-current" /> {t('userPlaylistsView.playAll')}
+                            </button>
+                            <button 
+                              onClick={() => {
+                                if (processedPlaylistTracks.length > 0) {
+                                  const shuffled = [...processedPlaylistTracks].sort(() => Math.random() - 0.5)
+                                  handleRowClick(shuffled[0], shuffled)
+                                }
+                              }}
+                              className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                            >
+                              <Shuffle size={16} /> {t('artistsView.shuffle')}
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Playlist</p>
-                        <h2 className="text-5xl font-extrabold text-white mb-4">{activePlaylist.name}</h2>
-                        <p className="text-zinc-400">{activePlaylist.tracks.length} {t('common.songs')}</p>
+
+                      {/* Nút thêm nhạc riêng cho Playlist */}
+                      <div className="flex gap-3 shrink-0">
+                        <button onClick={() => setShowAddSongsModal(true)} className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer">
+                          <Plus size={16} /> {t('playlistsView.addExistingSongs')}
+                        </button>
+                        <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer">
+                          <Plus size={16} /> {t('playlistsView.importFromComputer')}
+                        </button>
                       </div>
-                    </div>
-                    {/* Nút thêm nhạc riêng cho Playlist */}
-                    <div className="flex gap-3">
-                      <button onClick={() => setShowAddSongsModal(true)} className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-                        <Plus size={16} /> {t('playlistsView.addExistingSongs')}
-                      </button>
-                      <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
-                        <Plus size={16} /> {t('playlistsView.importFromComputer')}
-                      </button>
                     </div>
                   </div>
-                  {renderTrackTable(processedPlaylistTracks)}
-                </>
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    {renderTrackTable(processedPlaylistTracks)}
+                  </div>
+                </div>
               )}
 
 
@@ -3183,15 +6117,39 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center w-1/3 max-w-md">
-          <div className="flex items-center gap-6 mb-2">
-            <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
-            <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
-            <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
-              {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current translate-x-[2px]" />}
-            </button>
-            <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={20} /></button>
-            <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+        <div className="flex flex-col items-center justify-center w-1/3 max-w-md relative">
+          <div className="relative w-full flex items-center justify-center mb-2">
+            {/* 5 nút điều khiển đối xứng tuyệt đối qua nút Play ở giữa */}
+            <div className="flex items-center gap-6 justify-center">
+              <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
+              <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
+              <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
+                {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current translate-x-[2px]" />}
+              </button>
+              <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={20} /></button>
+              <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+            </div>
+
+            {/* YouTube-style Smart Autoplay Switch đặt absolute ở lề phải để không làm lệch tâm nút Play */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1.5" title={smartAutoplay ? t('player.smartAutoplay') : t('player.smartAutoplayDesc')}>
+              <button
+                type="button"
+                onClick={() => setSmartAutoplay(prev => !prev)}
+                className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  smartAutoplay ? 'bg-theme-10' : 'bg-zinc-700'
+                }`}
+                role="switch"
+                aria-checked={smartAutoplay}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
+                    smartAutoplay ? 'translate-x-3 text-zinc-950' : 'translate-x-0 text-zinc-500'
+                  }`}
+                >
+                  {smartAutoplay ? <Sparkles size={7} className="text-zinc-950 fill-current" /> : <div className="w-1 h-1 rounded-full bg-zinc-400" />}
+                </span>
+              </button>
+            </div>
           </div>
           <PlayerProgressBar 
             audioRef={audioRef} 
@@ -3199,7 +6157,8 @@ export default function App() {
             crossfadeEnabled={crossfadeEnabled} 
             crossfadeDuration={crossfadeDuration} 
             repeatMode={repeatMode} 
-            onNext={handleNext} 
+            onNext={handleNext}
+            bitPerfectEnabled={bitPerfectEnabled}
           />
         </div>
         
@@ -3219,7 +6178,7 @@ export default function App() {
           )}
 
           {/* Thanh chỉnh âm lượng luôn giữ lại */}
-          <VolumeSlider volume={volume} setVolume={setVolume} audioRef={audioRef} />
+          <VolumeSlider volume={volume} setVolume={setVolume} audioRef={audioRef} bitPerfectEnabled={bitPerfectEnabled} />
         </div>
       </footer>
       </div>

@@ -22,19 +22,33 @@ export interface TranslationDictionary {
     hours: string
     minutes: string
     seconds: string
+    deletePermanently: string
+    warning: string
+    notice: string
+    back: string
   }
   sidebar: {
     library: string
     home: string
+    dashboard: string
     youtubeMusic: string
     soundCloud: string
     songList: string
     myPlaylists: string
+    artists: string
+    genres: string
+    userPlaylists: string
     cloudConnection: string
     googleDrive: string
     settings: string
   }
+  viewOptions: {
+    table: string
+    grid: string
+    compact: string
+  }
   header: {
+    searchDashboard: string
     searchYtm: string
     searchSc: string
     searchLocal: string
@@ -56,6 +70,23 @@ export interface TranslationDictionary {
     sortDuration: string
   }
   home: {
+    dashboardTitle: string
+    dashboardSubtitle: string
+    forYouTitle: string
+    forYouSubtitle: string
+    recentlyPlayedTitle: string
+    recentlyPlayedSubtitle: string
+    discoverFolderTitle: string
+    discoverFolderSubtitle: string
+    playAllRecommendations: string
+    shuffleAllLibrary: string
+    refreshDashboard: string
+    statsSongs: string
+    statsPlaylists: string
+    statsArtists: string
+    statsRecent: string
+    noRecentTitle: string
+    noRecentDesc: string
     ytmTitle: string
     ytmSubtitle: string
     refreshYtm: string
@@ -77,6 +108,7 @@ export interface TranslationDictionary {
     loadingSc: string
     noScTracksTitle: string
     noScTracksDesc: string
+    backToDashboard: string
     genres: {
       all: string
       electronic: string
@@ -92,9 +124,54 @@ export interface TranslationDictionary {
     searchResults: string
     songList: string
     addMusic: string
+    randomPlay: string
     noSongsMatched: string
     libraryNotConfigured: string
     libraryNotConfiguredDesc: string
+  }
+  artistsView: {
+    title: string
+    searchResults: string
+    allArtists: string
+    albums: string
+    singlesAndTracks: string
+    noArtists: string
+    playAll: string
+    shuffle: string
+    artistCount: string
+    trackCount: string
+    albumCount: string
+    backToArtists: string
+  }
+  genresView: {
+    title: string
+    searchResults: string
+    allGenres: string
+    noGenres: string
+    genreCount: string
+    playAll: string
+    shuffle: string
+    songsInGenre: string
+    topArtists: string
+    backToGenres: string
+  }
+  userPlaylistsView: {
+    title: string
+    searchResults: string
+    createPlaylist: string
+    playlistCount: string
+    noPlaylists: string
+    empty: string
+    emptyPlaylist: string
+    addSongs: string
+    chooseCover: string
+    deletePlaylist: string
+    confirmDelete: string
+    rename: string
+    playAll: string
+    shuffle: string
+    removeFromPlaylist: string
+    confirmRemove: string
   }
   driveView: {
     title: string
@@ -149,6 +226,14 @@ export interface TranslationDictionary {
       desc: string
       notSet: string
       change: string
+      addFolder: string
+      removeFolder: string
+      confirmRemoveFolder: string
+      updateFolder: string
+      openFolder: string
+      folderCount: string
+      rescan: string
+      autoCategorize: string
     }
     bitPerfect: {
       title: string
@@ -176,8 +261,11 @@ export interface TranslationDictionary {
       title: string
       desc: string
       standard: string
+      standardDesc: string
       lite: string
+      liteDesc: string
       core: string
+      coreDesc: string
     }
   }
   player: {
@@ -197,6 +285,9 @@ export interface TranslationDictionary {
     pause: string
     next: string
     prev: string
+    smartAutoplay: string
+    smartAutoplayDesc: string
+    smartAutoplayPlaying: string
   }
   lyrics: {
     title: string
@@ -233,6 +324,11 @@ export interface TranslationDictionary {
     addSongs: {
       title: string
       addCount: string
+      searchPlaceholder: string
+      noMatches: string
+      selectAll: string
+      clearAll: string
+      showingCount: string
     }
     cloudAction: {
       desc: string
@@ -244,6 +340,18 @@ export interface TranslationDictionary {
       title: string
       placeholder: string
       create: string
+    }
+    editPlaylist: {
+      title: string
+      nameLabel: string
+      namePlaceholder: string
+      descLabel: string
+      descPlaceholder: string
+      coverLabel: string
+      chooseImage: string
+      removeImage: string
+      save: string
+      cancel: string
     }
     renamePlaylist: {
       title: string
@@ -306,6 +414,8 @@ export interface TranslationDictionary {
     downloadFinished: string
     albumDownloadFinished: string
     playlistCreated: string
+    playlistUpdatedSuccess: string
+    playlistRenamedSuccess: string
     tracksAddedToPlaylist: string
     connectingStream: string
     setLibraryFirst: string
@@ -317,6 +427,7 @@ export interface TranslationDictionary {
     addedToPlaylist: string
     removedFromPlaylist: string
     movedToTrash: string
+    deletedPermanently: string
     playlistDeleted: string
     deleteTrackError: string
     deletePlaylistError: string
@@ -326,5 +437,6 @@ export interface TranslationDictionary {
     autoCategorizeSuccess: string
     coverUpdatedSuccess: string
     coverChangeSuccess: string
+    coverChangedSuccess: string
   }
 }
