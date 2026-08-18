@@ -3253,6 +3253,13 @@ export default function App() {
     }
   }, [eqBands, isEqEnabled, preampGain])
 
+  // Watch Volume
+  useEffect(() => {
+    if (bitPerfectEnabled) {
+      window.api.mpvSetVolume(volume)
+    }
+  }, [volume, bitPerfectEnabled])
+
   return (
     <>
       {!isCore && (
@@ -4732,10 +4739,36 @@ export default function App() {
                         <input 
                           type="checkbox" 
                           checked={bitPerfectEnabled} 
-                          onChange={e => {
+                          onChange={async (e) => {
                             const val = e.target.checked
+                            const prevTrack = currentTrack
+                            const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
+                            const wasPlaying = isPlaying
+
                             setBitPerfectEnabled(val)
-                            window.api.setBitPerfect(val)
+                            await window.api.setBitPerfect(val)
+
+                            if (prevTrack && prevTrack.filePath) {
+                              if (val) {
+                                if (audioRef.current) audioRef.current.pause()
+                                if (wasPlaying) {
+                                  await window.api.mpvPlay(prevTrack.filePath, 0)
+                                  if (currentPlaybackTime > 0) {
+                                    window.api.mpvSeek(currentPlaybackTime)
+                                  }
+                                }
+                              } else {
+                                if (audioRef.current) {
+                                  audioRef.current.currentTime = currentPlaybackTime
+                                  if (wasPlaying) {
+                                    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+                                      await audioCtxRef.current.resume().catch(() => {})
+                                    }
+                                    audioRef.current.play().catch(console.warn)
+                                  }
+                                }
+                              }
+                            }
                           }} 
                           className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
                         />
@@ -6145,7 +6178,7 @@ export default function App() {
           )}
 
           {/* Thanh chỉnh âm lượng luôn giữ lại */}
-          <VolumeSlider volume={volume} setVolume={setVolume} audioRef={audioRef} />
+          <VolumeSlider volume={volume} setVolume={setVolume} audioRef={audioRef} bitPerfectEnabled={bitPerfectEnabled} />
         </div>
       </footer>
       </div>

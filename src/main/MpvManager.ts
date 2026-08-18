@@ -58,7 +58,7 @@ export class MpvInstance extends EventEmitter {
       '--keep-open=yes',
       `--input-ipc-server=${this.pipeName}`,
       '--no-video',
-      '--hwdec=auto',
+      '--gapless-audio=yes',
       '--msg-level=all=no'
     ]
 
@@ -67,17 +67,14 @@ export class MpvInstance extends EventEmitter {
       if (process.platform === 'win32') {
         args.push('--ao=wasapi')
         args.push('--audio-exclusive=yes')
-        args.push('--audio-samplerate=0')
-        args.push('--audio-format=auto')
-        args.push('--audio-resample=no')
       }
-      if (audioDevice && audioDevice !== 'default') {
+      if (audioDevice && audioDevice !== 'default' && audioDevice.startsWith('wasapi/')) {
         args.push(`--audio-device=${audioDevice}`)
       } else {
         args.push('--audio-device=auto')
       }
     } else {
-      if (audioDevice && audioDevice !== 'default') {
+      if (audioDevice && audioDevice !== 'default' && audioDevice.startsWith('wasapi/')) {
         args.push(`--audio-device=${audioDevice}`)
       }
     }
@@ -88,8 +85,10 @@ export class MpvInstance extends EventEmitter {
     await this.connectSocket()
   }
 
+  private commandQueue: any[][] = []
+
   private async connectSocket(): Promise<void> {
-    const maxRetries = 12
+    const maxRetries = 15
     const retryDelay = 150
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -135,6 +134,16 @@ export class MpvInstance extends EventEmitter {
             this.sendCommand(['observe_property', 2, 'eof-reached'])
             this.sendCommand(['observe_property', 3, 'pause'])
             this.sendCommand(['observe_property', 4, 'duration'])
+
+            // Flush queued commands
+            while (this.commandQueue.length > 0) {
+              const cmd = this.commandQueue.shift()
+              if (cmd) {
+                const msg = { command: cmd, request_id: this.reqId++ }
+                socket.write(JSON.stringify(msg) + '\n')
+              }
+            }
+
             resolve()
           }
 
@@ -158,7 +167,10 @@ export class MpvInstance extends EventEmitter {
   }
 
   public sendCommand(cmd: any[]) {
-    if (!this.isConnected || !this.socket) return
+    if (!this.isConnected || !this.socket) {
+      this.commandQueue.push(cmd)
+      return
+    }
     const msg = { command: cmd, request_id: this.reqId++ }
     this.socket.write(JSON.stringify(msg) + '\n')
   }
@@ -207,11 +219,18 @@ export class MpvInstance extends EventEmitter {
 
   public kill() {
     if (this.socket) {
-      this.socket.destroy()
+      try {
+        this.socket.destroy()
+      } catch (e) {}
+      this.socket = null
     }
     if (this.mpvProcess) {
-      this.mpvProcess.kill()
+      try {
+        this.mpvProcess.kill()
+      } catch (e) {}
+      this.mpvProcess = null
     }
+    this.isConnected = false
   }
 }
 
@@ -222,19 +241,29 @@ export class MpvManager extends EventEmitter {
 
   private currentAudioDevice?: string
   private currentBitPerfect: boolean = false
+  private currentVolume: number = 1.0
 
   public async init(audioDevice?: string, bitPerfect: boolean = false) {
     if (this.activeInstance) {
       this.activeInstance.kill()
+      this.activeInstance = null
     }
     if (this.nextInstance) {
       this.nextInstance.kill()
+      this.nextInstance = null
     }
 
     this.currentAudioDevice = audioDevice
     this.currentBitPerfect = bitPerfect
+
+    if (!bitPerfect) {
+      // Khi tắt Bit-perfect, giải phóng hoàn toàn tiến trình MPV và khóa phần cứng WASAPI
+      return
+    }
+
     this.activeInstance = new MpvInstance()
     await this.activeInstance.init(audioDevice, bitPerfect)
+    this.activeInstance.setVolume(this.currentVolume)
     
     this.setupListeners(this.activeInstance)
   }

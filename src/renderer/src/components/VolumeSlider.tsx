@@ -5,18 +5,25 @@ interface VolumeSliderProps {
   volume: number
   setVolume: (val: number) => void
   audioRef: React.RefObject<HTMLAudioElement | null>
+  bitPerfectEnabled?: boolean
 }
 
-export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, setVolume, audioRef }) => {
+export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, setVolume, audioRef, bitPerfectEnabled }) => {
   const toggleMute = () => {
     if (volume === 0) {
       const prev = parseFloat(localStorage.getItem('player_volume_prev') || '1')
       setVolume(prev)
       if (audioRef.current) audioRef.current.volume = prev
+      if (bitPerfectEnabled && (window as any).api?.mpvSetVolume) {
+        (window as any).api.mpvSetVolume(prev)
+      }
     } else {
       localStorage.setItem('player_volume_prev', volume.toString())
       setVolume(0)
       if (audioRef.current) audioRef.current.volume = 0
+      if (bitPerfectEnabled && (window as any).api?.mpvSetVolume) {
+        (window as any).api.mpvSetVolume(0)
+      }
     }
   }
 
@@ -27,6 +34,9 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, setVolume, a
     const newVol = Math.max(0, Math.min(1, Math.round((volume + delta) * 100) / 100))
     setVolume(newVol)
     if (audioRef.current) audioRef.current.volume = newVol
+    if (bitPerfectEnabled && (window as any).api?.mpvSetVolume) {
+      (window as any).api.mpvSetVolume(newVol)
+    }
   }
 
   return (
@@ -44,6 +54,9 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, setVolume, a
           const val = parseFloat(e.target.value)
           setVolume(val)
           if (audioRef.current) audioRef.current.volume = val
+          if (bitPerfectEnabled && (window as any).api?.mpvSetVolume) {
+            (window as any).api.mpvSetVolume(val)
+          }
         }}
         onWheel={handleWheel}
         className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10" 
