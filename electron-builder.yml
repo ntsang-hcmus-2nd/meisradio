@@ -12,6 +12,11 @@ files:
 asarUnpack:
   - resources/**
   - "**/node_modules/yt-dlp-exec/bin/*"
+extraResources:
+  - from: resources/bin
+    to: bin
+    filter:
+      - "**/*"
 win:
   executableName: meisradio
 nsis:

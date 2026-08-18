@@ -27,11 +27,41 @@ import {
 export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma']
 
 let mpvManager: MpvManager | null = null
-// FFmpeg directories
 
-const ffmpegDir = is.dev 
-  ? join(app.getAppPath(), 'resources', 'bin')
-  : join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'resources', 'bin');
+// Hàm tìm thư mục chứa binary (ffmpeg, ffprobe, mpv) đa môi trường (Dev, Packaged, Portable)
+export function getBinaryDir(): string {
+  const candidateDirs = [
+    // 1. extraResources trong bản build: <resourcesPath>/bin
+    join(process.resourcesPath, 'bin'),
+    // 2. extraResources dạng lồng: <resourcesPath>/resources/bin
+    join(process.resourcesPath, 'resources', 'bin'),
+    // 3. Chế độ Dev: <projectRoot>/resources/bin
+    join(app.getAppPath(), 'resources', 'bin'),
+    // 4. Preview / Dev working directory
+    join(process.cwd(), 'resources', 'bin'),
+    // 5. asar.unpacked: <app.asar.unpacked>/resources/bin
+    join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'resources', 'bin'),
+    // 6. asar.unpacked: <app.asar.unpacked>/bin
+    join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'bin'),
+    // 7. Thư mục chứa file exe: <exeDir>/resources/bin
+    join(path.dirname(app.getPath('exe')), 'resources', 'bin'),
+    // 8. Thư mục chứa file exe: <exeDir>/bin
+    join(path.dirname(app.getPath('exe')), 'bin')
+  ]
+
+  for (const dir of candidateDirs) {
+    if (fs.existsSync(dir) && (fs.existsSync(join(dir, 'ffmpeg.exe')) || fs.existsSync(join(dir, 'ffmpeg')))) {
+      return dir
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    if (fs.existsSync(dir)) return dir
+  }
+  return candidateDirs[0]
+}
+
+export const ffmpegDir = getBinaryDir()
 
 // 1. QUẢN LÝ THƯ MỤC DỮ LIỆU ĐỘC LẬP (Chống lỗi cấm ghi ổ đĩa khi Build)
 const DATA_FOLDER = is.dev 
@@ -2544,16 +2574,25 @@ app.whenReady().then(() => {
         ? (track.permalinkUrl || `https://api.soundcloud.com/tracks/${track.originalId}`)
         : track.originalId;
 
-      await ytdlp(downloadTarget, {
+      const config = getConfig();
+      const downloadOptions: any = {
         extractAudio: true,
         audioFormat: 'mp3',
         audioQuality: 0,
         output: destPath,
         embedMetadata: true,
         embedThumbnail: true,
-        extractorArgs: track.platform === 'soundcloud' ? undefined : 'youtube:player-client=android',
-        ffmpegLocation: ffmpegDir 
-      } as any);
+        ffmpegLocation: getBinaryDir()
+      };
+
+      if (track.platform !== 'soundcloud') {
+        downloadOptions.extractorArgs = 'youtube:player-client=android,web,ios';
+        if (config.ytCookie) {
+          downloadOptions.addHeader = [`Cookie: ${config.ytCookie}`];
+        }
+      }
+
+      await ytdlp(downloadTarget, downloadOptions as any);
       return { success: true, localPath: pathToFileURL(destPath).href };
     } catch (e: any) {
       return { success: false, error: e.message };

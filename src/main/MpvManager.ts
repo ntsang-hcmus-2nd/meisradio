@@ -3,7 +3,6 @@ import net from 'net'
 import path from 'path'
 import fs from 'fs'
 import { app } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import { EventEmitter } from 'events'
 
 const getPipeName = () => {
@@ -30,9 +29,25 @@ export class MpvInstance extends EventEmitter {
 
   public async init(audioDevice?: string, bitPerfect: boolean = false) {
     const binName = process.platform === 'win32' ? 'mpv.exe' : 'mpv'
-    const binPath = is.dev
-      ? path.join(app.getAppPath(), 'resources', 'bin', binName)
-      : path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'resources', 'bin', binName)
+    const candidateDirs = [
+      path.join(process.resourcesPath, 'bin'),
+      path.join(process.resourcesPath, 'resources', 'bin'),
+      path.join(app.getAppPath(), 'resources', 'bin'),
+      path.join(process.cwd(), 'resources', 'bin'),
+      path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'resources', 'bin'),
+      path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'bin'),
+      path.join(path.dirname(app.getPath('exe')), 'resources', 'bin'),
+      path.join(path.dirname(app.getPath('exe')), 'bin')
+    ]
+
+    let binPath = path.join(app.getAppPath(), 'resources', 'bin', binName)
+    for (const dir of candidateDirs) {
+      const candidate = path.join(dir, binName)
+      if (fs.existsSync(candidate)) {
+        binPath = candidate
+        break
+      }
+    }
 
     if (!fs.existsSync(binPath)) {
       throw new Error(`MPV binary not found at ${binPath}`)
