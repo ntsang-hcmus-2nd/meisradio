@@ -124,6 +124,7 @@ export const vi: TranslationDictionary = {
     searchResults: 'Kết quả tìm kiếm',
     songList: 'Danh sách bài hát',
     addMusic: 'Thêm nhạc vào Thư viện',
+    randomPlay: 'Phát ngẫu nhiên',
     noSongsMatched: 'Không tìm thấy bài hát nào phù hợp với từ khóa',
     libraryNotConfigured: 'Chưa chọn thư mục nhạc',
     libraryNotConfiguredDesc: 'Vui lòng bấm vào nút bên dưới để chọn thư mục chứa nhạc trên máy tính của bạn.'

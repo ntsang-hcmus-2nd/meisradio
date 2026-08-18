@@ -511,12 +511,14 @@ app.whenReady().then(() => {
   mpvManager.on('ended', () => mainWindow?.webContents.send('mpv:ended'))
 
   ipcMain.handle('mpv:play', (_, url, crossfade) => {
-    // If it's a file path, we need to ensure it's loaded as raw path by MPV
-    // Or if it's http it just works.
     let rawPath = url
-    if (rawPath.startsWith('file:///')) {
-      const { fileURLToPath } = require('url')
-      try { rawPath = fileURLToPath(rawPath) } catch(e){}
+    if (typeof rawPath === 'string' && rawPath.startsWith('file://')) {
+      try {
+        const { fileURLToPath } = require('url')
+        rawPath = fileURLToPath(rawPath)
+      } catch (e) {
+        rawPath = decodeURIComponent(rawPath.replace(/^file:\/\/\/?/, ''))
+      }
     }
     mpvManager?.playTrack(rawPath, crossfade)
   })
@@ -525,11 +527,12 @@ app.whenReady().then(() => {
   ipcMain.handle('mpv:seek', (_, pos) => mpvManager?.seek(pos))
   ipcMain.handle('mpv:setVolume', (_, vol) => mpvManager?.setVolume(vol))
   ipcMain.handle('mpv:setEqualizer', (_, bands, preamp = 0) => mpvManager?.setEqualizer(bands, preamp))
-  ipcMain.handle('mpv:setBitPerfect', (_, val) => {
+  ipcMain.handle('mpv:setBitPerfect', async (_, val) => {
     const config = getConfig()
     config.bitPerfectEnabled = val
     saveConfig(config)
-    mpvManager?.init(config.audioDevice, val)
+    await mpvManager?.init(config.audioDevice, val)
+    return { success: true }
   })
 
   ipcMain.handle('music:setAudioDevice', (_, deviceId) => {

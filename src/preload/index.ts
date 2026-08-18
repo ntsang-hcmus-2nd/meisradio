@@ -85,20 +85,24 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
   
   onMpvTime: (callback: (val: number) => void) => {
-    ipcRenderer.removeAllListeners('mpv:time')
-    ipcRenderer.on('mpv:time', (_e, val) => callback(val))
+    const handler = (_e: any, val: number) => callback(val)
+    ipcRenderer.on('mpv:time', handler)
+    return () => ipcRenderer.removeListener('mpv:time', handler)
   },
   onMpvDuration: (callback: (val: number) => void) => {
-    ipcRenderer.removeAllListeners('mpv:duration')
-    ipcRenderer.on('mpv:duration', (_e, val) => callback(val))
+    const handler = (_e: any, val: number) => callback(val)
+    ipcRenderer.on('mpv:duration', handler)
+    return () => ipcRenderer.removeListener('mpv:duration', handler)
   },
   onMpvPaused: (callback: (val: boolean) => void) => {
-    ipcRenderer.removeAllListeners('mpv:paused')
-    ipcRenderer.on('mpv:paused', (_e, val) => callback(val))
+    const handler = (_e: any, val: boolean) => callback(val)
+    ipcRenderer.on('mpv:paused', handler)
+    return () => ipcRenderer.removeListener('mpv:paused', handler)
   },
   onMpvEnded: (callback: () => void) => {
-    ipcRenderer.removeAllListeners('mpv:ended')
-    ipcRenderer.on('mpv:ended', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('mpv:ended', handler)
+    return () => ipcRenderer.removeListener('mpv:ended', handler)
   },
   getThemeColorsCache: () => ipcRenderer.invoke('music:getThemeColorsCache'),
   cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),

@@ -124,6 +124,7 @@ export const en: TranslationDictionary = {
     searchResults: 'Search Results',
     songList: 'All Songs',
     addMusic: 'Add Music to Library',
+    randomPlay: 'Random Play',
     noSongsMatched: 'No songs matched your query',
     libraryNotConfigured: 'No music folder configured',
     libraryNotConfiguredDesc: 'Please click the button below to choose your local music folders.'

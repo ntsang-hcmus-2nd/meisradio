@@ -14,15 +14,42 @@ interface PlayerProgressBarProps {
   crossfadeDuration: number
   repeatMode: number
   onNext: () => void
+  bitPerfectEnabled?: boolean
 }
 
 export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
-  audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext
+  audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext, bitPerfectEnabled
 }) => {
   const [currentTime, setCurrentTime] = useState(0)
   const [isDragging, setIsDragging] = useState(false) // Trạng thái kéo chuột
 
+  // Reset time when track changes
   useEffect(() => {
+    setCurrentTime(0)
+  }, [currentTrack?.id, currentTrack?.filePath])
+
+  useEffect(() => {
+    if (bitPerfectEnabled) {
+      // @ts-ignore
+      if (window.api?.onMpvTime) {
+        // @ts-ignore
+        const cleanup = window.api.onMpvTime((val: number) => {
+          if (isDragging) return
+          setCurrentTime(val)
+
+          if (crossfadeEnabled && currentTrack && currentTrack.duration > 0 && repeatMode !== 2) {
+            if (currentTrack.duration - val <= crossfadeDuration && currentTrack.duration - val > crossfadeDuration - 0.5) {
+              onNext()
+            }
+          }
+        })
+        return () => {
+          if (typeof cleanup === 'function') cleanup()
+        }
+      }
+      return
+    }
+
     const audio = audioRef.current
     if (!audio) return
 
@@ -42,7 +69,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
     audio.addEventListener('timeupdate', handleTimeUpdate)
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext, isDragging])
+  }, [audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext, isDragging, bitPerfectEnabled])
 
   // Chỉ cập nhật giao diện thanh trượt (Không gọi API / Tua nhạc)
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,7 +78,13 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
   // Áp dụng lệnh Tua nhạc thực tế khi THẢ CHUỘT ra
   const handleSeekCommit = () => {
-    if (audioRef.current) {
+    if (bitPerfectEnabled) {
+      // @ts-ignore
+      if (window.api?.mpvSeek) {
+        // @ts-ignore
+        window.api.mpvSeek(currentTime)
+      }
+    } else if (audioRef.current) {
       audioRef.current.currentTime = currentTime
     }
     setIsDragging(false)

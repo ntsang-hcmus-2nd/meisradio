@@ -124,6 +124,7 @@ export interface TranslationDictionary {
     searchResults: string
     songList: string
     addMusic: string
+    randomPlay: string
     noSongsMatched: string
     libraryNotConfigured: string
     libraryNotConfiguredDesc: string

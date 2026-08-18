@@ -1471,10 +1471,56 @@ export default function App() {
     handlePlayTrack(playQueue[prevIndex])
   }
 
+  const handlePlayPause = () => {
+    if (!currentTrack) {
+      if (libraryTracks.length > 0) {
+        handleRowClick(libraryTracks[0], libraryTracks)
+      }
+      return
+    }
+    
+    if (bitPerfectEnabled) {
+      if (isPlaying) {
+        window.api.mpvPause()
+        setIsPlaying(false)
+      } else {
+        window.api.mpvResume()
+        setIsPlaying(true)
+      }
+    } else if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause()
+        setIsPlaying(false)
+      } else {
+        audioRef.current.play().catch(console.warn)
+        setIsPlaying(true)
+      }
+    }
+  }
+
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value)
     setVolume(val)
     if (audioRef.current) audioRef.current.volume = val
+    if (bitPerfectEnabled) window.api.mpvSetVolume(val)
+  }
+
+  const handleVolumeUp = () => {
+    setVolume(prev => {
+      const newVol = Math.min(1, Math.round((prev + 0.05) * 100) / 100)
+      if (audioRef.current) audioRef.current.volume = newVol
+      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
+      return newVol
+    })
+  }
+
+  const handleVolumeDown = () => {
+    setVolume(prev => {
+      const newVol = Math.max(0, Math.round((prev - 0.05) * 100) / 100)
+      if (audioRef.current) audioRef.current.volume = newVol
+      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
+      return newVol
+    })
   }
 
   const toggleMute = () => {
@@ -1482,10 +1528,12 @@ export default function App() {
       setPrevVolume(volume)
       setVolume(0)
       if (audioRef.current) audioRef.current.volume = 0
+      if (bitPerfectEnabled) window.api.mpvSetVolume(0)
     } else {
       const newVol = prevVolume > 0 ? prevVolume : 1
       setVolume(newVol)
       if (audioRef.current) audioRef.current.volume = newVol
+      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
     }
   }
 
@@ -2914,56 +2962,144 @@ export default function App() {
     }
   }, [currentLyricIndex])
 
-  // Spacebar Play/Pause
+  // In-App Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
-      if (e.code === 'Space' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault() 
-        if (currentTrack) setIsPlaying(prev => !prev)
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+
+      // Space / K -> Play / Pause
+      if (e.code === 'Space' || e.code === 'KeyK') {
+        e.preventDefault()
+        handlePlayPause()
+        return
+      }
+
+      // ArrowRight -> Seek +5s
+      if (e.code === 'ArrowRight' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault()
+        if (bitPerfectEnabled) {
+          window.api.mpvSeek(5)
+        } else if (audioRef.current && currentTrack) {
+          audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
+        }
+        return
+      }
+
+      // ArrowLeft -> Seek -5s
+      if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault()
+        if (bitPerfectEnabled) {
+          window.api.mpvSeek(-5)
+        } else if (audioRef.current && currentTrack) {
+          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
+        }
+        return
+      }
+
+      // Ctrl+Right / Shift+N / KeyN -> Next track
+      if ((e.ctrlKey && e.code === 'ArrowRight') || (e.shiftKey && e.code === 'KeyN') || (e.code === 'KeyN' && !e.ctrlKey && !e.altKey)) {
+        e.preventDefault()
+        handleNext()
+        return
+      }
+
+      // Ctrl+Left / Shift+P / KeyP -> Previous track
+      if ((e.ctrlKey && e.code === 'ArrowLeft') || (e.shiftKey && e.code === 'KeyP') || (e.code === 'KeyP' && !e.ctrlKey && !e.altKey)) {
+        e.preventDefault()
+        handlePrev()
+        return
+      }
+
+      // ArrowUp / Ctrl+Up -> Volume Up
+      if (e.code === 'ArrowUp') {
+        e.preventDefault()
+        handleVolumeUp()
+        return
+      }
+
+      // ArrowDown / Ctrl+Down -> Volume Down
+      if (e.code === 'ArrowDown') {
+        e.preventDefault()
+        handleVolumeDown()
+        return
+      }
+
+      // M -> Mute toggle
+      if (e.code === 'KeyM' && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        toggleMute()
+        return
+      }
+
+      // S -> Shuffle toggle
+      if (e.code === 'KeyS' && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        toggleShuffle()
+        return
+      }
+
+      // R -> Repeat toggle
+      if (e.code === 'KeyR' && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        toggleRepeat()
+        return
+      }
+
+      // / or Ctrl+F -> Focus Search
+      if ((e.code === 'Slash' && !e.ctrlKey && !e.shiftKey) || (e.ctrlKey && e.code === 'KeyF')) {
+        e.preventDefault()
+        const searchEl = document.querySelector('header input[type="text"]') as HTMLInputElement
+        if (searchEl) {
+          searchEl.focus()
+          searchEl.select()
+        }
+        return
       }
     }
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [currentTrack])
+  }, [currentTrack, isPlaying, bitPerfectEnabled, playQueue, repeatMode, volume, prevVolume, isShuffle, originalQueue])
 
   // Global Shortcuts
   useEffect(() => {
     if ((window as any).api?.onGlobalShortcut) {
       (window as any).api.onGlobalShortcut((action: string) => {
         switch (action) {
-          case 'play-pause': setIsPlaying(prev => !prev); break;
-          case 'next': handleNext(); break;
-          case 'prev': handlePrev(); break;
+          case 'play-pause':
+            handlePlayPause()
+            break
+          case 'next':
+            handleNext()
+            break
+          case 'prev':
+            handlePrev()
+            break
           case 'vol-up':
-            setVolume(prev => {
-              const newVol = Math.min(1, prev + 0.1)
-              if (audioRef.current) audioRef.current.volume = newVol
-              return newVol
-            }); break;
+            handleVolumeUp()
+            break
           case 'vol-down':
-            setVolume(prev => {
-              const newVol = Math.max(0, prev - 0.1)
-              if (audioRef.current) audioRef.current.volume = newVol
-              return newVol
-            }); break;
+            handleVolumeDown()
+            break
           case 'seek-forward':
-            if (audioRef.current) {
-              const newTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + 5)
-              audioRef.current.currentTime = newTime
+            if (bitPerfectEnabled) {
+              window.api.mpvSeek(5)
+            } else if (audioRef.current && currentTrack) {
+              audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
             }
-            break;
+            break
           case 'seek-backward':
-            if (audioRef.current) {
-              const newTime = Math.max(0, audioRef.current.currentTime - 5)
-              audioRef.current.currentTime = newTime
+            if (bitPerfectEnabled) {
+              window.api.mpvSeek(-5)
+            } else if (audioRef.current && currentTrack) {
+              audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
             }
-            break;
+            break
         }
       })
     }
-  }, [currentTrack, playQueue, isPlaying, repeatMode, volume])
+  }, [currentTrack, isPlaying, bitPerfectEnabled, playQueue, repeatMode, volume, prevVolume])
 
 
   // ==========================================
@@ -3069,25 +3205,31 @@ export default function App() {
 
   // MPV Listeners
   useEffect(() => {
-    window.api.onMpvTime((val) => {
+    const unTime = window.api.onMpvTime((val) => {
       if (bitPerfectEnabled && audioRef.current) {
-        (audioRef.current as any)._currentTime = val;
+        (audioRef.current as any)._currentTime = val
       }
-    });
-    window.api.onMpvDuration((val) => {
+    })
+    const unDuration = window.api.onMpvDuration((val) => {
       if (bitPerfectEnabled && audioRef.current) {
-        (audioRef.current as any)._duration = val;
+        (audioRef.current as any)._duration = val
       }
-    });
-    window.api.onMpvPaused((val) => {
+    })
+    const unPaused = window.api.onMpvPaused((val) => {
       if (bitPerfectEnabled) {
         setIsPlaying(!val)
       }
-    });
-    window.api.onMpvEnded(() => {
+    })
+    const unEnded = window.api.onMpvEnded(() => {
       if (bitPerfectEnabled && !crossfadeEnabled) handleNext()
-    });
-  }, [handleNext, crossfadeEnabled, bitPerfectEnabled]);
+    })
+    return () => {
+      if (typeof unTime === 'function') unTime()
+      if (typeof unDuration === 'function') unDuration()
+      if (typeof unPaused === 'function') unPaused()
+      if (typeof unEnded === 'function') unEnded()
+    }
+  }, [handleNext, crossfadeEnabled, bitPerfectEnabled])
 
   // Watch currentTrack
   useEffect(() => {
@@ -3097,10 +3239,10 @@ export default function App() {
         if (audioRef.current) audioRef.current.pause()
       } else {
         // Dừng mpv khi phát bằng HTML Audio
-        window.api.mpvPause(true)
+        window.api.mpvPause()
       }
     }
-  }, [currentTrack, bitPerfectEnabled]);
+  }, [currentTrack, bitPerfectEnabled, crossfadeEnabled, crossfadeDuration])
 
   // Watch EQ & Preamp
   useEffect(() => {
@@ -3109,22 +3251,7 @@ export default function App() {
     } else {
       window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0], 0)
     }
-  }, [eqBands, isEqEnabled, preampGain]);
-
-  const handlePlayPause = () => {
-    if (!currentTrack) return;
-    
-    if (bitPerfectEnabled) {
-      window.api.mpvPause();
-    } else if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play().catch(console.warn);
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
+  }, [eqBands, isEqEnabled, preampGain])
 
   return (
     <>
@@ -4295,15 +4422,16 @@ export default function App() {
                       <button 
                         onClick={() => {
                           if (processedLibraryTracks.length > 0) {
+                            setIsShuffle(true)
                             const shuffled = [...processedLibraryTracks].sort(() => Math.random() - 0.5)
                             handleRowClick(shuffled[0], shuffled)
                           }
                         }}
                         disabled={processedLibraryTracks.length === 0}
                         className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                        title={t('artistsView.shuffle')}
+                        title={t('songsView.randomPlay')}
                       >
-                        <Shuffle size={16} /> {t('artistsView.shuffle')}
+                        <Shuffle size={16} /> {t('songsView.randomPlay')}
                       </button>
                       <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer">
                         <Plus size={18} /> {t('songsView.addMusic')}
@@ -5996,7 +6124,8 @@ export default function App() {
             crossfadeEnabled={crossfadeEnabled} 
             crossfadeDuration={crossfadeDuration} 
             repeatMode={repeatMode} 
-            onNext={handleNext} 
+            onNext={handleNext}
+            bitPerfectEnabled={bitPerfectEnabled}
           />
         </div>
         
