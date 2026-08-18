@@ -30,6 +30,7 @@ export const en: TranslationDictionary = {
   sidebar: {
     library: 'Library',
     home: 'Home',
+    dashboard: 'Dashboard',
     youtubeMusic: 'YouTube Music',
     soundCloud: 'SoundCloud',
     songList: 'All Songs',
@@ -47,6 +48,7 @@ export const en: TranslationDictionary = {
     compact: 'Compact List'
   },
   header: {
+    searchDashboard: 'Search songs, artists in library...',
     searchYtm: 'Search music on YouTube Music...',
     searchSc: 'Search music on SoundCloud...',
     searchLocal: 'Search local songs, artists...',
@@ -68,6 +70,23 @@ export const en: TranslationDictionary = {
     sortDuration: 'Sort by Duration'
   },
   home: {
+    dashboardTitle: 'Dashboard',
+    dashboardSubtitle: 'Discover songs, curated collections and personalized suggestions',
+    forYouTitle: 'Recommended For You',
+    forYouSubtitle: 'Songs from your music folders matching your recent listening tastes',
+    recentlyPlayedTitle: 'Recently Played',
+    recentlyPlayedSubtitle: 'Continue listening to tracks you recently enjoyed',
+    discoverFolderTitle: 'Discover From Library',
+    discoverFolderSubtitle: 'Random tunes from your computer library',
+    playAllRecommendations: 'Play Suggestions',
+    shuffleAllLibrary: 'Shuffle Entire Library',
+    refreshDashboard: 'Refresh Suggestions',
+    statsSongs: 'Songs',
+    statsPlaylists: 'Playlists',
+    statsArtists: 'Artists',
+    statsRecent: 'Recently Played',
+    noRecentTitle: 'Start listening to get smart recommendations',
+    noRecentDesc: 'As you play songs from your library, Mei\'s Radio will automatically suggest tracks tailored to your music taste.',
     ytmTitle: 'YouTube Music',
     ytmSubtitle: 'Discover and personalized recommendations',
     refreshYtm: 'Refresh YouTube Music',
@@ -321,6 +340,18 @@ export const en: TranslationDictionary = {
       placeholder: 'Enter playlist name...',
       create: 'Create'
     },
+    editPlaylist: {
+      title: 'Edit Playlist Info',
+      nameLabel: 'Playlist Name',
+      namePlaceholder: 'Enter playlist name...',
+      descLabel: 'Description (optional)',
+      descPlaceholder: 'Enter description for this playlist...',
+      coverLabel: 'Playlist Cover',
+      chooseImage: 'Choose image from computer',
+      removeImage: 'Remove custom cover',
+      save: 'Save Changes',
+      cancel: 'Cancel'
+    },
     renamePlaylist: {
       title: 'Rename Playlist',
       placeholder: 'Enter new name...',
@@ -382,6 +413,8 @@ export const en: TranslationDictionary = {
     downloadFinished: 'Finished downloading "{title}"!',
     albumDownloadFinished: 'Finished downloading {count}/{total} songs in album!',
     playlistCreated: 'Playlist created successfully!',
+    playlistUpdatedSuccess: 'Playlist updated successfully!',
+    playlistRenamedSuccess: 'Playlist renamed successfully!',
     tracksAddedToPlaylist: 'Added {count} songs to playlist!',
     connectingStream: 'Connecting to audio stream...',
     setLibraryFirst: 'Please configure your library folder in Settings before downloading!',
@@ -402,6 +435,7 @@ export const en: TranslationDictionary = {
     autoCategorizeConfirm: 'This action will automatically create folders and move songs with matching Album tags into them. Are you sure you want to proceed?',
     autoCategorizeSuccess: 'Successfully moved {count} songs into Album Playlists!',
     coverUpdatedSuccess: 'Updated cover from first track successfully!',
-    coverChangeSuccess: 'Cover image changed successfully! Reloading library...'
+    coverChangeSuccess: 'Cover image changed successfully! Reloading library...',
+    coverChangedSuccess: 'Playlist cover updated successfully!'
   }
 }

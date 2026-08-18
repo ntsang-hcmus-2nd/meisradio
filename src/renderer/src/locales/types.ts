@@ -30,6 +30,7 @@ export interface TranslationDictionary {
   sidebar: {
     library: string
     home: string
+    dashboard: string
     youtubeMusic: string
     soundCloud: string
     songList: string
@@ -47,6 +48,7 @@ export interface TranslationDictionary {
     compact: string
   }
   header: {
+    searchDashboard: string
     searchYtm: string
     searchSc: string
     searchLocal: string
@@ -68,6 +70,23 @@ export interface TranslationDictionary {
     sortDuration: string
   }
   home: {
+    dashboardTitle: string
+    dashboardSubtitle: string
+    forYouTitle: string
+    forYouSubtitle: string
+    recentlyPlayedTitle: string
+    recentlyPlayedSubtitle: string
+    discoverFolderTitle: string
+    discoverFolderSubtitle: string
+    playAllRecommendations: string
+    shuffleAllLibrary: string
+    refreshDashboard: string
+    statsSongs: string
+    statsPlaylists: string
+    statsArtists: string
+    statsRecent: string
+    noRecentTitle: string
+    noRecentDesc: string
     ytmTitle: string
     ytmSubtitle: string
     refreshYtm: string
@@ -321,6 +340,18 @@ export interface TranslationDictionary {
       placeholder: string
       create: string
     }
+    editPlaylist: {
+      title: string
+      nameLabel: string
+      namePlaceholder: string
+      descLabel: string
+      descPlaceholder: string
+      coverLabel: string
+      chooseImage: string
+      removeImage: string
+      save: string
+      cancel: string
+    }
     renamePlaylist: {
       title: string
       placeholder: string
@@ -382,6 +413,8 @@ export interface TranslationDictionary {
     downloadFinished: string
     albumDownloadFinished: string
     playlistCreated: string
+    playlistUpdatedSuccess: string
+    playlistRenamedSuccess: string
     tracksAddedToPlaylist: string
     connectingStream: string
     setLibraryFirst: string
@@ -403,5 +436,6 @@ export interface TranslationDictionary {
     autoCategorizeSuccess: string
     coverUpdatedSuccess: string
     coverChangeSuccess: string
+    coverChangedSuccess: string
   }
 }

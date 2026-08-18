@@ -30,6 +30,7 @@ export const vi: TranslationDictionary = {
   sidebar: {
     library: 'Thư viện',
     home: 'Trang chủ',
+    dashboard: 'Tổng quan',
     youtubeMusic: 'YouTube Music',
     soundCloud: 'SoundCloud',
     songList: 'Danh sách bài hát',
@@ -47,6 +48,7 @@ export const vi: TranslationDictionary = {
     compact: 'Danh sách thu gọn'
   },
   header: {
+    searchDashboard: 'Tìm bài hát, nghệ sĩ trong thư viện...',
     searchYtm: 'Tìm kiếm nhạc trên YouTube Music...',
     searchSc: 'Tìm kiếm nhạc trên SoundCloud...',
     searchLocal: 'Tìm bài hát, nghệ sĩ trong máy...',
@@ -68,6 +70,23 @@ export const vi: TranslationDictionary = {
     sortDuration: 'Sắp xếp theo thời lượng'
   },
   home: {
+    dashboardTitle: 'Tổng quan',
+    dashboardSubtitle: 'Khám phá bài hát, tuyển tập và gợi ý dành riêng cho bạn',
+    forYouTitle: 'Gợi ý dành riêng cho bạn',
+    forYouSubtitle: 'Tuyển tập từ thư mục nhạc dựa trên nghệ sĩ & thể loại bạn nghe gần đây',
+    recentlyPlayedTitle: 'Đã nghe gần đây',
+    recentlyPlayedSubtitle: 'Tiếp tục thưởng thức những bản nhạc bạn vừa phát',
+    discoverFolderTitle: 'Khám phá từ thư mục nhạc',
+    discoverFolderSubtitle: 'Giai điệu ngẫu nhiên từ kho nhạc trên máy tính của bạn',
+    playAllRecommendations: 'Phát gợi ý',
+    shuffleAllLibrary: 'Trộn bài toàn bộ thư mục',
+    refreshDashboard: 'Làm mới gợi ý',
+    statsSongs: 'Bài hát',
+    statsPlaylists: 'Playlist',
+    statsArtists: 'Nghệ sĩ',
+    statsRecent: 'Đã nghe',
+    noRecentTitle: 'Bắt đầu nghe nhạc để nhận gợi ý thông minh',
+    noRecentDesc: 'Khi bạn nghe các bài hát trong thư mục, Mei\'s Radio sẽ tự động phân tích và gợi ý những bản nhạc phù hợp nhất với gu âm nhạc của bạn.',
     ytmTitle: 'YouTube Music',
     ytmSubtitle: 'Khám phá và đề xuất cá nhân hóa',
     refreshYtm: 'Làm mới YouTube Music',
@@ -321,6 +340,18 @@ export const vi: TranslationDictionary = {
       placeholder: 'Nhập tên playlist...',
       create: 'Tạo mới'
     },
+    editPlaylist: {
+      title: 'Chỉnh sửa thông tin Playlist',
+      nameLabel: 'Tên Playlist',
+      namePlaceholder: 'Nhập tên playlist...',
+      descLabel: 'Mô tả Playlist (tùy chọn)',
+      descPlaceholder: 'Nhập mô tả về playlist này...',
+      coverLabel: 'Ảnh bìa Playlist',
+      chooseImage: 'Chọn ảnh từ máy tính',
+      removeImage: 'Xóa ảnh tùy chỉnh',
+      save: 'Lưu thay đổi',
+      cancel: 'Hủy'
+    },
     renamePlaylist: {
       title: 'Đổi tên Playlist',
       placeholder: 'Nhập tên mới...',
@@ -382,6 +413,8 @@ export const vi: TranslationDictionary = {
     downloadFinished: 'Đã tải xong "{title}"!',
     albumDownloadFinished: 'Đã tải hoàn tất {count}/{total} bài hát của Album!',
     playlistCreated: 'Đã tạo playlist thành công!',
+    playlistUpdatedSuccess: 'Đã cập nhật thông tin playlist thành công!',
+    playlistRenamedSuccess: 'Đã đổi tên playlist thành công!',
     tracksAddedToPlaylist: 'Đã thêm {count} bài hát vào playlist!',
     connectingStream: 'Đang kết nối luồng phát...',
     setLibraryFirst: 'Vui lòng vào Cài đặt để thiết lập Thư viện gốc trước khi tải!',
@@ -402,6 +435,7 @@ export const vi: TranslationDictionary = {
     autoCategorizeConfirm: 'Hành động này sẽ tự động tạo thư mục và di chuyển các bài hát có chung Album vào đó. Bạn có chắc chắn muốn thực hiện?',
     autoCategorizeSuccess: 'Đã di chuyển thành công {count} bài hát vào các Playlist Album!',
     coverUpdatedSuccess: 'Đã cập nhật ảnh bìa từ bài hát đầu tiên thành công!',
-    coverChangeSuccess: 'Đã thay đổi ảnh bìa thành công! Đang tải lại thư viện...'
+    coverChangeSuccess: 'Đã thay đổi ảnh bìa thành công! Đang tải lại thư viện...',
+    coverChangedSuccess: 'Đã cập nhật ảnh bìa playlist!'
   }
 }

@@ -1046,9 +1046,61 @@ app.whenReady().then(() => {
       target.name = trimmed
       target.updatedAt = Date.now()
       saveUserPlaylists(playlists)
-      return { success: true, playlists }
+      return { success: true, playlists, playlist: target }
     }
     return { success: false, error: 'Không tìm thấy playlist' }
+  })
+
+  ipcMain.handle('music:updateUserPlaylist', async (_, playlistId: string, updates: { name?: string; description?: string; thumbnail?: string | null; customImagePath?: string }) => {
+    const playlists = getUserPlaylists()
+    const target = playlists.find(p => p.id === playlistId)
+    if (!target) return { success: false, error: 'Không tìm thấy playlist' }
+
+    if (updates.name !== undefined) {
+      const trimmed = updates.name.trim()
+      if (!trimmed) return { success: false, error: 'Tên playlist không được để trống' }
+      target.name = trimmed
+    }
+
+    if (updates.description !== undefined) {
+      target.description = updates.description.trim()
+    }
+
+    if (updates.customImagePath) {
+      const playlistHash = crypto.createHash('md5').update('user_pl_' + playlistId).digest('hex')
+      const plCentralThumbPath = join(IMAGE_CACHE_DIR, `upl_${playlistHash}.jpg`)
+      try {
+        const img = nativeImage.createFromPath(updates.customImagePath)
+        const resized = img.resize({ width: 300, height: 300, quality: 'good' })
+        fs.writeFileSync(plCentralThumbPath, resized.toJPEG(85))
+        target.thumbnail = `${pathToFileURL(plCentralThumbPath).href}?t=${Date.now()}`
+      } catch (e) {
+        target.thumbnail = `${pathToFileURL(updates.customImagePath).href}?t=${Date.now()}`
+      }
+    } else if (updates.thumbnail !== undefined) {
+      target.thumbnail = updates.thumbnail
+    }
+
+    target.updatedAt = Date.now()
+    saveUserPlaylists(playlists)
+    return { success: true, playlist: target, playlists }
+  })
+
+  ipcMain.handle('music:pickImage', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg', 'webp'] }]
+    })
+    if (canceled || filePaths.length === 0) return { success: false, canceled: true }
+    const imagePath = filePaths[0]
+    try {
+      const img = nativeImage.createFromPath(imagePath)
+      const resized = img.resize({ width: 300, height: 300, quality: 'good' })
+      const buffer = resized.toJPEG(85)
+      const dataUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`
+      return { success: true, filePath: imagePath, dataUrl, previewUrl: pathToFileURL(imagePath).href }
+    } catch (e) {
+      return { success: true, filePath: imagePath, dataUrl: pathToFileURL(imagePath).href, previewUrl: pathToFileURL(imagePath).href }
+    }
   })
 
   ipcMain.handle('music:setUserPlaylistThumbnail', async (_, playlistId: string, customPath?: string) => {
@@ -1075,7 +1127,7 @@ app.whenReady().then(() => {
       }
       target.updatedAt = Date.now()
       saveUserPlaylists(playlists)
-      return { success: true, thumbnail: target.thumbnail, playlists }
+      return { success: true, thumbnail: target.thumbnail, playlists, playlist: target }
     }
     return { success: false, error: 'Không tìm thấy playlist' }
   })
