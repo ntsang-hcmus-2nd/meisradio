@@ -119,6 +119,10 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     ipcRenderer.removeAllListeners('nav:forward')
     ipcRenderer.on('nav:forward', () => callback())
   },
+  discordUpdatePresence: (payload: any) => ipcRenderer.invoke('discord:updatePresence', payload),
+  discordClearPresence: () => ipcRenderer.invoke('discord:clearPresence'),
+  discordUpdateConfig: (config: any) => ipcRenderer.invoke('discord:updateConfig', config),
+  discordGetStatus: () => ipcRenderer.invoke('discord:getStatus'),
 }
 
 if (process.contextIsolated) {

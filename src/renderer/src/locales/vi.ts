@@ -266,6 +266,30 @@ export const vi: TranslationDictionary = {
       liteDesc: 'Tiết kiệm pin, tắt hiệu ứng kính mờ và Visualizer, tối ưu GPU cho Laptop và card đồ họa tích hợp.',
       core: 'Cốt lõi (Core Mode)',
       coreDesc: 'Hiệu năng tối đa, tắt toàn bộ ảnh bìa và module online.'
+    },
+    discordRpc: {
+      title: 'Hiển thị trạng thái hoạt động trên Discord (Rich Presence)',
+      desc: 'Hiển thị bài hát đang nghe, nghệ sĩ, thời gian và ảnh bìa lên trạng thái tài khoản Discord của bạn.',
+      enable: 'Bật hiển thị trạng thái trên Discord',
+      enableDesc: 'Cho phép Mei\'s Radio kết nối với ứng dụng Discord Desktop đang chạy trên máy tính',
+      clientIdTitle: 'Discord Application ID (Client ID)',
+      clientIdDesc: 'Nhập Client ID từ Discord Developer Portal nếu muốn tùy biến tên ứng dụng trên Discord (Mặc định sử dụng ID tích hợp).',
+      clientIdPlaceholder: '1539993441851670589',
+      resetDefault: 'Đặt lại mặc định',
+      showDetails: 'Hiển thị tên bài hát & Ca sĩ',
+      showDetailsDesc: 'Hiển thị chi tiết bài hát, nghệ sĩ và album đang phát',
+      showTime: 'Hiển thị thời gian sử dụng ứng dụng',
+      showTimeDesc: 'Hiển thị thời gian đã trôi qua kể từ khi mở ứng dụng (App Uptime / Elapsed time)',
+      showCover: 'Hiển thị ảnh bìa bài hát',
+      showCoverDesc: 'Hiển thị ảnh bìa từ nguồn Online (YouTube, SoundCloud, Drive) hoặc logo Mei\'s Radio',
+      showQuality: 'Hiển thị chất lượng âm thanh',
+      showQualityDesc: 'Hiển thị thông số định dạng (FLAC 24-bit/96kHz, MP3 320kbps, v.v.)',
+      showButtons: 'Hiển thị nút liên kết (Buttons)',
+      showButtonsDesc: 'Hiển thị nút nghe bài hát trên YouTube Music / SoundCloud và nút Mei\'s Radio',
+      showIdle: 'Hiển thị trạng thái nhàn rỗi (Idle)',
+      showIdleDesc: 'Hiển thị trạng thái đang duyệt nhạc khi mở ứng dụng nhưng chưa phát bài nào',
+      connectedStatus: 'Đã kết nối Discord',
+      disconnectedStatus: 'Chưa kết nối Discord (Hãy mở Discord Desktop)'
     }
   },
   player: {

@@ -14,6 +14,7 @@ import axios from 'axios'
 import http from 'http'
 import { MpvManager } from './MpvManager'
 import { writeFlacMetadata } from './flacMetadata'
+import { DiscordRpcManager, DiscordRpcConfig, DiscordPresencePayload, DEFAULT_DISCORD_CLIENT_ID } from './DiscordRpcManager'
 import { 
   getScUserProfile, 
   getScTrendingCharts, 
@@ -27,6 +28,7 @@ import {
 export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma']
 
 let mpvManager: MpvManager | null = null
+let discordRpcManager: DiscordRpcManager | null = null
 
 // Hàm tìm thư mục chứa binary (ffmpeg, ffprobe, mpv) đa môi trường (Dev, Packaged, Portable)
 export function getBinaryDir(): string {
@@ -305,12 +307,36 @@ function getConfig() {
       const rawPaths = Array.isArray(config.libraryPaths) ? config.libraryPaths : (config.libraryPath ? [config.libraryPath] : [])
       config.libraryPaths = rawPaths.filter((p: any) => typeof p === 'string' && p.trim() !== '')
       config.libraryPath = config.libraryPaths[0] || null
+
+      if (!config.discordRpc) {
+        config.discordRpc = {
+          enabled: true,
+          clientId: DEFAULT_DISCORD_CLIENT_ID,
+          showDetails: true,
+          showTime: true,
+          showCover: true,
+          showQuality: true,
+          showButtons: true,
+          showIdle: true
+        }
+      }
+
       return config
     }
   } catch (e) {}
   return { 
     libraryPath: null, libraryPaths: [], crossfadeEnabled: false, crossfadeDuration: 3, 
-    volume: 1, eqBands: null, appMode: 'default'
+    volume: 1, eqBands: null, appMode: 'default',
+    discordRpc: {
+      enabled: true,
+      clientId: DEFAULT_DISCORD_CLIENT_ID,
+      showDetails: true,
+      showTime: true,
+      showCover: true,
+      showQuality: true,
+      showButtons: true,
+      showIdle: true
+    }
   }
 }
 
@@ -476,6 +502,7 @@ function createWindow(): void {
   app.on('before-quit', () => {
     isQuitting = true
     if (mpvManager) mpvManager.killAll()
+    if (discordRpcManager) discordRpcManager.destroy()
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -490,6 +517,35 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
 
   // ==========================================
+  // DISCORD RICH PRESENCE MANAGER
+  // ==========================================
+  const currentConfig = getConfig()
+  discordRpcManager = new DiscordRpcManager()
+  discordRpcManager.init(currentConfig.discordRpc)
+
+  ipcMain.handle('discord:updatePresence', (_, payload: DiscordPresencePayload) => {
+    discordRpcManager?.updatePresence(payload)
+    return { success: true }
+  })
+
+  ipcMain.handle('discord:clearPresence', () => {
+    discordRpcManager?.clearPresence()
+    return { success: true }
+  })
+
+  ipcMain.handle('discord:updateConfig', (_, config: Partial<DiscordRpcConfig>) => {
+    const cur = getConfig()
+    const updatedDiscordConfig = { ...(cur.discordRpc || {}), ...config }
+    saveConfig({ discordRpc: updatedDiscordConfig })
+    discordRpcManager?.updateConfig(updatedDiscordConfig)
+    return { success: true, config: discordRpcManager?.getConfig() }
+  })
+
+  ipcMain.handle('discord:getStatus', () => {
+    return discordRpcManager?.getStatus() || { isConnected: false, isConnecting: false, enabled: false }
+  })
+
+  // ==========================================
   // API CẤU HÌNH & THƯ VIỆN
   // ==========================================
   ipcMain.handle('music:getConfig', () => getConfig())
@@ -502,7 +558,6 @@ app.whenReady().then(() => {
   // MPV AUDIO BACKEND IPC
   // ==========================================
   mpvManager = new MpvManager()
-  const currentConfig = getConfig()
   mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false).catch(console.error) // auto init on start
   
   mpvManager.on('time', (val) => mainWindow?.webContents.send('mpv:time', val))

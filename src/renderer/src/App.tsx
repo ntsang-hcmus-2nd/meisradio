@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
@@ -406,10 +406,20 @@ export default function App() {
   const [crossfadeEnabled, setCrossfadeEnabled] = useState(false)
   const [crossfadeDuration, setCrossfadeDuration] = useState(3)
 
-  // System Tray & Mini Player States
   const [minimizeToTray, setMinimizeToTray] = useState(false)
   const [closeToTray, setCloseToTray] = useState(false)
   const [isMiniPlayer, setIsMiniPlayer] = useState(false)
+
+  // Discord Rich Presence States
+  const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true)
+  const [discordClientId, setDiscordClientId] = useState('1539993441851670589')
+  const [discordShowDetails, setDiscordShowDetails] = useState(true)
+  const [discordShowTime, setDiscordShowTime] = useState(true)
+  const [discordShowCover, setDiscordShowCover] = useState(true)
+  const [discordShowQuality, setDiscordShowQuality] = useState(true)
+  const [discordShowButtons, setDiscordShowButtons] = useState(true)
+  const [discordShowIdle, setDiscordShowIdle] = useState(true)
+  const [discordConnected, setDiscordConnected] = useState(false)
 
   // Modals & Panels Visibility
   const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false)
@@ -2627,6 +2637,16 @@ export default function App() {
       if (cfg.scUserInfo) {
         setScUser(cfg.scUserInfo)
       }
+      if (cfg.discordRpc) {
+        if (cfg.discordRpc.enabled !== undefined) setDiscordRpcEnabled(cfg.discordRpc.enabled)
+        if (cfg.discordRpc.clientId !== undefined) setDiscordClientId(cfg.discordRpc.clientId)
+        if (cfg.discordRpc.showDetails !== undefined) setDiscordShowDetails(cfg.discordRpc.showDetails)
+        if (cfg.discordRpc.showTime !== undefined) setDiscordShowTime(cfg.discordRpc.showTime)
+        if (cfg.discordRpc.showCover !== undefined) setDiscordShowCover(cfg.discordRpc.showCover)
+        if (cfg.discordRpc.showQuality !== undefined) setDiscordShowQuality(cfg.discordRpc.showQuality)
+        if (cfg.discordRpc.showButtons !== undefined) setDiscordShowButtons(cfg.discordRpc.showButtons)
+        if (cfg.discordRpc.showIdle !== undefined) setDiscordShowIdle(cfg.discordRpc.showIdle)
+      }
       fetchScDashboard()
       setIsConfigLoaded(true)
       loadLibrary()
@@ -2703,6 +2723,104 @@ export default function App() {
       clearInterval(idleInterval)
     }
   }, [])
+
+  // DISCORD RICH PRESENCE SYNC
+  const updateDiscordSettings = (updates: Partial<{
+    enabled: boolean
+    clientId: string
+    showDetails: boolean
+    showTime: boolean
+    showCover: boolean
+    showQuality: boolean
+    showButtons: boolean
+    showIdle: boolean
+  }>) => {
+    if (updates.enabled !== undefined) setDiscordRpcEnabled(updates.enabled)
+    if (updates.clientId !== undefined) setDiscordClientId(updates.clientId)
+    if (updates.showDetails !== undefined) setDiscordShowDetails(updates.showDetails)
+    if (updates.showTime !== undefined) setDiscordShowTime(updates.showTime)
+    if (updates.showCover !== undefined) setDiscordShowCover(updates.showCover)
+    if (updates.showQuality !== undefined) setDiscordShowQuality(updates.showQuality)
+    if (updates.showButtons !== undefined) setDiscordShowButtons(updates.showButtons)
+    if (updates.showIdle !== undefined) setDiscordShowIdle(updates.showIdle)
+
+    // @ts-ignore
+    if (window.api && window.api.discordUpdateConfig) {
+      // @ts-ignore
+      window.api.discordUpdateConfig(updates)
+    }
+  }
+
+  // Periodic Discord RPC connection status check
+  useEffect(() => {
+    const checkStatus = () => {
+      // @ts-ignore
+      if (window.api && window.api.discordGetStatus) {
+        // @ts-ignore
+        window.api.discordGetStatus().then((st: any) => {
+          if (st) setDiscordConnected(Boolean(st.isConnected))
+        }).catch(() => {})
+      }
+    }
+    checkStatus()
+    const interval = setInterval(checkStatus, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Send Discord Rich Presence updates
+  const sendDiscordPresence = useCallback((override?: { isPlaying?: boolean; position?: number }) => {
+    // @ts-ignore
+    if (!window.api || !window.api.discordUpdatePresence) return
+
+    if (!currentTrack) {
+      // @ts-ignore
+      window.api.discordUpdatePresence({ isPlaying: false })
+      return
+    }
+
+    let onlineUrl: string | null = null
+    if (currentTrack.isOnline) {
+      if (currentTrack.platform === 'soundcloud') {
+        onlineUrl = currentTrack.permalinkUrl || currentTrack.url || currentTrack.id
+      } else if (currentTrack.videoId) {
+        onlineUrl = `https://music.youtube.com/watch?v=${currentTrack.videoId}`
+      }
+    }
+
+    const curPos = override?.position !== undefined 
+      ? override.position 
+      : (bitPerfectEnabled ? ((audioRef.current as any)?._currentTime || 0) : (audioRef.current?.currentTime || 0))
+    
+    const curPlaying = override?.isPlaying !== undefined ? override.isPlaying : isPlaying
+
+    const curDur = bitPerfectEnabled 
+      ? ((audioRef.current as any)?._duration || currentTrack.duration || 0) 
+      : (audioRef.current?.duration || currentTrack.duration || 0)
+
+    // @ts-ignore
+    window.api.discordUpdatePresence({
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      album: currentTrack.album,
+      duration: curDur,
+      position: curPos,
+      isPlaying: curPlaying,
+      coverArt: currentTrack.coverArt,
+      isOnline: currentTrack.isOnline,
+      platform: currentTrack.platform,
+      onlineUrl: onlineUrl,
+      format: currentTrack.format,
+      bitrate: currentTrack.bitrate,
+      sampleRate: currentTrack.sampleRate,
+      bitDepth: currentTrack.bitDepth
+    })
+  }, [currentTrack, isPlaying, bitPerfectEnabled])
+
+  useEffect(() => {
+    if (isConfigLoaded) {
+      sendDiscordPresence()
+    }
+  }, [currentTrack?.id, currentTrack?.filePath, currentTrack?.title, isPlaying, isConfigLoaded, sendDiscordPresence])
 
   // Audio Context & Cấu trúc luồng Bit-perfect
   // EFFECT 1: CHỈ KHỞI TẠO LẠI BỘ LỌC KHI ĐỔI BÀI HOẶC BẬT/TẮT EQ (Tiết kiệm CPU)
@@ -4902,6 +5020,121 @@ export default function App() {
                           </div>
                         </div>
                       </div>
+                    </div>
+
+                    {/* DISCORD RICH PRESENCE SETTINGS */}
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <h3 className="text-theme-10 font-semibold">{t('settings.discordRpc.title')}</h3>
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            discordConnected 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                              : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/50'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${discordConnected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+                            {discordConnected ? t('settings.discordRpc.connectedStatus') : t('settings.discordRpc.disconnectedStatus')}
+                          </span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={discordRpcEnabled}
+                          onChange={(e) => updateDiscordSettings({ enabled: e.target.checked })}
+                          className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
+                        />
+                      </div>
+                      <p className="text-sm text-zinc-400 mb-4">{t('settings.discordRpc.desc')}</p>
+
+                      {discordRpcEnabled && (
+                        <div className="space-y-4 pl-1">
+                          {/* Toggles Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {/* 1. Show Details */}
+                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                              <div className="pr-2">
+                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showDetails')}</p>
+                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showDetailsDesc')}</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={discordShowDetails}
+                                onChange={(e) => updateDiscordSettings({ showDetails: e.target.checked })}
+                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                              />
+                            </label>
+
+                            {/* 2. Show Live Progress Time */}
+                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                              <div className="pr-2">
+                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showTime')}</p>
+                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showTimeDesc')}</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={discordShowTime}
+                                onChange={(e) => updateDiscordSettings({ showTime: e.target.checked })}
+                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                              />
+                            </label>
+
+                            {/* 3. Show Cover Art */}
+                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                              <div className="pr-2">
+                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showCover')}</p>
+                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showCoverDesc')}</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={discordShowCover}
+                                onChange={(e) => updateDiscordSettings({ showCover: e.target.checked })}
+                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                              />
+                            </label>
+
+                            {/* 4. Show Quality */}
+                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                              <div className="pr-2">
+                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showQuality')}</p>
+                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showQualityDesc')}</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={discordShowQuality}
+                                onChange={(e) => updateDiscordSettings({ showQuality: e.target.checked })}
+                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                              />
+                            </label>
+
+                            {/* 5. Show Buttons */}
+                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                              <div className="pr-2">
+                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showButtons')}</p>
+                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showButtonsDesc')}</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={discordShowButtons}
+                                onChange={(e) => updateDiscordSettings({ showButtons: e.target.checked })}
+                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                              />
+                            </label>
+
+                            {/* 6. Show Idle */}
+                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                              <div className="pr-2">
+                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showIdle')}</p>
+                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showIdleDesc')}</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={discordShowIdle}
+                                onChange={(e) => updateDiscordSettings({ showIdle: e.target.checked })}
+                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
