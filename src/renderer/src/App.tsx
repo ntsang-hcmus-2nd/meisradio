@@ -2530,7 +2530,7 @@ export default function App() {
   }, [activePlaylist, searchQuery, sortField, sortOrder])
 
   // Lấy Sample Rate chuẩn của bài hát hiện tại (Mặc định 44100Hz nếu không rõ)
-  const currentSampleRate = currentTrack?.sampleRate && currentTrack.sampleRate >= 8000 && currentTrack.sampleRate <= 192000 
+  const currentSampleRate = currentTrack?.sampleRate && currentTrack.sampleRate >= 8000 && currentTrack.sampleRate <= 384000 
     ? currentTrack.sampleRate 
     : 44100;
 

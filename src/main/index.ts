@@ -1295,9 +1295,20 @@ app.whenReady().then(() => {
       }
       if (fs.existsSync(rawPath)) {
         const fileBuffer = fs.readFileSync(rawPath)
+        let sampleRate: number | undefined = undefined
+        let bitDepth: number | undefined = undefined
+        try {
+          const metadata = await mm.parseFile(rawPath)
+          sampleRate = metadata?.format?.sampleRate
+          bitDepth = metadata?.format?.bitsPerSample
+        } catch (mErr) {
+          // Fallback nếu không đọc được metadata
+        }
         return { 
           success: true, 
-          buffer: fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength) 
+          buffer: fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength),
+          sampleRate,
+          bitDepth
         }
       }
       return { success: false, error: `Không tìm thấy file: ${rawPath}` }
