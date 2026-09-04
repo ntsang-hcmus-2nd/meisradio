@@ -18,7 +18,7 @@ interface SidebarProps {
   isCore: boolean // <-- MỚI: Nhận trạng thái Core Mode
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ 
+export const Sidebar: React.FC<SidebarProps> = React.memo(({ 
   activeView, setActiveView, setSearchQuery, setSearchInput, 
   setActiveAlbum, setActivePlaylist, setActiveArtist, setActiveGenre, setActiveUserPlaylist,
   fetchDashboard, fetchScDashboard, isCore 
@@ -161,4 +161,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     </aside>
   )
-}
+})

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
@@ -528,6 +528,40 @@ export default function App() {
   const navForwardRef = useRef<any[]>([])
   const isNavigatingRef = useRef(false)
 
+  // Quản lý và khôi phục vị trí cuộn khi điều hướng / quay lại
+  const contentContainerRef = useRef<HTMLDivElement>(null)
+  const scrollPositionsRef = useRef<Record<string, number>>({})
+
+  const currentViewKey = `${activeView}-${activeAlbum ? (activeAlbum.browseId || activeAlbum.title || 'album') : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.name || ''}-${activeUserPlaylist?.id || ''}${searchQuery ? `-${searchQuery}` : ''}`
+
+  useLayoutEffect(() => {
+    const saved = scrollPositionsRef.current[currentViewKey]
+    if (saved !== undefined && contentContainerRef.current) {
+      contentContainerRef.current.scrollTop = saved
+      const raf = requestAnimationFrame(() => {
+        if (contentContainerRef.current) {
+          contentContainerRef.current.scrollTop = saved
+        }
+      })
+      const timer = setTimeout(() => {
+        if (contentContainerRef.current) {
+          contentContainerRef.current.scrollTop = saved
+        }
+      }, 50)
+      return () => {
+        cancelAnimationFrame(raf)
+        clearTimeout(timer)
+      }
+    } else if (contentContainerRef.current) {
+      contentContainerRef.current.scrollTop = 0
+    }
+    return () => {
+      if (contentContainerRef.current) {
+        scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop
+      }
+    }
+  }, [currentViewKey])
+
   const captureNavState = () => ({
     activeView,
     activeAlbum,
@@ -536,7 +570,8 @@ export default function App() {
     activePlaylist,
     activeUserPlaylist,
     searchQuery,
-    searchInput
+    searchInput,
+    scrollTop: contentContainerRef.current?.scrollTop || 0
   })
 
   useEffect(() => {
@@ -556,6 +591,9 @@ export default function App() {
   }, [activeView, activeAlbum, activeArtist, activeGenre, activePlaylist, activeUserPlaylist, searchQuery])
 
   const handleNavBack = () => {
+    if (contentContainerRef.current) {
+      scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop
+    }
     if (activeAlbum) {
       setActiveAlbum(null)
       return
@@ -622,16 +660,22 @@ export default function App() {
     }
   }
 
+  const handleNavBackRef = useRef(handleNavBack)
+  handleNavBackRef.current = handleNavBack
+
+  const handleNavForwardRef = useRef(handleNavForward)
+  handleNavForwardRef.current = handleNavForward
+
   useEffect(() => {
     const handleMouseUp = (e: MouseEvent) => {
       if (e.button === 3) {
         e.preventDefault()
         e.stopPropagation()
-        handleNavBack()
+        handleNavBackRef.current()
       } else if (e.button === 4) {
         e.preventDefault()
         e.stopPropagation()
-        handleNavForward()
+        handleNavForwardRef.current()
       }
     }
 
@@ -639,9 +683,9 @@ export default function App() {
     window.addEventListener('auxclick', handleMouseUp)
 
     // @ts-ignore
-    let unlistenBack = window.api?.onNavBack?.(handleNavBack)
+    let unlistenBack = window.api?.onNavBack?.(() => handleNavBackRef.current())
     // @ts-ignore
-    let unlistenForward = window.api?.onNavForward?.(handleNavForward)
+    let unlistenForward = window.api?.onNavForward?.(() => handleNavForwardRef.current())
 
     return () => {
       window.removeEventListener('mouseup', handleMouseUp)
@@ -649,7 +693,7 @@ export default function App() {
       if (typeof unlistenBack === 'function') unlistenBack()
       if (typeof unlistenForward === 'function') unlistenForward()
     }
-  }, [activeAlbum, activeArtist, activeGenre, activePlaylist, activeUserPlaylist, searchQuery, searchInput, activeView])
+  }, [])
 
   // Cloud & Google Drive States
   const [googleDriveApiKey, setGoogleDriveApiKey] = useState('')
@@ -762,6 +806,9 @@ export default function App() {
 
   const handleScItemClick = async (item: any) => {
     if (item.isPlaylist || item.playlistId) {
+      if (contentContainerRef.current) {
+        scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop
+      }
       setActiveAlbum({ title: item.title, tracks: [] })
       setIsAlbumLoading(true)
       // @ts-ignore
@@ -803,6 +850,9 @@ export default function App() {
       
     } else if (item.isArtist) {
       // XỬ LÝ MỞ TRANG NGHỆ SĨ
+      if (contentContainerRef.current) {
+        scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop
+      }
       setActiveAlbum({ title: item.title, tracks: [] });
       setIsAlbumLoading(true);
       // @ts-ignore
@@ -813,6 +863,9 @@ export default function App() {
 
     } else if (item.playlistId) {
       // XỬ LÝ MỞ ALBUM/PLAYLIST
+      if (contentContainerRef.current) {
+        scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop
+      }
       setActiveAlbum({ title: item.title, tracks: [] });
       setIsAlbumLoading(true);
       // @ts-ignore
@@ -977,11 +1030,22 @@ export default function App() {
     }
   }
 
+  // Lắng nghe sự kiện Live Update từ main process khi có tệp nhạc được thêm/xóa/sửa
+  useEffect(() => {
+    // @ts-ignore
+    const unlisten = window.api?.onLibraryChanged?.(() => {
+      loadLibrary(true)
+    })
+    return () => {
+      if (typeof unlisten === 'function') unlisten()
+    }
+  }, [])
+
   // Tự động đồng bộ Active Playlist mỗi khi thêm/xóa bài hát trong thư viện
   useEffect(() => {
     if (activePlaylist) {
       const updated = playlists.find(p => p.name === activePlaylist.name);
-      if (updated && updated.tracks.length !== activePlaylist.tracks.length) {
+      if (updated) {
         setActivePlaylist(updated);
       }
     }
@@ -996,6 +1060,7 @@ export default function App() {
       }
     }
   }, [userPlaylists]);
+
 
   const handleReloadLibrary = async () => {
     setIsReloading(true)
@@ -2348,16 +2413,20 @@ export default function App() {
   // ==========================================
   // 4. MEMOS
   // ==========================================
-  const getResolvedUserPlaylistTracks = (upl: any) => {
-    if (!upl || !Array.isArray(upl.trackIds)) return []
-    const trackMap = new Map<string, any>()
+  const libraryTracksMap = useMemo(() => {
+    const map = new Map<string, any>()
     for (const t of libraryTracks) {
-      if (t.id) trackMap.set(t.id, t)
-      if (t.filePath) trackMap.set(t.filePath, t)
+      if (t.id) map.set(t.id, t)
+      if (t.filePath) map.set(t.filePath, t)
     }
+    return map
+  }, [libraryTracks])
+
+  const getResolvedUserPlaylistTracks = useCallback((upl: any) => {
+    if (!upl || !Array.isArray(upl.trackIds)) return []
     const resolved: any[] = []
     for (const trackId of upl.trackIds) {
-      const found = trackMap.get(trackId)
+      const found = libraryTracksMap.get(trackId)
       if (found) {
         resolved.push(found)
       } else {
@@ -2374,14 +2443,14 @@ export default function App() {
       }
     }
     return resolved
-  }
+  }, [libraryTracksMap])
 
   const activeUserPlaylistTracks = useMemo(() => {
     if (!activeUserPlaylist) return []
     const resolved = getResolvedUserPlaylistTracks(activeUserPlaylist)
     const filtered = getFilteredTracks(resolved)
     return getSortedTracks(filtered)
-  }, [activeUserPlaylist, libraryTracks, searchQuery, sortField, sortOrder])
+  }, [activeUserPlaylist, getResolvedUserPlaylistTracks, searchQuery, sortField, sortOrder])
 
   const artistsData = useMemo(() => {
     const artistMap = new Map<string, {
@@ -2392,26 +2461,38 @@ export default function App() {
     }>()
 
     for (const track of libraryTracks) {
-      const artistName = (track.artist && track.artist.trim() && track.artist.toLowerCase() !== 'unknown') ? track.artist.trim() : (language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')
-      if (!artistMap.has(artistName)) {
-        artistMap.set(artistName, {
-          name: artistName,
-          tracks: [],
-          albums: new Map(),
-          coverArt: null
-        })
+      let rawArtists: string[] = []
+      if (Array.isArray(track.artists) && track.artists.length > 0) {
+        rawArtists = track.artists
+      } else if (track.artist && track.artist.trim() && track.artist.toLowerCase() !== 'unknown') {
+        rawArtists = track.artist.split(/\s*,\s*|\s*;\s*|\s*\/\s*|\s*&\s*/).map((s: string) => s.trim()).filter(Boolean)
       }
-      const item = artistMap.get(artistName)!
-      item.tracks.push(track)
-      if (!item.coverArt && track.coverArt) {
-        item.coverArt = track.coverArt
+
+      if (rawArtists.length === 0) {
+        rawArtists = [language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist']
       }
-      const albumName = (track.album && track.album.trim() && track.album.toLowerCase() !== 'unknown') ? track.album.trim() : null
-      if (albumName) {
-        if (!item.albums.has(albumName)) {
-          item.albums.set(albumName, [])
+
+      for (const artistName of rawArtists) {
+        if (!artistMap.has(artistName)) {
+          artistMap.set(artistName, {
+            name: artistName,
+            tracks: [],
+            albums: new Map(),
+            coverArt: null
+          })
         }
-        item.albums.get(albumName)!.push(track)
+        const item = artistMap.get(artistName)!
+        item.tracks.push(track)
+        if (!item.coverArt && track.coverArt) {
+          item.coverArt = track.coverArt
+        }
+        const albumName = (track.album && track.album.trim() && track.album.toLowerCase() !== 'unknown') ? track.album.trim() : null
+        if (albumName) {
+          if (!item.albums.has(albumName)) {
+            item.albums.set(albumName, [])
+          }
+          item.albums.get(albumName)!.push(track)
+        }
       }
     }
 
@@ -2529,6 +2610,12 @@ export default function App() {
     return getSortedTracks(filtered)
   }, [activePlaylist, searchQuery, sortField, sortOrder])
 
+  const processedGenreTracks = useMemo(() => {
+    if (!activeGenre) return []
+    const filtered = getFilteredTracks(activeGenre.tracks)
+    return getSortedTracks(filtered)
+  }, [activeGenre, searchQuery, sortField, sortOrder])
+
   // Lấy Sample Rate chuẩn của bài hát hiện tại (Mặc định 44100Hz nếu không rõ)
   const currentSampleRate = currentTrack?.sampleRate && currentTrack.sampleRate >= 8000 && currentTrack.sampleRate <= 384000 
     ? currentTrack.sampleRate 
@@ -2538,6 +2625,26 @@ export default function App() {
   // ==========================================
   // 5. EFFECTS
   // ==========================================
+
+  // Tự động đồng bộ Active Genre khi thư viện thay đổi
+  useEffect(() => {
+    if (activeGenre) {
+      const updated = genresData.find(g => g.name === activeGenre.name);
+      if (updated) {
+        setActiveGenre(updated);
+      }
+    }
+  }, [genresData]);
+
+  // Tự động đồng bộ Active Artist khi thư viện thay đổi
+  useEffect(() => {
+    if (activeArtist) {
+      const updated = artistsData.artistsList.find(a => a.name === activeArtist.name);
+      if (updated) {
+        setActiveArtist(updated);
+      }
+    }
+  }, [artistsData]);
 
   // Get audio output devices
   useEffect(() => {
@@ -3785,8 +3892,11 @@ export default function App() {
             
             {/* CỘT TRÁI: DATA VIEW */}
             <div 
-              key={`${activeView}-${activeAlbum ? (activeAlbum.browseId || activeAlbum.title || 'album') : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.name || ''}-${activeUserPlaylist?.id || ''}`}
-              className={`${isLite || isCore ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || activeView === 'home' || (activeView === 'playlists' && !activePlaylist) || activeView === 'artists' || (activeView === 'genres' && !activeGenre) || (activeView === 'user-playlists' && !activeUserPlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}
+              ref={contentContainerRef}
+              onScroll={(e) => {
+                scrollPositionsRef.current[currentViewKey] = e.currentTarget.scrollTop
+              }}
+              className={`flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || activeView === 'home' || (activeView === 'home-ytm' && !activeAlbum) || (activeView === 'home-soundcloud' && !activeAlbum) || (activeView === 'playlists' && !activePlaylist) || activeView === 'artists' || (activeView === 'genres' && !activeGenre) || (activeView === 'user-playlists' && !activeUserPlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}
             >
               
               {/* VIEW: TRANG CHỦ TỔNG QUAN (DASHBOARD) */}
@@ -4090,12 +4200,20 @@ export default function App() {
               
               {/* VIEW: TRANG CHỦ YOUTUBE MUSIC */}
               {activeView === 'home-ytm' && (
-                <div className="flex flex-col h-full">
+                <div className={`flex flex-col ${activeAlbum ? 'h-full' : 'space-y-6'}`}>
                   {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST --- */}
                   {activeAlbum ? (
                     <div className="flex flex-col h-full animate-fade-in space-y-6">
                       <div>
-                        <button onClick={() => setActiveAlbum(null)} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer">
+                        <button 
+                          onClick={() => {
+                            if (contentContainerRef.current) {
+                              scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                            }
+                            setActiveAlbum(null);
+                          }} 
+                          className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
+                        >
                           <ArrowLeft size={16}/> {t('home.backToDashboard')}
                         </button>
                         <div className="flex items-end justify-between gap-6 mb-6">
@@ -4203,7 +4321,7 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
+                      <div className="space-y-10 pb-20">
                         {/* THÔNG BÁO KHI CHƯA ĐĂNG NHẬP (TRỐNG DỮ LIỆU) */}
                         {dashboardData.length === 0 ? (
                            <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
@@ -4286,12 +4404,20 @@ export default function App() {
 
               {/* VIEW: TRANG CHỦ SOUNDCLOUD */}
               {activeView === 'home-soundcloud' && (
-                <div className="flex flex-col h-full">
+                <div className={`flex flex-col ${activeAlbum ? 'h-full' : 'space-y-6'}`}>
                   {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST SOUNDCLOUD --- */}
                   {activeAlbum ? (
                     <div className="flex flex-col h-full animate-fade-in space-y-6">
                       <div>
-                        <button onClick={() => setActiveAlbum(null)} className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer">
+                        <button 
+                          onClick={() => {
+                            if (contentContainerRef.current) {
+                              scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                            }
+                            setActiveAlbum(null);
+                          }} 
+                          className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
+                        >
                           <ArrowLeft size={16}/> {t('home.backToDashboard')}
                         </button>
                         <div className="flex items-end justify-between gap-6 mb-6">
@@ -4431,7 +4557,7 @@ export default function App() {
                       </div>
 
                       {/* NỘI DUNG SOUNDCLOUD SECTIONS */}
-                      <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
+                      <div className="space-y-10 pb-20">
                         {isScLoading && scDashboardData.length === 0 ? (
                           <div className="flex-1 flex flex-col items-center justify-center mt-20 text-zinc-500">
                             <Activity size={40} className="text-amber-500 animate-bounce mb-3" />
@@ -5142,7 +5268,7 @@ export default function App() {
 
               {/* VIEW: NGHỆ SĨ (ARTISTS LIST) */}
               {activeView === 'artists' && !activeArtist && (
-                <div className="flex flex-col h-full space-y-6">
+                <div className="flex flex-col space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-3xl font-bold text-white">{searchQuery ? t('artistsView.searchResults') : t('artistsView.title')}</h2>
@@ -5153,7 +5279,7 @@ export default function App() {
                   </div>
 
                   {/* Alphabet fast jump bar */}
-                  <div className="flex items-center gap-1.5 flex-wrap pb-2 border-b border-theme-30/40">
+                  <div className="flex items-center gap-1.5 flex-wrap pb-2 border-b border-theme-30/40 sticky top-0 bg-theme-90/80 backdrop-blur z-10 py-1">
                     {artistsData.alphabetGroups.map(grp => (
                       <button
                         key={grp.letter}
@@ -5169,7 +5295,7 @@ export default function App() {
                   </div>
 
                   {/* Danh sách nhóm theo Alphabet A-Z */}
-                  <div className="flex-1 overflow-y-auto space-y-8 pr-2">
+                  <div className="space-y-8">
                     {(() => {
                       const lowerQuery = searchQuery.toLowerCase().trim()
                       const filteredArtists = searchQuery 
@@ -5185,7 +5311,12 @@ export default function App() {
                             {filteredArtists.map(artist => (
                               <div 
                                 key={artist.name} 
-                                onClick={() => setActiveArtist(artist)}
+                                onClick={() => {
+                                  if (contentContainerRef.current) {
+                                    scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                  }
+                                  setActiveArtist(artist);
+                                }}
                                 onContextMenu={(e) => handleArtistContextMenu(artist, e)}
                                 className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md track-card-optimized"
                               >
@@ -5238,7 +5369,12 @@ export default function App() {
                                 {grp.artists.map(artist => (
                                   <div 
                                     key={artist.name} 
-                                    onClick={() => setActiveArtist(artist)}
+                                    onClick={() => {
+                                      if (contentContainerRef.current) {
+                                        scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                      }
+                                      setActiveArtist(artist);
+                                    }}
                                     onContextMenu={(e) => handleArtistContextMenu(artist, e)}
                                     className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md track-card-optimized"
                                   >
@@ -5280,8 +5416,13 @@ export default function App() {
                 <div className="flex flex-col space-y-8 pb-16">
                   <div>
                     <button 
-                      onClick={() => setActiveArtist(null)} 
-                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
+                      onClick={() => {
+                        if (contentContainerRef.current) {
+                          scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                        }
+                        setActiveArtist(null);
+                      }} 
+                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
                     >
                       <ArrowLeft size={16} /> {t('artistsView.backToArtists')}
                     </button>
@@ -5384,7 +5525,7 @@ export default function App() {
 
               {/* VIEW: THỂ LOẠI (GENRES LIST) */}
               {activeView === 'genres' && !activeGenre && (
-                <div className="flex flex-col h-full space-y-6">
+                <div className="flex flex-col space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold text-white">{searchQuery ? t('genresView.searchResults') : t('genresView.title')}</h2>
                     <p className="text-xs text-zinc-400 mt-1">
@@ -5392,155 +5533,193 @@ export default function App() {
                     </p>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto pr-2">
+                  <div className="space-y-8">
                     {(() => {
                       const lowerQuery = searchQuery.toLowerCase().trim()
                       const filteredGenres = searchQuery 
                         ? genresData.filter(g => g.name.toLowerCase().includes(lowerQuery))
                         : genresData
+                      const matchedSongs = searchQuery ? processedLibraryTracks : []
 
-                      if (filteredGenres.length === 0) {
+                      if (!searchQuery && genresData.length === 0) {
                         return <p className="text-zinc-500 text-center mt-10">{t('genresView.noGenres')}</p>
                       }
 
-                      if (viewMode === 'table') {
-                        return (
-                          <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
-                            <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                              <div className="col-span-1 text-center">#</div>
-                              <div className="col-span-5">{t('genresView.title')}</div>
-                              <div className="col-span-4">{t('genresView.topArtists')}</div>
-                              <div className="col-span-1 text-center">{t('common.songs')}</div>
-                              <div className="col-span-1 text-right">Phát</div>
-                            </div>
-                            <div className="divide-y divide-theme-30/20">
-                              {filteredGenres.map((genre, idx) => (
-                                <div
-                                  key={genre.name}
-                                  onClick={() => setActiveGenre(genre)}
-                                  className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
-                                >
-                                  <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
-                                    {idx + 1}
-                                  </div>
-                                  <div className="col-span-5 flex items-center gap-3.5 min-w-0">
-                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-theme-10/30 to-theme-30 border border-theme-10/30 flex items-center justify-center shrink-0 shadow-md">
-                                      <Tag size={20} className="text-theme-10" />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{genre.name}</h4>
-                                      <p className="text-xs text-zinc-500 truncate mt-0.5">{genre.artistCount} {t('artistsView.artistCount')}</p>
-                                    </div>
-                                  </div>
-                                  <div className="col-span-4 flex items-center gap-1.5 overflow-hidden">
-                                    {genre.artists.slice(0, 3).map((art: string) => (
-                                      <span key={art} className="px-2 py-0.5 bg-theme-30/50 text-[11px] text-zinc-300 rounded-md truncate max-w-[120px]">
-                                        {art}
-                                      </span>
-                                    ))}
-                                    {genre.artists.length > 3 && (
-                                      <span className="text-[10px] text-zinc-500">+{genre.artists.length - 3}</span>
-                                    )}
-                                  </div>
-                                  <div className="col-span-1 text-center">
-                                    <span className="px-2 py-0.5 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
-                                      {genre.trackCount}
-                                    </span>
-                                  </div>
-                                  <div className="col-span-1 text-right">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
-                                      }}
-                                      className="p-2 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition"
-                                      title={t('artistsView.playAll')}
-                                    >
-                                      <Play size={14} className="ml-0.5 fill-current" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      }
-
-                      if (viewMode === 'compact') {
-                        return (
-                          <div className="w-full space-y-1.5">
-                            {filteredGenres.map((genre, idx) => (
-                              <div
-                                key={genre.name}
-                                onClick={() => setActiveGenre(genre)}
-                                className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
-                              >
-                                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                  <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
-                                  <div className="w-8 h-8 rounded-lg bg-theme-10/20 border border-theme-10/30 flex items-center justify-center shrink-0">
-                                    <Tag size={15} className="text-theme-10" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{genre.name}</h4>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-4 shrink-0">
-                                  <span className="text-xs text-zinc-400 font-mono">{genre.trackCount} {t('common.songs')} • {genre.artistCount} {t('artistsView.artistCount')}</span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
-                                    }}
-                                    className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
-                                    title={t('artistsView.playAll')}
-                                  >
-                                    <Play size={13} className="ml-0.5 fill-current" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )
-                      }
-
                       return (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
-                          {filteredGenres.map(genre => (
-                            <div 
-                              key={genre.name}
-                              onClick={() => setActiveGenre(genre)}
-                              className="bg-gradient-to-br from-theme-60/80 to-theme-30/40 hover:from-theme-10/20 hover:to-theme-30/70 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/50 transition duration-300 group cursor-pointer shadow-lg flex flex-col justify-between h-48 track-card-optimized"
-                            >
-                              <div className="w-full aspect-video bg-theme-30/60 rounded-xl overflow-hidden relative mb-3 flex items-center justify-center">
-                                {(!isLite && genre.coverArts.length > 0) ? (
-                                  <div className="w-full h-full grid grid-cols-2 gap-0.5">
-                                    {genre.coverArts.slice(0, 4).map((c, i) => (
-                                      <img key={i} loading="lazy" src={c} className="w-full h-full object-cover" />
+                        <div className="space-y-10">
+                          {filteredGenres.length > 0 && (
+                            <div>
+                              {searchQuery && (
+                                <h3 className="text-xl font-bold text-white mb-6">
+                                  {t('genresView.title')} ({filteredGenres.length})
+                                </h3>
+                              )}
+                              {viewMode === 'table' ? (
+                                <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
+                                  <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                                    <div className="col-span-1 text-center">#</div>
+                                    <div className="col-span-5">{t('genresView.title')}</div>
+                                    <div className="col-span-4">{t('genresView.topArtists')}</div>
+                                    <div className="col-span-1 text-center">{t('common.songs')}</div>
+                                    <div className="col-span-1 text-right">Phát</div>
+                                  </div>
+                                  <div className="divide-y divide-theme-30/20">
+                                    {filteredGenres.map((genre, idx) => (
+                                      <div
+                                        key={genre.name}
+                                        onClick={() => {
+                                          if (contentContainerRef.current) {
+                                            scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                          }
+                                          setActiveGenre(genre);
+                                        }}
+                                        className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+                                      >
+                                        <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
+                                          {idx + 1}
+                                        </div>
+                                        <div className="col-span-5 flex items-center gap-3.5 min-w-0">
+                                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-theme-10/30 to-theme-30 border border-theme-10/30 flex items-center justify-center shrink-0 shadow-md">
+                                            <Tag size={20} className="text-theme-10" />
+                                          </div>
+                                          <div className="min-w-0">
+                                            <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{genre.name}</h4>
+                                            <p className="text-xs text-zinc-500 truncate mt-0.5">{genre.artistCount} {t('artistsView.artistCount')}</p>
+                                          </div>
+                                        </div>
+                                        <div className="col-span-4 flex items-center gap-1.5 overflow-hidden">
+                                          {genre.artists.slice(0, 3).map((art: string) => (
+                                            <span key={art} className="px-2 py-0.5 bg-theme-30/50 text-[11px] text-zinc-300 rounded-md truncate max-w-[120px]">
+                                              {art}
+                                            </span>
+                                          ))}
+                                          {genre.artists.length > 3 && (
+                                            <span className="text-[10px] text-zinc-500">+{genre.artists.length - 3}</span>
+                                          )}
+                                        </div>
+                                        <div className="col-span-1 text-center">
+                                          <span className="px-2 py-0.5 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
+                                            {genre.trackCount}
+                                          </span>
+                                        </div>
+                                        <div className="col-span-1 text-right">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
+                                            }}
+                                            className="p-2 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition"
+                                            title={t('artistsView.playAll')}
+                                          >
+                                            <Play size={14} className="ml-0.5 fill-current" />
+                                          </button>
+                                        </div>
+                                      </div>
                                     ))}
                                   </div>
-                                ) : (
-                                  <Tag size={32} className="text-theme-10/80" />
-                                )}
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
-                                    }}
-                                    className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition"
-                                  >
-                                    <Play size={18} className="ml-0.5 fill-current" />
-                                  </button>
                                 </div>
-                              </div>
-                              <div>
-                                <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">{genre.name}</h3>
-                                <p className="text-xs text-zinc-400 mt-1">
-                                  {genre.trackCount} {t('common.songs')} • {genre.artistCount} {t('artistsView.artistCount')}
-                                </p>
+                              ) : viewMode === 'compact' ? (
+                                <div className="w-full space-y-1.5">
+                                  {filteredGenres.map((genre, idx) => (
+                                    <div
+                                      key={genre.name}
+                                      onClick={() => {
+                                        if (contentContainerRef.current) {
+                                          scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                        }
+                                        setActiveGenre(genre);
+                                      }}
+                                      className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
+                                    >
+                                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                        <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
+                                        <div className="w-8 h-8 rounded-lg bg-theme-10/20 border border-theme-10/30 flex items-center justify-center shrink-0">
+                                          <Tag size={15} className="text-theme-10" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{genre.name}</h4>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-4 shrink-0">
+                                        <span className="text-xs text-zinc-400 font-mono">{genre.trackCount} {t('common.songs')} • {genre.artistCount} {t('artistsView.artistCount')}</span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
+                                          }}
+                                          className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
+                                          title={t('artistsView.playAll')}
+                                        >
+                                          <Play size={13} className="ml-0.5 fill-current" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+                                  {filteredGenres.map(genre => (
+                                    <div 
+                                      key={genre.name} 
+                                      onClick={() => {
+                                        if (contentContainerRef.current) {
+                                          scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                        }
+                                        setActiveGenre(genre);
+                                      }}
+                                      className="bg-gradient-to-br from-theme-60/80 to-theme-30/40 hover:from-theme-10/20 hover:to-theme-30/70 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/50 transition duration-300 group cursor-pointer shadow-lg flex flex-col justify-between h-48 track-card-optimized"
+                                    >
+                                      <div className="w-full aspect-video bg-theme-30/60 rounded-xl overflow-hidden relative mb-3 flex items-center justify-center">
+                                        {(!isLite && genre.coverArts.length > 0) ? (
+                                          <div className="w-full h-full grid grid-cols-2 gap-0.5">
+                                            {genre.coverArts.slice(0, 4).map((c, i) => (
+                                              <img key={i} loading="lazy" src={c} className="w-full h-full object-cover" />
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <Tag size={32} className="text-theme-10/80" />
+                                        )}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                          <button 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
+                                            }}
+                                            className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition"
+                                          >
+                                            <Play size={18} className="ml-0.5 fill-current" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">{genre.name}</h3>
+                                        <p className="text-xs text-zinc-400 mt-1">
+                                          {genre.trackCount} {t('common.songs')} • {genre.artistCount} {t('artistsView.artistCount')}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {searchQuery && (
+                            <div className="flex flex-col h-[520px] w-full shrink-0">
+                              <h3 className="text-xl font-bold text-white mb-4 shrink-0">{t('common.songs')} ({matchedSongs.length})</h3>
+                              <div className="flex-1 min-h-0 flex flex-col h-[460px] w-full">
+                                {matchedSongs.length > 0 ? (
+                                  renderTrackTable(matchedSongs)
+                                ) : (
+                                  <p className="text-zinc-500 mt-4">{t('songsView.noSongsMatched', { query: searchQuery })}</p>
+                                )}
                               </div>
                             </div>
-                          ))}
+                          )}
+
+                          {searchQuery && filteredGenres.length === 0 && matchedSongs.length === 0 && (
+                            <p className="text-zinc-500 mt-8 text-center">{t('playlistsView.noResults', { query: searchQuery })}</p>
+                          )}
                         </div>
                       )
                     })()}
@@ -5553,8 +5732,13 @@ export default function App() {
                 <div className="flex flex-col h-full space-y-6">
                   <div>
                     <button 
-                      onClick={() => setActiveGenre(null)} 
-                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
+                      onClick={() => {
+                        if (contentContainerRef.current) {
+                          scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                        }
+                        setActiveGenre(null);
+                      }} 
+                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
                     >
                       <ArrowLeft size={16} /> {t('genresView.backToGenres')}
                     </button>
@@ -5567,13 +5751,14 @@ export default function App() {
                         <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Thể loại</p>
                         <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">{activeGenre.name}</h2>
                         <p className="text-sm text-zinc-400 mb-4">
-                          {activeGenre.tracks.length} {t('common.songs')} • {activeGenre.artistCount} {t('artistsView.artistCount')}
+                          {searchQuery ? `${processedGenreTracks.length} / ${activeGenre.tracks.length}` : activeGenre.tracks.length} {t('common.songs')} • {activeGenre.artistCount} {t('artistsView.artistCount')}
                         </p>
                         <div className="flex items-center gap-3">
                           <button 
                             onClick={() => {
-                              if (activeGenre.tracks.length > 0) {
-                                handleRowClick(activeGenre.tracks[0], activeGenre.tracks)
+                              const tracksToPlay = searchQuery ? processedGenreTracks : activeGenre.tracks;
+                              if (tracksToPlay.length > 0) {
+                                handleRowClick(tracksToPlay[0], tracksToPlay);
                               }
                             }}
                             className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20"
@@ -5582,9 +5767,10 @@ export default function App() {
                           </button>
                           <button 
                             onClick={() => {
-                              if (activeGenre.tracks.length > 0) {
-                                const shuffled = [...activeGenre.tracks].sort(() => Math.random() - 0.5)
-                                handleRowClick(shuffled[0], shuffled)
+                              const tracksToPlay = searchQuery ? processedGenreTracks : activeGenre.tracks;
+                              if (tracksToPlay.length > 0) {
+                                const shuffled = [...tracksToPlay].sort(() => Math.random() - 0.5);
+                                handleRowClick(shuffled[0], shuffled);
                               }
                             }}
                             className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
@@ -5619,14 +5805,14 @@ export default function App() {
                   </div>
 
                   <div className="flex-1 min-h-0 flex flex-col">
-                    {renderTrackTable(activeGenre.tracks)}
+                    {renderTrackTable(processedGenreTracks)}
                   </div>
                 </div>
               )}
 
               {/* VIEW: PLAYLIST CỦA NGƯỜI DÙNG (USER PLAYLISTS LIST) */}
               {activeView === 'user-playlists' && !activeUserPlaylist && (
-                <div className="flex flex-col h-full space-y-6">
+                <div className="flex flex-col space-y-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-3xl font-bold text-white">{searchQuery ? t('userPlaylistsView.searchResults') : t('userPlaylistsView.title')}</h2>
@@ -5642,7 +5828,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto pr-2">
+                  <div className="space-y-8">
                     {(() => {
                       const lowerQuery = searchQuery.toLowerCase().trim()
                       const matchedUserPlaylists = searchQuery 
@@ -5681,7 +5867,12 @@ export default function App() {
                                 return (
                                   <div
                                     key={pl.id}
-                                    onClick={() => setActiveUserPlaylist(pl)}
+                                    onClick={() => {
+                                      if (contentContainerRef.current) {
+                                        scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                      }
+                                      setActiveUserPlaylist(pl);
+                                    }}
                                     onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
                                     className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
                                   >
@@ -5690,7 +5881,7 @@ export default function App() {
                                     </div>
                                     <div className="col-span-6 flex items-center gap-3.5 min-w-0">
                                       <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-                                        {(!isLite && coverImg) ? <img loading="lazy" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={20} className="text-zinc-600" />}
+                                        {(!isLite && coverImg) ? <img loading="lazy" decoding="async" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={20} className="text-zinc-600" />}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                           <button
                                             onClick={(e) => {
@@ -5735,14 +5926,19 @@ export default function App() {
                               return (
                                 <div
                                   key={pl.id}
-                                  onClick={() => setActiveUserPlaylist(pl)}
+                                  onClick={() => {
+                                    if (contentContainerRef.current) {
+                                      scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                    }
+                                    setActiveUserPlaylist(pl);
+                                  }}
                                   onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
                                   className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
                                 >
                                   <div className="flex items-center gap-3.5 min-w-0 flex-1">
                                     <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
                                     <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                                      {(!isLite && coverImg) ? <img loading="lazy" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={16} className="text-zinc-600" />}
+                                      {(!isLite && coverImg) ? <img loading="lazy" decoding="async" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={16} className="text-zinc-600" />}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
@@ -5783,13 +5979,18 @@ export default function App() {
                             return (
                               <div 
                                 key={pl.id} 
-                                onClick={() => setActiveUserPlaylist(pl)}
+                                onClick={() => {
+                                  if (contentContainerRef.current) {
+                                    scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                  }
+                                  setActiveUserPlaylist(pl);
+                                }}
                                 onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
                                 className="bg-theme-60/40 hover:bg-theme-30/50 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between shadow-lg track-card-optimized"
                               >
                                 <div className="aspect-square bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-md">
                                   {(!isLite && coverImg) ? (
-                                    <img loading="lazy" src={coverImg} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                    <img loading="lazy" decoding="async" src={coverImg} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
                                       <ListPlus size={36} />
@@ -5841,8 +6042,13 @@ export default function App() {
                 <div className="flex flex-col h-full space-y-6">
                   <div>
                     <button 
-                      onClick={() => setActiveUserPlaylist(null)} 
-                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
+                      onClick={() => {
+                        if (contentContainerRef.current) {
+                          scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                        }
+                        setActiveUserPlaylist(null);
+                      }} 
+                      className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
                     >
                       <ArrowLeft size={16} /> {t('userPlaylistsView.title')}
                     </button>
@@ -5973,7 +6179,7 @@ export default function App() {
                   {(() => {
                     const lowerQuery = searchQuery.toLowerCase().trim()
                     const matchedPlaylists = searchQuery ? playlists.filter(pl => pl.name.toLowerCase().includes(lowerQuery)) : playlists
-                    const matchedSongs = processedLibraryTracks
+                    const matchedSongs = searchQuery ? processedLibraryTracks : []
 
                     if (!searchQuery && playlists.length === 0) {
                       return <p className="text-zinc-500">{t('playlistsView.noPlaylists')}</p>
@@ -5996,8 +6202,14 @@ export default function App() {
                                 <div className="divide-y divide-theme-30/20">
                                   {matchedPlaylists.map((pl, idx) => (
                                     <div
-                                      key={pl.name}
-                                      onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
+                                      key={pl.path || pl.name}
+                                      onClick={() => {
+                                        if (contentContainerRef.current) {
+                                          scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                        }
+                                        setActivePlaylist(pl);
+                                        setSearchQuery('');
+                                      }}
                                       onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
                                       className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
                                     >
@@ -6006,7 +6218,7 @@ export default function App() {
                                       </div>
                                       <div className="col-span-7 flex items-center gap-3.5 min-w-0">
                                         <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-                                          {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={20} className="text-zinc-600" />}
+                                          {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={20} className="text-zinc-600" />}
                                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                             <button
                                               onClick={(e) => {
@@ -6042,15 +6254,21 @@ export default function App() {
                               <div className="w-full space-y-1.5">
                                 {matchedPlaylists.map((pl, idx) => (
                                   <div
-                                    key={pl.name}
-                                    onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
+                                    key={pl.path || pl.name}
+                                    onClick={() => {
+                                      if (contentContainerRef.current) {
+                                        scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                      }
+                                      setActivePlaylist(pl);
+                                      setSearchQuery('');
+                                    }}
                                     onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
                                     className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
                                   >
                                     <div className="flex items-center gap-3.5 min-w-0 flex-1">
                                       <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
                                       <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                                        {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
+                                        {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
                                       </div>
                                       <div className="min-w-0 flex-1">
                                         <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
@@ -6082,13 +6300,19 @@ export default function App() {
                               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
                                 {matchedPlaylists.map(pl => (
                                   <div 
-                                    key={pl.name} 
+                                    key={pl.path || pl.name} 
                                     className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer track-card-optimized" 
-                                    onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
+                                    onClick={() => {
+                                      if (contentContainerRef.current) {
+                                        scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                                      }
+                                      setActivePlaylist(pl);
+                                      setSearchQuery('');
+                                    }}
                                     onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
                                   >
                                     <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative shadow-md">
-                                      {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
+                                      {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
                                       <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.chooseCover')}><ImageIcon size={16}/></button>
                                       <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.extractCover')}><Sparkles size={16}/></button>
                                     </div>
@@ -6131,7 +6355,12 @@ export default function App() {
                 <div className="flex flex-col h-full space-y-6">
                   <div>
                     <button 
-                      onClick={() => setActivePlaylist(null)} 
+                      onClick={() => {
+                        if (contentContainerRef.current) {
+                          scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
+                        }
+                        setActivePlaylist(null);
+                      }} 
                       className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
                     >
                       <ArrowLeft size={16} /> {t('sidebar.myPlaylists')}

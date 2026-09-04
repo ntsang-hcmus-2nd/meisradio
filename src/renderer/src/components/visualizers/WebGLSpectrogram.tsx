@@ -131,8 +131,18 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
     const offsetLoc = gl.getUniformLocation(program, 'u_offset')
     
     let lastDrawTime = performance.now()
+    let lastResizeCheck = 0
     const fpsInterval = 1000 / 40 // 40 FPS waterfall
     let currentColumn = 0
+
+    // Thiết lập kích thước ban đầu
+    const initDpr = window.devicePixelRatio || 1
+    const initRect = canvas.getBoundingClientRect()
+    if (initRect.width > 0 && initRect.height > 0) {
+      canvas.width = Math.floor(initRect.width * initDpr)
+      canvas.height = Math.floor(initRect.height * initDpr)
+      gl.viewport(0, 0, canvas.width, canvas.height)
+    }
 
     const draw = (now: number) => {
       reqAnimRef.current = requestAnimationFrame(draw)
@@ -141,15 +151,19 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
       if (elapsed < fpsInterval) return
       lastDrawTime = now - (elapsed % fpsInterval)
 
-      const dpr = window.devicePixelRatio || 1
-      const rect = canvas.getBoundingClientRect()
-      if (rect.width > 0 && rect.height > 0) {
-        const targetW = Math.floor(rect.width * dpr)
-        const targetH = Math.floor(rect.height * dpr)
-        if (canvas.width !== targetW || canvas.height !== targetH) {
-          canvas.width = targetW
-          canvas.height = targetH
-          gl.viewport(0, 0, targetW, targetH)
+      // Throttle kiểm tra kích thước (chống layout thrashing)
+      if (now - lastResizeCheck > 250) {
+        lastResizeCheck = now
+        const dpr = window.devicePixelRatio || 1
+        const rect = canvas.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          const targetW = Math.floor(rect.width * dpr)
+          const targetH = Math.floor(rect.height * dpr)
+          if (canvas.width !== targetW || canvas.height !== targetH) {
+            canvas.width = targetW
+            canvas.height = targetH
+            gl.viewport(0, 0, targetW, targetH)
+          }
         }
       }
 

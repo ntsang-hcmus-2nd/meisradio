@@ -277,8 +277,18 @@ app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('disable-http-cache');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-hardware-overlays');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
+
+// Chuẩn hóa tên thư mục / playlist, loại bỏ triệt để dấu chấm và khoảng trắng ở cuối (tránh lỗi Windows)
+function sanitizeFolderName(name: string): string {
+  if (!name) return ''
+  let safe = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim()
+  safe = safe.replace(/[.\s]+$/, '').trim()
+  return safe
+}
+
+let libraryWatchers: fs.FSWatcher[] = []
+let libraryWatchDebounceTimer: NodeJS.Timeout | null = null
 
 let tray: Tray | null = null
 let isQuitting = false 
@@ -425,9 +435,10 @@ function createWindow(): void {
     title: "MEI'S RADIO",
     show: false,
     autoHideMenuBar: true,
+    backgroundColor: '#18181b',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: 'rgba(0,0,0,0)',
+      color: '#18181b',
       symbolColor: '#ffffff',
       height: 40
     },
@@ -501,6 +512,11 @@ function createWindow(): void {
   
   app.on('before-quit', () => {
     isQuitting = true
+    for (const w of libraryWatchers) {
+      try { w.close() } catch (e) {}
+    }
+    libraryWatchers = []
+    if (libraryWatchDebounceTimer) clearTimeout(libraryWatchDebounceTimer)
     if (mpvManager) mpvManager.killAll()
     if (discordRpcManager) discordRpcManager.destroy()
   })
@@ -512,9 +528,69 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.electron')
-  app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
+function updateLibraryWatchers() {
+  for (const w of libraryWatchers) {
+    try { w.close() } catch (e) {}
+  }
+  libraryWatchers = []
+
+  const config = getConfig()
+  const libraryPaths: string[] = (config.libraryPaths && config.libraryPaths.length > 0)
+    ? config.libraryPaths
+    : (config.libraryPath ? [config.libraryPath] : [])
+
+  for (const p of libraryPaths) {
+    if (typeof p === 'string' && fs.existsSync(p)) {
+      try {
+        const watcher = fs.watch(p, { recursive: true }, (_eventType, filename) => {
+          if (filename) {
+            const fname = String(filename)
+            if (fname.includes('.thumbnails') || fname.includes('temp_') || fname.startsWith('.')) {
+              return
+            }
+            const lower = fname.toLowerCase()
+            const isAudio = SUPPORTED_AUDIO_EXTS.some(ext => lower.endsWith(ext))
+            const isRelated = isAudio || lower.endsWith('.lrc') || lower.endsWith('.jpg') || lower.endsWith('.png') || lower.endsWith('.webp') || !fname.includes('.')
+            if (!isRelated) return
+          }
+
+          if (libraryWatchDebounceTimer) clearTimeout(libraryWatchDebounceTimer)
+          libraryWatchDebounceTimer = setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('library:changed')
+            }
+          }, 800)
+        })
+
+        watcher.on('error', (err) => {
+          console.warn('[LibraryWatcher] Error watching', p, err)
+        })
+
+        libraryWatchers.push(watcher)
+      } catch (err) {
+        console.warn('[LibraryWatcher] Failed to watch', p, err)
+      }
+    }
+  }
+}
+
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      if (!mainWindow.isVisible()) mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+
+  app.whenReady().then(() => {
+    updateLibraryWatchers()
+    electronApp.setAppUserModelId('com.electron')
+    app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
 
   // ==========================================
   // DISCORD RICH PRESENCE MANAGER
@@ -612,6 +688,7 @@ app.whenReady().then(() => {
       currentPaths.push(selected)
     }
     saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || selected })
+    updateLibraryWatchers()
     return { success: true, path: selected, libraryPaths: currentPaths }
   })
 
@@ -626,6 +703,7 @@ app.whenReady().then(() => {
       currentPaths.push(selected)
     }
     saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || selected })
+    updateLibraryWatchers()
     return { success: true, path: selected, libraryPaths: currentPaths }
   })
 
@@ -635,6 +713,7 @@ app.whenReady().then(() => {
     let currentPaths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
     currentPaths = currentPaths.filter(p => p !== folderPath)
     saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || null })
+    updateLibraryWatchers()
     return { success: true, libraryPaths: currentPaths }
   })
 
@@ -652,6 +731,7 @@ app.whenReady().then(() => {
       currentPaths.push(newPath)
     }
     saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || null })
+    updateLibraryWatchers()
     return { success: true, oldPath, newPath, libraryPaths: currentPaths }
   })
 
@@ -737,11 +817,14 @@ app.whenReady().then(() => {
       if (cached && cached.mtime === stat.mtimeMs && cached.data && cached.data.genre !== undefined && cached.data.genre !== 'Unknown') {
         const existingTrack = previousTrackMap.get(trackPath) || previousTrackMap.get(cached.data.filePath)
         if (existingTrack && existingTrack.genre !== undefined && existingTrack.genre !== 'Unknown') {
-          return existingTrack
+          const artistsArr = existingTrack.artists || (existingTrack.artist ? existingTrack.artist.split(/\s*,\s*|\s*;\s*|\s*\/\s*/).map((s: string) => s.trim()).filter(Boolean) : ['Unknown'])
+          return { ...existingTrack, artists: artistsArr }
         }
+        const artistsArr = cached.data.artists || (cached.data.artist ? cached.data.artist.split(/\s*,\s*|\s*;\s*|\s*\/\s*/).map((s: string) => s.trim()).filter(Boolean) : ['Unknown'])
         return {
           ...cached.data,
           filePath: pathToFileURL(trackPath).href,
+          artists: artistsArr,
           coverArt: coverUrl || cached.data.coverArt || null,
           themeColors: themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || cached.data.themeColors || null
         }
@@ -835,11 +918,55 @@ app.whenReady().then(() => {
 
         const yearVal = metadata.common.year || (metadata.common.date ? parseInt(metadata.common.date) : null)
 
+        // Trích xuất toàn bộ nghệ sĩ (hỗ trợ nhiều nghệ sĩ)
+        let artistsList: string[] = []
+        if (Array.isArray(metadata.common.artists) && metadata.common.artists.length > 0) {
+          artistsList = metadata.common.artists.map(a => String(a).trim()).filter(Boolean)
+        } else if (metadata.common.artist) {
+          artistsList = [metadata.common.artist.trim()]
+        }
+
+        if (artistsList.length <= 1 && metadata.native) {
+          const collected: string[] = []
+          for (const tagFormat of Object.keys(metadata.native)) {
+            const tagList = metadata.native[tagFormat]
+            if (Array.isArray(tagList)) {
+              for (const t of tagList) {
+                const tid = String(t.id).toUpperCase()
+                if (tid === 'TPE1' || tid === 'ARTIST' || tid === '©ART') {
+                  if (Array.isArray(t.value)) {
+                    collected.push(...t.value.map(v => String(v).trim()).filter(Boolean))
+                  } else if (typeof t.value === 'string' && t.value.trim()) {
+                    collected.push(t.value.trim())
+                  }
+                }
+              }
+            }
+          }
+          if (collected.length > 1) {
+            artistsList = Array.from(new Set(collected))
+          }
+        }
+
+        // Tách các nghệ sĩ bị nối bởi dấu phân tách phổ biến nếu chỉ có 1 chuỗi
+        if (artistsList.length === 1) {
+          const raw = artistsList[0]
+          if (raw.includes(';') || raw.includes(' / ') || raw.includes(' // ') || /\s+(?:feat\.|ft\.)\s+/i.test(raw)) {
+            const parts = raw.split(/\s*(?:;|(?:\s\/\s)|(?:\s\/\/\s)|(?:\s+(?:feat\.|ft\.)\s+))\s*/i).map(s => s.trim()).filter(Boolean)
+            if (parts.length > 1) {
+              artistsList = parts
+            }
+          }
+        }
+
+        const artistStr = artistsList.length > 0 ? artistsList.join(', ') : (metadata.common.artist || 'Unknown')
+
         const trackData = {
           id: trackPath,
           filePath: pathToFileURL(trackPath).href,
           title: metadata.common.title || subItemName.replace(/\.[^/.]+$/, ""),
-          artist: metadata.common.artist || 'Unknown',
+          artist: artistStr,
+          artists: artistsList.length > 0 ? artistsList : [artistStr],
           album: metadata.common.album || 'Unknown',
           genre: genreStr,
           year: yearVal,
@@ -868,6 +995,7 @@ app.whenReady().then(() => {
           filePath: pathToFileURL(trackPath).href,
           title: subItemName,
           artist: 'Unknown',
+          artists: ['Unknown'],
           album: 'Unknown',
           genre: 'Unknown',
           year: null,
@@ -894,18 +1022,30 @@ app.whenReady().then(() => {
 
             if (stat.isDirectory() && item !== '.thumbnails') {
               const playlistTracks: any[] = []
-              const subItems = fs.readdirSync(itemPath)
-              for (const subItem of subItems) {
-                if (supportedExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
-                  const trackPath = join(itemPath, subItem)
-                  try {
-                    const subStat = fs.statSync(trackPath)
-                    const trackData = await parseOrGetTrack(trackPath, subItem, subStat, thumbDir)
-                    playlistTracks.push(trackData)
-                    tracks.push(trackData)
-                  } catch (e) {}
-                }
+
+              // Đọc đệ quy toàn bộ thư mục con bên trong thư mục playlist
+              const scanPlaylistDir = async (dir: string) => {
+                try {
+                  const entries = fs.readdirSync(dir, { withFileTypes: true })
+                  for (const entry of entries) {
+                    if (entry.name === '.thumbnails') continue
+                    const fullEntryPath = join(dir, entry.name)
+                    if (entry.isDirectory()) {
+                      await scanPlaylistDir(fullEntryPath)
+                    } else if (entry.isFile() && supportedExts.some(ext => entry.name.toLowerCase().endsWith(ext))) {
+                      try {
+                        const subStat = fs.statSync(fullEntryPath)
+                        const trackData = await parseOrGetTrack(fullEntryPath, entry.name, subStat, thumbDir)
+                        playlistTracks.push(trackData)
+                        tracks.push(trackData)
+                      } catch (e) {}
+                    }
+                  }
+                } catch (e) {}
               }
+              await scanPlaylistDir(itemPath)
+
+              const subItems = fs.existsSync(itemPath) ? fs.readdirSync(itemPath) : []
               
               let thumbnailUrl: string | null = null
               const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
@@ -1007,6 +1147,8 @@ app.whenReady().then(() => {
   ipcMain.handle('music:renamePlaylist', async (_, oldName, newName) => {
     const config = getConfig()
     const paths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
+    const safeNewName = sanitizeFolderName(newName)
+    if (!safeNewName) return { success: false, error: 'Tên playlist mới không hợp lệ!' }
     try {
       let targetRoot = paths[0]
       for (const p of paths) {
@@ -1016,12 +1158,12 @@ app.whenReady().then(() => {
         }
       }
       const oldDirPath = join(targetRoot, oldName)
-      const newDirPath = join(targetRoot, newName)
+      const newDirPath = join(targetRoot, safeNewName)
       fs.renameSync(oldDirPath, newDirPath)
       const exts = ['.jpg', '.png', '.jpeg', '.webp']
       for (const ext of exts) {
         const oldImgPath = join(newDirPath, `${oldName}${ext}`)
-        if (fs.existsSync(oldImgPath)) fs.renameSync(oldImgPath, join(newDirPath, `${newName}${ext}`))
+        if (fs.existsSync(oldImgPath)) fs.renameSync(oldImgPath, join(newDirPath, `${safeNewName}${ext}`))
       }
       return { success: true }
     } catch (e: any) { return { success: false, error: e.message } }
@@ -1245,7 +1387,8 @@ app.whenReady().then(() => {
           const metadata = await mm.parseFile(itemPath)
           const albumName = metadata.common.album
           if (albumName && albumName.trim() !== '') {
-            const safeAlbumName = albumName.replace(/[<>:"\/\\|?*]/g, '').trim()
+            const safeAlbumName = sanitizeFolderName(albumName)
+            if (!safeAlbumName) continue
             const albumDirPath = join(rootPath, safeAlbumName)
             if (!fs.existsSync(albumDirPath)) fs.mkdirSync(albumDirPath)
             if (metadata.common.picture && metadata.common.picture.length > 0) {
@@ -2172,7 +2315,7 @@ app.whenReady().then(() => {
     const rootPath = getConfig().libraryPath
     if (!rootPath || !fs.existsSync(rootPath)) return { success: false, error: 'Chưa cấu hình thư mục thư viện!' }
     
-    const safeName = playlistName.replace(/[<>:"\/\\|?*]/g, '').trim()
+    const safeName = sanitizeFolderName(playlistName)
     if (!safeName) return { success: false, error: 'Tên playlist không hợp lệ!' }
 
     const dirPath = join(rootPath, safeName)
@@ -2660,7 +2803,7 @@ app.whenReady().then(() => {
     if (!rootPath) return { success: false, error: 'Chưa cấu hình Thư mục thư viện' };
     
     // Tạo thư mục Album (Nếu không có tên Album thì lưu vào thư mục Singles)
-    const safeAlbum = (track.album || 'Singles').replace(/[<>:"\/\\|?*]/g, '_').trim();
+    const safeAlbum = sanitizeFolderName(track.album || 'Singles') || 'Singles';
     const albumPath = join(rootPath, safeAlbum);
     if (!fs.existsSync(albumPath)) {
       fs.mkdirSync(albumPath, { recursive: true });
@@ -3434,3 +3577,4 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
 })
+}

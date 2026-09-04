@@ -56,16 +56,14 @@
 @keyframes fadeInSlideUp {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 .animate-fade-in {
-  animation: fadeInSlideUp 0.3s ease-out forwards;
+  animation: fadeInSlideUp 0.15s ease-out forwards;
 }
 
 @keyframes spin-slow {
@@ -166,13 +164,11 @@ body {
 /* Thẻ Card (Grid): Chỉ giải mã hình ảnh và render layout khi cuộn tới */
 .track-card-optimized {
   content-visibility: auto;
-  contain-intrinsic-size: 0 200px;
-  contain: layout style paint;
+  contain-intrinsic-size: auto 200px;
 }
 
 /* Hàng danh sách (Row/Compact): Bỏ qua tính toán reflow ngoài tầm nhìn */
 .track-row-optimized {
   content-visibility: auto;
-  contain-intrinsic-size: 0 48px;
-  contain: layout style paint;
+  contain-intrinsic-size: auto 48px;
 }
