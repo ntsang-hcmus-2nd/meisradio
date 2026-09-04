@@ -285,6 +285,143 @@ const SortableQueueItem = React.memo(({ id, track, isActive, isPlaying, isLite, 
   );
 }, (prev, next) => prev.isActive === next.isActive && prev.isPlaying === next.isPlaying && prev.isLite === next.isLite && prev.track.id === next.track.id);
 
+const PlaylistGridCard = React.memo(({ 
+  pl, 
+  isLite, 
+  onClick, 
+  onContextMenu, 
+  onChangeImage, 
+  onExtractImage, 
+  onRename, 
+  t 
+}: any) => {
+  return (
+    <div 
+      className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer track-card-optimized" 
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+    >
+      <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative shadow-md">
+        {(!isLite && pl.thumbnail) ? (
+          <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>
+        )}
+        <button onClick={(e) => { e.stopPropagation(); onChangeImage(); }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.chooseCover')}><ImageIcon size={16}/></button>
+        <button onClick={(e) => { e.stopPropagation(); onExtractImage(); }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.extractCover')}><Sparkles size={16}/></button>
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="min-w-0 flex-1 pr-2">
+          <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">{pl.name}</h3>
+          <p className="text-xs text-zinc-500 mt-0.5">{pl.tracks.length} {t('common.songs')}</p>
+        </div>
+        <button onClick={(e) => { e.stopPropagation(); onRename(); }} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
+      </div>
+    </div>
+  )
+});
+
+const PlaylistTableRow = React.memo(({
+  pl,
+  idx,
+  isLite,
+  onClick,
+  onContextMenu,
+  onPlay,
+  onChangeImage,
+  onRename,
+  t
+}: any) => {
+  return (
+    <div
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+    >
+      <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
+        {idx + 1}
+      </div>
+      <div className="col-span-7 flex items-center gap-3.5 min-w-0">
+        <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
+          {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={20} className="text-zinc-600" />}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlay();
+              }}
+              className="text-white hover:scale-110 transition"
+            >
+              <Play size={16} className="fill-current" />
+            </button>
+          </div>
+        </div>
+        <div className="min-w-0">
+          <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
+          <p className="text-xs text-zinc-500 truncate mt-0.5">Playlist thư mục</p>
+        </div>
+      </div>
+      <div className="col-span-2 text-center">
+        <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
+          {pl.tracks.length} {t('common.songs')}
+        </span>
+      </div>
+      <div className="col-span-2 flex items-center justify-end gap-2">
+        <button onClick={(e) => { e.stopPropagation(); onChangeImage() }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('playlistsView.chooseCover')}><ImageIcon size={15}/></button>
+        <button onClick={(e) => { e.stopPropagation(); onRename() }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('modals.playlistRename.title')}><Edit2 size={15}/></button>
+        <button onClick={(e) => { e.stopPropagation(); onContextMenu(e) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition"><MoreVertical size={15}/></button>
+      </div>
+    </div>
+  )
+});
+
+const PlaylistCompactRow = React.memo(({
+  pl,
+  idx,
+  isLite,
+  onClick,
+  onContextMenu,
+  onPlay,
+  t
+}: any) => {
+  return (
+    <div
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
+    >
+      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+        <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
+        <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
+          {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
+        </div>
+      </div>
+      <div className="flex items-center gap-4 shrink-0">
+        <span className="text-xs text-zinc-400 font-mono">{pl.tracks.length} {t('common.songs')}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlay();
+          }}
+          className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
+          title={t('artistsView.playAll')}
+        >
+          <Play size={13} className="ml-0.5 fill-current" />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+          className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
+        >
+          <MoreVertical size={14} />
+        </button>
+      </div>
+    </div>
+  )
+});
+
 const SC_GENRES = [
   { id: 'all-music', key: 'all' },
   { id: 'electronic', key: 'electronic' },
@@ -728,7 +865,7 @@ export default function App() {
   }, [currentTrack]);
 
   // --- Dashboard & Online Music ---
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async () => {
     // @ts-ignore
     const res = await window.api.getHomeDashboard()
     if (res.success) {
@@ -740,7 +877,7 @@ export default function App() {
         console.warn("Lỗi Dashboard YTM:", res.error)
       }
     }
-  }
+  }, [])
 
   const handleYtmLogin = async () => {
     // @ts-ignore
@@ -764,7 +901,7 @@ export default function App() {
     }
   }
 
-  const fetchScDashboard = async (genre?: string) => {
+  const fetchScDashboard = useCallback(async (genre?: string) => {
     setIsScLoading(true)
     const targetGenre = genre || selectedScGenre
     // @ts-ignore
@@ -780,7 +917,7 @@ export default function App() {
       setScUser(null)
     }
     setIsScLoading(false)
-  }
+  }, [selectedScGenre])
 
   const handleScLogin = async () => {
     // @ts-ignore
@@ -3896,8 +4033,10 @@ export default function App() {
               onScroll={(e) => {
                 scrollPositionsRef.current[currentViewKey] = e.currentTarget.scrollTop
               }}
+              style={{ overflowAnchor: 'none' }}
               className={`flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || activeView === 'home' || (activeView === 'home-ytm' && !activeAlbum) || (activeView === 'home-soundcloud' && !activeAlbum) || (activeView === 'playlists' && !activePlaylist) || activeView === 'artists' || (activeView === 'genres' && !activeGenre) || (activeView === 'user-playlists' && !activeUserPlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}
             >
+              <div key={currentViewKey} className="animate-fade-in flex-1 flex flex-col min-h-0">
               
               {/* VIEW: TRANG CHỦ TỔNG QUAN (DASHBOARD) */}
               {activeView === 'home' && (
@@ -6201,8 +6340,11 @@ export default function App() {
                                 </div>
                                 <div className="divide-y divide-theme-30/20">
                                   {matchedPlaylists.map((pl, idx) => (
-                                    <div
+                                    <PlaylistTableRow
                                       key={pl.path || pl.name}
+                                      pl={pl}
+                                      idx={idx}
+                                      isLite={isLite}
                                       onClick={() => {
                                         if (contentContainerRef.current) {
                                           scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
@@ -6211,50 +6353,24 @@ export default function App() {
                                         setSearchQuery('');
                                       }}
                                       onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                      className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
-                                    >
-                                      <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
-                                        {idx + 1}
-                                      </div>
-                                      <div className="col-span-7 flex items-center gap-3.5 min-w-0">
-                                        <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-                                          {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={20} className="text-zinc-600" />}
-                                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (pl.tracks.length > 0) handleRowClick(pl.tracks[0], pl.tracks);
-                                              }}
-                                              className="text-white hover:scale-110 transition"
-                                            >
-                                              <Play size={16} className="fill-current" />
-                                            </button>
-                                          </div>
-                                        </div>
-                                        <div className="min-w-0">
-                                          <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
-                                          <p className="text-xs text-zinc-500 truncate mt-0.5">Playlist thư mục</p>
-                                        </div>
-                                      </div>
-                                      <div className="col-span-2 text-center">
-                                        <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
-                                          {pl.tracks.length} {t('common.songs')}
-                                        </span>
-                                      </div>
-                                      <div className="col-span-2 flex items-center justify-end gap-2">
-                                        <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('playlistsView.chooseCover')}><ImageIcon size={15}/></button>
-                                        <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('modals.playlistRename.title')}><Edit2 size={15}/></button>
-                                        <button onClick={(e) => { e.stopPropagation(); handlePlaylistContextMenu(pl, e) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition"><MoreVertical size={15}/></button>
-                                      </div>
-                                    </div>
+                                      onPlay={() => {
+                                        if (pl.tracks.length > 0) handleRowClick(pl.tracks[0], pl.tracks);
+                                      }}
+                                      onChangeImage={() => handleChangePlaylistImage(pl.name)}
+                                      onRename={() => setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name })}
+                                      t={t}
+                                    />
                                   ))}
                                 </div>
                               </div>
                             ) : viewMode === 'compact' ? (
                               <div className="w-full space-y-1.5">
                                 {matchedPlaylists.map((pl, idx) => (
-                                  <div
+                                  <PlaylistCompactRow
                                     key={pl.path || pl.name}
+                                    pl={pl}
+                                    idx={idx}
+                                    isLite={isLite}
                                     onClick={() => {
                                       if (contentContainerRef.current) {
                                         scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
@@ -6263,45 +6379,20 @@ export default function App() {
                                       setSearchQuery('');
                                     }}
                                     onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                    className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
-                                  >
-                                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                      <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
-                                      <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                                        {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
-                                      </div>
-                                      <div className="min-w-0 flex-1">
-                                        <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-4 shrink-0">
-                                      <span className="text-xs text-zinc-400 font-mono">{pl.tracks.length} {t('common.songs')}</span>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (pl.tracks.length > 0) handleRowClick(pl.tracks[0], pl.tracks);
-                                        }}
-                                        className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
-                                        title={t('artistsView.playAll')}
-                                      >
-                                        <Play size={13} className="ml-0.5 fill-current" />
-                                      </button>
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); handlePlaylistContextMenu(pl, e); }}
-                                        className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
-                                      >
-                                        <MoreVertical size={14} />
-                                      </button>
-                                    </div>
-                                  </div>
+                                    onPlay={() => {
+                                      if (pl.tracks.length > 0) handleRowClick(pl.tracks[0], pl.tracks);
+                                    }}
+                                    t={t}
+                                  />
                                 ))}
                               </div>
                             ) : (
                               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
                                 {matchedPlaylists.map(pl => (
-                                  <div 
-                                    key={pl.path || pl.name} 
-                                    className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer track-card-optimized" 
+                                  <PlaylistGridCard
+                                    key={pl.path || pl.name}
+                                    pl={pl}
+                                    isLite={isLite}
                                     onClick={() => {
                                       if (contentContainerRef.current) {
                                         scrollPositionsRef.current[currentViewKey] = contentContainerRef.current.scrollTop;
@@ -6310,20 +6401,11 @@ export default function App() {
                                       setSearchQuery('');
                                     }}
                                     onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                  >
-                                    <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative shadow-md">
-                                      {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
-                                      <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.chooseCover')}><ImageIcon size={16}/></button>
-                                      <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.extractCover')}><Sparkles size={16}/></button>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <div className="min-w-0 flex-1 pr-2">
-                                        <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">{pl.name}</h3>
-                                        <p className="text-xs text-zinc-500 mt-0.5">{pl.tracks.length} {t('common.songs')}</p>
-                                      </div>
-                                      <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
-                                    </div>
-                                  </div>
+                                    onChangeImage={() => handleChangePlaylistImage(pl.name)}
+                                    onExtractImage={() => handleExtractPlaylistImage(pl.name)}
+                                    onRename={() => setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name })}
+                                    t={t}
+                                  />
                                 ))}
                               </div>
                             )}
@@ -6425,7 +6507,7 @@ export default function App() {
                 </div>
               )}
 
-
+              </div>
             </div>
             
             {/* CỘT PHẢI: LỜI BÀI HÁT (SPLIT VIEW) */}

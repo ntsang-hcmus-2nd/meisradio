@@ -56,14 +56,17 @@
 @keyframes fadeInSlideUp {
   from {
     opacity: 0;
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
 .animate-fade-in {
-  animation: fadeInSlideUp 0.15s ease-out forwards;
+  animation: fadeInSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
 }
 
 @keyframes spin-slow {
@@ -161,14 +164,11 @@ body {
    OFF-SCREEN RENDERING OPTIMIZATION (RAM & GPU SAVING)
    ========================================================================== */
 
-/* Thẻ Card (Grid): Chỉ giải mã hình ảnh và render layout khi cuộn tới */
+/* Thẻ Card (Grid) & Hàng danh sách: containment layout & style chống reflow toàn trang */
 .track-card-optimized {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 200px;
+  contain: layout style;
 }
 
-/* Hàng danh sách (Row/Compact): Bỏ qua tính toán reflow ngoài tầm nhìn */
 .track-row-optimized {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 48px;
+  contain: layout style;
 }
