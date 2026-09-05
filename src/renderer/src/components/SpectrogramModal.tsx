@@ -12,90 +12,7 @@ interface SpectrogramModalProps {
   audioRef?: React.MutableRefObject<HTMLAudioElement | null>
 }
 
-// Fast Radix-2 In-Place Cooley-Tukey FFT
-function computeFFT(re: Float32Array, im: Float32Array, n: number) {
-  let j = 0
-  for (let i = 0; i < n - 1; i++) {
-    if (i < j) {
-      let temp = re[i]; re[i] = re[j]; re[j] = temp
-      temp = im[i]; im[i] = im[j]; im[j] = temp
-    }
-    let k = n >> 1
-    while (k <= j) {
-      j -= k
-      k >>= 1
-    }
-    j += k
-  }
-
-  for (let len = 2; len <= n; len <<= 1) {
-    const half = len >> 1
-    const angle = (-2 * Math.PI) / len
-    const wStepRe = Math.cos(angle)
-    const wStepIm = Math.sin(angle)
-    for (let i = 0; i < n; i += len) {
-      let wRe = 1
-      let wIm = 0
-      for (let k = 0; k < half; k++) {
-        const pos1 = i + k
-        const pos2 = i + k + half
-        const uRe = re[pos1]
-        const uIm = im[pos1]
-        const vRe = re[pos2] * wRe - im[pos2] * wIm
-        const vIm = re[pos2] * wIm + im[pos2] * wRe
-        re[pos1] = uRe + vRe
-        im[pos1] = uIm + vIm
-        re[pos2] = uRe - vRe
-        im[pos2] = uIm - vIm
-        const nextWRe = wRe * wStepRe - wIm * wStepIm
-        wIm = wRe * wStepIm + wIm * wStepRe
-        wRe = nextWRe
-      }
-    }
-  }
-}
-
-// Spek / Audacity style color palette
-function getColor(norm: number): [number, number, number] {
-  if (norm <= 0.02) return [10, 10, 24] // Black / Navy background
-  
-  if (norm < 0.2) {
-    const t = norm / 0.2
-    return [
-      Math.floor(10 + t * 40),
-      Math.floor(10 + t * 20),
-      Math.floor(24 + t * 140)
-    ] // Deep Indigo
-  } else if (norm < 0.4) {
-    const t = (norm - 0.2) / 0.2
-    return [
-      Math.floor(50 + t * 10),
-      Math.floor(30 + t * 160),
-      Math.floor(164 - t * 40)
-    ] // Cyan / Teal
-  } else if (norm < 0.65) {
-    const t = (norm - 0.4) / 0.25
-    return [
-      Math.floor(60 + t * 195),
-      Math.floor(190 + t * 50),
-      Math.floor(124 - t * 124)
-    ] // Green / Lime
-  } else if (norm < 0.85) {
-    const t = (norm - 0.65) / 0.2
-    return [
-      255,
-      Math.floor(240 - t * 160),
-      0
-    ] // Yellow / Orange
-  } else {
-    const t = (norm - 0.85) / 0.15
-    return [
-      255,
-      Math.floor(80 + t * 175),
-      Math.floor(t * 255)
-    ] // Orange / Red / White
-  }
-}
+import { toMediaUrl } from '../utils/mediaUrl'
 
 // In-memory cache for analyzed spectrograms
 const spectrogramCache = new Map<string, ImageData>()
@@ -108,6 +25,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 }) => {
   const { t } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const workerRef = useRef<Worker | null>(null)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
@@ -132,6 +50,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
   // Giải phóng tức thì bộ nhớ RAM và Cache khi đóng Spectrogram Modal
   const releaseSpectrogramMemory = () => {
+    if (workerRef.current) {
+      workerRef.current.terminate()
+      workerRef.current = null
+    }
     spectrogramCache.clear()
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d')
@@ -200,18 +122,8 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
         }
       }
 
-      // 2. Fallback: Đọc bằng fetch trực tiếp với URL được encode chuẩn
-      let url = key
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        let normalized = key.replace(/\\/g, '/')
-        if (normalized.startsWith('file://')) {
-          url = encodeURI(normalized)
-        } else {
-          if (!normalized.startsWith('/')) normalized = '/' + normalized
-          url = encodeURI('file://' + normalized)
-        }
-      }
-
+      // 2. Fallback: Đọc bằng fetch trực tiếp với media:// URL
+      const url = toMediaUrl(key)
       const response = await fetch(url)
       if (!response.ok) {
         throw new Error(`Không thể đọc file (${response.status} ${response.statusText})`)
@@ -267,70 +179,56 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
         const actualSampleRate = audioBuffer.sampleRate || fileSampleRate
         setDetectedSampleRate(actualSampleRate)
 
-        const channelData = audioBuffer.getChannelData(0)
-        const totalSamples = channelData.length
         const trackDuration = audioBuffer.duration
         setDuration(trackDuration)
 
-        // 3. Chuẩn bị STFT
-        const fftSize = 2048
-        const halfFFT = fftSize / 2
-        const hanning = new Float32Array(fftSize)
-        for (let i = 0; i < fftSize; i++) {
-          hanning[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)))
+        // 3. Phân tích phổ STFT bằng Web Worker trên tiến trình nền (0% UI jank)
+        if (workerRef.current) {
+          workerRef.current.terminate()
+          workerRef.current = null
         }
 
-        const imageData = ctx.createImageData(W, H)
-        const pixels = imageData.data
+        const worker = new Worker(new URL('../workers/spectrogram.worker.ts', import.meta.url), { type: 'module' })
+        workerRef.current = worker
 
-        const re = new Float32Array(fftSize)
-        const im = new Float32Array(fftSize)
-
-        // Phân tích từng cột dọc (Column-wise STFT)
-        for (let x = 0; x < W; x++) {
-          const sampleCenter = Math.floor((x / W) * (totalSamples - fftSize))
-          if (sampleCenter < 0 || sampleCenter + fftSize > totalSamples) continue
-
-          // Áp dụng cửa sổ Hanning
-          for (let i = 0; i < fftSize; i++) {
-            re[i] = channelData[sampleCenter + i] * hanning[i]
-            im[i] = 0
+        worker.onmessage = (e) => {
+          if (isCancelled) {
+            worker.terminate()
+            return
           }
-
-          computeFFT(re, im, fftSize)
-
-          // Vẽ các điểm ảnh từ dưới lên: Y = 0 (đỉnh) là Nyquist (actualSampleRate / 2), Y = H - 1 (đáy) là 0 Hz
-          for (let y = 0; y < H; y++) {
-            const binFloat = ((H - 1 - y) / (H - 1)) * (halfFFT - 1)
-            const binStart = Math.max(0, Math.floor(binFloat))
-            const binEnd = Math.min(halfFFT - 1, Math.ceil(((H - y) / (H - 1)) * (halfFFT - 1)))
-
-            let maxMag = 0
-            for (let b = binStart; b <= binEnd; b++) {
-              const mag = Math.sqrt(re[b] * re[b] + im[b] * im[b])
-              if (mag > maxMag) maxMag = mag
-            }
-
-            // Chuẩn hóa năng lượng với Coherent Gain của cửa sổ Hanning (0.5)
-            const normalizedMag = maxMag / (halfFFT * 0.5)
-            const dB = 20 * Math.log10(normalizedMag + 1e-6)
-            // Chuẩn hóa dải động từ -95dB đến 0dB
-            const norm = Math.max(0, Math.min(1, (dB + 95) / 95))
-
-            const [r, g, b] = getColor(norm)
-            const pixelIndex = (y * W + x) * 4
-            pixels[pixelIndex] = r
-            pixels[pixelIndex + 1] = g
-            pixels[pixelIndex + 2] = b
-            pixels[pixelIndex + 3] = 255
+          if (e.data.success && e.data.pixels) {
+            const pixelsArray = new Uint8ClampedArray(e.data.pixels)
+            const imgData = new ImageData(pixelsArray, W, H)
+            ctx.putImageData(imgData, 0, 0)
+            spectrogramCache.set(trackKey, imgData)
+            setLoading(false)
+          } else {
+            setErrorMsg(e.data.error || 'Lỗi dựng phổ tần số')
+            setLoading(false)
+          }
+          worker.terminate()
+          if (workerRef.current === worker) {
+            workerRef.current = null
           }
         }
 
-        if (!isCancelled) {
-          ctx.putImageData(imageData, 0, 0)
-          spectrogramCache.set(trackKey, imageData)
-          setLoading(false)
+        worker.onerror = (err) => {
+          if (!isCancelled) {
+            setErrorMsg(err.message || 'Lỗi dựng phổ tần số từ Worker')
+            setLoading(false)
+          }
+          worker.terminate()
+          if (workerRef.current === worker) {
+            workerRef.current = null
+          }
         }
+
+        const rawChannel = audioBuffer.getChannelData(0)
+        const channelCopy = new Float32Array(rawChannel)
+        worker.postMessage(
+          { channelData: channelCopy, width: W, height: H, sampleRate: actualSampleRate, fftSize: 2048 },
+          [channelCopy.buffer]
+        )
       } catch (err: any) {
         if (!isCancelled) {
           console.error('[Spectrogram] Lỗi phân tích:', err)
@@ -344,6 +242,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
     return () => {
       isCancelled = true
+      if (workerRef.current) {
+        workerRef.current.terminate()
+        workerRef.current = null
+      }
     }
   }, [isOpen, currentTrack?.id, currentTrack?.filePath, currentTrack?.sampleRate])
 

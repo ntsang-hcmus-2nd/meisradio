@@ -307,13 +307,14 @@ export class MpvManager extends EventEmitter {
       const fadeRatio = step / fadeSteps
       
       // fade out old
+      const baseVol = this.currentVolume
       if (this.activeInstance) {
-        this.activeInstance.setVolume(1 - fadeRatio)
+        this.activeInstance.setVolume(baseVol * (1 - fadeRatio))
       }
       
       // fade in new
       if (this.nextInstance) {
-        this.nextInstance.setVolume(fadeRatio)
+        this.nextInstance.setVolume(baseVol * fadeRatio)
       }
 
       if (step >= fadeSteps) {
@@ -328,7 +329,10 @@ export class MpvManager extends EventEmitter {
         // Next becomes active
         this.activeInstance = this.nextInstance
         this.nextInstance = null
-        this.setupListeners(this.activeInstance!)
+        if (this.activeInstance) {
+          this.activeInstance.setVolume(baseVol)
+          this.setupListeners(this.activeInstance)
+        }
       }
     }, stepTime)
   }
@@ -346,6 +350,7 @@ export class MpvManager extends EventEmitter {
   }
 
   public setVolume(vol: number) {
+    this.currentVolume = vol
     this.activeInstance?.setVolume(vol)
   }
 

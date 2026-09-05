@@ -18,7 +18,7 @@ interface PlayerProgressBarProps {
 }
 
 export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
-  audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext, bitPerfectEnabled
+  audioRef, currentTrack, bitPerfectEnabled
 }) => {
   const [currentTime, setCurrentTime] = useState(0)
   const [isDragging, setIsDragging] = useState(false) // Trạng thái kéo chuột
@@ -34,13 +34,8 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       if (window.api?.onMpvTime) {
         // @ts-ignore
         const cleanup = window.api.onMpvTime((val: number) => {
-          if (isDragging) return
-          setCurrentTime(val)
-
-          if (crossfadeEnabled && currentTrack && currentTrack.duration > 0 && repeatMode !== 2) {
-            if (currentTrack.duration - val <= crossfadeDuration && currentTrack.duration - val > crossfadeDuration - 0.5) {
-              onNext()
-            }
+          if (!isDragging) {
+            setCurrentTime(val)
           }
         })
         return () => {
@@ -55,21 +50,13 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
     const handleTimeUpdate = () => {
       // TỐI ƯU HÓA: Ngưng cập nhật UI từ Audio nếu người dùng đang dùng tay kéo thanh trượt
-      if (isDragging) return; 
-
-      const cTime = audio.currentTime
-      setCurrentTime(cTime)
-      
-      if (crossfadeEnabled && currentTrack && currentTrack.duration > 0 && repeatMode !== 2) {
-        if (currentTrack.duration - cTime <= crossfadeDuration && currentTrack.duration - cTime > crossfadeDuration - 0.5) {
-          onNext()
-        }
-      }
+      if (isDragging) return
+      setCurrentTime(audio.currentTime)
     }
 
     audio.addEventListener('timeupdate', handleTimeUpdate)
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext, isDragging, bitPerfectEnabled])
+  }, [audioRef, isDragging, bitPerfectEnabled])
 
   // Chỉ cập nhật giao diện thanh trượt (Không gọi API / Tua nhạc)
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {

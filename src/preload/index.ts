@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
   getConfig: () => ipcRenderer.invoke('music:getConfig'),
@@ -38,14 +37,16 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   fetchMusixmatchLyrics: (title: string, artist: string) => ipcRenderer.invoke('music:fetchMusixmatchLyrics', title, artist),
   importLocalFiles: (targetFolder?: string, existingTracks?: any[]) => ipcRenderer.invoke('music:importLocalFiles', targetFolder, existingTracks),
   onGlobalShortcut: (callback: (action: string) => void) => {
-    ipcRenderer.removeAllListeners('global-shortcut') // Dọn dẹp để tránh trùng lặp sự kiện
-    ipcRenderer.on('global-shortcut', (_event, action) => callback(action))
+    const handler = (_event: any, action: string) => callback(action)
+    ipcRenderer.on('global-shortcut', handler)
+    return () => ipcRenderer.removeListener('global-shortcut', handler)
   },
   getTrackCover: (filePath: string) => ipcRenderer.invoke('music:getTrackCover', filePath),
   getOriginalTrackCover: (filePath: string) => ipcRenderer.invoke('music:getOriginalTrackCover', filePath),
   onDownloadProgress: (callback: (data: any) => void) => {
-    ipcRenderer.removeAllListeners('download-progress')
-    ipcRenderer.on('download-progress', (_event, data) => callback(data))
+    const handler = (_event: any, data: any) => callback(data)
+    ipcRenderer.on('download-progress', handler)
+    return () => ipcRenderer.removeListener('download-progress', handler)
   },
   updateTrayConfig: (config: any) => ipcRenderer.invoke('music:updateTrayConfig', config),
   toggleMiniPlayer: (isMini: boolean) => ipcRenderer.invoke('music:toggleMiniPlayer', isMini),
@@ -108,21 +109,24 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),
   clearMemoryCache: () => ipcRenderer.invoke('app:clearMemoryCache'),
   onDeepClean: (callback: () => void) => {
-    ipcRenderer.removeAllListeners('app:onDeepClean')
-    ipcRenderer.on('app:onDeepClean', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('app:onDeepClean', handler)
+    return () => ipcRenderer.removeListener('app:onDeepClean', handler)
   },
   onNavBack: (callback: () => void) => {
-    ipcRenderer.removeAllListeners('nav:back')
-    ipcRenderer.on('nav:back', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('nav:back', handler)
+    return () => ipcRenderer.removeListener('nav:back', handler)
   },
   onNavForward: (callback: () => void) => {
-    ipcRenderer.removeAllListeners('nav:forward')
-    ipcRenderer.on('nav:forward', () => callback())
+    const handler = () => callback()
+    ipcRenderer.on('nav:forward', handler)
+    return () => ipcRenderer.removeListener('nav:forward', handler)
   },
   onLibraryChanged: (callback: () => void) => {
-    ipcRenderer.removeAllListeners('library:changed')
-    ipcRenderer.on('library:changed', () => callback())
-    return () => ipcRenderer.removeAllListeners('library:changed')
+    const handler = () => callback()
+    ipcRenderer.on('library:changed', handler)
+    return () => ipcRenderer.removeListener('library:changed', handler)
   },
   discordUpdatePresence: (payload: any) => ipcRenderer.invoke('discord:updatePresence', payload),
   discordClearPresence: () => ipcRenderer.invoke('discord:clearPresence'),
@@ -130,14 +134,20 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   discordGetStatus: () => ipcRenderer.invoke('discord:getStatus'),
 }
 
+const safeElectron = {
+  process: {
+    versions: process.versions
+  }
+}
+
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('electron', safeElectron)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) { console.error(error) }
 } else {
   // @ts-ignore
-  window.electron = electronAPI
+  window.electron = safeElectron
   // @ts-ignore
   window.api = api
 }
