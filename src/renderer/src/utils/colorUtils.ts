@@ -1,5 +1,3 @@
-import { toMediaUrl } from './mediaUrl';
-
 export interface RGB {
   r: number;
   g: number;
@@ -90,8 +88,7 @@ export const extractThemeColors = (imageSrc: string, trackKey?: string): Promise
       return;
     }
 
-    const mediaSrc = toMediaUrl(imageSrc);
-    const lookupKey = trackKey || mediaSrc;
+    const lookupKey = trackKey || imageSrc;
     if (themeColorCache.has(lookupKey)) {
       const cached = themeColorCache.get(lookupKey)!
       themeColorCache.delete(lookupKey)
@@ -100,14 +97,14 @@ export const extractThemeColors = (imageSrc: string, trackKey?: string): Promise
       return;
     }
 
-    if (trackKey && themeColorCache.has(mediaSrc)) {
-      const cached = themeColorCache.get(mediaSrc)!
+    if (trackKey && themeColorCache.has(imageSrc)) {
+      const cached = themeColorCache.get(imageSrc)!
       resolve(cached);
       return;
     }
 
     const img = new Image();
-    if (mediaSrc.startsWith('http://') || mediaSrc.startsWith('https://')) {
+    if (imageSrc.startsWith('http://') || imageSrc.startsWith('https://')) {
       img.crossOrigin = 'anonymous';
     }
 
@@ -271,6 +268,6 @@ export const extractThemeColors = (imageSrc: string, trackKey?: string): Promise
 
     img.onload = onLoad
     img.onerror = onError
-    img.src = mediaSrc;
+    img.src = imageSrc;
   });
 };

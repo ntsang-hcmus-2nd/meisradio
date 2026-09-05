@@ -16,12 +16,11 @@ interface EQPanelProps {
   filterNodesRef: React.MutableRefObject<BiquadFilterNode[]>
   preampGain: number
   setPreampGain: (v: number) => void
-  showToast?: (message: string, type?: 'success' | 'error' | 'info') => void
 }
 
 export const EQPanel: React.FC<EQPanelProps> = ({ 
   showEQ, setShowEQ, isEqEnabled, setIsEqEnabled, eqBands, setEqBands, filterNodesRef,
-  preampGain, setPreampGain, showToast
+  preampGain, setPreampGain
 }) => {
   const { t } = useTranslation()
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -91,9 +90,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         if (!text) return
         const parsed = parsePeaceEqText(text)
         if (parsed.bands.length === 0) {
-          if (showToast) {
-            showToast('Không tìm thấy dải tần số nào hợp lệ trong tệp!', 'error')
-          }
+          alert('Không tìm thấy dải tần số nào hợp lệ trong tệp!')
           return
         }
 
@@ -111,13 +108,8 @@ export const EQPanel: React.FC<EQPanelProps> = ({
 
         setEqBands(newBands)
         setIsEqEnabled(true)
-        if (showToast) {
-          showToast('Đã nhập cấu hình EQ thành công!', 'success')
-        }
       } catch (err: any) {
-        if (showToast) {
-          showToast('Lỗi đọc tệp cấu hình: ' + err.message, 'error')
-        }
+        alert('Lỗi đọc tệp cấu hình: ' + err.message)
       }
     }
     reader.readAsText(file)
@@ -134,9 +126,6 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     a.download = `MeisRadio_Peace_EQ_${Date.now()}.txt`
     a.click()
     URL.revokeObjectURL(url)
-    if (showToast) {
-      showToast('Đã xuất cấu hình EQ thành công!', 'success')
-    }
   }
 
   // Hàm vẽ biểu đồ sóng EQ và Trục X/Y

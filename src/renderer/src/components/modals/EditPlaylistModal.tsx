@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Image as ImageIcon, X, Trash2, FolderOpen } from 'lucide-react'
 import { useTranslation } from '../../locales'
-import { toMediaUrl } from '../../utils/mediaUrl'
 
 interface EditPlaylistModalProps {
   isOpen: boolean
@@ -105,7 +104,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                 title={t('modals.editPlaylist.chooseImage')}
               >
                 {previewUrl ? (
-                  <img src={toMediaUrl(previewUrl)} alt="Cover preview" className="w-full h-full object-cover" />
+                  <img src={previewUrl} alt="Cover preview" className="w-full h-full object-cover" />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-zinc-600 gap-1">
                     <ImageIcon size={32} />

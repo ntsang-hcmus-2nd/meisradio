@@ -54,30 +54,19 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
     }
     updateThemeColor()
 
-    let resizeRaf: number | null = null
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.contentRect) {
           cachedWidth = Math.floor(entry.contentRect.width)
           cachedHeight = Math.floor(entry.contentRect.height)
           cachedDpr = window.devicePixelRatio || 1
+          if (cachedWidth > 0 && cachedHeight > 0) {
+            canvas.width = Math.floor(cachedWidth * cachedDpr)
+            canvas.height = Math.floor(cachedHeight * cachedDpr)
+          }
         }
       }
       updateThemeColor()
-
-      if (!resizeRaf) {
-        resizeRaf = requestAnimationFrame(() => {
-          resizeRaf = null
-          if (cachedWidth > 0 && cachedHeight > 0) {
-            const targetW = Math.floor(cachedWidth * cachedDpr)
-            const targetH = Math.floor(cachedHeight * cachedDpr)
-            if (canvas.width !== targetW || canvas.height !== targetH) {
-              canvas.width = targetW
-              canvas.height = targetH
-            }
-          }
-        })
-      }
     })
 
     resizeObserver.observe(canvas)
@@ -199,7 +188,6 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
 
     return () => {
       resizeObserver.disconnect()
-      if (resizeRaf) cancelAnimationFrame(resizeRaf)
       if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
     }
   }, [isPlaying, isLite, showVisualizer, analyserNodeRef, barCount])
