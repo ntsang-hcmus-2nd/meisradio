@@ -29,8 +29,9 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({ isOpen
           <button onClick={onClose} className="px-4 py-2 text-zinc-400 hover:text-white transition">{t('common.cancel')}</button>
           <button 
             onClick={() => {
-              if (playlistName.trim()) {
-                onCreate(playlistName.trim())
+              const clean = playlistName.trim().replace(/[\s.]+$/, '').trim()
+              if (clean) {
+                onCreate(clean)
                 setPlaylistName('')
               }
             }} 

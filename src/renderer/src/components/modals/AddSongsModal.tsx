@@ -29,6 +29,7 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
       (t) =>
         t.title?.toLowerCase().includes(q) ||
         t.artist?.toLowerCase().includes(q) ||
+        (Array.isArray(t.artists) && t.artists.some((a: string) => a?.toLowerCase().includes(q))) ||
         t.album?.toLowerCase().includes(q)
     )
   }, [tracks, searchQuery])
