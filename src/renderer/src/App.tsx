@@ -10,7 +10,7 @@ import {
   Folder, FolderOpen, MoreVertical, ChevronRight, ChevronDown, ChevronUp, Layers, ListPlus,
   Leaf, Cpu, Zap, BatteryCharging, History, Compass
 } from 'lucide-react'
-import { TableVirtuoso } from 'react-virtuoso'
+import { TableVirtuoso, Virtuoso, VirtuosoGrid } from 'react-virtuoso'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -40,6 +40,66 @@ const formatDuration = (seconds: number) => {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
+}
+
+const PRESERVED_ARTIST_NAMES = [
+  'AC/DC',
+  'Tyler, The Creator',
+  'Earth, Wind & Fire',
+  'Simon & Garfunkel',
+  'Hall & Oates',
+  'Daryl Hall & John Oates',
+  'Crosby, Stills, Nash & Young',
+  'Emerson, Lake & Palmer',
+  'Blood, Sweat & Tears',
+  'Brooks & Dunn',
+  'Bell, Book & Candle',
+  'K/DA',
+  'Panic! At The Disco'
+]
+
+const splitArtistString = (raw: string): string[] => {
+  if (!raw || typeof raw !== 'string') return []
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'unknown artist') {
+    return []
+  }
+
+  for (const preserved of PRESERVED_ARTIST_NAMES) {
+    if (trimmed.toLowerCase() === preserved.toLowerCase()) {
+      return [preserved]
+    }
+  }
+
+  let working = trimmed
+  const placeholders: { token: string; original: string }[] = []
+  PRESERVED_ARTIST_NAMES.forEach((preserved, idx) => {
+    const regex = new RegExp(preserved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+    if (regex.test(working)) {
+      const token = `__PRESERVED_ARTIST_${idx}__`
+      working = working.replace(regex, token)
+      placeholders.push({ token, original: preserved })
+    }
+  })
+
+  working = working.replace(/[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]\}]+)[\)\]\}]/gi, ' feat. $1')
+  const splitRegex = /(?:\s*;\s*|\0+|\s*[\/\\]\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX]\s+|,\s*)/i
+  const parts = working.split(splitRegex)
+  const result: string[] = []
+
+  for (let part of parts) {
+    for (const p of placeholders) {
+      part = part.replace(new RegExp(p.token, 'g'), p.original)
+    }
+    const clean = part.trim().replace(/^[\(\[\{]/, '').replace(/[\)\]\}]$/, '').trim()
+    if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
+      if (!result.some(existing => existing.toLowerCase() === clean.toLowerCase())) {
+        result.push(clean)
+      }
+    }
+  }
+
+  return result.length > 0 ? result : [trimmed]
 }
 
 import { WebGLVisualizer } from './components/visualizers/WebGLVisualizer'
@@ -154,104 +214,277 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
   )
 });
 
-// Chế độ xem Lưới thẻ bìa (Grid View)
-const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor }: any) => {
+// Thẻ bài hát dạng Lưới (Grid Item)
+const TrackGridItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, onContextMenu }: any) => {
   return (
-    <div className="flex-1 overflow-y-auto pr-1">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-1">
-        {tracks.map((track: any, index: number) => {
-          const isThisTrackPlaying = currentTrack?.id === track.id
-          return (
-            <div 
-              key={track.id || index}
-              onClick={() => handleRowClick(track, tracks)}
-              onContextMenu={(e) => onContextMenu?.(track, e)}
-              className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between track-card-optimized"
-            >
-              <div className="aspect-square bg-theme-30/80 rounded-lg mb-3 overflow-hidden relative shadow-md">
-                {(!isLite && track.coverArt) ? (
-                  <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
-                    <Music size={32} />
-                  </div>
-                )}
-                <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${isThisTrackPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                  <div className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition">
-                    {isThisTrackPlaying && isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
-                  </div>
-                </div>
-                {track.format && (
-                  <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-black/60 backdrop-blur-md text-zinc-300 uppercase">
-                    {track.format}
-                  </span>
-                )}
-              </div>
-              <div className="min-w-0">
-                <h4 className={`font-semibold text-sm truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'} transition-colors`}>
-                  {track.title}
-                </h4>
-                <p className="text-xs text-zinc-400 truncate mt-0.5">{track.artist}</p>
-                <div className="flex items-center justify-between text-[11px] text-zinc-500 mt-2 pt-2 border-t border-theme-30/30">
-                  <span className="truncate max-w-[90px]">{track.album || 'Unknown'}</span>
-                  <span>{formatDuration(track.duration)}</span>
-                </div>
-              </div>
-            </div>
-          )
-        })}
+    <div 
+      key={track.id || index}
+      onClick={() => handleRowClick(track, tracks)}
+      onContextMenu={(e) => onContextMenu?.(track, e)}
+      className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between track-card-optimized h-full"
+    >
+      <div className="aspect-square bg-theme-30/80 rounded-lg mb-3 overflow-hidden relative shadow-md">
+        {(!isLite && track.coverArt) ? (
+          <img loading="lazy" decoding="async" src={track.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
+            <Music size={32} />
+          </div>
+        )}
+        <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${isThisTrackPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <div className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition">
+            {isThisTrackPlaying && isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+          </div>
+        </div>
+        {track.format && (
+          <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-black/60 backdrop-blur-md text-zinc-300 uppercase">
+            {track.format}
+          </span>
+        )}
+      </div>
+      <div className="min-w-0">
+        <h4 className={`font-semibold text-sm truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'} transition-colors`}>
+          {track.title}
+        </h4>
+        <p className="text-xs text-zinc-400 truncate mt-0.5">{track.artist}</p>
+        <div className="flex items-center justify-between text-[11px] text-zinc-500 mt-2 pt-2 border-t border-theme-30/30">
+          <span className="truncate max-w-[90px]">{track.album || 'Unknown'}</span>
+          <span>{formatDuration(track.duration)}</span>
+        </div>
       </div>
     </div>
   )
 });
 
-// Chế độ xem Danh sách thu gọn (Compact View)
+// Chế độ xem Lưới thẻ bìa (Grid View - Ảo hóa với VirtuosoGrid)
+const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor }: any) => {
+  return (
+    <div className="flex-1 min-h-[300px] h-full w-full overflow-hidden">
+      <VirtuosoGrid
+        style={{ height: '100%', width: '100%' }}
+        data={tracks}
+        listClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-1"
+        itemClassName="h-full"
+        increaseViewportBy={{ top: 200, bottom: 200 }}
+        itemContent={(index, track) => (
+          <TrackGridItem 
+            track={track} 
+            index={index} 
+            isThisTrackPlaying={currentTrack?.id === track.id}
+            isPlaying={isPlaying}
+            isLite={isLite}
+            handleRowClick={handleRowClick}
+            tracks={tracks}
+            onContextMenu={onContextMenu}
+          />
+        )}
+      />
+    </div>
+  )
+});
+
+// Hàng bài hát dạng Thu gọn (Compact Row Item)
+const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, onContextMenu, openTagEditor }: any) => {
+  return (
+    <div 
+      onClick={() => handleRowClick(track, tracks)}
+      onContextMenu={(e) => onContextMenu?.(track, e)}
+      className={`flex items-center gap-3 px-3 py-2 text-xs transition cursor-pointer group track-row-optimized ${isThisTrackPlaying ? 'bg-theme-10/15' : 'hover:bg-white/5'}`}
+    >
+      <span className="w-6 text-center text-zinc-500 font-mono text-[11px] group-hover:text-white">
+        {isThisTrackPlaying && isPlaying ? <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" /> : index + 1}
+      </span>
+      <div className="w-7 h-7 bg-theme-30 rounded overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+        {(!isLite && track.coverArt) ? <img loading="lazy" decoding="async" src={track.coverArt} className="w-full h-full object-cover" /> : <Music size={12} className="text-zinc-500" />}
+      </div>
+      <div className="flex-1 min-w-0 flex items-center gap-3">
+        <span className={`font-medium truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>
+          {track.title}
+        </span>
+        <span className="text-zinc-400 truncate text-[11px]">
+          • {track.artist}
+        </span>
+      </div>
+      <span className="text-zinc-500 truncate max-w-[140px] hidden md:block">
+        {track.album || ''}
+      </span>
+      <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-30/80 text-zinc-300 uppercase font-mono">
+        {track.format || 'MP3'}
+      </span>
+      <span className="w-12 text-right text-zinc-400 font-mono text-[11px]">
+        {formatDuration(track.duration)}
+      </span>
+      {!track.isCloud && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); openTagEditor(track, e); }}
+          className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-theme-10 p-1 transition cursor-pointer"
+        >
+          <Edit2 size={13} />
+        </button>
+      )}
+    </div>
+  )
+});
+
+// Chế độ xem Danh sách thu gọn (Compact View - Ảo hóa với Virtuoso)
 const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor }: any) => {
   return (
-    <div className="flex-1 overflow-y-auto divide-y divide-theme-30/20 bg-theme-60/20 rounded-lg border border-theme-30/50">
-      {tracks.map((track: any, index: number) => {
-        const isThisTrackPlaying = currentTrack?.id === track.id
-        return (
-          <div 
-            key={track.id || index}
-            onClick={() => handleRowClick(track, tracks)}
-            onContextMenu={(e) => onContextMenu?.(track, e)}
-            className={`flex items-center gap-3 px-3 py-2 text-xs transition cursor-pointer group track-row-optimized ${isThisTrackPlaying ? 'bg-theme-10/15' : 'hover:bg-white/5'}`}
-          >
-            <span className="w-6 text-center text-zinc-500 font-mono text-[11px] group-hover:text-white">
-              {isThisTrackPlaying && isPlaying ? <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" /> : index + 1}
-            </span>
-            <div className="w-7 h-7 bg-theme-30 rounded overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-              {(!isLite && track.coverArt) ? <img loading="lazy" src={track.coverArt} className="w-full h-full object-cover" /> : <Music size={12} className="text-zinc-500" />}
-            </div>
-            <div className="flex-1 min-w-0 flex items-center gap-3">
-              <span className={`font-medium truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>
-                {track.title}
-              </span>
-              <span className="text-zinc-400 truncate text-[11px]">
-                • {track.artist}
-              </span>
-            </div>
-            <span className="text-zinc-500 truncate max-w-[140px] hidden md:block">
-              {track.album || ''}
-            </span>
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-30/80 text-zinc-300 uppercase font-mono">
-              {track.format || 'MP3'}
-            </span>
-            <span className="w-12 text-right text-zinc-400 font-mono text-[11px]">
-              {formatDuration(track.duration)}
-            </span>
-            {!track.isCloud && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); openTagEditor(track, e); }}
-                className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-theme-10 p-1 transition"
-              >
-                <Edit2 size={13} />
-              </button>
-            )}
+    <div className="flex-1 min-h-[300px] h-full w-full bg-theme-60/20 rounded-lg border border-theme-30/50 overflow-hidden">
+      <Virtuoso
+        style={{ height: '100%', width: '100%' }}
+        data={tracks}
+        increaseViewportBy={{ top: 200, bottom: 200 }}
+        itemContent={(index, track) => (
+          <TrackCompactItem 
+            track={track} 
+            index={index} 
+            isThisTrackPlaying={currentTrack?.id === track.id}
+            isPlaying={isPlaying}
+            isLite={isLite}
+            handleRowClick={handleRowClick}
+            tracks={tracks}
+            onContextMenu={onContextMenu}
+            openTagEditor={openTagEditor}
+          />
+        )}
+      />
+    </div>
+  )
+});
+
+// Item Playlist dạng Thẻ Lưới (Grid Card)
+const PlaylistItemCard = React.memo(({ pl, isLite, onOpen, onContextMenu, onChangeImage, onExtractImage, onRename, t }: any) => {
+  return (
+    <div 
+      className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer track-card-optimized" 
+      onClick={() => onOpen(pl)}
+      onContextMenu={(e) => onContextMenu(pl, e)}
+    >
+      <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative shadow-md">
+        {(!isLite && pl.thumbnail) ? (
+          <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-zinc-600">
+            <FolderPlus size={40} />
           </div>
-        )
-      })}
+        )}
+        <button 
+          onClick={(e) => { e.stopPropagation(); onChangeImage(pl.name); }} 
+          className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition cursor-pointer" 
+          title={t('playlistsView.chooseCover')}
+        >
+          <ImageIcon size={16}/>
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onExtractImage(pl.name); }} 
+          className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition cursor-pointer" 
+          title={t('playlistsView.extractCover')}
+        >
+          <Sparkles size={16}/>
+        </button>
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="min-w-0 flex-1 pr-2">
+          <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">{pl.name}</h3>
+          <p className="text-xs text-zinc-500 mt-0.5">{pl.tracks?.length || 0} {t('common.songs')}</p>
+        </div>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onRename(pl.name); }} 
+          className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1 cursor-pointer"
+          title={t('modals.playlistRename.title')}
+        >
+          <Edit2 size={14}/>
+        </button>
+      </div>
+    </div>
+  )
+});
+
+// Item Playlist dạng Bảng Hàng (Table Row)
+const PlaylistItemRow = React.memo(({ pl, idx, isLite, onOpen, onPlay, onContextMenu, onChangeImage, onRename, t }: any) => {
+  return (
+    <div
+      onClick={() => onOpen(pl)}
+      onContextMenu={(e) => onContextMenu(pl, e)}
+      className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+    >
+      <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
+        {idx + 1}
+      </div>
+      <div className="col-span-7 flex items-center gap-3.5 min-w-0">
+        <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
+          {(!isLite && pl.thumbnail) ? (
+            <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" />
+          ) : (
+            <FolderPlus size={20} className="text-zinc-600" />
+          )}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (pl.tracks && pl.tracks.length > 0) onPlay(pl.tracks);
+              }}
+              className="text-white hover:scale-110 transition cursor-pointer"
+            >
+              <Play size={16} className="fill-current" />
+            </button>
+          </div>
+        </div>
+        <div className="min-w-0">
+          <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
+          <p className="text-xs text-zinc-500 truncate mt-0.5">Playlist thư mục</p>
+        </div>
+      </div>
+      <div className="col-span-2 text-center">
+        <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
+          {pl.tracks?.length || 0} {t('common.songs')}
+        </span>
+      </div>
+      <div className="col-span-2 flex items-center justify-end gap-2">
+        <button onClick={(e) => { e.stopPropagation(); onChangeImage(pl.name); }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100 cursor-pointer" title={t('playlistsView.chooseCover')}><ImageIcon size={15}/></button>
+        <button onClick={(e) => { e.stopPropagation(); onRename(pl.name); }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100 cursor-pointer" title={t('modals.playlistRename.title')}><Edit2 size={15}/></button>
+        <button onClick={(e) => { e.stopPropagation(); onContextMenu(pl, e); }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition cursor-pointer"><MoreVertical size={15}/></button>
+      </div>
+    </div>
+  )
+});
+
+// Item Playlist dạng Thu gọn (Compact Item)
+const PlaylistItemCompact = React.memo(({ pl, idx, isLite, onOpen, onPlay, onContextMenu, t }: any) => {
+  return (
+    <div
+      onClick={() => onOpen(pl)}
+      onContextMenu={(e) => onContextMenu(pl, e)}
+      className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
+    >
+      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+        <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
+        <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
+          {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
+        </div>
+      </div>
+      <div className="flex items-center gap-4 shrink-0">
+        <span className="text-xs text-zinc-400 font-mono">{pl.tracks?.length || 0} {t('common.songs')}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (pl.tracks && pl.tracks.length > 0) onPlay(pl.tracks);
+          }}
+          className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100 cursor-pointer"
+          title={t('artistsView.playAll')}
+        >
+          <Play size={13} className="ml-0.5 fill-current" />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onContextMenu(pl, e); }}
+          className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100 cursor-pointer"
+        >
+          <MoreVertical size={14} />
+        </button>
+      </div>
     </div>
   )
 });
@@ -372,6 +605,8 @@ export default function App() {
   const [activeUserPlaylist, setActiveUserPlaylist] = useState<any | null>(null)
   const [activeArtist, setActiveArtist] = useState<any | null>(null)
   const [activeGenre, setActiveGenre] = useState<any | null>(null)
+  const [playlistsRenderLimit, setPlaylistsRenderLimit] = useState(36)
+  const playlistsLoadMoreRef = useRef<HTMLDivElement>(null)
   const [viewMode, setViewMode] = useState<'table' | 'grid' | 'compact'>(() => {
     return (localStorage.getItem('meis_view_mode') as any) || 'table'
   })
@@ -1169,13 +1404,14 @@ export default function App() {
   }
 
   const handleRenameSubmit = async () => {
-    if (!playlistRename.newName || playlistRename.newName === playlistRename.oldName) {
+    const cleanNewName = playlistRename.newName.trim().replace(/[\s.]+$/, '').trim()
+    if (!cleanNewName || cleanNewName === playlistRename.oldName) {
       setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
       return
     }
     if (playlistRename.id) {
       // @ts-ignore
-      const res = await window.api.renameUserPlaylist(playlistRename.id, playlistRename.newName.trim())
+      const res = await window.api.renameUserPlaylist(playlistRename.id, cleanNewName)
       if (res && res.success) {
         setUserPlaylists(res.playlists)
         setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
@@ -1185,7 +1421,7 @@ export default function App() {
       }
     } else {
       // @ts-ignore
-      const res = await window.api.renamePlaylist(playlistRename.oldName, playlistRename.newName.trim())
+      const res = await window.api.renamePlaylist(playlistRename.oldName, cleanNewName)
       if (res.success) {
         setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
         loadLibrary()
@@ -1251,6 +1487,7 @@ export default function App() {
     return tracks.filter(t => 
       (t.title && t.title.toLowerCase().includes(lowerQuery)) ||
       (t.artist && t.artist.toLowerCase().includes(lowerQuery)) ||
+      (Array.isArray(t.artists) && t.artists.some((a: string) => a?.toLowerCase().includes(lowerQuery))) ||
       (t.album && t.album.toLowerCase().includes(lowerQuery))
     )
   }
@@ -1417,10 +1654,18 @@ export default function App() {
     }
 
     // 2. Khớp nghệ sĩ (Artist)
-    if (currentArtist && currentArtist !== 'unknown' && currentArtist !== 'various artists') {
+    const currentArtists = (Array.isArray(current.artists) && current.artists.length > 0)
+      ? current.artists.map((a: string) => a.toLowerCase().trim())
+      : splitArtistString(current.artist || '').map(a => a.toLowerCase().trim())
+
+    const validCurrentArtists = currentArtists.filter(a => a && a !== 'unknown' && a !== 'various artists' && a !== 'không rõ')
+
+    if (validCurrentArtists.length > 0) {
       const artistMatches = pool.filter(t => {
-        const a = (t.artist || '').toString().toLowerCase().trim()
-        return a && a !== 'unknown' && (a.includes(currentArtist) || currentArtist.includes(a))
+        const tArtists = (Array.isArray(t.artists) && t.artists.length > 0)
+          ? t.artists.map((a: string) => a.toLowerCase().trim())
+          : splitArtistString(t.artist || '').map(a => a.toLowerCase().trim())
+        return tArtists.some(ta => validCurrentArtists.some(ca => ta.includes(ca) || ca.includes(ta)))
       })
       if (artistMatches.length > 0) {
         return artistMatches[Math.floor(Math.random() * artistMatches.length)]
@@ -1977,12 +2222,15 @@ export default function App() {
     if (res.success) {
       showToast(res.note || t('toasts.tagSavedSuccess'), 'success')
       const newCover = res.coverUrl || currentTrack?.coverArt
+      const newParsedArtists = splitArtistString(editTags.artist)
+      const effectiveArtists = newParsedArtists.length > 0 ? newParsedArtists : [editTags.artist]
       setLibraryTracks(prev => prev.map(t => {
         if (t.id === editingTrack.id || t.filePath === editingTrack.filePath) {
           return {
             ...t,
             title: editTags.title,
             artist: editTags.artist,
+            artists: effectiveArtists,
             album: editTags.album,
             genre: editTags.genre,
             lyrics: editTags.lyrics,
@@ -1996,6 +2244,7 @@ export default function App() {
           ...currentTrack,
           title: editTags.title,
           artist: editTags.artist,
+          artists: effectiveArtists,
           album: editTags.album,
           genre: editTags.genre,
           lyrics: editTags.lyrics,
@@ -2392,26 +2641,40 @@ export default function App() {
     }>()
 
     for (const track of libraryTracks) {
-      const artistName = (track.artist && track.artist.trim() && track.artist.toLowerCase() !== 'unknown') ? track.artist.trim() : (language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')
-      if (!artistMap.has(artistName)) {
-        artistMap.set(artistName, {
-          name: artistName,
-          tracks: [],
-          albums: new Map(),
-          coverArt: null
-        })
-      }
-      const item = artistMap.get(artistName)!
-      item.tracks.push(track)
-      if (!item.coverArt && track.coverArt) {
-        item.coverArt = track.coverArt
-      }
-      const albumName = (track.album && track.album.trim() && track.album.toLowerCase() !== 'unknown') ? track.album.trim() : null
-      if (albumName) {
-        if (!item.albums.has(albumName)) {
-          item.albums.set(albumName, [])
+      const trackArtists = (Array.isArray(track.artists) && track.artists.length > 0)
+        ? track.artists
+        : splitArtistString(track.artist || '')
+
+      const effectiveArtists = trackArtists.length > 0
+        ? trackArtists
+        : [(language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')]
+
+      for (const rawArtist of effectiveArtists) {
+        const artistName = (rawArtist && rawArtist.trim() && rawArtist.toLowerCase() !== 'unknown') ? rawArtist.trim() : (language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')
+        if (!artistMap.has(artistName)) {
+          artistMap.set(artistName, {
+            name: artistName,
+            tracks: [],
+            albums: new Map(),
+            coverArt: null
+          })
         }
-        item.albums.get(albumName)!.push(track)
+        const item = artistMap.get(artistName)!
+        if (!item.tracks.some(t => (t.id || t.filePath) === (track.id || track.filePath))) {
+          item.tracks.push(track)
+        }
+        if (!item.coverArt && track.coverArt) {
+          item.coverArt = track.coverArt
+        }
+        const albumName = (track.album && track.album.trim() && track.album.toLowerCase() !== 'unknown') ? track.album.trim() : null
+        if (albumName) {
+          if (!item.albums.has(albumName)) {
+            item.albums.set(albumName, [])
+          }
+          if (!item.albums.get(albumName)!.some(t => (t.id || t.filePath) === (track.id || track.filePath))) {
+            item.albums.get(albumName)!.push(track)
+          }
+        }
       }
     }
 
@@ -2488,7 +2751,14 @@ export default function App() {
         }
         const item = genreMap.get(normalized)!
         item.tracks.push(track)
-        if (track.artist && track.artist !== 'Unknown') item.artists.add(track.artist)
+        const arts = (Array.isArray(track.artists) && track.artists.length > 0)
+          ? track.artists
+          : splitArtistString(track.artist || '')
+        for (const a of arts) {
+          if (a && a !== 'Unknown' && a.toLowerCase() !== 'unknown artist' && a !== 'Nghệ sĩ chưa rõ') {
+            item.artists.add(a.trim())
+          }
+        }
         if (track.album && track.album !== 'Unknown') item.albums.add(track.album)
         if (track.coverArt && item.coverArts.length < 4 && !item.coverArts.includes(track.coverArt)) {
           item.coverArts.push(track.coverArt)
@@ -2529,6 +2799,29 @@ export default function App() {
     return getSortedTracks(filtered)
   }, [activePlaylist, searchQuery, sortField, sortOrder])
 
+  const matchedPlaylists = useMemo(() => {
+    if (!searchQuery) return playlists
+    const lowerQuery = searchQuery.toLowerCase().trim()
+    return playlists.filter(pl => pl.name.toLowerCase().includes(lowerQuery))
+  }, [playlists, searchQuery])
+
+  const visiblePlaylists = useMemo(() => {
+    return matchedPlaylists.slice(0, playlistsRenderLimit)
+  }, [matchedPlaylists, playlistsRenderLimit])
+
+  const handleOpenPlaylist = useCallback((pl: any) => {
+    setActivePlaylist(pl)
+    setSearchQuery('')
+  }, [])
+
+  const handlePlayPlaylistTracks = useCallback((tracks: any[]) => {
+    if (tracks && tracks.length > 0) handleRowClick(tracks[0], tracks)
+  }, [handleRowClick])
+
+  const handleOpenPlaylistRename = useCallback((name: string) => {
+    setPlaylistRename({ isOpen: true, oldName: name, newName: name })
+  }, [])
+
   // Lấy Sample Rate chuẩn của bài hát hiện tại (Mặc định 44100Hz nếu không rõ)
   const currentSampleRate = currentTrack?.sampleRate && currentTrack.sampleRate >= 8000 && currentTrack.sampleRate <= 384000 
     ? currentTrack.sampleRate 
@@ -2538,6 +2831,27 @@ export default function App() {
   // ==========================================
   // 5. EFFECTS
   // ==========================================
+
+  // Reset giới hạn tải playlist khi chuyển view hoặc đổi từ khóa tìm kiếm
+  useEffect(() => {
+    setPlaylistsRenderLimit(36)
+  }, [activeView, searchQuery])
+
+  // Tải lũy tiến (Progressive batching) cho danh sách playlist qua IntersectionObserver
+  useEffect(() => {
+    if (activeView !== 'playlists' || activePlaylist) return
+    const sentinel = playlistsLoadMoreRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setPlaylistsRenderLimit(prev => Math.min(prev + 36, matchedPlaylists.length))
+      }
+    }, { rootMargin: '300px' })
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [activeView, activePlaylist, matchedPlaylists.length])
 
   // Get audio output devices
   useEffect(() => {
@@ -3874,7 +4188,7 @@ export default function App() {
                         <Mic2 size={22} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-2xl font-black text-white group-hover:text-purple-400 transition">{new Set(libraryTracks.map(t => t.artist).filter(Boolean)).size}</p>
+                        <p className="text-2xl font-black text-white group-hover:text-purple-400 transition">{artistsData.artistsList.length}</p>
                         <p className="text-xs text-zinc-400 truncate">{t('home.statsArtists')}</p>
                       </div>
                     </div>
@@ -5970,159 +6284,103 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  {(() => {
-                    const lowerQuery = searchQuery.toLowerCase().trim()
-                    const matchedPlaylists = searchQuery ? playlists.filter(pl => pl.name.toLowerCase().includes(lowerQuery)) : playlists
-                    const matchedSongs = processedLibraryTracks
-
-                    if (!searchQuery && playlists.length === 0) {
-                      return <p className="text-zinc-500">{t('playlistsView.noPlaylists')}</p>
-                    }
-
-                    return (
-                      <div className="space-y-10">
-                        {(matchedPlaylists.length > 0 || !searchQuery) && (
-                          <div>
-                            {searchQuery && <h3 className="text-xl font-bold text-white mb-6">{t('playlistsView.playlistsAndAlbums', { count: matchedPlaylists.length })}</h3>}
-                            
-                            {viewMode === 'table' ? (
-                              <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
-                                <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                                  <div className="col-span-1 text-center">#</div>
-                                  <div className="col-span-7">{t('playlistsView.title')}</div>
-                                  <div className="col-span-2 text-center">{t('common.songs')}</div>
-                                  <div className="col-span-2 text-right">Thao tác</div>
-                                </div>
-                                <div className="divide-y divide-theme-30/20">
-                                  {matchedPlaylists.map((pl, idx) => (
-                                    <div
-                                      key={pl.name}
-                                      onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
-                                      onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                      className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
-                                    >
-                                      <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
-                                        {idx + 1}
-                                      </div>
-                                      <div className="col-span-7 flex items-center gap-3.5 min-w-0">
-                                        <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-                                          {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={20} className="text-zinc-600" />}
-                                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (pl.tracks.length > 0) handleRowClick(pl.tracks[0], pl.tracks);
-                                              }}
-                                              className="text-white hover:scale-110 transition"
-                                            >
-                                              <Play size={16} className="fill-current" />
-                                            </button>
-                                          </div>
-                                        </div>
-                                        <div className="min-w-0">
-                                          <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
-                                          <p className="text-xs text-zinc-500 truncate mt-0.5">Playlist thư mục</p>
-                                        </div>
-                                      </div>
-                                      <div className="col-span-2 text-center">
-                                        <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
-                                          {pl.tracks.length} {t('common.songs')}
-                                        </span>
-                                      </div>
-                                      <div className="col-span-2 flex items-center justify-end gap-2">
-                                        <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('playlistsView.chooseCover')}><ImageIcon size={15}/></button>
-                                        <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100" title={t('modals.playlistRename.title')}><Edit2 size={15}/></button>
-                                        <button onClick={(e) => { e.stopPropagation(); handlePlaylistContextMenu(pl, e) }} className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition"><MoreVertical size={15}/></button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
+                  {!searchQuery && playlists.length === 0 ? (
+                    <p className="text-zinc-500">{t('playlistsView.noPlaylists')}</p>
+                  ) : (
+                    <div className="space-y-10">
+                      {(matchedPlaylists.length > 0 || !searchQuery) && (
+                        <div>
+                          {searchQuery && <h3 className="text-xl font-bold text-white mb-6">{t('playlistsView.playlistsAndAlbums', { count: matchedPlaylists.length })}</h3>}
+                          
+                          {viewMode === 'table' ? (
+                            <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
+                              <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                                <div className="col-span-1 text-center">#</div>
+                                <div className="col-span-7">{t('playlistsView.title')}</div>
+                                <div className="col-span-2 text-center">{t('common.songs')}</div>
+                                <div className="col-span-2 text-right">Thao tác</div>
                               </div>
-                            ) : viewMode === 'compact' ? (
-                              <div className="w-full space-y-1.5">
-                                {matchedPlaylists.map((pl, idx) => (
-                                  <div
+                              <div className="divide-y divide-theme-30/20">
+                                {visiblePlaylists.map((pl, idx) => (
+                                  <PlaylistItemRow
                                     key={pl.name}
-                                    onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
-                                    onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                    className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
-                                  >
-                                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                      <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
-                                      <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                                        {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
-                                      </div>
-                                      <div className="min-w-0 flex-1">
-                                        <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-4 shrink-0">
-                                      <span className="text-xs text-zinc-400 font-mono">{pl.tracks.length} {t('common.songs')}</span>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (pl.tracks.length > 0) handleRowClick(pl.tracks[0], pl.tracks);
-                                        }}
-                                        className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
-                                        title={t('artistsView.playAll')}
-                                      >
-                                        <Play size={13} className="ml-0.5 fill-current" />
-                                      </button>
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); handlePlaylistContextMenu(pl, e); }}
-                                        className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
-                                      >
-                                        <MoreVertical size={14} />
-                                      </button>
-                                    </div>
-                                  </div>
+                                    pl={pl}
+                                    idx={idx}
+                                    isLite={isLite}
+                                    onOpen={handleOpenPlaylist}
+                                    onPlay={handlePlayPlaylistTracks}
+                                    onContextMenu={handlePlaylistContextMenu}
+                                    onChangeImage={handleChangePlaylistImage}
+                                    onRename={handleOpenPlaylistRename}
+                                    t={t}
+                                  />
                                 ))}
                               </div>
+                            </div>
+                          ) : viewMode === 'compact' ? (
+                            <div className="w-full space-y-1.5">
+                              {visiblePlaylists.map((pl, idx) => (
+                                <PlaylistItemCompact
+                                  key={pl.name}
+                                  pl={pl}
+                                  idx={idx}
+                                  isLite={isLite}
+                                  onOpen={handleOpenPlaylist}
+                                  onPlay={handlePlayPlaylistTracks}
+                                  onContextMenu={handlePlaylistContextMenu}
+                                  t={t}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+                              {visiblePlaylists.map(pl => (
+                                <PlaylistItemCard
+                                  key={pl.name}
+                                  pl={pl}
+                                  isLite={isLite}
+                                  onOpen={handleOpenPlaylist}
+                                  onContextMenu={handlePlaylistContextMenu}
+                                  onChangeImage={handleChangePlaylistImage}
+                                  onExtractImage={handleExtractPlaylistImage}
+                                  onRename={handleOpenPlaylistRename}
+                                  t={t}
+                                />
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Sentinel tải lũy tiến (Progressive batching) */}
+                          {visiblePlaylists.length < matchedPlaylists.length && (
+                            <div 
+                              ref={playlistsLoadMoreRef} 
+                              className="w-full py-6 flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer transition"
+                              onClick={() => setPlaylistsRenderLimit(prev => Math.min(prev + 36, matchedPlaylists.length))}
+                            >
+                              <span>{`Hiển thị ${visiblePlaylists.length} / ${matchedPlaylists.length} danh sách phát (Cuộn xuống để tải thêm)`}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {searchQuery && (
+                        <div className="flex flex-col h-[520px] w-full shrink-0">
+                          <h3 className="text-xl font-bold text-white mb-4 shrink-0">{t('common.songs')} ({processedLibraryTracks.length})</h3>
+                          <div className="flex-1 min-h-0 flex flex-col h-[460px] w-full">
+                            {processedLibraryTracks.length > 0 ? (
+                              renderTrackTable(processedLibraryTracks)
                             ) : (
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
-                                {matchedPlaylists.map(pl => (
-                                  <div 
-                                    key={pl.name} 
-                                    className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer track-card-optimized" 
-                                    onClick={() => { setActivePlaylist(pl); setSearchQuery(''); }}
-                                    onContextMenu={(e) => handlePlaylistContextMenu(pl, e)}
-                                  >
-                                    <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative shadow-md">
-                                      {(!isLite && pl.thumbnail) ? <img loading="lazy" src={pl.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><FolderPlus size={40} /></div>}
-                                      <button onClick={(e) => { e.stopPropagation(); handleChangePlaylistImage(pl.name) }} className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.chooseCover')}><ImageIcon size={16}/></button>
-                                      <button onClick={(e) => { e.stopPropagation(); handleExtractPlaylistImage(pl.name) }} className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" title={t('playlistsView.extractCover')}><Sparkles size={16}/></button>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <div className="min-w-0 flex-1 pr-2">
-                                        <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">{pl.name}</h3>
-                                        <p className="text-xs text-zinc-500 mt-0.5">{pl.tracks.length} {t('common.songs')}</p>
-                                      </div>
-                                      <button onClick={(e) => { e.stopPropagation(); setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name }) }} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={14}/></button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
+                              <p className="text-zinc-500 mt-4">{t('songsView.noSongsMatched', { query: searchQuery })}</p>
                             )}
                           </div>
-                        )}
-                        {searchQuery && (
-                          <div className="flex flex-col h-[520px] w-full shrink-0">
-                            <h3 className="text-xl font-bold text-white mb-4 shrink-0">{t('common.songs')} ({matchedSongs.length})</h3>
-                            <div className="flex-1 min-h-0 flex flex-col h-[460px] w-full">
-                              {matchedSongs.length > 0 ? (
-                                renderTrackTable(matchedSongs)
-                              ) : (
-                                <p className="text-zinc-500 mt-4">{t('songsView.noSongsMatched', { query: searchQuery })}</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        {searchQuery && matchedPlaylists.length === 0 && matchedSongs.length === 0 && (
-                          <p className="text-zinc-500 mt-8 text-center">{t('playlistsView.noResults', { query: searchQuery })}</p>
-                        )}
-                      </div>
-                    )
-                  })()}
+                        </div>
+                      )}
+
+                      {searchQuery && matchedPlaylists.length === 0 && processedLibraryTracks.length === 0 && (
+                        <p className="text-zinc-500 mt-8 text-center">{t('playlistsView.noResults', { query: searchQuery })}</p>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 
