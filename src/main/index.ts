@@ -1,13 +1,13 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut, nativeImage, Tray, Menu, session, protocol, net } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage, globalShortcut, nativeImage, Tray, Menu, session } from 'electron'
 import { spawn } from 'child_process'
 import crypto from 'crypto'
-import { join, dirname, extname } from 'path'
+import { join, dirname } from 'path'
 import * as path from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import fs from 'fs'
 import * as mm from 'music-metadata'
-import { pathToFileURL, fileURLToPath } from 'url'
+import { pathToFileURL } from 'url'
 import NodeID3 from 'node-id3'
 import ytdlpDefault, { create } from 'yt-dlp-exec' // Đã sửa lỗi import yt-dlp
 import axios from 'axios'
@@ -25,58 +25,169 @@ import {
   resolveScStreamUrl 
 } from './soundcloud'
 
-// Đăng ký custom protocol "media" đặc quyền trước khi app ready (cho phép stream audio và load ảnh an toàn)
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: 'media',
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      stream: true,
-      bypassCSP: true
-    }
-  }
-])
-
-export function toMediaUrl(filePath: string | null | undefined): string {
-  if (!filePath) return ''
-  if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('data:') || filePath.startsWith('blob:')) return filePath
-  if (filePath.startsWith('media:///')) return filePath
-  if (filePath.startsWith('media://')) return filePath.replace(/^media:\/\//, 'media:///')
-  if (filePath.startsWith('file:///')) {
-    return filePath.replace(/^file:\/\/\//, 'media:///')
-  }
-  if (filePath.startsWith('file://')) {
-    return filePath.replace(/^file:\/\//, 'media:///')
-  }
-  const fileUrl = pathToFileURL(filePath).href
-  return fileUrl.replace(/^file:\/\/\//, 'media:///').replace(/^file:\/\//, 'media:///')
-}
-
-export function resolveToLocalPath(inputUrlOrPath: string): string {
-  if (!inputUrlOrPath) return ''
-  let raw = inputUrlOrPath
-  if (raw.startsWith('media://')) {
-    raw = raw.replace(/^media:\/\/\/?/, '')
-  } else if (raw.startsWith('file://')) {
-    try {
-      raw = fileURLToPath(raw)
-    } catch {
-      raw = raw.replace(/^file:\/\/\/?/, '')
-    }
-  }
-  if (process.platform === 'win32') {
-    raw = decodeURIComponent(raw)
-    if (/^\/?[a-zA-Z]:/.test(raw)) {
-      if (raw.startsWith('/')) raw = raw.slice(1)
-    }
-    raw = raw.replace(/\//g, '\\')
-  }
-  return raw
-}
-
 export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma']
+
+/**
+ * Chuẩn hóa tên thư mục, đảm bảo không kết thúc bằng dấu chấm hoặc khoảng trắng (Lỗi Windows Win32)
+ * và không chứa các ký tự đặc biệt bị cấm.
+ */
+export function sanitizeDirectoryName(name: string): string {
+  if (!name || typeof name !== 'string') return 'Untitled'
+  let safe = name.replace(/[<>:"\/\\|?*\x00-\x1f]/g, '').trim()
+  safe = safe.replace(/[\s.]+$/, '').trim()
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(safe)) {
+    safe += '_folder'
+  }
+  return safe || 'Untitled'
+}
+
+/**
+ * Chuẩn hóa tên tệp, loại bỏ ký tự cấm và dấu chấm/khoảng trắng cuối tên.
+ */
+export function sanitizeFileName(name: string): string {
+  if (!name || typeof name !== 'string') return 'track'
+  let safe = name.replace(/[<>:"\/\\|?*\x00-\x1f]/g, '').trim()
+  safe = safe.replace(/[\s.]+$/, '').trim()
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(safe)) {
+    safe += '_file'
+  }
+  return safe || 'track'
+}
+
+/**
+ * Quét đệ quy toàn bộ tệp âm thanh có định dạng hỗ trợ trong thư mục và mọi thư mục con
+ */
+export function getAudioFilesInDirectoryRecursive(dir: string, supportedExts: string[] = SUPPORTED_AUDIO_EXTS): string[] {
+  const audioFiles: string[] = []
+  
+  function scan(currentDir: string) {
+    try {
+      const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.name === '.thumbnails' || entry.name.startsWith('.')) continue
+        const fullPath = join(currentDir, entry.name)
+        if (entry.isDirectory()) {
+          scan(fullPath)
+        } else if (entry.isFile()) {
+          const lowerName = entry.name.toLowerCase()
+          if (supportedExts.some(ext => lowerName.endsWith(ext))) {
+            audioFiles.push(fullPath)
+          }
+        }
+      }
+    } catch (err) {}
+  }
+
+  scan(dir)
+  return audioFiles
+}
+
+/**
+ * Danh sách các nghệ sĩ / ban nhạc nổi tiếng có chứa ký tự đặc biệt (dấu gạch chéo, dấu phẩy, &)
+ * cần được bảo vệ để không bị phân tách nhầm.
+ */
+export const PRESERVED_ARTIST_NAMES = [
+  'AC/DC',
+  'Tyler, The Creator',
+  'Earth, Wind & Fire',
+  'Simon & Garfunkel',
+  'Hall & Oates',
+  'Daryl Hall & John Oates',
+  'Crosby, Stills, Nash & Young',
+  'Emerson, Lake & Palmer',
+  'Blood, Sweat & Tears',
+  'Brooks & Dunn',
+  'Bell, Book & Candle',
+  'K/DA',
+  'Panic! At The Disco'
+]
+
+/**
+ * Phân tách chuỗi tên nghệ sĩ thành mảng danh sách từng nghệ sĩ độc lập
+ */
+export function splitArtistString(raw: string): string[] {
+  if (!raw || typeof raw !== 'string') return []
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'unknown artist') {
+    return []
+  }
+
+  for (const preserved of PRESERVED_ARTIST_NAMES) {
+    if (trimmed.toLowerCase() === preserved.toLowerCase()) {
+      return [preserved]
+    }
+  }
+
+  let working = trimmed
+  const placeholders: { token: string; original: string }[] = []
+  PRESERVED_ARTIST_NAMES.forEach((preserved, idx) => {
+    const regex = new RegExp(preserved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+    if (regex.test(working)) {
+      const token = `__PRESERVED_ARTIST_${idx}__`
+      working = working.replace(regex, token)
+      placeholders.push({ token, original: preserved })
+    }
+  })
+
+  // Chuẩn hóa định dạng feat / ft trong ngoặc: (feat. X) -> feat. X
+  working = working.replace(/[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]\}]+)[\)\]\}]/gi, ' feat. $1')
+
+  // Tách bằng các ký hiệu phân cách phổ biến
+  const splitRegex = /(?:\s*;\s*|\0+|\s*[\/\\]\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX]\s+|,\s*)/i
+
+  const parts = working.split(splitRegex)
+  const result: string[] = []
+
+  for (let part of parts) {
+    for (const p of placeholders) {
+      part = part.replace(new RegExp(p.token, 'g'), p.original)
+    }
+    const clean = part.trim().replace(/^[\(\[\{]/, '').replace(/[\)\]\}]$/, '').trim()
+    if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
+      if (!result.some(existing => existing.toLowerCase() === clean.toLowerCase())) {
+        result.push(clean)
+      }
+    }
+  }
+
+  return result.length > 0 ? result : [trimmed]
+}
+
+/**
+ * Trích xuất danh sách nghệ sĩ từ music-metadata (hỗ trợ cả metadata.common.artists và metadata.common.artist)
+ */
+export function extractArtists(metadata: any): { artist: string; artists: string[] } {
+  const rawArtistsList: string[] = []
+
+  if (Array.isArray(metadata?.common?.artists) && metadata.common.artists.length > 0) {
+    for (const a of metadata.common.artists) {
+      if (typeof a === 'string' && a.trim()) rawArtistsList.push(a.trim())
+    }
+  }
+
+  if (rawArtistsList.length === 0 && typeof metadata?.common?.artist === 'string' && metadata.common.artist.trim()) {
+    rawArtistsList.push(metadata.common.artist.trim())
+  }
+
+  const parsedArtists: string[] = []
+  for (const rawItem of rawArtistsList) {
+    const split = splitArtistString(rawItem)
+    for (const s of split) {
+      if (s && !parsedArtists.some(ex => ex.toLowerCase() === s.toLowerCase())) {
+        parsedArtists.push(s)
+      }
+    }
+  }
+
+  const mainArtist = (metadata?.common?.artist && metadata.common.artist.trim())
+    ? metadata.common.artist.trim()
+    : (parsedArtists.length > 0 ? parsedArtists.join(', ') : 'Unknown')
+
+  return {
+    artist: mainArtist,
+    artists: parsedArtists.length > 0 ? parsedArtists : (mainArtist !== 'Unknown' ? [mainArtist] : [])
+  }
+}
 
 let mpvManager: MpvManager | null = null
 let discordRpcManager: DiscordRpcManager | null = null
@@ -134,7 +245,6 @@ const CONFIG_PATH = join(DATA_FOLDER, 'music-config.json');
 const METADATA_CACHE_PATH = join(DATA_FOLDER, 'metadata-cache.json');
 const THEME_COLORS_CACHE_PATH = join(DATA_FOLDER, 'theme-colors-cache.json');
 const LIBRARY_CACHE_PATH = join(DATA_FOLDER, 'library-cache.json');
-const PLAYLISTS_CACHE_PATH = join(DATA_FOLDER, 'playlists-cache.json');
 const USER_PLAYLISTS_PATH = join(DATA_FOLDER, 'user-playlists.json');
 
 export interface UserPlaylist {
@@ -151,13 +261,7 @@ function getUserPlaylists(): UserPlaylist[] {
   try {
     if (fs.existsSync(USER_PLAYLISTS_PATH)) {
       const data = JSON.parse(fs.readFileSync(USER_PLAYLISTS_PATH, 'utf-8'))
-      if (Array.isArray(data)) {
-        return data.map(pl => ({
-          ...pl,
-          thumbnail: toMediaUrl(pl.thumbnail),
-          customImagePath: toMediaUrl(pl.customImagePath)
-        }))
-      }
+      if (Array.isArray(data)) return data
     }
   } catch (e) {}
   return []
@@ -178,16 +282,10 @@ try {
   metadataCache = {};
 }
 
-let metadataCacheSaveTimer: NodeJS.Timeout | null = null
-function saveMetadataCache(immediate: boolean = false) {
-  if (metadataCacheSaveTimer) clearTimeout(metadataCacheSaveTimer)
-  if (immediate) {
-    try { fs.writeFileSync(METADATA_CACHE_PATH, JSON.stringify(metadataCache)); } catch (e) {}
-    return
-  }
-  metadataCacheSaveTimer = setTimeout(() => {
-    try { fs.writeFileSync(METADATA_CACHE_PATH, JSON.stringify(metadataCache)); } catch (e) {}
-  }, 1000)
+function saveMetadataCache() {
+  try {
+    fs.writeFileSync(METADATA_CACHE_PATH, JSON.stringify(metadataCache));
+  } catch (e) {}
 }
 
 let themeColorsCache: Record<string, { primary60: string; secondary30: string; accent10: string }> = {};
@@ -199,42 +297,9 @@ try {
   themeColorsCache = {};
 }
 
-let themeColorsSaveTimer: NodeJS.Timeout | null = null
-function saveThemeColorsCache(immediate: boolean = false) {
-  if (themeColorsSaveTimer) clearTimeout(themeColorsSaveTimer)
-  if (immediate) {
-    try { fs.writeFileSync(THEME_COLORS_CACHE_PATH, JSON.stringify(themeColorsCache, null, 2)); } catch (e) {}
-    return
-  }
-  themeColorsSaveTimer = setTimeout(() => {
-    try { fs.writeFileSync(THEME_COLORS_CACHE_PATH, JSON.stringify(themeColorsCache, null, 2)); } catch (e) {}
-  }, 1000)
-}
-
-interface PlaylistCacheEntry {
-  mtime: number
-  subMtimes?: Record<string, number>
-  data: {
-    name: string
-    path: string
-    folderRoot: string
-    tracks: any[]
-    thumbnail: string | null
-  }
-}
-
-let playlistsCache: Record<string, PlaylistCacheEntry> = {};
-try {
-  if (fs.existsSync(PLAYLISTS_CACHE_PATH)) {
-    playlistsCache = JSON.parse(fs.readFileSync(PLAYLISTS_CACHE_PATH, 'utf-8'));
-  }
-} catch (e) {
-  playlistsCache = {};
-}
-
-function savePlaylistsCache() {
+function saveThemeColorsCache() {
   try {
-    fs.writeFileSync(PLAYLISTS_CACHE_PATH, JSON.stringify(playlistsCache));
+    fs.writeFileSync(THEME_COLORS_CACHE_PATH, JSON.stringify(themeColorsCache, null, 2));
   } catch (e) {}
 }
 
@@ -369,23 +434,13 @@ const ytdlp = is.dev
       process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
     ));
 
-app.commandLine.appendSwitch('js-flags', '--expose-gc');
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=128 --optimize-for-size');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('disable-http-cache');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-hardware-overlays');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
-
-// Chuẩn hóa tên thư mục / playlist, loại bỏ triệt để dấu chấm và khoảng trắng ở cuối (tránh lỗi Windows)
-function sanitizeFolderName(name: string): string {
-  if (!name) return ''
-  let safe = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim()
-  safe = safe.replace(/[.\s]+$/, '').trim()
-  return safe
-}
-
-let libraryWatchers: fs.FSWatcher[] = []
-let libraryWatchDebounceTimer: NodeJS.Timeout | null = null
 
 let tray: Tray | null = null
 let isQuitting = false 
@@ -532,10 +587,9 @@ function createWindow(): void {
     title: "MEI'S RADIO",
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#18181b',
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#18181b',
+      color: 'rgba(0,0,0,0)',
       symbolColor: '#ffffff',
       height: 40
     },
@@ -543,7 +597,7 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      webSecurity: true
+      webSecurity: false
     }
   })
 
@@ -609,13 +663,6 @@ function createWindow(): void {
   
   app.on('before-quit', () => {
     isQuitting = true
-    saveMetadataCache(true)
-    saveThemeColorsCache(true)
-    for (const w of libraryWatchers) {
-      try { w.close() } catch (e) {}
-    }
-    libraryWatchers = []
-    if (libraryWatchDebounceTimer) clearTimeout(libraryWatchDebounceTimer)
     if (mpvManager) mpvManager.killAll()
     if (discordRpcManager) discordRpcManager.destroy()
   })
@@ -627,92 +674,9 @@ function createWindow(): void {
   }
 }
 
-function updateLibraryWatchers() {
-  for (const w of libraryWatchers) {
-    try { w.close() } catch (e) {}
-  }
-  libraryWatchers = []
-
-  const config = getConfig()
-  const libraryPaths: string[] = (config.libraryPaths && config.libraryPaths.length > 0)
-    ? config.libraryPaths
-    : (config.libraryPath ? [config.libraryPath] : [])
-
-  for (const p of libraryPaths) {
-    if (typeof p === 'string' && fs.existsSync(p)) {
-      try {
-        const watcher = fs.watch(p, { recursive: true }, (_eventType, filename) => {
-          if (filename) {
-            const fname = String(filename)
-            if (fname.includes('.thumbnails') || fname.includes('temp_') || fname.startsWith('.')) {
-              return
-            }
-            const lower = fname.toLowerCase()
-            const isAudio = SUPPORTED_AUDIO_EXTS.some(ext => lower.endsWith(ext))
-            const isRelated = isAudio || lower.endsWith('.lrc') || lower.endsWith('.jpg') || lower.endsWith('.png') || lower.endsWith('.webp') || !fname.includes('.')
-            if (!isRelated) return
-          }
-
-          if (libraryWatchDebounceTimer) clearTimeout(libraryWatchDebounceTimer)
-          libraryWatchDebounceTimer = setTimeout(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('library:changed')
-            }
-          }, 800)
-        })
-
-        watcher.on('error', (err) => {
-          console.warn('[LibraryWatcher] Error watching', p, err)
-        })
-
-        libraryWatchers.push(watcher)
-      } catch (err) {
-        console.warn('[LibraryWatcher] Failed to watch', p, err)
-      }
-    }
-  }
-}
-
-const gotTheLock = app.requestSingleInstanceLock()
-
-if (!gotTheLock) {
-  app.quit()
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      if (!mainWindow.isVisible()) mainWindow.show()
-      mainWindow.focus()
-    }
-  })
-
-  app.whenReady().then(() => {
-    // Đăng ký bộ xử lý giao thức media an toàn cho hình ảnh và âm thanh local
-    protocol.handle('media', (req) => {
-      try {
-        let pathname = req.url.replace(/^media:\/\/+/i, '')
-        const queryIndex = pathname.indexOf('?')
-        if (queryIndex !== -1) pathname = pathname.slice(0, queryIndex)
-        const hashIndex = pathname.indexOf('#')
-        if (hashIndex !== -1) pathname = pathname.slice(0, hashIndex)
-        let decoded = decodeURIComponent(pathname)
-        if (process.platform === 'win32') {
-          if (/^\/?[a-zA-Z]:/.test(decoded)) {
-            if (decoded.startsWith('/')) decoded = decoded.slice(1)
-          } else if (/^[a-zA-Z]\//.test(decoded)) {
-            decoded = decoded.charAt(0) + ':' + decoded.slice(1)
-          }
-          decoded = decoded.replace(/\//g, '\\')
-        }
-        return net.fetch(pathToFileURL(decoded).toString())
-      } catch (e) {
-        return new Response('Not Found', { status: 404 })
-      }
-    })
-
-    updateLibraryWatchers()
-    electronApp.setAppUserModelId('com.electron')
-    app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
+app.whenReady().then(() => {
+  electronApp.setAppUserModelId('com.electron')
+  app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
 
   // ==========================================
   // DISCORD RICH PRESENCE MANAGER
@@ -764,7 +728,15 @@ if (!gotTheLock) {
   mpvManager.on('ended', () => mainWindow?.webContents.send('mpv:ended'))
 
   ipcMain.handle('mpv:play', (_, url, crossfade) => {
-    const rawPath = resolveToLocalPath(url)
+    let rawPath = url
+    if (typeof rawPath === 'string' && rawPath.startsWith('file://')) {
+      try {
+        const { fileURLToPath } = require('url')
+        rawPath = fileURLToPath(rawPath)
+      } catch (e) {
+        rawPath = decodeURIComponent(rawPath.replace(/^file:\/\/\/?/, ''))
+      }
+    }
     mpvManager?.playTrack(rawPath, crossfade)
   })
   ipcMain.handle('mpv:resume', () => mpvManager?.play())
@@ -802,7 +774,6 @@ if (!gotTheLock) {
       currentPaths.push(selected)
     }
     saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || selected })
-    updateLibraryWatchers()
     return { success: true, path: selected, libraryPaths: currentPaths }
   })
 
@@ -817,7 +788,6 @@ if (!gotTheLock) {
       currentPaths.push(selected)
     }
     saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || selected })
-    updateLibraryWatchers()
     return { success: true, path: selected, libraryPaths: currentPaths }
   })
 
@@ -827,7 +797,6 @@ if (!gotTheLock) {
     let currentPaths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
     currentPaths = currentPaths.filter(p => p !== folderPath)
     saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || null })
-    updateLibraryWatchers()
     return { success: true, libraryPaths: currentPaths }
   })
 
@@ -845,7 +814,6 @@ if (!gotTheLock) {
       currentPaths.push(newPath)
     }
     saveConfig({ libraryPaths: currentPaths, libraryPath: currentPaths[0] || null })
-    updateLibraryWatchers()
     return { success: true, oldPath, newPath, libraryPaths: currentPaths }
   })
 
@@ -878,27 +846,19 @@ if (!gotTheLock) {
         const isSamePaths = cachedPaths.length === validPaths.length && cachedPaths.every((p: string, idx: number) => p === validPaths[idx])
         const hasGenreInfo = Array.isArray(cached.tracks) && cached.tracks.length > 0 && cached.tracks.some((t: any) => t.genre !== undefined && t.genre !== 'Unknown')
         if (cached && isSamePaths && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5)) {
-          const sanitizedTracks = (cached.tracks || []).map((t: any) => ({
+          const enrichedTracks = cached.tracks.map((t: any) => ({
             ...t,
-            filePath: toMediaUrl(t.filePath),
-            coverArt: toMediaUrl(t.coverArt)
-          }))
-          const sanitizedPlaylists = (cached.playlists || []).map((pl: any) => ({
-            ...pl,
-            thumbnail: toMediaUrl(pl.thumbnail),
-            tracks: Array.isArray(pl.tracks) ? pl.tracks.map((t: any) => ({
-              ...t,
-              filePath: toMediaUrl(t.filePath),
-              coverArt: toMediaUrl(t.coverArt)
-            })) : []
+            artists: (Array.isArray(t.artists) && t.artists.length > 0)
+              ? t.artists
+              : splitArtistString(t.artist || '')
           }))
           return { 
             success: true, 
             fromCache: true, 
             libraryPath: primaryRootPath, 
             libraryPaths: validPaths, 
-            tracks: sanitizedTracks, 
-            playlists: sanitizedPlaylists,
+            tracks: enrichedTracks, 
+            playlists: cached.playlists || [],
             userPlaylists: getUserPlaylists()
           }
         }
@@ -935,9 +895,9 @@ if (!gotTheLock) {
 
       let coverUrl: string | null = null
       if (fs.existsSync(thumbPath)) {
-        coverUrl = toMediaUrl(thumbPath)
+        coverUrl = pathToFileURL(thumbPath).href
       } else if (fs.existsSync(centralThumbPath)) {
-        coverUrl = toMediaUrl(centralThumbPath)
+        coverUrl = pathToFileURL(centralThumbPath).href
       }
 
       // KIỂM TRA CACHE: Nếu file đã có và mtime không đổi -> TÁI SỬ DỤNG HOÀN TOÀN, KHÔNG ĐỌC LẠI FILE
@@ -945,23 +905,26 @@ if (!gotTheLock) {
       if (cached && cached.mtime === stat.mtimeMs && cached.data && cached.data.genre !== undefined && cached.data.genre !== 'Unknown') {
         const existingTrack = previousTrackMap.get(trackPath) || previousTrackMap.get(cached.data.filePath)
         if (existingTrack && existingTrack.genre !== undefined && existingTrack.genre !== 'Unknown') {
-          const artistsArr = existingTrack.artists || (existingTrack.artist ? existingTrack.artist.split(/\s*,\s*|\s*;\s*|\s*\/\s*/).map((s: string) => s.trim()).filter(Boolean) : ['Unknown'])
-          return { ...existingTrack, filePath: toMediaUrl(existingTrack.filePath || trackPath), coverArt: toMediaUrl(existingTrack.coverArt) || coverUrl, artists: artistsArr }
+          if (!existingTrack.artists || existingTrack.artists.length === 0) {
+            existingTrack.artists = splitArtistString(existingTrack.artist || '')
+          }
+          return existingTrack
         }
-        const artistsArr = cached.data.artists || (cached.data.artist ? cached.data.artist.split(/\s*,\s*|\s*;\s*|\s*\/\s*/).map((s: string) => s.trim()).filter(Boolean) : ['Unknown'])
         return {
           ...cached.data,
-          filePath: toMediaUrl(trackPath),
-          artists: artistsArr,
-          coverArt: coverUrl || toMediaUrl(cached.data.coverArt) || null,
-          themeColors: themeColorsCache[trackPath] || themeColorsCache[toMediaUrl(trackPath)] || cached.data.themeColors || null
+          filePath: pathToFileURL(trackPath).href,
+          artists: (Array.isArray(cached.data.artists) && cached.data.artists.length > 0)
+            ? cached.data.artists
+            : splitArtistString(cached.data.artist || ''),
+          coverArt: coverUrl || cached.data.coverArt || null,
+          themeColors: themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || cached.data.themeColors || null
         }
       }
 
       // CHỈ ĐỌC VÀ PHÂN TÍCH METADATA VỚI CÁC FILE MỚI ĐƯỢC THÊM HOẶC BỊ SỬA ĐỔI
       try {
         const metadata = await mm.parseFile(trackPath)
-        let calculatedColors = themeColorsCache[trackPath] || themeColorsCache[toMediaUrl(trackPath)] || null
+        let calculatedColors = themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || null
 
         if (metadata.common.picture && metadata.common.picture.length > 0) {
           try {
@@ -971,16 +934,16 @@ if (!gotTheLock) {
               const resized = img.resize({ width: 128, height: 128, quality: 'good' })
               try {
                 fs.writeFileSync(thumbPath, resized.toJPEG(80))
-                coverUrl = toMediaUrl(thumbPath)
+                coverUrl = pathToFileURL(thumbPath).href
               } catch(e) {
                 fs.writeFileSync(centralThumbPath, resized.toJPEG(80))
-                coverUrl = toMediaUrl(centralThumbPath)
+                coverUrl = pathToFileURL(centralThumbPath).href
               }
             }
             if (!calculatedColors) {
               calculatedColors = extractThemeColorsFromImage(img)
               themeColorsCache[trackPath] = calculatedColors
-              themeColorsCache[toMediaUrl(trackPath)] = calculatedColors
+              themeColorsCache[pathToFileURL(trackPath).href] = calculatedColors
               cacheModified = true
             }
           } catch(e) {}
@@ -1046,55 +1009,14 @@ if (!gotTheLock) {
 
         const yearVal = metadata.common.year || (metadata.common.date ? parseInt(metadata.common.date) : null)
 
-        // Trích xuất toàn bộ nghệ sĩ (hỗ trợ nhiều nghệ sĩ)
-        let artistsList: string[] = []
-        if (Array.isArray(metadata.common.artists) && metadata.common.artists.length > 0) {
-          artistsList = metadata.common.artists.map(a => String(a).trim()).filter(Boolean)
-        } else if (metadata.common.artist) {
-          artistsList = [metadata.common.artist.trim()]
-        }
-
-        if (artistsList.length <= 1 && metadata.native) {
-          const collected: string[] = []
-          for (const tagFormat of Object.keys(metadata.native)) {
-            const tagList = metadata.native[tagFormat]
-            if (Array.isArray(tagList)) {
-              for (const t of tagList) {
-                const tid = String(t.id).toUpperCase()
-                if (tid === 'TPE1' || tid === 'ARTIST' || tid === '©ART') {
-                  if (Array.isArray(t.value)) {
-                    collected.push(...t.value.map(v => String(v).trim()).filter(Boolean))
-                  } else if (typeof t.value === 'string' && t.value.trim()) {
-                    collected.push(t.value.trim())
-                  }
-                }
-              }
-            }
-          }
-          if (collected.length > 1) {
-            artistsList = Array.from(new Set(collected))
-          }
-        }
-
-        // Tách các nghệ sĩ bị nối bởi dấu phân tách phổ biến nếu chỉ có 1 chuỗi
-        if (artistsList.length === 1) {
-          const raw = artistsList[0]
-          if (raw.includes(';') || raw.includes(' / ') || raw.includes(' // ') || /\s+(?:feat\.|ft\.)\s+/i.test(raw)) {
-            const parts = raw.split(/\s*(?:;|(?:\s\/\s)|(?:\s\/\/\s)|(?:\s+(?:feat\.|ft\.)\s+))\s*/i).map(s => s.trim()).filter(Boolean)
-            if (parts.length > 1) {
-              artistsList = parts
-            }
-          }
-        }
-
-        const artistStr = artistsList.length > 0 ? artistsList.join(', ') : (metadata.common.artist || 'Unknown')
+        const { artist, artists } = extractArtists(metadata)
 
         const trackData = {
           id: trackPath,
-          filePath: toMediaUrl(trackPath),
+          filePath: pathToFileURL(trackPath).href,
           title: metadata.common.title || subItemName.replace(/\.[^/.]+$/, ""),
-          artist: artistStr,
-          artists: artistsList.length > 0 ? artistsList : [artistStr],
+          artist: artist,
+          artists: artists,
           album: metadata.common.album || 'Unknown',
           genre: genreStr,
           year: yearVal,
@@ -1107,7 +1029,7 @@ if (!gotTheLock) {
           lossless: metadata.format.lossless,
           isCloud: false,
           coverArt: coverUrl,
-          themeColors: themeColorsCache[trackPath] || themeColorsCache[toMediaUrl(trackPath)] || null,
+          themeColors: themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || null,
           lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
         }
 
@@ -1120,7 +1042,7 @@ if (!gotTheLock) {
       } catch (e) {
         const fallbackTrack = {
           id: trackPath,
-          filePath: toMediaUrl(trackPath),
+          filePath: pathToFileURL(trackPath).href,
           title: subItemName,
           artist: 'Unknown',
           artists: ['Unknown'],
@@ -1149,154 +1071,73 @@ if (!gotTheLock) {
             const stat = fs.statSync(itemPath)
 
             if (stat.isDirectory() && item !== '.thumbnails') {
-              const cachedEntry = playlistsCache[itemPath]
-              let isPlaylistCacheValid = false
+              const playlistTracks: any[] = []
+              // Quét đệ quy tất cả các file âm thanh trong thư mục và mọi thư mục con
+              const allTrackPaths = getAudioFilesInDirectoryRecursive(itemPath, supportedExts)
+              for (const trackPath of allTrackPaths) {
+                try {
+                  const subStat = fs.statSync(trackPath)
+                  const fileName = path.basename(trackPath)
+                  const trackData = await parseOrGetTrack(trackPath, fileName, subStat, thumbDir)
+                  playlistTracks.push(trackData)
+                  tracks.push(trackData)
+                } catch (e) {}
+              }
+              
+              let thumbnailUrl: string | null = null
+              const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
+              const commonCoverNames = ['cover', 'folder', 'front', 'artwork', item, 'thumb', 'thumbnail', 'album']
 
-              if (cachedEntry && cachedEntry.mtime === stat.mtimeMs && cachedEntry.data && Array.isArray(cachedEntry.data.tracks)) {
-                isPlaylistCacheValid = true
+              const playlistHash = crypto.createHash('md5').update('playlist_' + itemPath).digest('hex')
+              const plThumbPath = join(thumbDir, `pl_${playlistHash}.jpg`)
+              const plCentralThumbPath = join(IMAGE_CACHE_DIR, `pl_${playlistHash}.jpg`)
 
-                // Kiểm tra các thư mục con (nếu có) xem có thư mục nào bị sửa đổi hay không
-                if (cachedEntry.subMtimes) {
-                  for (const [subPath, subMtime] of Object.entries(cachedEntry.subMtimes)) {
-                    try {
-                      if (!fs.existsSync(subPath) || fs.statSync(subPath).mtimeMs !== subMtime) {
-                        isPlaylistCacheValid = false
-                        break
-                      }
-                    } catch {
-                      isPlaylistCacheValid = false
-                      break
-                    }
+              let rawCoverPath: string | null = null
+              for (const name of commonCoverNames) {
+                for (const ext of possibleImageExts) {
+                  const imgPath = join(itemPath, `${name}${ext}`)
+                  if (fs.existsSync(imgPath)) {
+                    rawCoverPath = imgPath
+                    break
                   }
                 }
-
-                // Kiểm tra file ảnh thumbnail nếu có
-                if (isPlaylistCacheValid && cachedEntry.data.thumbnail) {
-                  try {
-                    const localThumbFile = resolveToLocalPath(cachedEntry.data.thumbnail.split('?')[0])
-                    if (!fs.existsSync(localThumbFile)) {
-                      isPlaylistCacheValid = false
-                    }
-                  } catch {
-                    isPlaylistCacheValid = false
-                  }
-                }
+                if (rawCoverPath) break
               }
 
-              if (isPlaylistCacheValid && cachedEntry) {
-                // TÁI SỬ DỤNG HOÀN TOÀN TỪ PLAYLISTS-CACHE.JSON (0ms I/O)
-                existingDiskPaths.add(itemPath)
-                const plData = {
-                  ...cachedEntry.data,
-                  thumbnail: toMediaUrl(cachedEntry.data?.thumbnail),
-                  tracks: Array.isArray(cachedEntry.data?.tracks)
-                    ? cachedEntry.data.tracks.map((t: any) => ({
-                        ...t,
-                        filePath: toMediaUrl(t.filePath),
-                        coverArt: toMediaUrl(t.coverArt)
-                      }))
-                    : []
-                }
-                playlists.push(plData)
-
-                for (const trk of plData.tracks) {
-                  const rawTrackPath = resolveToLocalPath(trk.filePath)
-                  if (rawTrackPath) existingDiskPaths.add(rawTrackPath)
-                  tracks.push(trk)
-                }
-              } else {
-                const playlistTracks: any[] = []
-                const subMtimes: Record<string, number> = {}
-
-                // Đọc đệ quy toàn bộ thư mục con bên trong thư mục playlist
-                const scanPlaylistDir = async (dir: string) => {
-                  try {
-                    const entries = fs.readdirSync(dir, { withFileTypes: true })
-                    for (const entry of entries) {
-                      if (entry.name === '.thumbnails') continue
-                      const fullPath = join(dir, entry.name)
-                      try {
-                        const entStat = fs.statSync(fullPath)
-                        if (entStat.isDirectory()) {
-                          subMtimes[fullPath] = entStat.mtimeMs
-                          await scanPlaylistDir(fullPath)
-                        } else if (entStat.isFile()) {
-                          const ext = extname(entry.name).toLowerCase()
-                          if (supportedExts.includes(ext)) {
-                            const trk = await parseOrGetTrack(fullPath, entry.name, entStat, thumbDir)
-                            playlistTracks.push(trk)
-                            tracks.push(trk)
-                          }
-                        }
-                      } catch (e) {}
-                    }
-                  } catch (e) {}
-                }
-                await scanPlaylistDir(itemPath)
-
-                const subItems = fs.existsSync(itemPath) ? fs.readdirSync(itemPath) : []
-                
-                let thumbnailUrl: string | null = null
-                const possibleImageExts = ['.jpg', '.png', '.jpeg', '.webp']
-                const commonCoverNames = ['cover', 'folder', 'front', 'artwork', item, 'thumb', 'thumbnail', 'album']
-
-                const playlistHash = crypto.createHash('md5').update('playlist_' + itemPath).digest('hex')
-                const plThumbPath = join(thumbDir, `pl_${playlistHash}.jpg`)
-                const plCentralThumbPath = join(IMAGE_CACHE_DIR, `pl_${playlistHash}.jpg`)
-
-                let rawCoverPath: string | null = null
-                for (const name of commonCoverNames) {
-                  for (const ext of possibleImageExts) {
-                    const imgPath = join(itemPath, `${name}${ext}`)
-                    if (fs.existsSync(imgPath)) {
-                      rawCoverPath = imgPath
-                      break
-                    }
-                  }
-                  if (rawCoverPath) break
-                }
-
-                if (!rawCoverPath) {
+              if (!rawCoverPath) {
+                try {
+                  const subItems = fs.readdirSync(itemPath)
                   for (const subItem of subItems) {
                     if (possibleImageExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
                       rawCoverPath = join(itemPath, subItem)
                       break
                     }
                   }
-                }
-
-                if (rawCoverPath) {
-                  try {
-                    if (fs.existsSync(plThumbPath)) {
-                      thumbnailUrl = toMediaUrl(plThumbPath)
-                    } else if (fs.existsSync(plCentralThumbPath)) {
-                      thumbnailUrl = toMediaUrl(plCentralThumbPath)
-                    } else {
-                      const img = nativeImage.createFromPath(rawCoverPath)
-                      const resized = img.resize({ width: 200, height: 200, quality: 'good' })
-                      const jpegBuf = resized.toJPEG(80)
-                      try { fs.writeFileSync(plThumbPath, jpegBuf) } catch (e) {}
-                      try { fs.writeFileSync(plCentralThumbPath, jpegBuf) } catch (e) {}
-                      thumbnailUrl = toMediaUrl(plCentralThumbPath)
-                    }
-                  } catch (err) {
-                    thumbnailUrl = toMediaUrl(rawCoverPath)
-                  }
-                } else if (playlistTracks.length > 0 && playlistTracks[0].coverArt) {
-                  thumbnailUrl = toMediaUrl(playlistTracks[0].coverArt)
-                }
-
-                const plData = { name: item, path: itemPath, folderRoot, tracks: playlistTracks, thumbnail: thumbnailUrl }
-                playlists.push(plData)
-
-                // Cập nhật playlistsCache
-                playlistsCache[itemPath] = {
-                  mtime: stat.mtimeMs,
-                  subMtimes,
-                  data: plData
-                }
-                cacheModified = true
+                } catch (e) {}
               }
+
+              if (rawCoverPath) {
+                try {
+                  if (fs.existsSync(plThumbPath)) {
+                    thumbnailUrl = pathToFileURL(plThumbPath).href
+                  } else if (fs.existsSync(plCentralThumbPath)) {
+                    thumbnailUrl = pathToFileURL(plCentralThumbPath).href
+                  } else {
+                    const img = nativeImage.createFromPath(rawCoverPath)
+                    const resized = img.resize({ width: 200, height: 200, quality: 'good' })
+                    const jpegBuf = resized.toJPEG(80)
+                    try { fs.writeFileSync(plThumbPath, jpegBuf) } catch (e) {}
+                    try { fs.writeFileSync(plCentralThumbPath, jpegBuf) } catch (e) {}
+                    thumbnailUrl = pathToFileURL(plCentralThumbPath).href
+                  }
+                } catch (err) {
+                  thumbnailUrl = pathToFileURL(rawCoverPath).href
+                }
+              } else if (playlistTracks.length > 0 && playlistTracks[0].coverArt) {
+                thumbnailUrl = playlistTracks[0].coverArt
+              }
+
+              playlists.push({ name: item, path: itemPath, folderRoot, tracks: playlistTracks, thumbnail: thumbnailUrl })
             } else if (supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
               const trackData = await parseOrGetTrack(itemPath, item, stat, thumbDir)
               tracks.push(trackData)
@@ -1311,15 +1152,7 @@ if (!gotTheLock) {
       if (!existingDiskPaths.has(cachedPath)) {
         delete metadataCache[cachedPath]
         delete themeColorsCache[cachedPath]
-        delete themeColorsCache[toMediaUrl(cachedPath)]
-        cacheModified = true
-      }
-    }
-
-    // DỌN DẸP CACHE PLAYLIST: Loại bỏ các playlist không còn tồn tại trên ổ đĩa
-    for (const cachedPlPath of Object.keys(playlistsCache)) {
-      if (!fs.existsSync(cachedPlPath)) {
-        delete playlistsCache[cachedPlPath]
+        delete themeColorsCache[pathToFileURL(cachedPath).href]
         cacheModified = true
       }
     }
@@ -1327,7 +1160,6 @@ if (!gotTheLock) {
     if (cacheModified) {
       saveMetadataCache()
       saveThemeColorsCache()
-      savePlaylistsCache()
     }
 
     const userPlaylists = getUserPlaylists()
@@ -1355,9 +1187,12 @@ if (!gotTheLock) {
   ipcMain.handle('music:renamePlaylist', async (_, oldName, newName) => {
     const config = getConfig()
     const paths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
-    const safeNewName = sanitizeFolderName(newName)
-    if (!safeNewName) return { success: false, error: 'Tên playlist mới không hợp lệ!' }
     try {
+      const safeNewName = sanitizeDirectoryName(newName)
+      if (!safeNewName || safeNewName === 'Untitled') {
+        return { success: false, error: 'Tên playlist không hợp lệ!' }
+      }
+
       let targetRoot = paths[0]
       for (const p of paths) {
         if (fs.existsSync(join(p, oldName))) {
@@ -1367,15 +1202,16 @@ if (!gotTheLock) {
       }
       const oldDirPath = join(targetRoot, oldName)
       const newDirPath = join(targetRoot, safeNewName)
-      fs.renameSync(oldDirPath, newDirPath)
+      if (oldDirPath !== newDirPath) {
+        if (fs.existsSync(newDirPath)) {
+          return { success: false, error: 'Playlist với tên mới đã tồn tại!' }
+        }
+        fs.renameSync(oldDirPath, newDirPath)
+      }
       const exts = ['.jpg', '.png', '.jpeg', '.webp']
       for (const ext of exts) {
         const oldImgPath = join(newDirPath, `${oldName}${ext}`)
         if (fs.existsSync(oldImgPath)) fs.renameSync(oldImgPath, join(newDirPath, `${safeNewName}${ext}`))
-      }
-      if (playlistsCache[oldDirPath]) {
-        delete playlistsCache[oldDirPath]
-        savePlaylistsCache()
       }
       return { success: true }
     } catch (e: any) { return { success: false, error: e.message } }
@@ -1413,10 +1249,6 @@ if (!gotTheLock) {
       } catch (e) {}
 
       fs.copyFileSync(sourcePath, destPath)
-      if (playlistsCache[playlistPath]) {
-        delete playlistsCache[playlistPath]
-        savePlaylistsCache()
-      }
       return { success: true }
     } catch (e: any) { return { success: false, error: e.message } }
   })
@@ -1489,12 +1321,12 @@ if (!gotTheLock) {
         const img = nativeImage.createFromPath(updates.customImagePath)
         const resized = img.resize({ width: 300, height: 300, quality: 'good' })
         fs.writeFileSync(plCentralThumbPath, resized.toJPEG(85))
-        target.thumbnail = `${toMediaUrl(plCentralThumbPath)}?t=${Date.now()}`
+        target.thumbnail = `${pathToFileURL(plCentralThumbPath).href}?t=${Date.now()}`
       } catch (e) {
-        target.thumbnail = `${toMediaUrl(updates.customImagePath)}?t=${Date.now()}`
+        target.thumbnail = `${pathToFileURL(updates.customImagePath).href}?t=${Date.now()}`
       }
     } else if (updates.thumbnail !== undefined) {
-      target.thumbnail = toMediaUrl(updates.thumbnail)
+      target.thumbnail = updates.thumbnail
     }
 
     target.updatedAt = Date.now()
@@ -1513,9 +1345,9 @@ if (!gotTheLock) {
       const resized = img.resize({ width: 300, height: 300, quality: 'good' })
       const buffer = resized.toJPEG(85)
       const dataUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`
-      return { success: true, filePath: imagePath, dataUrl, previewUrl: toMediaUrl(imagePath) }
+      return { success: true, filePath: imagePath, dataUrl, previewUrl: pathToFileURL(imagePath).href }
     } catch (e) {
-      return { success: true, filePath: imagePath, dataUrl: toMediaUrl(imagePath), previewUrl: toMediaUrl(imagePath) }
+      return { success: true, filePath: imagePath, dataUrl: pathToFileURL(imagePath).href, previewUrl: pathToFileURL(imagePath).href }
     }
   })
 
@@ -1537,9 +1369,9 @@ if (!gotTheLock) {
         const img = nativeImage.createFromPath(imagePath)
         const resized = img.resize({ width: 200, height: 200, quality: 'good' })
         fs.writeFileSync(plCentralThumbPath, resized.toJPEG(80))
-        target.thumbnail = `${toMediaUrl(plCentralThumbPath)}?t=${Date.now()}`
+        target.thumbnail = `${pathToFileURL(plCentralThumbPath).href}?t=${Date.now()}`
       } catch (e) {
-        target.thumbnail = `${toMediaUrl(imagePath)}?t=${Date.now()}`
+        target.thumbnail = `${pathToFileURL(imagePath).href}?t=${Date.now()}`
       }
       target.updatedAt = Date.now()
       saveUserPlaylists(playlists)
@@ -1603,10 +1435,9 @@ if (!gotTheLock) {
           const metadata = await mm.parseFile(itemPath)
           const albumName = metadata.common.album
           if (albumName && albumName.trim() !== '') {
-            const safeAlbumName = sanitizeFolderName(albumName)
-            if (!safeAlbumName) continue
+            const safeAlbumName = sanitizeDirectoryName(albumName) || 'Unknown Album'
             const albumDirPath = join(rootPath, safeAlbumName)
-            if (!fs.existsSync(albumDirPath)) fs.mkdirSync(albumDirPath)
+            if (!fs.existsSync(albumDirPath)) fs.mkdirSync(albumDirPath, { recursive: true })
             if (metadata.common.picture && metadata.common.picture.length > 0) {
               const imgExt = metadata.common.picture[0].format.split('/')[1] || 'jpg'
               const imgDest = join(albumDirPath, `${safeAlbumName}.${imgExt}`)
@@ -1648,9 +1479,12 @@ if (!gotTheLock) {
     try {
       if (!audioFilePath) return { success: false, error: 'Đường dẫn rỗng' }
       if (audioFilePath.startsWith('http')) return { success: false, error: 'Chỉ hỗ trợ file cục bộ' }
-      const rawPath = resolveToLocalPath(audioFilePath)
+      let rawPath = audioFilePath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') {
+        try { rawPath = decodeURIComponent(rawPath) } catch (e) {}
+      }
       if (fs.existsSync(rawPath)) {
-        const fileBuffer = await fs.promises.readFile(rawPath)
+        const fileBuffer = fs.readFileSync(rawPath)
         let sampleRate: number | undefined = undefined
         let bitDepth: number | undefined = undefined
         try {
@@ -1751,7 +1585,7 @@ if (!gotTheLock) {
           try { fs.writeFileSync(centralThumbPath, jpegBuf) } catch (e) {}
           try { fs.writeFileSync(localThumbPath, jpegBuf) } catch (e) {}
           
-          coverUrl = `${toMediaUrl(centralThumbPath)}?t=${Date.now()}`
+          coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
         } catch (e) {}
       } else {
         // Kiểm tra xem file âm thanh có ảnh nhúng mới cập nhật hay không
@@ -1763,30 +1597,33 @@ if (!gotTheLock) {
             const jpegBuf = resized.toJPEG(80)
             try { fs.writeFileSync(centralThumbPath, jpegBuf) } catch (e) {}
             try { fs.writeFileSync(localThumbPath, jpegBuf) } catch (e) {}
-            coverUrl = `${toMediaUrl(centralThumbPath)}?t=${Date.now()}`
+            coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
           }
         } catch (err) {}
       }
 
       if (!coverUrl) {
         if (fs.existsSync(centralThumbPath)) {
-          coverUrl = `${toMediaUrl(centralThumbPath)}?t=${Date.now()}`
+          coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
         } else if (fs.existsSync(localThumbPath)) {
-          coverUrl = `${toMediaUrl(localThumbPath)}?t=${Date.now()}`
+          coverUrl = `${pathToFileURL(localThumbPath).href}?t=${Date.now()}`
         }
       }
 
       // Cập nhật ngay vào Metadata Cache
       const stat = fs.statSync(rawPath)
       const existingCached = metadataCache[rawPath]?.data || {}
+      const targetArtist = newTags.artist || existingCached.artist || 'Unknown'
+      const targetArtists = splitArtistString(targetArtist)
       metadataCache[rawPath] = {
         mtime: stat.mtimeMs,
         data: {
           ...existingCached,
           id: rawPath,
-          filePath: toMediaUrl(rawPath),
+          filePath: pathToFileURL(rawPath).href,
           title: newTags.title || existingCached.title,
-          artist: newTags.artist || existingCached.artist,
+          artist: targetArtist,
+          artists: targetArtists.length > 0 ? targetArtists : [targetArtist],
           album: newTags.album || existingCached.album,
           genre: newTags.genre || existingCached.genre,
           lyrics: newTags.lyrics || existingCached.lyrics,
@@ -1801,11 +1638,12 @@ if (!gotTheLock) {
           const libData = JSON.parse(fs.readFileSync(LIBRARY_CACHE_PATH, 'utf-8'))
           if (libData && Array.isArray(libData.tracks)) {
             for (let i = 0; i < libData.tracks.length; i++) {
-              if (libData.tracks[i].id === rawPath || libData.tracks[i].filePath === toMediaUrl(rawPath) || libData.tracks[i].filePath === pathToFileURL(rawPath).href) {
+              if (libData.tracks[i].id === rawPath || libData.tracks[i].filePath === pathToFileURL(rawPath).href) {
                 libData.tracks[i] = {
                   ...libData.tracks[i],
                   title: newTags.title || libData.tracks[i].title,
-                  artist: newTags.artist || libData.tracks[i].artist,
+                  artist: targetArtist,
+                  artists: targetArtists.length > 0 ? targetArtists : [targetArtist],
                   album: newTags.album || libData.tracks[i].album,
                   genre: newTags.genre || libData.tracks[i].genre,
                   lyrics: newTags.lyrics || libData.tracks[i].lyrics,
@@ -1821,7 +1659,7 @@ if (!gotTheLock) {
       // Nếu thay đổi ảnh bìa, xóa cache themeColors cũ để nạp màu mới
       if (rawImagePath) {
         delete themeColorsCache[rawPath]
-        delete themeColorsCache[toMediaUrl(rawPath)]
+        delete themeColorsCache[pathToFileURL(rawPath).href]
         saveThemeColorsCache()
       }
 
@@ -1878,24 +1716,21 @@ if (!gotTheLock) {
     return filePaths[0]
   })
 
-  // 8. Xóa bài hát (Đưa vào Recycle Bin an toàn)
-  ipcMain.handle('music:deleteTrack', async (_, trackPath: string, _deletePermanently: boolean = false) => {
+  // 8. Xóa bài hát (Xóa file vĩnh viễn khỏi ổ đĩa - Không vào Recycle Bin)
+  ipcMain.handle('music:deleteTrack', async (_, trackPath: string, _deletePermanently: boolean = true) => {
     try {
-      const rawPath = resolveToLocalPath(trackPath)
+      let rawPath = trackPath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') {
+        rawPath = decodeURIComponent(rawPath)
+        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+        rawPath = rawPath.replace(/\//g, '\\')
+      }
 
       if (fs.existsSync(rawPath)) {
-        try {
-          await shell.trashItem(rawPath)
-        } catch {
-          fs.unlinkSync(rawPath)
-        }
+        fs.unlinkSync(rawPath)
         const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
         if (fs.existsSync(lrcPath)) {
-          try {
-            await shell.trashItem(lrcPath)
-          } catch {
-            try { fs.unlinkSync(lrcPath) } catch (e) {}
-          }
+          try { fs.unlinkSync(lrcPath) } catch (e) {}
         }
       }
 
@@ -1910,19 +1745,13 @@ if (!gotTheLock) {
         saveThemeColorsCache()
       }
 
-      const parentDir = dirname(rawPath)
-      if (playlistsCache[parentDir]) {
-        delete playlistsCache[parentDir]
-        savePlaylistsCache()
-      }
-
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e.message }
     }
   })
 
-  // 9. Xóa Playlist (Đưa thư mục Playlist vào Recycle Bin an toàn)
+  // 9. Xóa Playlist (Xóa vĩnh viễn thư mục Playlist và toàn bộ tệp - Không vào Recycle Bin)
   ipcMain.handle('music:deletePlaylist', async (_, playlistName: string) => {
     try {
       const config = getConfig()
@@ -1935,15 +1764,8 @@ if (!gotTheLock) {
       for (const dir of searchDirs) {
         const playlistFolder = join(dir, playlistName)
         if (fs.existsSync(playlistFolder)) {
-          try {
-            await shell.trashItem(playlistFolder)
-          } catch {
-            fs.rmSync(playlistFolder, { recursive: true, force: true })
-          }
+          fs.rmSync(playlistFolder, { recursive: true, force: true })
           deleted = true
-        }
-        if (playlistsCache[playlistFolder]) {
-          delete playlistsCache[playlistFolder]
         }
       }
 
@@ -1965,7 +1787,6 @@ if (!gotTheLock) {
       }
       saveMetadataCache()
       saveThemeColorsCache()
-      savePlaylistsCache()
 
       return { success: true }
     } catch (e: any) {
@@ -1997,14 +1818,12 @@ if (!gotTheLock) {
     const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory'] })
     if (canceled || filePaths.length === 0) return []
     const folderPath = filePaths[0]
-    const files = fs.readdirSync(folderPath)
-    
-    const supportedExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.mp4']
-    const audioFiles = files.filter(file => supportedExtensions.some(ext => file.toLowerCase().endsWith(ext)))
+    const supportedExtensions = SUPPORTED_AUDIO_EXTS
+    const audioFiles = getAudioFilesInDirectoryRecursive(folderPath, supportedExtensions)
     const tracks: any[] = []
     
-    for (const file of audioFiles) {
-      const filePath = join(folderPath, file)
+    for (const filePath of audioFiles) {
+      const file = path.basename(filePath)
       try {
         const metadata = await mm.parseFile(filePath)
         let coverBase64 = null
@@ -2012,14 +1831,16 @@ if (!gotTheLock) {
           // const buffer = Buffer.from(picture.data)
           coverBase64 = null
         }
+        const { artist, artists } = extractArtists(metadata)
         tracks.push({
           id: filePath,
-          filePath: toMediaUrl(filePath),
-          title: metadata.common.title || file,
-          artist: metadata.common.artist || 'Unknown Artist',
+          filePath: pathToFileURL(filePath).href,
+          title: metadata.common.title || file.replace(/\.[^/.]+$/, ""),
+          artist: artist,
+          artists: artists,
           album: metadata.common.album || 'Unknown Album',
           duration: metadata.format.duration,
-          format: metadata.format.container || 'Unknown',
+          format: metadata.format.container || file.split('.').pop()?.toUpperCase() || 'Unknown',
           bitrate: metadata.format.bitrate,
           sampleRate: metadata.format.sampleRate,
           bitDepth: metadata.format.bitsPerSample,
@@ -2097,7 +1918,7 @@ if (!gotTheLock) {
         console.error('Lỗi nhúng metadata phụ:', metaErr)
       }
 
-      return { success: true, localPath: toMediaUrl(savePath) }
+      return { success: true, localPath: pathToFileURL(savePath).href }
     } catch (err: any) {
       return { success: false, error: err.message }
     }
@@ -2271,7 +2092,7 @@ if (!gotTheLock) {
           }
 
           const newTrackObj = {
-            id: destPath, filePath: toMediaUrl(destPath), title, artist,
+            id: destPath, filePath: pathToFileURL(destPath).href, title, artist,
             album, duration: metadata?.format.duration || 0,
             format: metadata?.format.container || ext.toUpperCase(), bitrate: metadata?.format.bitrate,
             sampleRate: metadata?.format.sampleRate, bitDepth: metadata?.format.bitsPerSample, lossless: metadata?.format.lossless, coverArt: null, isCloud: false
@@ -2279,7 +2100,7 @@ if (!gotTheLock) {
           downloadedTracks.push(newTrackObj)
           existingTracks.push(newTrackObj)
         } catch (e) {
-          downloadedTracks.push({ ...file, id: destPath, filePath: toMediaUrl(destPath), isCloud: false })
+          downloadedTracks.push({ ...file, id: destPath, filePath: pathToFileURL(destPath).href, isCloud: false })
         }
       }
       return { success: true, tracks: downloadedTracks }
@@ -2291,17 +2112,18 @@ if (!gotTheLock) {
   // Lấy ảnh bìa từ bài hát đầu tiên trong Playlist
   ipcMain.handle('music:extractPlaylistThumbnail', async (_, playlistName) => {
     const rootPath = getConfig().libraryPath
-    const playlistPath = join(rootPath, playlistName)
+    const safePlaylistName = sanitizeDirectoryName(playlistName)
+    const playlistPath = join(rootPath, safePlaylistName)
     
     try {
-      const items = fs.readdirSync(playlistPath)
       const supportedExts = SUPPORTED_AUDIO_EXTS
+      const allAudioFiles = getAudioFilesInDirectoryRecursive(playlistPath, supportedExts)
       
-      // Tìm bài hát đầu tiên có đuôi hỗ trợ
-      const firstTrack = items.find(item => supportedExts.some(ext => item.toLowerCase().endsWith(ext)))
+      // Tìm bài hát đầu tiên có đuôi hỗ trợ (kể cả trong thư mục con)
+      const firstTrack = allAudioFiles[0]
       if (!firstTrack) return { success: false, error: 'Playlist đang trống, không có bài hát nào!' }
 
-      const trackPath = join(playlistPath, firstTrack)
+      const trackPath = firstTrack
       const metadata = await mm.parseFile(trackPath)
 
       if (metadata.common.picture && metadata.common.picture.length > 0) {
@@ -2317,10 +2139,6 @@ if (!gotTheLock) {
 
         // Lưu ảnh từ thẻ metadata ra file
         fs.writeFileSync(destPath, Buffer.from(metadata.common.picture[0].data))
-        if (playlistsCache[playlistPath]) {
-          delete playlistsCache[playlistPath]
-          savePlaylistsCache()
-        }
         return { success: true }
       }
       return { success: false, error: 'Bài hát đầu tiên trong thư mục không có thẻ ảnh bìa!' }
@@ -2364,18 +2182,32 @@ if (!gotTheLock) {
 
       // 1. Tìm kiếm ID bài hát (Track ID)
       const cleanTitle = title.replace(/\([^)]*\)/g, '').trim()
-      let searchUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artist)}&usertoken=${token}`
-      
-      let searchRes = await fetch(searchUrl, { headers: mxmHeaders })
-      let searchData = await searchRes.json()
+      const searchTrack = async (artStr: string) => {
+        let url = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artStr)}&usertoken=${token}`
+        let res = await fetch(url, { headers: mxmHeaders })
+        let data = await res.json()
 
-      // FIX 1: Tự động làm mới Token nếu bị Musixmatch báo hết hạn (Lỗi 401)
-      if (searchData.message?.header?.status_code === 401) {
-        mxmToken = null // Xóa token cũ
-        token = await getMusixmatchToken() // Xin lại token mới
-        searchUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artist)}&usertoken=${token}`
-        searchRes = await fetch(searchUrl, { headers: mxmHeaders })
-        searchData = await searchRes.json()
+        if (data.message?.header?.status_code === 401) {
+          mxmToken = null
+          token = await getMusixmatchToken()
+          url = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artStr)}&usertoken=${token}`
+          res = await fetch(url, { headers: mxmHeaders })
+          data = await res.json()
+        }
+        return data
+      }
+
+      let searchData = await searchTrack(artist)
+
+      // Nếu tìm với nghệ sĩ kết hợp không thấy, thử với nghệ sĩ chính đầu tiên
+      if ((!searchData.message?.body?.track_list || searchData.message.body.track_list.length === 0) && (artist.includes(',') || /feat|ft|&|;|x|\//i.test(artist))) {
+        const primaryArtist = splitArtistString(artist)[0]
+        if (primaryArtist && primaryArtist.toLowerCase() !== artist.toLowerCase()) {
+          const fallbackData = await searchTrack(primaryArtist)
+          if (fallbackData.message?.body?.track_list && fallbackData.message.body.track_list.length > 0) {
+            searchData = fallbackData
+          }
+        }
       }
 
       if (searchData.message?.header?.status_code !== 200 || !searchData.message?.body?.track_list || searchData.message.body.track_list.length === 0) {
@@ -2419,8 +2251,9 @@ if (!gotTheLock) {
     }
 
     // Nếu có truyền tên Playlist vào, chép vào thư mục Playlist, ngược lại chép vào Thư viện gốc
-    const destFolder = targetSubFolder ? join(rootPath, targetSubFolder) : rootPath
-    if (!fs.existsSync(destFolder)) fs.mkdirSync(destFolder)
+    const safeTargetSubFolder = targetSubFolder ? sanitizeDirectoryName(targetSubFolder) : null
+    const destFolder = safeTargetSubFolder ? join(rootPath, safeTargetSubFolder) : rootPath
+    if (!fs.existsSync(destFolder)) fs.mkdirSync(destFolder, { recursive: true })
 
     // Mở hộp thoại chọn nhiều file nhạc
     const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -2456,11 +2289,14 @@ if (!gotTheLock) {
           coverBase64 = null
         }
 
+        const { artist, artists } = extractArtists(metadata)
+
         importedTracks.push({
           id: destPath,
-          filePath: toMediaUrl(destPath),
+          filePath: pathToFileURL(destPath).href,
           title: metadata.common.title || fileName.replace(/\.[^/.]+$/, ""),
-          artist: metadata.common.artist || 'Unknown Artist',
+          artist: artist,
+          artists: artists,
           album: metadata.common.album || 'Unknown Album',
           duration: metadata.format.duration,
           format: metadata.format.container || fileName.split('.').pop()?.toUpperCase(),
@@ -2472,13 +2308,8 @@ if (!gotTheLock) {
           isCloud: false
         })
       } catch (err) {
-        importedTracks.push({ id: destPath, filePath: toMediaUrl(destPath), title: fileName, isCloud: false })
+        importedTracks.push({ id: destPath, filePath: pathToFileURL(destPath).href, title: fileName, isCloud: false })
       }
-    }
-
-    if (targetSubFolder && playlistsCache[destFolder]) {
-      delete playlistsCache[destFolder]
-      savePlaylistsCache()
     }
 
     return { success: true, tracks: importedTracks }
@@ -2491,7 +2322,12 @@ if (!gotTheLock) {
     try {
       if (filePath.startsWith('http')) return null
 
-      let rawPath = resolveToLocalPath(filePath)
+      let rawPath = filePath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') {
+        rawPath = decodeURIComponent(rawPath)
+        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+        rawPath = rawPath.replace(/\//g, '\\')
+      }
 
       // 1. Khởi tạo thư mục proxy ảnh
       const rootPath = getConfig().libraryPath
@@ -2505,7 +2341,7 @@ if (!gotTheLock) {
 
       // 3. Nếu ảnh đã cache trước đó, lập tức trả về Local URL để giải phóng RAM
       if (fs.existsSync(thumbPath)) {
-        return toMediaUrl(thumbPath)
+        return pathToFileURL(thumbPath).href
       }
 
       // 4. Nếu chưa có, trích xuất thumbnail 128px và lưu xuống ổ cứng
@@ -2514,7 +2350,7 @@ if (!gotTheLock) {
         const img = nativeImage.createFromBuffer(Buffer.from(metadata.common.picture[0].data))
         const resized = img.resize({ width: 128, height: 128, quality: 'good' })
         fs.writeFileSync(thumbPath, resized.toJPEG(80))
-        return toMediaUrl(thumbPath)
+        return pathToFileURL(thumbPath).href
       }
     } catch (e) {}
     return null
@@ -2549,8 +2385,8 @@ if (!gotTheLock) {
     const rootPath = getConfig().libraryPath
     if (!rootPath || !fs.existsSync(rootPath)) return { success: false, error: 'Chưa cấu hình thư mục thư viện!' }
     
-    const safeName = sanitizeFolderName(playlistName)
-    if (!safeName) return { success: false, error: 'Tên playlist không hợp lệ!' }
+    const safeName = sanitizeDirectoryName(playlistName)
+    if (!safeName || safeName === 'Untitled') return { success: false, error: 'Tên playlist không hợp lệ!' }
 
     const dirPath = join(rootPath, safeName)
     if (fs.existsSync(dirPath)) {
@@ -2576,7 +2412,8 @@ if (!gotTheLock) {
 
     if (!fs.existsSync(rawPath)) return { success: false, error: 'File nguồn không tồn tại!' }
 
-    const playlistDir = join(rootPath, playlistName)
+    const safePlaylistName = sanitizeDirectoryName(playlistName)
+    const playlistDir = join(rootPath, safePlaylistName)
     if (!fs.existsSync(playlistDir)) fs.mkdirSync(playlistDir, { recursive: true })
 
     const fileName = path.basename(rawPath)
@@ -2598,11 +2435,6 @@ if (!gotTheLock) {
         try { 
           fs.linkSync(lrcSource, lrcDest) 
         } catch (e) {}
-      }
-
-      if (playlistsCache[playlistDir]) {
-        delete playlistsCache[playlistDir]
-        savePlaylistsCache()
       }
 
       return { success: true }
@@ -3042,13 +2874,13 @@ if (!gotTheLock) {
     if (!rootPath) return { success: false, error: 'Chưa cấu hình Thư mục thư viện' };
     
     // Tạo thư mục Album (Nếu không có tên Album thì lưu vào thư mục Singles)
-    const safeAlbum = sanitizeFolderName(track.album || 'Singles') || 'Singles';
+    const safeAlbum = sanitizeDirectoryName(track.album || 'Singles') || 'Singles';
     const albumPath = join(rootPath, safeAlbum);
     if (!fs.existsSync(albumPath)) {
       fs.mkdirSync(albumPath, { recursive: true });
     }
 
-    const safeTitle = (track.title || 'Unknown').replace(/[<>:"\/\\|?*]/g, '_').trim();
+    const safeTitle = sanitizeFileName(track.title || 'Unknown') || 'Unknown';
     let destPath = join(albumPath, `${safeTitle}.mp3`);
     
     // Kiểm tra trùng lặp và hiện Hộp thoại (Dialog)
@@ -3096,7 +2928,7 @@ if (!gotTheLock) {
       }
 
       await ytdlp(downloadTarget, downloadOptions as any);
-      return { success: true, localPath: toMediaUrl(destPath) };
+      return { success: true, localPath: pathToFileURL(destPath).href };
     } catch (e: any) {
       return { success: false, error: e.message };
     }
@@ -3714,6 +3546,11 @@ if (!gotTheLock) {
   globalShortcut.register('MediaPlayPause', () => sendShortcut('play-pause'))
   globalShortcut.register('MediaNextTrack', () => sendShortcut('next'))
   globalShortcut.register('MediaPreviousTrack', () => sendShortcut('prev'))
+  
+  // Lưu ý: Đăng ký 2 phím Volume dưới đây sẽ chặn tính năng tăng/giảm âm lượng tổng của Windows/macOS,
+  // và chỉ tăng/giảm âm lượng bên trong thanh trượt của ứng dụng.
+  globalShortcut.register('VolumeUp', () => sendShortcut('vol-up'))
+  globalShortcut.register('VolumeDown', () => sendShortcut('vol-down'))
 
   // ==========================================
   // KHỞI TẠO SYSTEM TRAY (KHAY HỆ THỐNG)
@@ -3811,4 +3648,3 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
 })
-}
