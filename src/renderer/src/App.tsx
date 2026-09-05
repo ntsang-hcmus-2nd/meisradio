@@ -2753,6 +2753,16 @@ export default function App() {
     return getSortedTracks(filtered)
   }, [activeGenre, searchQuery, sortField, sortOrder])
 
+  const matchedPlaylists = useMemo(() => {
+    const lowerQuery = searchQuery.toLowerCase().trim()
+    return lowerQuery ? playlists.filter(pl => pl.name.toLowerCase().includes(lowerQuery)) : playlists
+  }, [playlists, searchQuery])
+
+  const matchedUserPlaylists = useMemo(() => {
+    const lowerQuery = searchQuery.toLowerCase().trim()
+    return lowerQuery ? userPlaylists.filter(pl => pl.name.toLowerCase().includes(lowerQuery)) : userPlaylists
+  }, [userPlaylists, searchQuery])
+
   // Lấy Sample Rate chuẩn của bài hát hiện tại (Mặc định 44100Hz nếu không rõ)
   const currentSampleRate = currentTrack?.sampleRate && currentTrack.sampleRate >= 8000 && currentTrack.sampleRate <= 384000 
     ? currentTrack.sampleRate 
@@ -5969,11 +5979,6 @@ export default function App() {
 
                   <div className="space-y-8">
                     {(() => {
-                      const lowerQuery = searchQuery.toLowerCase().trim()
-                      const matchedUserPlaylists = searchQuery 
-                        ? userPlaylists.filter(pl => pl.name.toLowerCase().includes(lowerQuery))
-                        : userPlaylists
-
                       if (matchedUserPlaylists.length === 0) {
                         return (
                           <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
@@ -6316,8 +6321,6 @@ export default function App() {
                     )}
                   </div>
                   {(() => {
-                    const lowerQuery = searchQuery.toLowerCase().trim()
-                    const matchedPlaylists = searchQuery ? playlists.filter(pl => pl.name.toLowerCase().includes(lowerQuery)) : playlists
                     const matchedSongs = searchQuery ? processedLibraryTracks : []
 
                     if (!searchQuery && playlists.length === 0) {
