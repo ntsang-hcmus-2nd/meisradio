@@ -267,6 +267,30 @@ export interface TranslationDictionary {
       core: string
       coreDesc: string
     }
+    discordRpc: {
+      title: string
+      desc: string
+      enable: string
+      enableDesc: string
+      clientIdTitle: string
+      clientIdDesc: string
+      clientIdPlaceholder: string
+      resetDefault: string
+      showDetails: string
+      showDetailsDesc: string
+      showTime: string
+      showTimeDesc: string
+      showCover: string
+      showCoverDesc: string
+      showQuality: string
+      showQualityDesc: string
+      showButtons: string
+      showButtonsDesc: string
+      showIdle: string
+      showIdleDesc: string
+      connectedStatus: string
+      disconnectedStatus: string
+    }
   }
   player: {
     noTrack: string

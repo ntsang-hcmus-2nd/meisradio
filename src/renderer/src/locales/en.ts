@@ -266,6 +266,30 @@ export const en: TranslationDictionary = {
       liteDesc: 'Battery saver mode: disables backdrop blur and visualizers, optimized for laptops and iGPUs.',
       core: 'Minimal Core',
       coreDesc: 'Maximum performance, zero album art decoding, offline only.'
+    },
+    discordRpc: {
+      title: 'Discord Rich Presence Activity Status',
+      desc: 'Display current playing song, artist, live progress time, and album artwork on your Discord profile.',
+      enable: 'Enable Discord Rich Presence',
+      enableDesc: 'Allow Mei\'s Radio to connect to the Discord Desktop client running on your computer',
+      clientIdTitle: 'Discord Application ID (Client ID)',
+      clientIdDesc: 'Enter Client ID from Discord Developer Portal if you want a custom app name on Discord (Defaults to built-in ID).',
+      clientIdPlaceholder: '1539993441851670589',
+      resetDefault: 'Reset to Default',
+      showDetails: 'Show Song Title & Artist',
+      showDetailsDesc: 'Display song title, artist, and album name',
+      showTime: 'Show App Elapsed Time',
+      showTimeDesc: 'Display time elapsed since the application was opened (App Uptime / Elapsed time)',
+      showCover: 'Show Album Artwork',
+      showCoverDesc: 'Display online album artwork (YouTube, SoundCloud, Drive) or Mei\'s Radio logo',
+      showQuality: 'Show Audio Quality & Format',
+      showQualityDesc: 'Display audio format details (FLAC 24-bit/96kHz, MP3 320kbps, etc.)',
+      showButtons: 'Show Action Buttons',
+      showButtonsDesc: 'Display buttons to listen on YouTube Music / SoundCloud and explore Mei\'s Radio',
+      showIdle: 'Show Idle Status',
+      showIdleDesc: 'Display browsing status when the app is open but no song is currently playing',
+      connectedStatus: 'Connected to Discord',
+      disconnectedStatus: 'Not connected to Discord (Please launch Discord Desktop)'
     }
   },
   player: {

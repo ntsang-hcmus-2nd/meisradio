@@ -14,6 +14,7 @@ import axios from 'axios'
 import http from 'http'
 import { MpvManager } from './MpvManager'
 import { writeFlacMetadata } from './flacMetadata'
+import { DiscordRpcManager, DiscordRpcConfig, DiscordPresencePayload, DEFAULT_DISCORD_CLIENT_ID } from './DiscordRpcManager'
 import { 
   getScUserProfile, 
   getScTrendingCharts, 
@@ -26,7 +27,170 @@ import {
 
 export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma']
 
+/**
+ * Chuẩn hóa tên thư mục, đảm bảo không kết thúc bằng dấu chấm hoặc khoảng trắng (Lỗi Windows Win32)
+ * và không chứa các ký tự đặc biệt bị cấm.
+ */
+export function sanitizeDirectoryName(name: string): string {
+  if (!name || typeof name !== 'string') return 'Untitled'
+  let safe = name.replace(/[<>:"\/\\|?*\x00-\x1f]/g, '').trim()
+  safe = safe.replace(/[\s.]+$/, '').trim()
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(safe)) {
+    safe += '_folder'
+  }
+  return safe || 'Untitled'
+}
+
+/**
+ * Chuẩn hóa tên tệp, loại bỏ ký tự cấm và dấu chấm/khoảng trắng cuối tên.
+ */
+export function sanitizeFileName(name: string): string {
+  if (!name || typeof name !== 'string') return 'track'
+  let safe = name.replace(/[<>:"\/\\|?*\x00-\x1f]/g, '').trim()
+  safe = safe.replace(/[\s.]+$/, '').trim()
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(safe)) {
+    safe += '_file'
+  }
+  return safe || 'track'
+}
+
+/**
+ * Quét đệ quy toàn bộ tệp âm thanh có định dạng hỗ trợ trong thư mục và mọi thư mục con
+ */
+export function getAudioFilesInDirectoryRecursive(dir: string, supportedExts: string[] = SUPPORTED_AUDIO_EXTS): string[] {
+  const audioFiles: string[] = []
+  
+  function scan(currentDir: string) {
+    try {
+      const entries = fs.readdirSync(currentDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.name === '.thumbnails' || entry.name.startsWith('.')) continue
+        const fullPath = join(currentDir, entry.name)
+        if (entry.isDirectory()) {
+          scan(fullPath)
+        } else if (entry.isFile()) {
+          const lowerName = entry.name.toLowerCase()
+          if (supportedExts.some(ext => lowerName.endsWith(ext))) {
+            audioFiles.push(fullPath)
+          }
+        }
+      }
+    } catch (err) {}
+  }
+
+  scan(dir)
+  return audioFiles
+}
+
+/**
+ * Danh sách các nghệ sĩ / ban nhạc nổi tiếng có chứa ký tự đặc biệt (dấu gạch chéo, dấu phẩy, &)
+ * cần được bảo vệ để không bị phân tách nhầm.
+ */
+export const PRESERVED_ARTIST_NAMES = [
+  'AC/DC',
+  'Tyler, The Creator',
+  'Earth, Wind & Fire',
+  'Simon & Garfunkel',
+  'Hall & Oates',
+  'Daryl Hall & John Oates',
+  'Crosby, Stills, Nash & Young',
+  'Emerson, Lake & Palmer',
+  'Blood, Sweat & Tears',
+  'Brooks & Dunn',
+  'Bell, Book & Candle',
+  'K/DA',
+  'Panic! At The Disco'
+]
+
+/**
+ * Phân tách chuỗi tên nghệ sĩ thành mảng danh sách từng nghệ sĩ độc lập
+ */
+export function splitArtistString(raw: string): string[] {
+  if (!raw || typeof raw !== 'string') return []
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'unknown artist') {
+    return []
+  }
+
+  for (const preserved of PRESERVED_ARTIST_NAMES) {
+    if (trimmed.toLowerCase() === preserved.toLowerCase()) {
+      return [preserved]
+    }
+  }
+
+  let working = trimmed
+  const placeholders: { token: string; original: string }[] = []
+  PRESERVED_ARTIST_NAMES.forEach((preserved, idx) => {
+    const regex = new RegExp(preserved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+    if (regex.test(working)) {
+      const token = `__PRESERVED_ARTIST_${idx}__`
+      working = working.replace(regex, token)
+      placeholders.push({ token, original: preserved })
+    }
+  })
+
+  // Chuẩn hóa định dạng feat / ft trong ngoặc: (feat. X) -> feat. X
+  working = working.replace(/[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]\}]+)[\)\]\}]/gi, ' feat. $1')
+
+  // Tách bằng các ký hiệu phân cách phổ biến
+  const splitRegex = /(?:\s*;\s*|\0+|\s*[\/\\]\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX]\s+|,\s*)/i
+
+  const parts = working.split(splitRegex)
+  const result: string[] = []
+
+  for (let part of parts) {
+    for (const p of placeholders) {
+      part = part.replace(new RegExp(p.token, 'g'), p.original)
+    }
+    const clean = part.trim().replace(/^[\(\[\{]/, '').replace(/[\)\]\}]$/, '').trim()
+    if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
+      if (!result.some(existing => existing.toLowerCase() === clean.toLowerCase())) {
+        result.push(clean)
+      }
+    }
+  }
+
+  return result.length > 0 ? result : [trimmed]
+}
+
+/**
+ * Trích xuất danh sách nghệ sĩ từ music-metadata (hỗ trợ cả metadata.common.artists và metadata.common.artist)
+ */
+export function extractArtists(metadata: any): { artist: string; artists: string[] } {
+  const rawArtistsList: string[] = []
+
+  if (Array.isArray(metadata?.common?.artists) && metadata.common.artists.length > 0) {
+    for (const a of metadata.common.artists) {
+      if (typeof a === 'string' && a.trim()) rawArtistsList.push(a.trim())
+    }
+  }
+
+  if (rawArtistsList.length === 0 && typeof metadata?.common?.artist === 'string' && metadata.common.artist.trim()) {
+    rawArtistsList.push(metadata.common.artist.trim())
+  }
+
+  const parsedArtists: string[] = []
+  for (const rawItem of rawArtistsList) {
+    const split = splitArtistString(rawItem)
+    for (const s of split) {
+      if (s && !parsedArtists.some(ex => ex.toLowerCase() === s.toLowerCase())) {
+        parsedArtists.push(s)
+      }
+    }
+  }
+
+  const mainArtist = (metadata?.common?.artist && metadata.common.artist.trim())
+    ? metadata.common.artist.trim()
+    : (parsedArtists.length > 0 ? parsedArtists.join(', ') : 'Unknown')
+
+  return {
+    artist: mainArtist,
+    artists: parsedArtists.length > 0 ? parsedArtists : (mainArtist !== 'Unknown' ? [mainArtist] : [])
+  }
+}
+
 let mpvManager: MpvManager | null = null
+let discordRpcManager: DiscordRpcManager | null = null
 
 // Hàm tìm thư mục chứa binary (ffmpeg, ffprobe, mpv) đa môi trường (Dev, Packaged, Portable)
 export function getBinaryDir(): string {
@@ -305,12 +469,36 @@ function getConfig() {
       const rawPaths = Array.isArray(config.libraryPaths) ? config.libraryPaths : (config.libraryPath ? [config.libraryPath] : [])
       config.libraryPaths = rawPaths.filter((p: any) => typeof p === 'string' && p.trim() !== '')
       config.libraryPath = config.libraryPaths[0] || null
+
+      if (!config.discordRpc) {
+        config.discordRpc = {
+          enabled: true,
+          clientId: DEFAULT_DISCORD_CLIENT_ID,
+          showDetails: true,
+          showTime: true,
+          showCover: true,
+          showQuality: true,
+          showButtons: true,
+          showIdle: true
+        }
+      }
+
       return config
     }
   } catch (e) {}
   return { 
     libraryPath: null, libraryPaths: [], crossfadeEnabled: false, crossfadeDuration: 3, 
-    volume: 1, eqBands: null, appMode: 'default'
+    volume: 1, eqBands: null, appMode: 'default',
+    discordRpc: {
+      enabled: true,
+      clientId: DEFAULT_DISCORD_CLIENT_ID,
+      showDetails: true,
+      showTime: true,
+      showCover: true,
+      showQuality: true,
+      showButtons: true,
+      showIdle: true
+    }
   }
 }
 
@@ -476,6 +664,7 @@ function createWindow(): void {
   app.on('before-quit', () => {
     isQuitting = true
     if (mpvManager) mpvManager.killAll()
+    if (discordRpcManager) discordRpcManager.destroy()
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -490,6 +679,35 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
 
   // ==========================================
+  // DISCORD RICH PRESENCE MANAGER
+  // ==========================================
+  const currentConfig = getConfig()
+  discordRpcManager = new DiscordRpcManager()
+  discordRpcManager.init(currentConfig.discordRpc)
+
+  ipcMain.handle('discord:updatePresence', (_, payload: DiscordPresencePayload) => {
+    discordRpcManager?.updatePresence(payload)
+    return { success: true }
+  })
+
+  ipcMain.handle('discord:clearPresence', () => {
+    discordRpcManager?.clearPresence()
+    return { success: true }
+  })
+
+  ipcMain.handle('discord:updateConfig', (_, config: Partial<DiscordRpcConfig>) => {
+    const cur = getConfig()
+    const updatedDiscordConfig = { ...(cur.discordRpc || {}), ...config }
+    saveConfig({ discordRpc: updatedDiscordConfig })
+    discordRpcManager?.updateConfig(updatedDiscordConfig)
+    return { success: true, config: discordRpcManager?.getConfig() }
+  })
+
+  ipcMain.handle('discord:getStatus', () => {
+    return discordRpcManager?.getStatus() || { isConnected: false, isConnecting: false, enabled: false }
+  })
+
+  // ==========================================
   // API CẤU HÌNH & THƯ VIỆN
   // ==========================================
   ipcMain.handle('music:getConfig', () => getConfig())
@@ -502,7 +720,6 @@ app.whenReady().then(() => {
   // MPV AUDIO BACKEND IPC
   // ==========================================
   mpvManager = new MpvManager()
-  const currentConfig = getConfig()
   mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false).catch(console.error) // auto init on start
   
   mpvManager.on('time', (val) => mainWindow?.webContents.send('mpv:time', val))
@@ -629,12 +846,18 @@ app.whenReady().then(() => {
         const isSamePaths = cachedPaths.length === validPaths.length && cachedPaths.every((p: string, idx: number) => p === validPaths[idx])
         const hasGenreInfo = Array.isArray(cached.tracks) && cached.tracks.length > 0 && cached.tracks.some((t: any) => t.genre !== undefined && t.genre !== 'Unknown')
         if (cached && isSamePaths && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5)) {
+          const enrichedTracks = cached.tracks.map((t: any) => ({
+            ...t,
+            artists: (Array.isArray(t.artists) && t.artists.length > 0)
+              ? t.artists
+              : splitArtistString(t.artist || '')
+          }))
           return { 
             success: true, 
             fromCache: true, 
             libraryPath: primaryRootPath, 
             libraryPaths: validPaths, 
-            tracks: cached.tracks, 
+            tracks: enrichedTracks, 
             playlists: cached.playlists || [],
             userPlaylists: getUserPlaylists()
           }
@@ -682,11 +905,17 @@ app.whenReady().then(() => {
       if (cached && cached.mtime === stat.mtimeMs && cached.data && cached.data.genre !== undefined && cached.data.genre !== 'Unknown') {
         const existingTrack = previousTrackMap.get(trackPath) || previousTrackMap.get(cached.data.filePath)
         if (existingTrack && existingTrack.genre !== undefined && existingTrack.genre !== 'Unknown') {
+          if (!existingTrack.artists || existingTrack.artists.length === 0) {
+            existingTrack.artists = splitArtistString(existingTrack.artist || '')
+          }
           return existingTrack
         }
         return {
           ...cached.data,
           filePath: pathToFileURL(trackPath).href,
+          artists: (Array.isArray(cached.data.artists) && cached.data.artists.length > 0)
+            ? cached.data.artists
+            : splitArtistString(cached.data.artist || ''),
           coverArt: coverUrl || cached.data.coverArt || null,
           themeColors: themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || cached.data.themeColors || null
         }
@@ -780,11 +1009,14 @@ app.whenReady().then(() => {
 
         const yearVal = metadata.common.year || (metadata.common.date ? parseInt(metadata.common.date) : null)
 
+        const { artist, artists } = extractArtists(metadata)
+
         const trackData = {
           id: trackPath,
           filePath: pathToFileURL(trackPath).href,
           title: metadata.common.title || subItemName.replace(/\.[^/.]+$/, ""),
-          artist: metadata.common.artist || 'Unknown',
+          artist: artist,
+          artists: artists,
           album: metadata.common.album || 'Unknown',
           genre: genreStr,
           year: yearVal,
@@ -813,6 +1045,7 @@ app.whenReady().then(() => {
           filePath: pathToFileURL(trackPath).href,
           title: subItemName,
           artist: 'Unknown',
+          artists: ['Unknown'],
           album: 'Unknown',
           genre: 'Unknown',
           year: null,
@@ -839,17 +1072,16 @@ app.whenReady().then(() => {
 
             if (stat.isDirectory() && item !== '.thumbnails') {
               const playlistTracks: any[] = []
-              const subItems = fs.readdirSync(itemPath)
-              for (const subItem of subItems) {
-                if (supportedExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
-                  const trackPath = join(itemPath, subItem)
-                  try {
-                    const subStat = fs.statSync(trackPath)
-                    const trackData = await parseOrGetTrack(trackPath, subItem, subStat, thumbDir)
-                    playlistTracks.push(trackData)
-                    tracks.push(trackData)
-                  } catch (e) {}
-                }
+              // Quét đệ quy tất cả các file âm thanh trong thư mục và mọi thư mục con
+              const allTrackPaths = getAudioFilesInDirectoryRecursive(itemPath, supportedExts)
+              for (const trackPath of allTrackPaths) {
+                try {
+                  const subStat = fs.statSync(trackPath)
+                  const fileName = path.basename(trackPath)
+                  const trackData = await parseOrGetTrack(trackPath, fileName, subStat, thumbDir)
+                  playlistTracks.push(trackData)
+                  tracks.push(trackData)
+                } catch (e) {}
               }
               
               let thumbnailUrl: string | null = null
@@ -873,12 +1105,15 @@ app.whenReady().then(() => {
               }
 
               if (!rawCoverPath) {
-                for (const subItem of subItems) {
-                  if (possibleImageExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
-                    rawCoverPath = join(itemPath, subItem)
-                    break
+                try {
+                  const subItems = fs.readdirSync(itemPath)
+                  for (const subItem of subItems) {
+                    if (possibleImageExts.some(ext => subItem.toLowerCase().endsWith(ext))) {
+                      rawCoverPath = join(itemPath, subItem)
+                      break
+                    }
                   }
-                }
+                } catch (e) {}
               }
 
               if (rawCoverPath) {
@@ -953,6 +1188,11 @@ app.whenReady().then(() => {
     const config = getConfig()
     const paths: string[] = config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
     try {
+      const safeNewName = sanitizeDirectoryName(newName)
+      if (!safeNewName || safeNewName === 'Untitled') {
+        return { success: false, error: 'Tên playlist không hợp lệ!' }
+      }
+
       let targetRoot = paths[0]
       for (const p of paths) {
         if (fs.existsSync(join(p, oldName))) {
@@ -961,12 +1201,17 @@ app.whenReady().then(() => {
         }
       }
       const oldDirPath = join(targetRoot, oldName)
-      const newDirPath = join(targetRoot, newName)
-      fs.renameSync(oldDirPath, newDirPath)
+      const newDirPath = join(targetRoot, safeNewName)
+      if (oldDirPath !== newDirPath) {
+        if (fs.existsSync(newDirPath)) {
+          return { success: false, error: 'Playlist với tên mới đã tồn tại!' }
+        }
+        fs.renameSync(oldDirPath, newDirPath)
+      }
       const exts = ['.jpg', '.png', '.jpeg', '.webp']
       for (const ext of exts) {
         const oldImgPath = join(newDirPath, `${oldName}${ext}`)
-        if (fs.existsSync(oldImgPath)) fs.renameSync(oldImgPath, join(newDirPath, `${newName}${ext}`))
+        if (fs.existsSync(oldImgPath)) fs.renameSync(oldImgPath, join(newDirPath, `${safeNewName}${ext}`))
       }
       return { success: true }
     } catch (e: any) { return { success: false, error: e.message } }
@@ -1190,9 +1435,9 @@ app.whenReady().then(() => {
           const metadata = await mm.parseFile(itemPath)
           const albumName = metadata.common.album
           if (albumName && albumName.trim() !== '') {
-            const safeAlbumName = albumName.replace(/[<>:"\/\\|?*]/g, '').trim()
+            const safeAlbumName = sanitizeDirectoryName(albumName) || 'Unknown Album'
             const albumDirPath = join(rootPath, safeAlbumName)
-            if (!fs.existsSync(albumDirPath)) fs.mkdirSync(albumDirPath)
+            if (!fs.existsSync(albumDirPath)) fs.mkdirSync(albumDirPath, { recursive: true })
             if (metadata.common.picture && metadata.common.picture.length > 0) {
               const imgExt = metadata.common.picture[0].format.split('/')[1] || 'jpg'
               const imgDest = join(albumDirPath, `${safeAlbumName}.${imgExt}`)
@@ -1240,9 +1485,20 @@ app.whenReady().then(() => {
       }
       if (fs.existsSync(rawPath)) {
         const fileBuffer = fs.readFileSync(rawPath)
+        let sampleRate: number | undefined = undefined
+        let bitDepth: number | undefined = undefined
+        try {
+          const metadata = await mm.parseFile(rawPath)
+          sampleRate = metadata?.format?.sampleRate
+          bitDepth = metadata?.format?.bitsPerSample
+        } catch (mErr) {
+          // Fallback nếu không đọc được metadata
+        }
         return { 
           success: true, 
-          buffer: fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength) 
+          buffer: fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength),
+          sampleRate,
+          bitDepth
         }
       }
       return { success: false, error: `Không tìm thấy file: ${rawPath}` }
@@ -1357,6 +1613,8 @@ app.whenReady().then(() => {
       // Cập nhật ngay vào Metadata Cache
       const stat = fs.statSync(rawPath)
       const existingCached = metadataCache[rawPath]?.data || {}
+      const targetArtist = newTags.artist || existingCached.artist || 'Unknown'
+      const targetArtists = splitArtistString(targetArtist)
       metadataCache[rawPath] = {
         mtime: stat.mtimeMs,
         data: {
@@ -1364,7 +1622,8 @@ app.whenReady().then(() => {
           id: rawPath,
           filePath: pathToFileURL(rawPath).href,
           title: newTags.title || existingCached.title,
-          artist: newTags.artist || existingCached.artist,
+          artist: targetArtist,
+          artists: targetArtists.length > 0 ? targetArtists : [targetArtist],
           album: newTags.album || existingCached.album,
           genre: newTags.genre || existingCached.genre,
           lyrics: newTags.lyrics || existingCached.lyrics,
@@ -1383,7 +1642,8 @@ app.whenReady().then(() => {
                 libData.tracks[i] = {
                   ...libData.tracks[i],
                   title: newTags.title || libData.tracks[i].title,
-                  artist: newTags.artist || libData.tracks[i].artist,
+                  artist: targetArtist,
+                  artists: targetArtists.length > 0 ? targetArtists : [targetArtist],
                   album: newTags.album || libData.tracks[i].album,
                   genre: newTags.genre || libData.tracks[i].genre,
                   lyrics: newTags.lyrics || libData.tracks[i].lyrics,
@@ -1558,14 +1818,12 @@ app.whenReady().then(() => {
     const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory'] })
     if (canceled || filePaths.length === 0) return []
     const folderPath = filePaths[0]
-    const files = fs.readdirSync(folderPath)
-    
-    const supportedExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.mp4']
-    const audioFiles = files.filter(file => supportedExtensions.some(ext => file.toLowerCase().endsWith(ext)))
+    const supportedExtensions = SUPPORTED_AUDIO_EXTS
+    const audioFiles = getAudioFilesInDirectoryRecursive(folderPath, supportedExtensions)
     const tracks: any[] = []
     
-    for (const file of audioFiles) {
-      const filePath = join(folderPath, file)
+    for (const filePath of audioFiles) {
+      const file = path.basename(filePath)
       try {
         const metadata = await mm.parseFile(filePath)
         let coverBase64 = null
@@ -1573,14 +1831,16 @@ app.whenReady().then(() => {
           // const buffer = Buffer.from(picture.data)
           coverBase64 = null
         }
+        const { artist, artists } = extractArtists(metadata)
         tracks.push({
           id: filePath,
           filePath: pathToFileURL(filePath).href,
-          title: metadata.common.title || file,
-          artist: metadata.common.artist || 'Unknown Artist',
+          title: metadata.common.title || file.replace(/\.[^/.]+$/, ""),
+          artist: artist,
+          artists: artists,
           album: metadata.common.album || 'Unknown Album',
           duration: metadata.format.duration,
-          format: metadata.format.container || 'Unknown',
+          format: metadata.format.container || file.split('.').pop()?.toUpperCase() || 'Unknown',
           bitrate: metadata.format.bitrate,
           sampleRate: metadata.format.sampleRate,
           bitDepth: metadata.format.bitsPerSample,
@@ -1852,17 +2112,18 @@ app.whenReady().then(() => {
   // Lấy ảnh bìa từ bài hát đầu tiên trong Playlist
   ipcMain.handle('music:extractPlaylistThumbnail', async (_, playlistName) => {
     const rootPath = getConfig().libraryPath
-    const playlistPath = join(rootPath, playlistName)
+    const safePlaylistName = sanitizeDirectoryName(playlistName)
+    const playlistPath = join(rootPath, safePlaylistName)
     
     try {
-      const items = fs.readdirSync(playlistPath)
       const supportedExts = SUPPORTED_AUDIO_EXTS
+      const allAudioFiles = getAudioFilesInDirectoryRecursive(playlistPath, supportedExts)
       
-      // Tìm bài hát đầu tiên có đuôi hỗ trợ
-      const firstTrack = items.find(item => supportedExts.some(ext => item.toLowerCase().endsWith(ext)))
+      // Tìm bài hát đầu tiên có đuôi hỗ trợ (kể cả trong thư mục con)
+      const firstTrack = allAudioFiles[0]
       if (!firstTrack) return { success: false, error: 'Playlist đang trống, không có bài hát nào!' }
 
-      const trackPath = join(playlistPath, firstTrack)
+      const trackPath = firstTrack
       const metadata = await mm.parseFile(trackPath)
 
       if (metadata.common.picture && metadata.common.picture.length > 0) {
@@ -1921,18 +2182,32 @@ app.whenReady().then(() => {
 
       // 1. Tìm kiếm ID bài hát (Track ID)
       const cleanTitle = title.replace(/\([^)]*\)/g, '').trim()
-      let searchUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artist)}&usertoken=${token}`
-      
-      let searchRes = await fetch(searchUrl, { headers: mxmHeaders })
-      let searchData = await searchRes.json()
+      const searchTrack = async (artStr: string) => {
+        let url = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artStr)}&usertoken=${token}`
+        let res = await fetch(url, { headers: mxmHeaders })
+        let data = await res.json()
 
-      // FIX 1: Tự động làm mới Token nếu bị Musixmatch báo hết hạn (Lỗi 401)
-      if (searchData.message?.header?.status_code === 401) {
-        mxmToken = null // Xóa token cũ
-        token = await getMusixmatchToken() // Xin lại token mới
-        searchUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artist)}&usertoken=${token}`
-        searchRes = await fetch(searchUrl, { headers: mxmHeaders })
-        searchData = await searchRes.json()
+        if (data.message?.header?.status_code === 401) {
+          mxmToken = null
+          token = await getMusixmatchToken()
+          url = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artStr)}&usertoken=${token}`
+          res = await fetch(url, { headers: mxmHeaders })
+          data = await res.json()
+        }
+        return data
+      }
+
+      let searchData = await searchTrack(artist)
+
+      // Nếu tìm với nghệ sĩ kết hợp không thấy, thử với nghệ sĩ chính đầu tiên
+      if ((!searchData.message?.body?.track_list || searchData.message.body.track_list.length === 0) && (artist.includes(',') || /feat|ft|&|;|x|\//i.test(artist))) {
+        const primaryArtist = splitArtistString(artist)[0]
+        if (primaryArtist && primaryArtist.toLowerCase() !== artist.toLowerCase()) {
+          const fallbackData = await searchTrack(primaryArtist)
+          if (fallbackData.message?.body?.track_list && fallbackData.message.body.track_list.length > 0) {
+            searchData = fallbackData
+          }
+        }
       }
 
       if (searchData.message?.header?.status_code !== 200 || !searchData.message?.body?.track_list || searchData.message.body.track_list.length === 0) {
@@ -1976,8 +2251,9 @@ app.whenReady().then(() => {
     }
 
     // Nếu có truyền tên Playlist vào, chép vào thư mục Playlist, ngược lại chép vào Thư viện gốc
-    const destFolder = targetSubFolder ? join(rootPath, targetSubFolder) : rootPath
-    if (!fs.existsSync(destFolder)) fs.mkdirSync(destFolder)
+    const safeTargetSubFolder = targetSubFolder ? sanitizeDirectoryName(targetSubFolder) : null
+    const destFolder = safeTargetSubFolder ? join(rootPath, safeTargetSubFolder) : rootPath
+    if (!fs.existsSync(destFolder)) fs.mkdirSync(destFolder, { recursive: true })
 
     // Mở hộp thoại chọn nhiều file nhạc
     const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -2013,11 +2289,14 @@ app.whenReady().then(() => {
           coverBase64 = null
         }
 
+        const { artist, artists } = extractArtists(metadata)
+
         importedTracks.push({
           id: destPath,
           filePath: pathToFileURL(destPath).href,
           title: metadata.common.title || fileName.replace(/\.[^/.]+$/, ""),
-          artist: metadata.common.artist || 'Unknown Artist',
+          artist: artist,
+          artists: artists,
           album: metadata.common.album || 'Unknown Album',
           duration: metadata.format.duration,
           format: metadata.format.container || fileName.split('.').pop()?.toUpperCase(),
@@ -2106,8 +2385,8 @@ app.whenReady().then(() => {
     const rootPath = getConfig().libraryPath
     if (!rootPath || !fs.existsSync(rootPath)) return { success: false, error: 'Chưa cấu hình thư mục thư viện!' }
     
-    const safeName = playlistName.replace(/[<>:"\/\\|?*]/g, '').trim()
-    if (!safeName) return { success: false, error: 'Tên playlist không hợp lệ!' }
+    const safeName = sanitizeDirectoryName(playlistName)
+    if (!safeName || safeName === 'Untitled') return { success: false, error: 'Tên playlist không hợp lệ!' }
 
     const dirPath = join(rootPath, safeName)
     if (fs.existsSync(dirPath)) {
@@ -2133,7 +2412,8 @@ app.whenReady().then(() => {
 
     if (!fs.existsSync(rawPath)) return { success: false, error: 'File nguồn không tồn tại!' }
 
-    const playlistDir = join(rootPath, playlistName)
+    const safePlaylistName = sanitizeDirectoryName(playlistName)
+    const playlistDir = join(rootPath, safePlaylistName)
     if (!fs.existsSync(playlistDir)) fs.mkdirSync(playlistDir, { recursive: true })
 
     const fileName = path.basename(rawPath)
@@ -2594,13 +2874,13 @@ app.whenReady().then(() => {
     if (!rootPath) return { success: false, error: 'Chưa cấu hình Thư mục thư viện' };
     
     // Tạo thư mục Album (Nếu không có tên Album thì lưu vào thư mục Singles)
-    const safeAlbum = (track.album || 'Singles').replace(/[<>:"\/\\|?*]/g, '_').trim();
+    const safeAlbum = sanitizeDirectoryName(track.album || 'Singles') || 'Singles';
     const albumPath = join(rootPath, safeAlbum);
     if (!fs.existsSync(albumPath)) {
       fs.mkdirSync(albumPath, { recursive: true });
     }
 
-    const safeTitle = (track.title || 'Unknown').replace(/[<>:"\/\\|?*]/g, '_').trim();
+    const safeTitle = sanitizeFileName(track.title || 'Unknown') || 'Unknown';
     let destPath = join(albumPath, `${safeTitle}.mp3`);
     
     // Kiểm tra trùng lặp và hiện Hộp thoại (Dialog)

@@ -113,9 +113,22 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [hoverInfo, setHoverInfo] = useState<{ x: number; y: number; time: string; freq: string } | null>(null)
+  const [detectedSampleRate, setDetectedSampleRate] = useState<number>(currentTrack?.sampleRate || 44100)
+  const [detectedBitDepth, setDetectedBitDepth] = useState<number | undefined>(currentTrack?.bitDepth)
 
-  const sampleRate = currentTrack?.sampleRate || 44100
-  const maxDisplayFreq = sampleRate
+  const activeSampleRate = detectedSampleRate || currentTrack?.sampleRate || 44100
+  // Dải tần số cực đại theo định lý Nyquist là Sample Rate / 2 (ví dụ 96kHz -> 48kHz, 48kHz -> 24kHz)
+  const nyquistFreq = Math.round(activeSampleRate / 2)
+
+  // Cập nhật khi currentTrack thay đổi
+  useEffect(() => {
+    if (currentTrack?.sampleRate) {
+      setDetectedSampleRate(currentTrack.sampleRate)
+    }
+    if (currentTrack?.bitDepth) {
+      setDetectedBitDepth(currentTrack.bitDepth)
+    }
+  }, [currentTrack?.sampleRate, currentTrack?.bitDepth, currentTrack?.id])
 
   // Giải phóng tức thì bộ nhớ RAM và Cache khi đóng Spectrogram Modal
   const releaseSpectrogramMemory = () => {
@@ -170,13 +183,17 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
     let isCancelled = false
 
-    const loadAudioBuffer = async (key: string): Promise<ArrayBuffer> => {
-      // 1. Thử qua IPC electron bridge trước
+    const loadAudioData = async (key: string): Promise<{ buffer: ArrayBuffer; sampleRate?: number; bitDepth?: number }> => {
+      // 1. Thử qua IPC electron bridge trước để lấy buffer + metadata gốc
       if (typeof (window as any).api?.readAudioBuffer === 'function') {
         try {
           const res = await (window as any).api.readAudioBuffer(key)
           if (res && res.success && res.buffer) {
-            return res.buffer
+            return {
+              buffer: res.buffer,
+              sampleRate: res.sampleRate,
+              bitDepth: res.bitDepth
+            }
           }
         } catch (ipcErr) {
           console.warn('[Spectrogram] IPC readAudioBuffer failed:', ipcErr)
@@ -199,7 +216,8 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
       if (!response.ok) {
         throw new Error(`Không thể đọc file (${response.status} ${response.statusText})`)
       }
-      return await response.arrayBuffer()
+      const buffer = await response.arrayBuffer()
+      return { buffer }
     }
 
     const generateSpectrogram = async () => {
@@ -223,25 +241,36 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
       setErrorMsg(null)
 
       try {
-        // 1. Lấy dữ liệu file âm thanh
-        const arrayBuf = await loadAudioBuffer(trackKey)
-        if (isCancelled || !arrayBuf) return
+        // 1. Lấy dữ liệu file âm thanh và sampleRate gốc từ metadata
+        const audioData = await loadAudioData(trackKey)
+        if (isCancelled || !audioData?.buffer) return
 
-        // 2. Decode AudioBuffer qua Web Audio API
-        const tempCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
-        const audioBuffer = await tempCtx.decodeAudioData(arrayBuf.slice(0))
-        if (isCancelled) {
-          tempCtx.close()
-          return
+        const fileSampleRate = audioData.sampleRate || currentTrack.sampleRate || 44100
+        if (audioData.sampleRate) setDetectedSampleRate(audioData.sampleRate)
+        if (audioData.bitDepth) setDetectedBitDepth(audioData.bitDepth)
+
+        // 2. Decode AudioBuffer qua OfflineAudioContext để bảo toàn sample rate gốc (không bị Chromium downsample về 48kHz)
+        let audioBuffer: AudioBuffer
+        try {
+          const OfflineCtxClass = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext
+          const decodeCtx = new OfflineCtxClass(1, 1, fileSampleRate)
+          audioBuffer = await decodeCtx.decodeAudioData(audioData.buffer.slice(0))
+        } catch (_offlineErr) {
+          const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext
+          const tempCtx = new AudioCtxClass()
+          audioBuffer = await tempCtx.decodeAudioData(audioData.buffer.slice(0))
+          try { tempCtx.close() } catch (_c) {}
         }
+
+        if (isCancelled) return
+
+        const actualSampleRate = audioBuffer.sampleRate || fileSampleRate
+        setDetectedSampleRate(actualSampleRate)
 
         const channelData = audioBuffer.getChannelData(0)
         const totalSamples = channelData.length
-        const actualSampleRate = audioBuffer.sampleRate || sampleRate
         const trackDuration = audioBuffer.duration
         setDuration(trackDuration)
-
-        tempCtx.close()
 
         // 3. Chuẩn bị STFT
         const fftSize = 2048
@@ -251,8 +280,6 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
           hanning[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)))
         }
 
-        // Hiển thị toàn bộ dải tần số cho đến Sample Rate của bài hát
-        const targetMaxFreq = actualSampleRate
         const imageData = ctx.createImageData(W, H)
         const pixels = imageData.data
 
@@ -272,18 +299,23 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
           computeFFT(re, im, fftSize)
 
-          // Vẽ các điểm ảnh từ dưới lên (Y = 0 Hz ở đáy, Y = H ở đỉnh = Sample Rate)
+          // Vẽ các điểm ảnh từ dưới lên: Y = 0 (đỉnh) là Nyquist (actualSampleRate / 2), Y = H - 1 (đáy) là 0 Hz
           for (let y = 0; y < H; y++) {
-            const freq = ((H - 1 - y) / (H - 1)) * targetMaxFreq
-            
-            let norm = 0
-            if (freq <= actualSampleRate / 2) {
-              const bin = Math.min(halfFFT - 1, Math.max(0, Math.floor((freq / (actualSampleRate / 2)) * halfFFT)))
-              const mag = Math.sqrt(re[bin] * re[bin] + im[bin] * im[bin]) / halfFFT
-              const dB = 20 * Math.log10(mag + 1e-6)
-              // Chuẩn hóa dải động từ -85dB đến 0dB
-              norm = Math.max(0, Math.min(1, (dB + 85) / 85))
+            const binFloat = ((H - 1 - y) / (H - 1)) * (halfFFT - 1)
+            const binStart = Math.max(0, Math.floor(binFloat))
+            const binEnd = Math.min(halfFFT - 1, Math.ceil(((H - y) / (H - 1)) * (halfFFT - 1)))
+
+            let maxMag = 0
+            for (let b = binStart; b <= binEnd; b++) {
+              const mag = Math.sqrt(re[b] * re[b] + im[b] * im[b])
+              if (mag > maxMag) maxMag = mag
             }
+
+            // Chuẩn hóa năng lượng với Coherent Gain của cửa sổ Hanning (0.5)
+            const normalizedMag = maxMag / (halfFFT * 0.5)
+            const dB = 20 * Math.log10(normalizedMag + 1e-6)
+            // Chuẩn hóa dải động từ -95dB đến 0dB
+            const norm = Math.max(0, Math.min(1, (dB + 95) / 95))
 
             const [r, g, b] = getColor(norm)
             const pixelIndex = (y * W + x) * 4
@@ -313,7 +345,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
     return () => {
       isCancelled = true
     }
-  }, [isOpen, currentTrack?.id, currentTrack?.filePath, sampleRate])
+  }, [isOpen, currentTrack?.id, currentTrack?.filePath, currentTrack?.sampleRate])
 
   if (!isOpen) return null
 
@@ -344,7 +376,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
     const rx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const ry = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
     const timeSecs = rx * (duration || currentTrack?.duration || 0)
-    const freqHz = Math.round((1 - ry) * maxDisplayFreq)
+    const freqHz = Math.round((1 - ry) * nyquistFreq)
     setHoverInfo({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
@@ -355,13 +387,16 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
 
-  // 8 mốc tần số từ Sample Rate bài hát về 0 Hz
+  // 8 mốc tần số từ Tần số Nyquist về 0 Hz (chuẩn Audacity / Spek)
   const numTicks = 8
   const yTicks = Array.from({ length: numTicks }, (_, i) => {
     const ratio = (numTicks - 1 - i) / (numTicks - 1)
-    const freqHz = Math.round(ratio * maxDisplayFreq)
+    const freqHz = Math.round(ratio * nyquistFreq)
     if (freqHz === 0) return '0 Hz'
-    if (freqHz >= 1000) return `${(freqHz / 1000).toFixed(1)} kHz`
+    if (freqHz >= 1000) {
+      const khz = freqHz / 1000
+      return Number.isInteger(khz) ? `${khz} kHz` : `${khz.toFixed(1)} kHz`
+    }
     return `${freqHz} Hz`
   })
 
@@ -383,13 +418,13 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
                     <span className="font-bold text-theme-10 uppercase">
                       {currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}
                     </span>
-                    {currentTrack.bitDepth && (
+                    {(detectedBitDepth || currentTrack.bitDepth) && (
                       <span className="text-blue-400 font-bold">
-                        {currentTrack.bitDepth}-BIT
+                        {detectedBitDepth || currentTrack.bitDepth}-BIT
                       </span>
                     )}
                     <span className="text-zinc-400">
-                      {maxDisplayFreq >= 1000 ? `${(maxDisplayFreq / 1000).toFixed(1)}kHz` : `${maxDisplayFreq}Hz`}
+                      {activeSampleRate >= 1000 ? `${(activeSampleRate / 1000).toFixed(1).replace('.0', '')}kHz` : `${activeSampleRate}Hz`}
                     </span>
                   </div>
                 )}
