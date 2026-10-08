@@ -139,3 +139,6 @@ dist
 resources/bin/ffmpeg.exe
 resources/bin/ffprobe.exe
 resources/bin/mpv.exe
+
+#src-tauri
+src-tauri/
