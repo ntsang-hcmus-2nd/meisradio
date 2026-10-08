@@ -117,6 +117,7 @@ export interface EQBand {
 interface LyricLine {
   time: number // Thời gian tính theo giây
   text: string
+  unsynced?: boolean // true: lời thô không có mốc thời gian (không highlight / không tua)
 }
 
 // Chuẩn hóa đường dẫn hình ảnh cho Background
@@ -640,6 +641,7 @@ export default function App() {
   const [bitPerfectEnabled, setBitPerfectEnabled] = useState(false)
   const [crossfadeEnabled, setCrossfadeEnabled] = useState(false)
   const [crossfadeDuration, setCrossfadeDuration] = useState(3)
+  const [mpvOutParams, setMpvOutParams] = useState<{ samplerate?: number; format?: string; channels?: string } | null>(null)
 
   const [minimizeToTray, setMinimizeToTray] = useState(false)
   const [closeToTray, setCloseToTray] = useState(false)
@@ -673,8 +675,10 @@ export default function App() {
   // Audio Devices & EQ States
   const [isEqEnabled, setIsEqEnabled] = useState(false)
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('default')
-  const selectedDeviceRef = useRef<string>('default');
+  const [availableAudioDevices, setAvailableAudioDevices] = useState<{ name: string; description: string }[]>([])
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('auto')
+  const selectedDeviceRef = useRef<string>('auto');
+  const pendingSeekTimeRef = useRef<number | null>(null);
   useEffect(() => { 
     selectedDeviceRef.current = selectedDeviceId; 
   }, [selectedDeviceId]);
@@ -1681,11 +1685,16 @@ export default function App() {
     if (!currentTrack) return
     if (!playQueue || playQueue.length === 0) return
 
+    if (repeatMode === 2) {
+      handlePlayTrack(currentTrack)
+      return
+    }
+
     const currentIndex = playQueue.findIndex(t => t.id === currentTrack.id)
     let nextIndex = currentIndex + 1
 
     if (nextIndex >= playQueue.length) {
-      if (repeatMode === 1 || repeatMode === 2) {
+      if (repeatMode === 1) {
         nextIndex = 0
       } else if (smartAutoplay) {
         const candidate = findRecommendedTrack(currentTrack, playQueue, libraryTracks)
@@ -1698,10 +1707,12 @@ export default function App() {
           return
         } else {
           setIsPlaying(false)
+          if (bitPerfectEnabled && (window.api as any)?.mpvStop) (window.api as any).mpvStop()
           return
         }
       } else {
         setIsPlaying(false)
+        if (bitPerfectEnabled && (window.api as any)?.mpvStop) (window.api as any).mpvStop()
         return
       }
     }
@@ -1710,9 +1721,17 @@ export default function App() {
 
   const handlePrev = () => {
     if (!currentTrack) return
-    if (audioRef.current && audioRef.current.currentTime > 3) { 
-      audioRef.current.currentTime = 0
-      return 
+    const curTime = bitPerfectEnabled
+      ? ((audioRef.current as any)?._currentTime || 0)
+      : (audioRef.current?.currentTime || 0)
+
+    if (curTime > 3) {
+      if (bitPerfectEnabled) {
+        window.api.mpvSeek(0, 'absolute')
+      } else if (audioRef.current) {
+        audioRef.current.currentTime = 0
+      }
+      return
     }
     if (!playQueue || playQueue.length === 0) return
 
@@ -1895,17 +1914,19 @@ export default function App() {
   }
 
   // --- Lyrics ---
+  // Chuẩn hóa mọi dạng dữ liệu lời bài hát (string / object { text } / mảng) về chuỗi
+  const lyricsToText = (raw: any): string => {
+    if (!raw) return ''
+    let text = ''
+    if (typeof raw === 'string') text = raw
+    else if (Array.isArray(raw)) text = raw.map((r) => lyricsToText(r)).join('\n')
+    else if (typeof raw === 'object') text = typeof raw.text === 'string' ? raw.text : ''
+    return text.replace(/^\uFEFF/, '')
+  }
+
   const parseLRC = (rawText: any): LyricLine[] => {
-    if (!rawText) return []
-    let lrcText = ''
-    if (typeof rawText === 'string') {
-      lrcText = rawText
-    } else if (typeof rawText === 'object') {
-      if (rawText.text) lrcText = rawText.text
-      else if (Array.isArray(rawText)) lrcText = rawText.join('\n')
-      else lrcText = String(rawText)
-    }
-    if (typeof lrcText !== 'string' || !lrcText.split) return []
+    const lrcText = lyricsToText(rawText)
+    if (!lrcText) return []
 
     let globalOffset = 0
     const offsetMatch = /\[offset:\s*(-?\d+)\]/i.exec(lrcText)
@@ -1913,28 +1934,57 @@ export default function App() {
       globalOffset = parseInt(offsetMatch[1], 10) / 1000
     }
 
-    const lines = lrcText.split('\n')
+    const lines = lrcText.split(/\r?\n/)
     const result: LyricLine[] = []
-    const timeRegex = /\[(\d{2,}):(\d{2})(?:\.(\d{1,3}))?\]/
+    const timeRegexGlobal = /\[(\d{1,}):(\d{2})(?:[.:](\d{1,3}))?\]/g
 
     lines.forEach((line) => {
-      const match = timeRegex.exec(line)
-      if (match) {
+      const matches = Array.from(line.matchAll(timeRegexGlobal))
+      if (matches.length === 0) return
+
+      // Bỏ toàn bộ thẻ thời gian dòng và thẻ thời gian theo từng từ (<mm:ss.xx>) để lấy phần chữ
+      const text = line
+        .replace(timeRegexGlobal, '')
+        .replace(/<\d+:\d{2}(?:[.:]\d{1,3})?>/g, '')
+        .trim()
+      if (!text) return
+
+      // Hỗ trợ nhiều mốc thời gian cho cùng một dòng: [00:10.00][00:50.00]Lời
+      for (const match of matches) {
         const minutes = parseInt(match[1], 10)
         const seconds = parseInt(match[2], 10)
         const milliseconds = match[3] ? parseInt(match[3].padEnd(3, '0'), 10) : 0
-        
         let time = (minutes * 60) + seconds + (milliseconds / 1000) + globalOffset
         if (time < 0) time = 0
-        
-        const text = line.replace(/\[\d{2,}:\d{2}(?:\.\d{1,3})?\]/g, '').trim()
-        if (text) {
-          result.push({ time, text })
-        }
+        result.push({ time, text })
       }
     })
 
     return result.sort((a, b) => a.time - b.time)
+  }
+
+  // Lời thô (không có mốc thời gian): tách theo dòng, bỏ thẻ metadata dạng [ar:...], [ti:...]
+  const parsePlainLyrics = (rawText: any): LyricLine[] => {
+    const text = lyricsToText(rawText)
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.replace(/^\s*\[[a-z]{2,}:[^\]]*\]\s*$/i, '').trimEnd())
+    // Gom các dòng trống liên tiếp & bỏ dòng trống ở đầu/cuối
+    const compact: string[] = []
+    for (const l of lines) {
+      if (!l.trim()) {
+        if (compact.length > 0 && compact[compact.length - 1] !== '') compact.push('')
+      } else compact.push(l)
+    }
+    while (compact.length > 0 && compact[compact.length - 1] === '') compact.pop()
+    return compact.map((l) => ({ time: 0, text: l, unsynced: true }))
+  }
+
+  // Thử lời đồng bộ trước; nếu nguồn chỉ có lời thô thì dùng lời thô (vẫn tính là "có lời" của nguồn đó)
+  const buildLyricLines = (raw: any): LyricLine[] => {
+    const synced = parseLRC(raw)
+    if (synced.length > 0) return synced
+    return parsePlainLyrics(raw)
   }
 
   // --- Cloud & Google Drive ---
@@ -2178,12 +2228,14 @@ export default function App() {
   // Change Audio Device
   useEffect(() => {
     if (selectedDeviceId) {
-      if (audioRef.current) {
-        if (typeof (audioRef.current as any).setSinkId === 'function') {
-          (audioRef.current as any).setSinkId(selectedDeviceId).catch(console.error);
-        }
+      const isWasapiOrAuto = selectedDeviceId === 'auto' || selectedDeviceId === 'default' || selectedDeviceId.startsWith('wasapi/')
+      const browserSinkId = isWasapiOrAuto ? '' : selectedDeviceId
+      if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
+        (audioRef.current as any).setSinkId(browserSinkId).catch(() => {})
       }
-      window.api.setAudioDevice(selectedDeviceId)
+      if (window.api && (window.api as any).setAudioDevice) {
+        (window.api as any).setAudioDevice(selectedDeviceId)
+      }
     }
   }, [selectedDeviceId])
 
@@ -2853,15 +2905,25 @@ export default function App() {
     return () => observer.disconnect()
   }, [activeView, activePlaylist, matchedPlaylists.length])
 
-  // Get audio output devices
+  // Get audio output devices (native MPV/WASAPI and browser outputs)
   useEffect(() => {
     const getDevices = async () => {
+      try {
+        if (window.api && (window.api as any).getAudioDevices) {
+          const res = await (window.api as any).getAudioDevices()
+          if (res && res.success && Array.isArray(res.devices)) {
+            setAvailableAudioDevices(res.devices)
+          }
+        }
+      } catch (err) {
+        console.error("Lỗi lấy danh sách thiết bị MPV:", err)
+      }
       try {
         const devices = await navigator.mediaDevices.enumerateDevices()
         const audioOutputs = devices.filter(device => device.kind === 'audiooutput')
         setAudioDevices(audioOutputs)
       } catch (err) {
-        console.error("Lỗi lấy danh sách thiết bị:", err)
+        console.error("Lỗi lấy danh sách thiết bị WebAudio:", err)
       }
     }
     getDevices()
@@ -2895,13 +2957,13 @@ export default function App() {
   useEffect(() => {
     const applyDevice = async () => {
       try {
-        // TỐI ƯU HÓA: Chromium yêu cầu dùng chuỗi rỗng '' cho thiết bị mặc định
-        const targetId = selectedDeviceId === 'default' ? '' : selectedDeviceId;
+        const isWasapiOrAuto = selectedDeviceId === 'auto' || selectedDeviceId === 'default' || selectedDeviceId.startsWith('wasapi/')
+        const targetId = isWasapiOrAuto ? '' : selectedDeviceId
         if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
-          await (audioRef.current as any).setSinkId(targetId)
+          await (audioRef.current as any).setSinkId(targetId).catch(() => {})
         }
         if (audioCtxRef.current && typeof (audioCtxRef.current as any).setSinkId === 'function') {
-          await (audioCtxRef.current as any).setSinkId(targetId)
+          await (audioCtxRef.current as any).setSinkId(targetId).catch(() => {})
         }
       } catch (error) {
         console.error("Lỗi khi chuyển đổi thiết bị âm thanh:", error)
@@ -3294,55 +3356,77 @@ export default function App() {
     }
   }, [isPlaying, currentTrack, bitPerfectEnabled])
 
-  // Load Lyrics
+  // Load Lyrics — thứ tự ưu tiên: file .lrc -> lời trong metadata -> lời online (Musixmatch)
   useEffect(() => {
+    setCurrentLyricIndex(-1)
     if (isLite || !currentTrack) {
       setLyrics([])
       return
     }
 
+    // Tránh race condition: bỏ kết quả của bài cũ nếu người dùng đã chuyển bài trong lúc đang tải
+    let cancelled = false
     const trackPath = currentTrack.id || currentTrack.filePath
+    setLyrics([])
 
     const loadLyrics = async () => {
-      let externalLrc = null
+      // 1. File .lrc cùng thư mục với bài hát
       if (trackPath && (window as any).api?.readLrcFile) {
-        try { externalLrc = await (window as any).api.readLrcFile(trackPath) } catch (e) {}
-      }
-
-      if (externalLrc) {
-        const parsedExternal = parseLRC(externalLrc)
-        if (parsedExternal.length > 0) {
-          setLyrics(parsedExternal)
-          return
-        }
-      }
-
-      if (currentTrack.lyrics) {
-        const parsedInternal = parseLRC(currentTrack.lyrics)
-        if (parsedInternal.length > 0) {
-          setLyrics(parsedInternal)
-          return
-        }
-      }
-
-      if (currentTrack.title && currentTrack.artist && !currentTrack.artist.toLowerCase().includes('unknown')) {
         try {
-          // @ts-ignore
-          const mmRes = await window.api.fetchMusixmatchLyrics(currentTrack.title, currentTrack.artist)
-          if (mmRes.success && mmRes.lyrics) {
-            if (mmRes.isSynced) setLyrics(parseLRC(mmRes.lyrics))
-            else setLyrics([{ time: 0, text: mmRes.lyrics + '\n\n---\n(Lời bài hát được cung cấp bởi Musixmatch)' }])
+          const externalLrc = await (window as any).api.readLrcFile(trackPath)
+          if (cancelled) return
+          const parsedExternal = buildLyricLines(externalLrc)
+          if (parsedExternal.length > 0) {
+            setLyrics(parsedExternal)
             return
           }
         } catch (e) {
-          console.error("Lỗi lấy lời Musixmatch", e)
+          console.warn('Lỗi đọc file .lrc:', e)
         }
       }
 
-      setLyrics([])
+      // 2. Lời bài hát nhúng trong metadata (đồng bộ hoặc lời thô)
+      const parsedInternal = buildLyricLines(currentTrack.lyrics)
+      if (parsedInternal.length > 0) {
+        setLyrics(parsedInternal)
+        return
+      }
+
+      // 3. Lời bài hát online
+      if (currentTrack.title && currentTrack.artist && !currentTrack.artist.toLowerCase().includes('unknown')) {
+        try {
+          // @ts-ignore
+          const mmRes = await window.api.fetchMusixmatchLyrics(currentTrack.title, currentTrack.artist, currentTrack.album, currentTrack.duration)
+          if (cancelled) return
+          if (mmRes?.success && mmRes.lyrics) {
+            const parsedOnline = mmRes.isSynced ? parseLRC(mmRes.lyrics) : []
+            if (parsedOnline.length > 0) {
+              setLyrics(parsedOnline)
+              return
+            }
+            const plainOnline = parsePlainLyrics(mmRes.lyrics)
+            if (plainOnline.length > 0) {
+              setLyrics([
+                ...plainOnline,
+                { time: 0, text: '', unsynced: true },
+                { time: 0, text: `(Lời bài hát được cung cấp bởi ${mmRes.source === 'lrclib' ? 'LRCLIB' : 'Musixmatch'})`, unsynced: true }
+              ])
+              return
+            }
+          } else if (mmRes && mmRes.code && mmRes.code !== 'NOT_FOUND' && mmRes.code !== 'NO_LYRICS') {
+            // Lỗi thật sự của API (token, giới hạn tần suất, mạng...) -> ghi log để dễ chẩn đoán
+            console.warn('Lỗi lấy lời online:', mmRes.code, mmRes.error)
+          }
+        } catch (e) {
+          console.error('Lỗi lấy lời Musixmatch', e)
+        }
+      }
+
+      if (!cancelled) setLyrics([])
     }
 
     loadLyrics()
+    return () => { cancelled = true }
   }, [currentTrack])
 
   // Sync Lyrics & Preload Buffer Next Track
@@ -3352,7 +3436,10 @@ export default function App() {
 
     const handleTimeUpdate = () => {
       // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Chỉ cập nhật khi giao diện đang mở trên màn hình) ---
-      if (!document.hidden && lyrics.length > 0) {
+      if (!document.hidden && lyrics.length > 0 && lyrics[0].unsynced) {
+        // Lời thô không có mốc thời gian: không highlight theo thời gian phát
+        if (currentLyricIndex !== -1) setCurrentLyricIndex(-1)
+      } else if (!document.hidden && lyrics.length > 0) {
         const visualTime = audio.currentTime + 0.3
         const index = lyrics.findIndex((line, i) => {
           const nextLine = lyrics[i + 1]
@@ -3411,7 +3498,7 @@ export default function App() {
       if (e.code === 'ArrowRight' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         e.preventDefault()
         if (bitPerfectEnabled) {
-          window.api.mpvSeek(5)
+          window.api.mpvSeek(5, 'relative')
         } else if (audioRef.current && currentTrack) {
           audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
         }
@@ -3422,7 +3509,7 @@ export default function App() {
       if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         e.preventDefault()
         if (bitPerfectEnabled) {
-          window.api.mpvSeek(-5)
+          window.api.mpvSeek(-5, 'relative')
         } else if (audioRef.current && currentTrack) {
           audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
         }
@@ -3516,14 +3603,14 @@ export default function App() {
             break
           case 'seek-forward':
             if (bitPerfectEnabled) {
-              window.api.mpvSeek(5)
+              window.api.mpvSeek(5, 'relative')
             } else if (audioRef.current && currentTrack) {
               audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
             }
             break
           case 'seek-backward':
             if (bitPerfectEnabled) {
-              window.api.mpvSeek(-5)
+              window.api.mpvSeek(-5, 'relative')
             } else if (audioRef.current && currentTrack) {
               audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
             }
@@ -3655,13 +3742,29 @@ export default function App() {
     const unEnded = window.api.onMpvEnded(() => {
       if (bitPerfectEnabled && !crossfadeEnabled) handleNext()
     })
+    const unError = (window.api as any)?.onMpvError?.((err: string) => {
+      showToast(`Lỗi âm thanh WASAPI: ${err}`, 'error')
+    })
+    const unAudioParams = (window.api as any)?.onMpvAudioParams?.((params: any) => {
+      if (params && params.samplerate) {
+        setMpvOutParams(params)
+      }
+    })
     return () => {
       if (typeof unTime === 'function') unTime()
       if (typeof unDuration === 'function') unDuration()
       if (typeof unPaused === 'function') unPaused()
       if (typeof unEnded === 'function') unEnded()
+      if (typeof unError === 'function') unError()
+      if (typeof unAudioParams === 'function') unAudioParams()
     }
   }, [handleNext, crossfadeEnabled, bitPerfectEnabled])
+
+  useEffect(() => {
+    if (!bitPerfectEnabled) {
+      setMpvOutParams(null)
+    }
+  }, [bitPerfectEnabled])
 
   // Watch currentTrack
   useEffect(() => {
@@ -3669,6 +3772,13 @@ export default function App() {
       if (bitPerfectEnabled) {
         window.api.mpvPlay(currentTrack.filePath, crossfadeEnabled ? crossfadeDuration : 0)
         if (audioRef.current) audioRef.current.pause()
+        if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
+          const seekTo = pendingSeekTimeRef.current
+          pendingSeekTimeRef.current = null
+          setTimeout(() => {
+            window.api.mpvSeek(seekTo, 'absolute')
+          }, 150)
+        }
       } else {
         // Dừng mpv khi phát bằng HTML Audio
         window.api.mpvPause()
@@ -3678,12 +3788,17 @@ export default function App() {
 
   // Watch EQ & Preamp
   useEffect(() => {
-    if (isEqEnabled) {
-      window.api.mpvSetEqualizer(eqBands.map(b => b.gain), preampGain)
-    } else {
-      window.api.mpvSetEqualizer([0,0,0,0,0,0,0,0,0,0], 0)
+    // Trong chế độ Bit-Perfect, bypass toàn bộ EQ filter để bảo toàn 100% bit dữ liệu truyền tới DAC
+    if (bitPerfectEnabled) {
+      window.api.mpvSetEqualizer([], 0)
+      return
     }
-  }, [eqBands, isEqEnabled, preampGain])
+    if (isEqEnabled) {
+      window.api.mpvSetEqualizer(eqBands, preampGain)
+    } else {
+      window.api.mpvSetEqualizer([], 0)
+    }
+  }, [eqBands, isEqEnabled, preampGain, bitPerfectEnabled])
 
   // Watch Volume
   useEffect(() => {
@@ -5177,18 +5292,21 @@ export default function App() {
                             const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
                             const wasPlaying = isPlaying
 
+                            try {
+                              await window.api.setBitPerfect(val, volume)
+                            } catch (err: any) {
+                              showToast(`Không thể cấu hình Bit-perfect: ${err?.message || err}`, 'error')
+                              return
+                            }
+
+                            if (currentPlaybackTime > 0) {
+                              pendingSeekTimeRef.current = currentPlaybackTime
+                            }
                             setBitPerfectEnabled(val)
-                            await window.api.setBitPerfect(val)
 
                             if (prevTrack && prevTrack.filePath) {
                               if (val) {
                                 if (audioRef.current) audioRef.current.pause()
-                                if (wasPlaying) {
-                                  await window.api.mpvPlay(prevTrack.filePath, 0)
-                                  if (currentPlaybackTime > 0) {
-                                    window.api.mpvSeek(currentPlaybackTime)
-                                  }
-                                }
                               } else {
                                 if (audioRef.current) {
                                   audioRef.current.currentTime = currentPlaybackTime
@@ -5206,6 +5324,33 @@ export default function App() {
                         />
                       </div>
                       <p className="text-xs text-zinc-500 mt-2">{t('settings.bitPerfect.note')}</p>
+
+                      {/* Lựa chọn thiết bị đầu ra âm thanh / DAC */}
+                      <div className="mt-4">
+                        <label className="block text-zinc-300 text-xs font-medium mb-1.5">
+                          {t('settings.bitPerfect.deviceLabel')}
+                        </label>
+                        <select
+                          value={selectedDeviceId}
+                          onChange={(e) => {
+                            const newDev = e.target.value
+                            setSelectedDeviceId(newDev)
+                            if (window.api && (window.api as any).setAudioDevice) {
+                              (window.api as any).setAudioDevice(newDev)
+                            }
+                          }}
+                          className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-theme-10 transition-colors"
+                        >
+                          <option value="auto">{t('settings.bitPerfect.deviceAuto')}</option>
+                          {availableAudioDevices
+                            .filter(d => d.name !== 'auto')
+                            .map((dev) => (
+                              <option key={dev.name} value={dev.name}>
+                                {dev.description || dev.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
                     </div>
 
                     <div className="border-t border-theme-30 pt-6 mt-6">
@@ -6467,16 +6612,23 @@ export default function App() {
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
                   {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-10">{t('lyrics.noLyrics')}</p> : lyrics.map((line, index) => {
                     const isActive = index === currentLyricIndex
-                    return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-theme-10 text-xl' : 'text-zinc-500 text-sm hover:text-zinc-300'}`}>{line.text}</p>
+                    return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(!line.unsynced && audioRef.current){audioRef.current.currentTime = line.time}}} className={`transition-all duration-300 font-bold ${line.unsynced ? 'text-zinc-300 text-sm min-h-[1.25rem]' : `cursor-pointer ${isActive ? 'text-theme-10 text-xl' : 'text-zinc-500 text-sm hover:text-zinc-300'}`}`}>{line.text}</p>
                   })}
                 </div>
                 <div className="p-3 border-t border-theme-30/50 bg-zinc-950/40 h-16 shrink-0 w-full overflow-hidden flex items-center justify-center">
-                  <WebGLVisualizer 
-                    analyserNodeRef={analyserNodeRef} 
-                    isPlaying={isPlaying} 
-                    isLite={isLite} 
-                    showVisualizer={true} 
-                  />
+                  {bitPerfectEnabled ? (
+                    <div className="flex items-center gap-2 text-xs text-emerald-400/90 font-medium bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>Bit-perfect Direct Stream {mpvOutParams?.samplerate ? `(${mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`})` : '(Bypass DSP)'}</span>
+                    </div>
+                  ) : (
+                    <WebGLVisualizer 
+                      analyserNodeRef={analyserNodeRef} 
+                      isPlaying={isPlaying} 
+                      isLite={isLite} 
+                      showVisualizer={true} 
+                    />
+                  )}
                 </div>
               </div>
             )}
@@ -6559,12 +6711,19 @@ export default function App() {
 
                 {/* VISUALIZER DƯỚI ĐĨA THAN */}
                 <div className="w-[25vw] max-w-[400px] min-w-[250px] h-14 rounded-xl bg-zinc-950/50 border border-theme-30/50 p-2 overflow-hidden flex items-center justify-center shadow-inner">
-                  <WebGLVisualizer 
-                    analyserNodeRef={analyserNodeRef} 
-                    isPlaying={isPlaying} 
-                    isLite={isLite} 
-                    showVisualizer={true} 
-                  />
+                  {bitPerfectEnabled ? (
+                    <div className="flex items-center gap-2 text-xs text-emerald-400/90 font-medium bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>Bit-perfect Direct Stream {mpvOutParams?.samplerate ? `(${mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`})` : '(Bypass DSP)'}</span>
+                    </div>
+                  ) : (
+                    <WebGLVisualizer 
+                      analyserNodeRef={analyserNodeRef} 
+                      isPlaying={isPlaying} 
+                      isLite={isLite} 
+                      showVisualizer={true} 
+                    />
+                  )}
                 </div>
 
                 <div className="text-center"><h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2><p className="text-theme-10 text-lg">{currentTrack?.artist}</p></div>
@@ -6572,7 +6731,7 @@ export default function App() {
               <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">
                  {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-32 text-xl">{t('lyrics.noLyrics')}</p> : lyrics.map((line, index) => {
                   const isActive = index === currentLyricIndex
-                  return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(audioRef.current){audioRef.current.currentTime = line.time}}} className={`cursor-pointer transition-all duration-300 font-bold ${isActive ? 'text-theme-10 text-3xl scale-105' : 'text-zinc-500 text-xl hover:text-zinc-300 opacity-50'}`}>{line.text}</p>
+                  return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(!line.unsynced && audioRef.current){audioRef.current.currentTime = line.time}}} className={`transition-all duration-300 font-bold ${line.unsynced ? 'text-zinc-300 text-xl min-h-[1.75rem]' : `cursor-pointer ${isActive ? 'text-theme-10 text-3xl scale-105' : 'text-zinc-500 text-xl hover:text-zinc-300 opacity-50'}`}`}>{line.text}</p>
                 })}
               </div>
             </div>
@@ -6601,8 +6760,21 @@ export default function App() {
                       {currentTrack.bitDepth}-BIT
                     </span>
                   )}
+                  {bitPerfectEnabled && (
+                    <span
+                      className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded"
+                      title={mpvOutParams?.samplerate ? `WASAPI Exclusive: ${mpvOutParams.samplerate}Hz • ${mpvOutParams.format || 'Direct'} (Bit-perfect)` : "WASAPI Exclusive: Direct bit-perfect stream to hardware DAC"}
+                    >
+                      WASAPI Direct
+                    </span>
+                  )}
                 </div>
-                <span className="text-[10px] text-zinc-500">{currentTrack.sampleRate ? `${currentTrack.sampleRate / 1000}kHz` : ''} {currentTrack.bitrate ? ` | ${Math.round(currentTrack.bitrate / 1000)} kbps` : ''}</span>
+                <span className="text-[10px] text-zinc-500">
+                  {bitPerfectEnabled && mpvOutParams?.samplerate
+                    ? `${mpvOutParams.samplerate / 1000}kHz`
+                    : (currentTrack.sampleRate ? `${currentTrack.sampleRate / 1000}kHz` : '')}
+                  {currentTrack.bitrate ? ` | ${Math.round(currentTrack.bitrate / 1000)} kbps` : ''}
+                </span>
               </div>
             )}
           </div>

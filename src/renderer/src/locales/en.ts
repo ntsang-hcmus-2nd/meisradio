@@ -236,9 +236,11 @@ export const en: TranslationDictionary = {
       autoCategorize: 'Auto Categorize by Album'
     },
     bitPerfect: {
-      title: 'Bit-perfect (WASAPI Exclusive / ASIO)',
+      title: 'Bit-perfect (WASAPI Exclusive)',
       label: 'Bit-perfect Mode (Bypass Windows Mixer)',
-      note: 'Note: Enabling this mode takes exclusive audio control; other apps will have no sound. Changes will restart the audio stream.'
+      note: 'Note: Enabling this mode takes exclusive audio control; other apps will have no sound. Changes will restart the audio stream.',
+      deviceLabel: 'Audio Output Device / DAC',
+      deviceAuto: 'Automatic (System Default)'
     },
     googleDrive: {
       title: 'Google Drive API Key',

@@ -239,6 +239,8 @@ export interface TranslationDictionary {
       title: string
       label: string
       note: string
+      deviceLabel: string
+      deviceAuto: string
     }
     googleDrive: {
       title: string

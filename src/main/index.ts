@@ -12,7 +12,7 @@ import NodeID3 from 'node-id3'
 import ytdlpDefault, { create } from 'yt-dlp-exec' // Đã sửa lỗi import yt-dlp
 import axios from 'axios'
 import http from 'http'
-import { MpvManager } from './MpvManager'
+import { MpvManager, getMpvAudioDevices } from './MpvManager'
 import { writeFlacMetadata } from './flacMetadata'
 import { DiscordRpcManager, DiscordRpcConfig, DiscordPresencePayload, DEFAULT_DISCORD_CLIENT_ID } from './DiscordRpcManager'
 import { 
@@ -80,6 +80,89 @@ export function getAudioFilesInDirectoryRecursive(dir: string, supportedExts: st
 
   scan(dir)
   return audioFiles
+}
+
+/**
+ * Bản bất đồng bộ, tiết kiệm tài nguyên của getAudioFilesInDirectoryRecursive:
+ * - Dùng fs.promises.readdir({ withFileTypes }) nên KHÔNG cần stat từng mục để phân biệt thư mục/tệp
+ * - Không đi theo symlink thư mục (tránh vòng lặp vô hạn), giới hạn độ sâu tối đa
+ * - Nhường event loop định kỳ để tiến trình chính không bị đơ khi quét thư viện lớn
+ * - Giữ nguyên thứ tự duyệt theo thư mục (không cần sắp xếp lại toàn bộ danh sách)
+ */
+const MAX_SCAN_DEPTH = 12
+const SCAN_YIELD_EVERY = 16
+
+export async function getAudioFilesInDirectoryRecursiveAsync(
+  dir: string,
+  supportedExts: string[] = SUPPORTED_AUDIO_EXTS,
+  maxDepth: number = MAX_SCAN_DEPTH
+): Promise<string[]> {
+  const audioFiles: string[] = []
+  let visitedDirs = 0
+
+  const scan = async (currentDir: string, depth: number): Promise<void> => {
+    let entries: fs.Dirent[]
+    try {
+      entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
+    } catch (err) {
+      return
+    }
+
+    if (++visitedDirs % SCAN_YIELD_EVERY === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      if (entry.isDirectory()) {
+        if (depth < maxDepth) await scan(join(currentDir, entry.name), depth + 1)
+      } else if (entry.isFile() || entry.isSymbolicLink()) {
+        const lowerName = entry.name.toLowerCase()
+        if (supportedExts.some((ext) => lowerName.endsWith(ext))) {
+          audioFiles.push(join(currentDir, entry.name))
+        }
+      }
+    }
+  }
+
+  await scan(dir, 0)
+  return audioFiles
+}
+
+/**
+ * Trích lời bài hát nhúng trong metadata và trả về dạng chuỗi.
+ * Ưu tiên lời đồng bộ thời gian (SYLT, đơn vị ms) -> chuyển sang định dạng LRC; nếu không có thì lấy lời thô (USLT).
+ */
+function formatLrcTimestamp(ms: number): string {
+  const total = Math.max(0, Math.round(ms))
+  const m = Math.floor(total / 60000)
+  const s = Math.floor((total % 60000) / 1000)
+  const cs = Math.floor((total % 1000) / 10)
+  return `[${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}]`
+}
+
+export function extractEmbeddedLyrics(metadata: any): string | null {
+  const tags = metadata?.common?.lyrics
+  if (!Array.isArray(tags) || tags.length === 0) return null
+
+  let plain: string | null = null
+  for (const tag of tags as any[]) {
+    if (!tag) continue
+    if (typeof tag === 'string') {
+      if (!plain && tag.trim()) plain = tag
+      continue
+    }
+    // timeStampFormat === 2: mốc thời gian tính bằng mili giây
+    if (Array.isArray(tag.syncText) && tag.syncText.length > 0 && tag.timeStampFormat === 2) {
+      const lrc = tag.syncText
+        .filter((l: any) => l && typeof l.text === 'string' && typeof l.timestamp === 'number' && l.text.trim())
+        .map((l: any) => `${formatLrcTimestamp(l.timestamp)}${l.text.trim()}`)
+        .join('\n')
+      if (lrc) return lrc
+    }
+    if (!plain && typeof tag.text === 'string' && tag.text.trim()) plain = tag.text
+  }
+  return plain
 }
 
 /**
@@ -720,12 +803,14 @@ app.whenReady().then(() => {
   // MPV AUDIO BACKEND IPC
   // ==========================================
   mpvManager = new MpvManager()
-  mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false).catch(console.error) // auto init on start
+  mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false, currentConfig.volume ?? 1.0).catch(console.error) // auto init on start
   
   mpvManager.on('time', (val) => mainWindow?.webContents.send('mpv:time', val))
   mpvManager.on('duration', (val) => mainWindow?.webContents.send('mpv:duration', val))
   mpvManager.on('paused', (val) => mainWindow?.webContents.send('mpv:paused', val))
   mpvManager.on('ended', () => mainWindow?.webContents.send('mpv:ended'))
+  mpvManager.on('error', (err) => mainWindow?.webContents.send('mpv:error', err))
+  mpvManager.on('audio-out-params', (params) => mainWindow?.webContents.send('mpv:audio-out-params', params))
 
   ipcMain.handle('mpv:play', (_, url, crossfade) => {
     let rawPath = url
@@ -741,14 +826,25 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('mpv:resume', () => mpvManager?.play())
   ipcMain.handle('mpv:pause', () => mpvManager?.pause())
-  ipcMain.handle('mpv:seek', (_, pos) => mpvManager?.seek(pos))
-  ipcMain.handle('mpv:setVolume', (_, vol) => mpvManager?.setVolume(vol))
+  ipcMain.handle('mpv:stop', () => mpvManager?.stop())
+  ipcMain.handle('mpv:seek', (_, pos, mode = 'absolute') => mpvManager?.seek(pos, mode))
+  ipcMain.handle('mpv:setVolume', (_, vol) => {
+    if (typeof vol === 'number') {
+      const config = getConfig()
+      config.volume = vol
+      saveConfig(config)
+    }
+    mpvManager?.setVolume(vol)
+  })
   ipcMain.handle('mpv:setEqualizer', (_, bands, preamp = 0) => mpvManager?.setEqualizer(bands, preamp))
-  ipcMain.handle('mpv:setBitPerfect', async (_, val) => {
+  ipcMain.handle('mpv:setBitPerfect', async (_, val, currentVol?: number) => {
     const config = getConfig()
     config.bitPerfectEnabled = val
+    if (typeof currentVol === 'number') {
+      config.volume = currentVol
+    }
     saveConfig(config)
-    await mpvManager?.init(config.audioDevice, val)
+    await mpvManager?.init(config.audioDevice, val, typeof currentVol === 'number' ? currentVol : config.volume)
     return { success: true }
   })
 
@@ -757,6 +853,20 @@ app.whenReady().then(() => {
     config.audioDevice = deviceId
     saveConfig(config)
     mpvManager?.setAudioDevice(deviceId)
+    return { success: true }
+  })
+
+  ipcMain.handle('music:getAudioDevices', async () => {
+    try {
+      const devices = await getMpvAudioDevices()
+      return { success: true, devices }
+    } catch (err: any) {
+      return { 
+        success: false, 
+        error: err?.message || 'Unknown error', 
+        devices: [{ name: 'auto', description: 'Tự động chọn (Auto / Default)' }] 
+      }
+    }
   })
 
   // ==========================================
@@ -1030,7 +1140,7 @@ app.whenReady().then(() => {
           isCloud: false,
           coverArt: coverUrl,
           themeColors: themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || null,
-          lyrics: metadata.common.lyrics ? metadata.common.lyrics[0] : null
+          lyrics: extractEmbeddedLyrics(metadata)
         }
 
         metadataCache[trackPath] = {
@@ -1064,19 +1174,24 @@ app.whenReady().then(() => {
           try { fs.mkdirSync(thumbDir) } catch (e) {}
         }
 
-        const items = fs.readdirSync(folderRoot)
-        for (const item of items) {
+        const dirents = await fs.promises.readdir(folderRoot, { withFileTypes: true })
+        for (const dirent of dirents) {
+          const item = dirent.name
           const itemPath = join(folderRoot, item)
           try {
-            const stat = fs.statSync(itemPath)
+            // Dirent đã cho biết loại mục -> không cần stat; chỉ stat khi là symlink để biết đích đến
+            let isDir = dirent.isDirectory()
+            if (!isDir && dirent.isSymbolicLink()) {
+              isDir = (await fs.promises.stat(itemPath)).isDirectory()
+            }
 
-            if (stat.isDirectory() && item !== '.thumbnails') {
+            if (isDir && item !== '.thumbnails') {
               const playlistTracks: any[] = []
-              // Quét đệ quy tất cả các file âm thanh trong thư mục và mọi thư mục con
-              const allTrackPaths = getAudioFilesInDirectoryRecursive(itemPath, supportedExts)
+              // Quét đệ quy (bất đồng bộ, nhường event loop) mọi file âm thanh trong thư mục và các thư mục con
+              const allTrackPaths = await getAudioFilesInDirectoryRecursiveAsync(itemPath, supportedExts)
               for (const trackPath of allTrackPaths) {
                 try {
-                  const subStat = fs.statSync(trackPath)
+                  const subStat = await fs.promises.stat(trackPath)
                   const fileName = path.basename(trackPath)
                   const trackData = await parseOrGetTrack(trackPath, fileName, subStat, thumbDir)
                   playlistTracks.push(trackData)
@@ -1138,7 +1253,8 @@ app.whenReady().then(() => {
               }
 
               playlists.push({ name: item, path: itemPath, folderRoot, tracks: playlistTracks, thumbnail: thumbnailUrl })
-            } else if (supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
+            } else if (!isDir && supportedExts.some(ext => item.toLowerCase().endsWith(ext))) {
+              const stat = await fs.promises.stat(itemPath)
               const trackData = await parseOrGetTrack(itemPath, item, stat, thumbDir)
               tracks.push(trackData)
             }
@@ -1463,13 +1579,19 @@ app.whenReady().then(() => {
       if (rawPath.startsWith('file://')) {
         const { fileURLToPath } = require('url')
         rawPath = fileURLToPath(rawPath)
-      } else {
+      } else if (!fs.existsSync(rawPath)) {
+        // Chỉ giải mã URI khi đường dẫn thô không tồn tại (tránh làm hỏng tên tệp chứa '%')
         try { rawPath = decodeURIComponent(rawPath) } catch (e) {}
       }
       const dir = path.dirname(rawPath)
       const fileNameWithoutExt = path.basename(rawPath, path.extname(rawPath))
-      const lrcPath = path.join(dir, `${fileNameWithoutExt}.lrc`)
-      if (fs.existsSync(lrcPath)) return fs.readFileSync(lrcPath, 'utf-8')
+      for (const lrcExt of ['.lrc', '.LRC']) {
+        const lrcPath = path.join(dir, `${fileNameWithoutExt}${lrcExt}`)
+        try {
+          const content = (await fs.promises.readFile(lrcPath, 'utf-8')).replace(/^\uFEFF/, '')
+          if (content.trim()) return content
+        } catch (e) {}
+      }
       return null
     } catch (error) { return null }
   })
@@ -1819,7 +1941,7 @@ app.whenReady().then(() => {
     if (canceled || filePaths.length === 0) return []
     const folderPath = filePaths[0]
     const supportedExtensions = SUPPORTED_AUDIO_EXTS
-    const audioFiles = getAudioFilesInDirectoryRecursive(folderPath, supportedExtensions)
+    const audioFiles = await getAudioFilesInDirectoryRecursiveAsync(folderPath, supportedExtensions)
     const tracks: any[] = []
     
     for (const filePath of audioFiles) {
@@ -1897,7 +2019,7 @@ app.whenReady().then(() => {
           if (metadata?.common.lyrics && metadata.common.lyrics.length > 0) {
             tags.unsynchronisedLyrics = { 
               language: 'eng', 
-              text: String(metadata.common.lyrics[0]) // Ép kiểu chuỗi
+              text: extractEmbeddedLyrics(metadata) || '' // Lấy chuỗi lời (không String() trực tiếp vì tag có thể là object)
             }
           }
           NodeID3.update(tags, savePath)
@@ -2117,7 +2239,7 @@ app.whenReady().then(() => {
     
     try {
       const supportedExts = SUPPORTED_AUDIO_EXTS
-      const allAudioFiles = getAudioFilesInDirectoryRecursive(playlistPath, supportedExts)
+      const allAudioFiles = await getAudioFilesInDirectoryRecursiveAsync(playlistPath, supportedExts)
       
       // Tìm bài hát đầu tiên có đuôi hỗ trợ (kể cả trong thư mục con)
       const firstTrack = allAudioFiles[0]
@@ -2152,6 +2274,19 @@ app.whenReady().then(() => {
   // ==========================================
   
   let mxmToken: string | null = null
+  let mxmTokenPromise: Promise<string | null> | null = null
+  let mxmCooldownUntil = 0 // Khi bị Musixmatch yêu cầu captcha/giới hạn, tạm ngưng gọi API để tránh bị khóa lâu hơn
+
+  const MXM_BASE = 'https://apic-desktop.musixmatch.com/ws/1.1'
+  const MXM_APP_ID = 'web-desktop-app-v1.0'
+  const MXM_TIMEOUT_MS = 8000
+  const MXM_COOLDOWN_MS = 2 * 60 * 1000
+  const MXM_NEGATIVE_CACHE_MS = 10 * 60 * 1000
+  const MXM_CACHE_MAX = 100
+  // Hiện tại endpoint desktop của Musixmatch cấp token giả (toàn số 0) và trả về dữ liệu mẫu cố định
+  // (lyrics_id 35776330 - văn bản vô nghĩa "Wob gopini den...") -> phải nhận diện & loại bỏ
+  const MXM_DUMMY_TOKEN_COOLDOWN_MS = 30 * 60 * 1000
+  const MXM_DUMMY_LYRICS_ID = 35776330
 
   // Header ngụy trang thành phần mềm Musixmatch Desktop thật
   const mxmHeaders = {
@@ -2159,86 +2294,379 @@ app.whenReady().then(() => {
     'Accept': 'application/json'
   }
 
-  async function getMusixmatchToken() {
-    if (mxmToken) return mxmToken
-    const url = 'https://apic-desktop.musixmatch.com/ws/1.1/token.get?app_id=web-desktop-app-v1.0'
-    try {
-      const res = await fetch(url, { headers: mxmHeaders })
-      const data = await res.json()
-      if (data.message.header.status_code === 200) {
-        mxmToken = data.message.body.user_token
-        return mxmToken
-      }
-    } catch (e) {
-      console.error("Lỗi lấy Token Musixmatch:", e)
+  type MxmResult = {
+    success: boolean
+    lyrics?: string
+    isSynced?: boolean
+    source?: 'lrclib' | 'musixmatch'
+    error?: string
+    code?: 'NO_TOKEN' | 'RATE_LIMITED' | 'NETWORK' | 'NOT_FOUND' | 'NO_LYRICS' | 'BAD_RESPONSE'
+  }
+  // Cache kết quả (thành công + "không tìm thấy") để không gọi lại API mỗi lần phát lại bài hát
+  const mxmResultCache = new Map<string, { at: number; result: MxmResult }>()
+
+  const mxmCacheSet = (key: string, result: MxmResult) => {
+    if (mxmResultCache.size >= MXM_CACHE_MAX) {
+      const oldest = mxmResultCache.keys().next().value
+      if (oldest !== undefined) mxmResultCache.delete(oldest)
     }
+    mxmResultCache.set(key, { at: Date.now(), result })
+  }
+
+  // fetch có timeout, kiểm tra HTTP status và đảm bảo phản hồi là JSON hợp lệ
+  async function mxmFetchJson(url: string): Promise<any> {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), MXM_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, { headers: mxmHeaders, signal: controller.signal })
+      if (res.status === 429) {
+        const err: any = new Error('Musixmatch giới hạn tần suất truy vấn (HTTP 429)')
+        err.code = 'RATE_LIMITED'
+        throw err
+      }
+      if (!res.ok && res.status !== 401 && res.status !== 404) {
+        const err: any = new Error(`Musixmatch trả về HTTP ${res.status}`)
+        err.code = 'NETWORK'
+        throw err
+      }
+      try {
+        return await res.json()
+      } catch {
+        const err: any = new Error('Phản hồi Musixmatch không phải JSON hợp lệ')
+        err.code = 'BAD_RESPONSE'
+        throw err
+      }
+    } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        const err: any = new Error('Hết thời gian chờ Musixmatch')
+        err.code = 'NETWORK'
+        throw err
+      }
+      if (!e?.code) e.code = 'NETWORK'
+      throw e
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  async function getMusixmatchToken(): Promise<string | null> {
+    if (mxmToken) return mxmToken
+    if (Date.now() < mxmCooldownUntil) return null
+    // Gộp các yêu cầu token đồng thời thành một lần gọi duy nhất
+    if (mxmTokenPromise) return mxmTokenPromise
+
+    mxmTokenPromise = (async () => {
+      try {
+        const data = await mxmFetchJson(`${MXM_BASE}/token.get?app_id=${MXM_APP_ID}`)
+        const header = data?.message?.header
+        const token = data?.message?.body?.user_token
+        if (header?.status_code === 200 && typeof token === 'string' && /^0+$/.test(token)) {
+          mxmCooldownUntil = Date.now() + MXM_DUMMY_TOKEN_COOLDOWN_MS
+          console.error('Musixmatch trả về token giả (toàn số 0): API desktop không còn trả dữ liệu thật, tạm bỏ qua nguồn này')
+          return null
+        }
+        if (header?.status_code === 200 && typeof token === 'string' && token && token !== 'UpgradeOnlyUpgradeOnlyUpgradeOnlyUpgradeOnly') {
+          mxmToken = token
+          return mxmToken
+        }
+        if (header?.status_code === 401 || header?.hint === 'captcha') {
+          mxmCooldownUntil = Date.now() + MXM_COOLDOWN_MS
+        }
+        console.error('Lỗi lấy Token Musixmatch:', header?.status_code, header?.hint)
+      } catch (e) {
+        console.error('Lỗi lấy Token Musixmatch:', e)
+      }
+      return null
+    })().finally(() => { mxmTokenPromise = null })
+
+    return mxmTokenPromise
+  }
+
+  // Gọi một endpoint Musixmatch, tự làm mới token 1 lần nếu hết hạn và chuẩn hóa mã trạng thái
+  async function mxmCall(endpoint: string, params: Record<string, string | number>, canRetry = true): Promise<{ statusCode: number; body: any }> {
+    const token = await getMusixmatchToken()
+    if (!token) {
+      const err: any = new Error(Date.now() < mxmCooldownUntil ? 'Musixmatch tạm không khả dụng (token không hợp lệ hoặc cần xác minh captcha)' : 'Không thể khởi tạo token Musixmatch')
+      err.code = 'NO_TOKEN'
+      throw err
+    }
+
+    const qs = new URLSearchParams({ app_id: MXM_APP_ID, ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])), usertoken: token })
+    const data = await mxmFetchJson(`${MXM_BASE}/${endpoint}?${qs.toString()}`)
+    const header = data?.message?.header
+    const statusCode = Number(header?.status_code)
+    if (!Number.isFinite(statusCode)) {
+      const err: any = new Error('Phản hồi Musixmatch thiếu mã trạng thái')
+      err.code = 'BAD_RESPONSE'
+      throw err
+    }
+
+    if (statusCode === 401) {
+      mxmToken = null
+      if (header?.hint === 'captcha') {
+        mxmCooldownUntil = Date.now() + MXM_COOLDOWN_MS
+        const err: any = new Error('Musixmatch yêu cầu xác minh (captcha)')
+        err.code = 'RATE_LIMITED'
+        throw err
+      }
+      if (canRetry) return mxmCall(endpoint, params, false)
+      const err: any = new Error('Token Musixmatch bị từ chối')
+      err.code = 'NO_TOKEN'
+      throw err
+    }
+
+    return { statusCode, body: data?.message?.body }
+  }
+
+  // Chuẩn hóa chuỗi để so khớp tên bài hát/nghệ sĩ (bỏ dấu, ký tự đặc biệt, nội dung trong ngoặc)
+  const mxmNormalize = (s: string) =>
+    (s || '')
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim()
+
+  const mxmCleanTitle = (title: string) =>
+    title
+      .replace(/\([^)]*\)|\[[^\]]*\]/g, '')
+      .replace(/\s+-\s+.*(remaster|version|edit|live|mix|mono|stereo).*$/i, '')
+      .trim()
+
+  // Chọn bản ghi khớp nhất. Bắt buộc khớp cả tên bài hát lẫn nghệ sĩ để không lấy nhầm lời bài khác
+  function pickBestMxmTrack(trackList: any[], title: string, artists: string[]): any | null {
+    const wantTitle = mxmNormalize(mxmCleanTitle(title))
+    const wantArtists = artists.map(mxmNormalize).filter(Boolean)
+    if (!wantTitle) return null
+
+    let best: any = null
+    let bestScore = 0
+    for (const item of trackList) {
+      const t = item?.track
+      if (!t?.track_id) continue
+      const gotTitle = mxmNormalize(mxmCleanTitle(String(t.track_name || '')))
+      const gotArtist = mxmNormalize(String(t.artist_name || ''))
+
+      let titleScore = 0
+      if (gotTitle === wantTitle) titleScore = 3
+      else if (gotTitle && (gotTitle.includes(wantTitle) || wantTitle.includes(gotTitle))) titleScore = 1
+      if (titleScore === 0) continue
+
+      const artistOk = wantArtists.length === 0 || wantArtists.some((a) => gotArtist.includes(a) || (gotArtist && a.includes(gotArtist)))
+      if (!artistOk) continue
+
+      const score = titleScore + (t.has_subtitles === 1 ? 1 : 0) + (t.has_lyrics === 1 ? 0.5 : 0)
+      if (score > bestScore) {
+        bestScore = score
+        best = t
+      }
+    }
+    return best
+  }
+
+  // Loại bỏ phần chú thích bản quyền/pixel theo dõi mà Musixmatch gắn ở cuối lời thô
+  const mxmCleanPlainLyrics = (raw: string) =>
+    raw.split('*******')[0].replace(/\(\d{6,}\)\s*$/, '').trim()
+
+  const hasLrcTimestamps = (text: string) => /\[\d{2,}:\d{2}(?:\.\d{1,3})?\]/.test(text)
+
+  async function fetchMusixmatchLyricsInternal(title: string, artist: string): Promise<MxmResult> {
+    const artists = splitArtistString(artist)
+    const primaryArtist = artists[0] || artist
+
+    // 1. Tìm bài hát: nghệ sĩ đầy đủ -> nghệ sĩ chính -> tìm tự do theo "tên + nghệ sĩ chính"
+    const cleanTitle = mxmCleanTitle(title)
+    const searches: Record<string, string | number>[] = [
+      { q_track: cleanTitle, q_artist: artist }
+    ]
+    if (primaryArtist && primaryArtist.toLowerCase() !== artist.toLowerCase()) {
+      searches.push({ q_track: cleanTitle, q_artist: primaryArtist })
+    }
+    searches.push({ q: `${cleanTitle} ${primaryArtist}` })
+
+    let matched: any = null
+    for (const search of searches) {
+      const { statusCode, body } = await mxmCall('track.search', {
+        ...search,
+        f_has_lyrics: 1,
+        s_track_rating: 'desc',
+        page_size: 5,
+        page: 1
+      })
+      if (statusCode !== 200) continue
+      const list = Array.isArray(body?.track_list) ? body.track_list : []
+      matched = pickBestMxmTrack(list, title, artists.length > 0 ? artists : [artist])
+      if (matched) break
+    }
+
+    if (!matched) {
+      return { success: false, code: 'NOT_FOUND', error: 'Không tìm thấy bài hát khớp trên Musixmatch' }
+    }
+
+    const trackId = matched.track_id
+
+    // 2. Ưu tiên bản đồng bộ thời gian (LRC)
+    if (matched.has_subtitles !== 0) {
+      const sub = await mxmCall('track.subtitle.get', { track_id: trackId, subtitle_format: 'lrc' })
+      const subBody = sub.statusCode === 200 ? sub.body?.subtitle?.subtitle_body : null
+      if (typeof subBody === 'string' && hasLrcTimestamps(subBody)) {
+        return { success: true, lyrics: subBody, isSynced: true, source: 'musixmatch' }
+      }
+    }
+
+    // 3. Nếu không có bản đồng bộ, lấy lời thô
+    const lyr = await mxmCall('track.lyrics.get', { track_id: trackId })
+    if (lyr.statusCode === 200) {
+      const lyricsObj = lyr.body?.lyrics
+      if (lyricsObj?.lyrics_id === MXM_DUMMY_LYRICS_ID) {
+        return { success: false, code: 'BAD_RESPONSE', error: 'Musixmatch trả về lời mẫu giả (không phải lời thật của bài hát)' }
+      }
+      if (lyricsObj?.restricted === 1) {
+        return { success: false, code: 'NO_LYRICS', error: 'Lời bài hát bị hạn chế bản quyền tại khu vực này' }
+      }
+      const rawBody = lyricsObj?.lyrics_body
+      if (typeof rawBody === 'string') {
+        const cleaned = mxmCleanPlainLyrics(rawBody)
+        if (cleaned) return { success: true, lyrics: cleaned, isSynced: false, source: 'musixmatch' }
+      }
+    }
+
+    return { success: false, code: 'NO_LYRICS', error: 'Bài hát chưa được cập nhật lời' }
+  }
+
+  // ------------------------------------------
+  // LRCLIB (https://lrclib.net) — API lời bài hát miễn phí, không cần khóa, có cả lời đồng bộ (LRC)
+  // ------------------------------------------
+  const LRCLIB_BASE = 'https://lrclib.net/api'
+  const LRCLIB_HEADERS = { 'User-Agent': 'MeisRadio/0.4.6 (https://github.com/meisradio)', 'Accept': 'application/json' }
+
+  async function lrclibFetch(endpoint: string, params: Record<string, string>): Promise<{ status: number; data: any }> {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), MXM_TIMEOUT_MS)
+    try {
+      const res = await fetch(`${LRCLIB_BASE}/${endpoint}?${new URLSearchParams(params).toString()}`, { headers: LRCLIB_HEADERS, signal: controller.signal })
+      if (res.status === 429) {
+        const err: any = new Error('LRCLIB giới hạn tần suất truy vấn (HTTP 429)')
+        err.code = 'RATE_LIMITED'
+        throw err
+      }
+      let data: any = null
+      try { data = await res.json() } catch { /* body rỗng/không phải JSON */ }
+      if (!res.ok && res.status !== 404) {
+        const err: any = new Error(`LRCLIB trả về HTTP ${res.status}`)
+        err.code = 'NETWORK'
+        throw err
+      }
+      return { status: res.status, data }
+    } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        const err: any = new Error('Hết thời gian chờ LRCLIB')
+        err.code = 'NETWORK'
+        throw err
+      }
+      if (!e?.code) e.code = 'NETWORK'
+      throw e
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  const lrclibToResult = (item: any): MxmResult | null => {
+    if (!item) return null
+    if (item.instrumental) return { success: false, code: 'NO_LYRICS', error: 'Bài hát không lời (instrumental)' }
+    const synced = typeof item.syncedLyrics === 'string' ? item.syncedLyrics : ''
+    if (synced.trim() && hasLrcTimestamps(synced)) return { success: true, lyrics: synced, isSynced: true, source: 'lrclib' }
+    const plain = typeof item.plainLyrics === 'string' ? item.plainLyrics.trim() : ''
+    if (plain) return { success: true, lyrics: plain, isSynced: false, source: 'lrclib' }
     return null
   }
 
-  ipcMain.handle('music:fetchMusixmatchLyrics', async (_, title: string, artist: string) => {
-    try {
-      let token = await getMusixmatchToken()
-      if (!token) return { success: false, error: 'Không thể khởi tạo token Musixmatch' }
+  async function fetchLrclibLyrics(title: string, artist: string, album?: string, duration?: number): Promise<MxmResult> {
+    const artists = splitArtistString(artist)
+    const primaryArtist = artists[0] || artist
+    const cleanTitle = mxmCleanTitle(title) || title
+    const hasDuration = typeof duration === 'number' && Number.isFinite(duration) && duration > 0
 
-      // 1. Tìm kiếm ID bài hát (Track ID)
-      const cleanTitle = title.replace(/\([^)]*\)/g, '').trim()
-      const searchTrack = async (artStr: string) => {
-        let url = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artStr)}&usertoken=${token}`
-        let res = await fetch(url, { headers: mxmHeaders })
-        let data = await res.json()
-
-        if (data.message?.header?.status_code === 401) {
-          mxmToken = null
-          token = await getMusixmatchToken()
-          url = `https://apic-desktop.musixmatch.com/ws/1.1/track.search?app_id=web-desktop-app-v1.0&q_track=${encodeURIComponent(cleanTitle)}&q_artist=${encodeURIComponent(artStr)}&usertoken=${token}`
-          res = await fetch(url, { headers: mxmHeaders })
-          data = await res.json()
-        }
-        return data
-      }
-
-      let searchData = await searchTrack(artist)
-
-      // Nếu tìm với nghệ sĩ kết hợp không thấy, thử với nghệ sĩ chính đầu tiên
-      if ((!searchData.message?.body?.track_list || searchData.message.body.track_list.length === 0) && (artist.includes(',') || /feat|ft|&|;|x|\//i.test(artist))) {
-        const primaryArtist = splitArtistString(artist)[0]
-        if (primaryArtist && primaryArtist.toLowerCase() !== artist.toLowerCase()) {
-          const fallbackData = await searchTrack(primaryArtist)
-          if (fallbackData.message?.body?.track_list && fallbackData.message.body.track_list.length > 0) {
-            searchData = fallbackData
-          }
-        }
-      }
-
-      if (searchData.message?.header?.status_code !== 200 || !searchData.message?.body?.track_list || searchData.message.body.track_list.length === 0) {
-        return { success: false, error: 'Không tìm thấy bài hát trên hệ thống' }
-      }
-
-      const trackId = searchData.message.body.track_list[0].track.track_id
-
-      // FIX 2: Bổ sung &subtitle_format=lrc để ép Musixmatch trả về đúng định dạng chuẩn
-      const subtitleUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.subtitle.get?app_id=web-desktop-app-v1.0&track_id=${trackId}&subtitle_format=lrc&usertoken=${token}`
-      const subtitleRes = await fetch(subtitleUrl, { headers: mxmHeaders })
-      const subtitleData = await subtitleRes.json()
-
-      if (subtitleData.message?.header?.status_code === 200 && subtitleData.message?.body?.subtitle) {
-        return { success: true, lyrics: subtitleData.message.body.subtitle.subtitle_body, isSynced: true }
-      }
-
-      // 3. Nếu không có bản đồng bộ, lấy lời thô
-      const lyricsUrl = `https://apic-desktop.musixmatch.com/ws/1.1/track.lyrics.get?app_id=web-desktop-app-v1.0&track_id=${trackId}&usertoken=${token}`
-      const lyricsRes = await fetch(lyricsUrl, { headers: mxmHeaders })
-      const lyricsData = await lyricsRes.json()
-
-      if (lyricsData.message?.header?.status_code === 200 && lyricsData.message?.body?.lyrics) {
-        return { success: true, lyrics: lyricsData.message.body.lyrics.lyrics_body, isSynced: false }
-      }
-
-      return { success: false, error: 'Bài hát chưa được cập nhật lời' }
-    } catch (error: any) {
-      console.error("Lỗi API Musixmatch:", error)
-      return { success: false, error: error.message }
+    // 1. Khớp chính xác theo tên + nghệ sĩ (+ album, thời lượng nếu có)
+    const exactParams: Record<string, string> = { track_name: cleanTitle, artist_name: artist }
+    if (album && album.toLowerCase() !== 'unknown' && album.toLowerCase() !== 'unknown album') exactParams.album_name = album
+    if (hasDuration) exactParams.duration = String(Math.round(duration as number))
+    const exact = await lrclibFetch('get', exactParams)
+    if (exact.status === 200) {
+      const r = lrclibToResult(exact.data)
+      if (r) return r
     }
+
+    // 2. Tìm kiếm rồi chọn bản khớp nhất (bắt buộc khớp tên bài + nghệ sĩ, lệch thời lượng tối đa 5 giây)
+    const search = await lrclibFetch('search', { track_name: cleanTitle, artist_name: primaryArtist })
+    const list: any[] = Array.isArray(search.data) ? search.data : []
+    const wantTitle = mxmNormalize(cleanTitle)
+    const wantArtists = (artists.length > 0 ? artists : [artist]).map(mxmNormalize).filter(Boolean)
+
+    let best: any = null
+    let bestScore = 0
+    for (const item of list) {
+      const gotTitle = mxmNormalize(mxmCleanTitle(String(item?.trackName || '')))
+      const gotArtist = mxmNormalize(String(item?.artistName || ''))
+      if (!gotTitle || !(gotTitle === wantTitle || gotTitle.includes(wantTitle) || wantTitle.includes(gotTitle))) continue
+      if (!wantArtists.some((a) => gotArtist.includes(a) || (gotArtist && a.includes(gotArtist)))) continue
+      if (hasDuration && typeof item.duration === 'number' && Math.abs(item.duration - (duration as number)) > 5) continue
+      if (!lrclibToResult(item)) continue
+
+      const score = (gotTitle === wantTitle ? 3 : 1) + (item.syncedLyrics ? 2 : 0)
+      if (score > bestScore) {
+        bestScore = score
+        best = item
+      }
+    }
+    const r = lrclibToResult(best)
+    if (r) return r
+    return { success: false, code: 'NOT_FOUND', error: 'Không tìm thấy bài hát khớp trên LRCLIB' }
+  }
+
+  // Lấy lời online: LRCLIB trước (ổn định, miễn phí) -> Musixmatch dự phòng
+  async function fetchOnlineLyrics(title: string, artist: string, album?: string, duration?: number): Promise<MxmResult> {
+    let primaryError: MxmResult | null = null
+    try {
+      const r = await fetchLrclibLyrics(title, artist, album, duration)
+      if (r.success) return r
+      primaryError = r
+    } catch (e: any) {
+      console.error('Lỗi API LRCLIB:', e)
+      primaryError = { success: false, code: e?.code || 'NETWORK', error: e?.message || 'Lỗi không xác định khi gọi LRCLIB' }
+    }
+
+    try {
+      const r = await fetchMusixmatchLyricsInternal(title, artist)
+      if (r.success) return r
+      // Ưu tiên báo lỗi "có ý nghĩa" hơn (không tìm thấy) thay vì lỗi hạ tầng của nguồn dự phòng
+      if (r.code === 'NOT_FOUND' || r.code === 'NO_LYRICS') return primaryError.code === 'NETWORK' ? r : primaryError
+      return primaryError
+    } catch (e: any) {
+      console.error('Lỗi API Musixmatch:', e)
+      return primaryError
+    }
+  }
+
+  ipcMain.handle('music:fetchMusixmatchLyrics', async (_, title: string, artist: string, album?: string, duration?: number): Promise<MxmResult> => {
+    if (typeof title !== 'string' || typeof artist !== 'string' || !title.trim() || !artist.trim()) {
+      return { success: false, code: 'NOT_FOUND', error: 'Thiếu tên bài hát hoặc nghệ sĩ' }
+    }
+
+    const cacheKey = `${mxmNormalize(title)}|${mxmNormalize(artist)}`
+    const cached = mxmResultCache.get(cacheKey)
+    if (cached) {
+      if (cached.result.success || Date.now() - cached.at < MXM_NEGATIVE_CACHE_MS) return cached.result
+      mxmResultCache.delete(cacheKey)
+    }
+
+    const result = await fetchOnlineLyrics(title, artist, typeof album === 'string' ? album : undefined, typeof duration === 'number' ? duration : undefined)
+    // Chỉ cache kết quả chắc chắn (có lời / không có lời); lỗi mạng, token, giới hạn tần suất thì không cache
+    if (result.success || result.code === 'NOT_FOUND' || result.code === 'NO_LYRICS') {
+      mxmCacheSet(cacheKey, result)
+    }
+    return result
   })
 
   // ==========================================

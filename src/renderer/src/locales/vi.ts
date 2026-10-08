@@ -236,9 +236,11 @@ export const vi: TranslationDictionary = {
       autoCategorize: 'Tự động phân loại Album'
     },
     bitPerfect: {
-      title: 'Bit-perfect (WASAPI Exclusive/ASIO)',
+      title: 'Bit-perfect (WASAPI Exclusive)',
       label: 'Chế độ Bit-perfect (Bỏ qua Windows Mixer)',
-      note: 'Lưu ý: Bật chế độ này sẽ chiếm quyền Audio, các ứng dụng khác sẽ không có tiếng. Thay đổi sẽ khởi động lại luồng âm thanh.'
+      note: 'Lưu ý: Bật chế độ này sẽ chiếm quyền Audio, các ứng dụng khác sẽ không có tiếng. Thay đổi sẽ khởi động lại luồng âm thanh.',
+      deviceLabel: 'Thiết bị đầu ra âm thanh (Audio Output Device / DAC)',
+      deviceAuto: 'Tự động chọn (Auto / Mặc định hệ thống)'
     },
     googleDrive: {
       title: 'Google Drive API Key',

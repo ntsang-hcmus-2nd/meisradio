@@ -35,7 +35,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   readLrcFile: (filePath: string) => ipcRenderer.invoke('music:read-lyrics', filePath),
   readAudioBuffer: (filePath: string) => ipcRenderer.invoke('music:readAudioBuffer', filePath),
   extractPlaylistThumbnail: (playlistName: string) => ipcRenderer.invoke('music:extractPlaylistThumbnail', playlistName),
-  fetchMusixmatchLyrics: (title: string, artist: string) => ipcRenderer.invoke('music:fetchMusixmatchLyrics', title, artist),
+  fetchMusixmatchLyrics: (title: string, artist: string, album?: string, duration?: number) => ipcRenderer.invoke('music:fetchMusixmatchLyrics', title, artist, album, duration),
   importLocalFiles: (targetFolder?: string, existingTracks?: any[]) => ipcRenderer.invoke('music:importLocalFiles', targetFolder, existingTracks),
   onGlobalShortcut: (callback: (action: string) => void) => {
     ipcRenderer.removeAllListeners('global-shortcut') // Dọn dẹp để tránh trùng lặp sự kiện
@@ -78,11 +78,13 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   mpvPlay: (url: string, crossfade: number) => ipcRenderer.invoke('mpv:play', url, crossfade),
   mpvResume: () => ipcRenderer.invoke('mpv:resume'),
   mpvPause: () => ipcRenderer.invoke('mpv:pause'),
-  mpvSeek: (pos: number) => ipcRenderer.invoke('mpv:seek', pos),
+  mpvStop: () => ipcRenderer.invoke('mpv:stop'),
+  mpvSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') => ipcRenderer.invoke('mpv:seek', pos, mode),
   mpvSetVolume: (vol: number) => ipcRenderer.invoke('mpv:setVolume', vol),
-  mpvSetEqualizer: (bands: number[], preamp?: number) => ipcRenderer.invoke('mpv:setEqualizer', bands, preamp),
-  setBitPerfect: (val: boolean) => ipcRenderer.invoke('mpv:setBitPerfect', val),
+  mpvSetEqualizer: (bands: any[], preamp?: number) => ipcRenderer.invoke('mpv:setEqualizer', bands, preamp),
+  setBitPerfect: (val: boolean, currentVol?: number) => ipcRenderer.invoke('mpv:setBitPerfect', val, currentVol),
   setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
+  getAudioDevices: () => ipcRenderer.invoke('music:getAudioDevices'),
   
   onMpvTime: (callback: (val: number) => void) => {
     const handler = (_e: any, val: number) => callback(val)
@@ -103,6 +105,16 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     const handler = () => callback()
     ipcRenderer.on('mpv:ended', handler)
     return () => ipcRenderer.removeListener('mpv:ended', handler)
+  },
+  onMpvError: (callback: (err: string) => void) => {
+    const handler = (_e: any, err: string) => callback(err)
+    ipcRenderer.on('mpv:error', handler)
+    return () => ipcRenderer.removeListener('mpv:error', handler)
+  },
+  onMpvAudioParams: (callback: (params: any) => void) => {
+    const handler = (_e: any, params: any) => callback(params)
+    ipcRenderer.on('mpv:audio-out-params', handler)
+    return () => ipcRenderer.removeListener('mpv:audio-out-params', handler)
   },
   getThemeColorsCache: () => ipcRenderer.invoke('music:getThemeColorsCache'),
   cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),
