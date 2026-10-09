@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, ChildProcess, execFile, execFileSync } from 'child_process'
 import net from 'net'
 import path from 'path'
 import fs from 'fs'
@@ -13,11 +13,9 @@ const getPipeName = () => {
   return `/tmp/mpv_ipc_${rand}.sock`
 }
 
-import { execFile } from 'child_process'
-
 export function getMpvBinaryPath(): string {
   const isWin = process.platform === 'win32'
-  const binNames = isWin ? ['mpv.com', 'mpv.exe'] : ['mpv']
+  const binNames = isWin ? ['mpv.exe', 'mpv.com'] : ['mpv']
   const appPath = typeof app?.getAppPath === 'function' ? app.getAppPath() : process.cwd()
   const exeDir = typeof app?.getPath === 'function' ? path.dirname(app.getPath('exe')) : process.cwd()
   const resPath = process.resourcesPath || ''
@@ -85,6 +83,12 @@ export class MpvInstance extends EventEmitter {
   private buffer = ''
   private isConnected = false
   public isPlaying = false
+  private processPid: number | null = null
+  private isKilled = false
+
+  public get pid(): number | null {
+    return this.processPid || this.mpvProcess?.pid || null
+  }
 
   constructor() {
     super()
@@ -125,15 +129,23 @@ export class MpvInstance extends EventEmitter {
       }
     }
 
-    this.mpvProcess = spawn(binPath, args, { stdio: 'ignore' })
+    this.mpvProcess = spawn(binPath, args, { stdio: 'ignore', windowsHide: true })
+    if (this.mpvProcess.pid) {
+      this.processPid = this.mpvProcess.pid
+    }
+    // Tránh giữ tham chiếu làm treo tiến trình Node/Electron khi thoát
+    this.mpvProcess.unref()
+
     this.mpvProcess.on('error', (err) => {
       this.emit('audio-error', `MPV error: ${err.message}`)
     })
     this.mpvProcess.on('exit', (code) => {
-      if (code !== 0 && code !== null) {
+      if (code !== 0 && code !== null && !this.isKilled) {
         this.emit('audio-error', `MPV terminated with exit code ${code}`)
       }
     })
+
+    if (this.isKilled) return
 
     // Wait for pipe to be ready with retry
     await this.connectSocket()
@@ -146,11 +158,17 @@ export class MpvInstance extends EventEmitter {
     const retryDelay = 150
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (this.isKilled) return
       try {
         await new Promise<void>((resolve, reject) => {
+          if (this.isKilled) return resolve()
           const socket = net.createConnection(this.pipeName)
 
           const onConnect = () => {
+            if (this.isKilled) {
+              try { socket.destroy() } catch (e) {}
+              return resolve()
+            }
             this.socket = socket
             this.isConnected = true
             socket.removeListener('error', onError)
@@ -222,6 +240,7 @@ export class MpvInstance extends EventEmitter {
         })
         return
       } catch (err) {
+        if (this.isKilled) return
         if (attempt === maxRetries) {
           console.error(`Failed to connect to MPV pipe after ${maxRetries} attempts:`, err)
           throw err
@@ -304,19 +323,79 @@ export class MpvInstance extends EventEmitter {
   }
 
   public kill() {
+    this.isKilled = true
+    const pid = this.processPid || this.mpvProcess?.pid
+
+    // 1. Gửi lệnh quit qua socket để MPV giải phóng khóa độc quyền phần cứng WASAPI và COM sạch sẽ
+    if (this.socket && this.isConnected) {
+      try {
+        const msg = JSON.stringify({ command: ['quit'], request_id: this.reqId++ }) + '\n'
+        this.socket.write(msg)
+      } catch (e) {}
+    }
+
+    // 2. Hủy socket kết nối IPC
     if (this.socket) {
       try {
+        this.socket.removeAllListeners()
         this.socket.destroy()
       } catch (e) {}
       this.socket = null
     }
+    this.isConnected = false
+
+    // 3. Hủy tiến trình con MPV
     if (this.mpvProcess) {
       try {
-        this.mpvProcess.kill()
+        this.mpvProcess.removeAllListeners()
+        this.mpvProcess.kill('SIGKILL')
       } catch (e) {}
       this.mpvProcess = null
     }
+
+    // 4. Trên Windows, cưỡng chế đóng toàn bộ cây tiến trình (cả process con nếu có)
+    if (pid && process.platform === 'win32') {
+      try {
+        execFile('taskkill', ['/F', '/T', '/PID', pid.toString()], () => {})
+      } catch (e) {}
+    }
+    this.processPid = null
+  }
+
+  public killSync() {
+    this.isKilled = true
+    const pid = this.processPid || this.mpvProcess?.pid
+
+    if (this.socket && this.isConnected) {
+      try {
+        const msg = JSON.stringify({ command: ['quit'], request_id: this.reqId++ }) + '\n'
+        this.socket.write(msg)
+      } catch (e) {}
+    }
+
+    if (this.socket) {
+      try {
+        this.socket.removeAllListeners()
+        this.socket.destroy()
+      } catch (e) {}
+      this.socket = null
+    }
     this.isConnected = false
+
+    if (this.mpvProcess) {
+      try {
+        this.mpvProcess.removeAllListeners()
+        this.mpvProcess.kill('SIGKILL')
+      } catch (e) {}
+      this.mpvProcess = null
+    }
+
+    if (pid && process.platform === 'win32') {
+      try {
+        execFileSync('taskkill', ['/F', '/T', '/PID', pid.toString()], { stdio: 'ignore' })
+      } catch (e) {}
+    }
+    this.processPid = null
   }
 }
 
@@ -324,10 +403,18 @@ export class MpvManager extends EventEmitter {
   private activeInstance: MpvInstance | null = null
   private nextInstance: MpvInstance | null = null
   private crossfadeInterval: NodeJS.Timeout | null = null
+  private spawnedPids: Set<number> = new Set()
 
   private currentAudioDevice?: string
   private currentBitPerfect: boolean = false
   private currentVolume: number = 1.0
+
+  constructor() {
+    super()
+    process.on('exit', () => {
+      this.killAllSync()
+    })
+  }
 
   public async init(audioDevice?: string, bitPerfect: boolean = false, initialVolume?: number) {
     if (this.activeInstance) {
@@ -352,6 +439,9 @@ export class MpvManager extends EventEmitter {
 
     this.activeInstance = new MpvInstance()
     await this.activeInstance.init(audioDevice, bitPerfect)
+    if (this.activeInstance.pid) {
+      this.spawnedPids.add(this.activeInstance.pid)
+    }
     this.activeInstance.setVolume(this.currentVolume)
     
     this.setupListeners(this.activeInstance)
@@ -391,6 +481,9 @@ export class MpvManager extends EventEmitter {
     // Create new instance for crossfade
     this.nextInstance = new MpvInstance()
     await this.nextInstance.init(this.currentAudioDevice, this.currentBitPerfect) // use same audio device
+    if (this.nextInstance.pid) {
+      this.spawnedPids.add(this.nextInstance.pid)
+    }
     
     // Set initial volume to 0
     this.nextInstance.setVolume(0)
@@ -429,7 +522,9 @@ export class MpvManager extends EventEmitter {
         // Next becomes active
         this.activeInstance = this.nextInstance
         this.nextInstance = null
-        this.setupListeners(this.activeInstance!)
+        if (this.activeInstance) {
+          this.setupListeners(this.activeInstance)
+        }
       }
     }, stepTime)
   }
@@ -466,7 +561,48 @@ export class MpvManager extends EventEmitter {
   }
 
   public killAll() {
-    this.activeInstance?.kill()
-    this.nextInstance?.kill()
+    if (this.crossfadeInterval) {
+      clearInterval(this.crossfadeInterval)
+      this.crossfadeInterval = null
+    }
+    if (this.activeInstance) {
+      this.activeInstance.kill()
+      this.activeInstance = null
+    }
+    if (this.nextInstance) {
+      this.nextInstance.kill()
+      this.nextInstance = null
+    }
+    if (process.platform === 'win32' && this.spawnedPids.size > 0) {
+      for (const pid of this.spawnedPids) {
+        try {
+          execFile('taskkill', ['/F', '/T', '/PID', pid.toString()], () => {})
+        } catch (e) {}
+      }
+      this.spawnedPids.clear()
+    }
+  }
+
+  public killAllSync() {
+    if (this.crossfadeInterval) {
+      clearInterval(this.crossfadeInterval)
+      this.crossfadeInterval = null
+    }
+    if (this.activeInstance) {
+      this.activeInstance.killSync()
+      this.activeInstance = null
+    }
+    if (this.nextInstance) {
+      this.nextInstance.killSync()
+      this.nextInstance = null
+    }
+    if (process.platform === 'win32' && this.spawnedPids.size > 0) {
+      for (const pid of this.spawnedPids) {
+        try {
+          execFileSync('taskkill', ['/F', '/T', '/PID', pid.toString()], { stdio: 'ignore' })
+        } catch (e) {}
+      }
+      this.spawnedPids.clear()
+    }
   }
 }

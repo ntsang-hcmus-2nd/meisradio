@@ -726,6 +726,9 @@ function createWindow(): void {
     if (!isQuitting && closeToTray) {
       event.preventDefault()
       mainWindow?.hide()
+    } else {
+      isQuitting = true
+      if (mpvManager) mpvManager.killAll()
     }
   })
 
@@ -742,12 +745,6 @@ function createWindow(): void {
     } else if (cmd === 'browser-forward') {
       mainWindow?.webContents.send('nav:forward')
     }
-  })
-  
-  app.on('before-quit', () => {
-    isQuitting = true
-    if (mpvManager) mpvManager.killAll()
-    if (discordRpcManager) discordRpcManager.destroy()
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -805,12 +802,24 @@ app.whenReady().then(() => {
   mpvManager = new MpvManager()
   mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false, currentConfig.volume ?? 1.0).catch(console.error) // auto init on start
   
-  mpvManager.on('time', (val) => mainWindow?.webContents.send('mpv:time', val))
-  mpvManager.on('duration', (val) => mainWindow?.webContents.send('mpv:duration', val))
-  mpvManager.on('paused', (val) => mainWindow?.webContents.send('mpv:paused', val))
-  mpvManager.on('ended', () => mainWindow?.webContents.send('mpv:ended'))
-  mpvManager.on('error', (err) => mainWindow?.webContents.send('mpv:error', err))
-  mpvManager.on('audio-out-params', (params) => mainWindow?.webContents.send('mpv:audio-out-params', params))
+  mpvManager.on('time', (val) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:time', val)
+  })
+  mpvManager.on('duration', (val) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:duration', val)
+  })
+  mpvManager.on('paused', (val) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:paused', val)
+  })
+  mpvManager.on('ended', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:ended')
+  })
+  mpvManager.on('error', (err) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:error', err)
+  })
+  mpvManager.on('audio-out-params', (params) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:audio-out-params', params)
+  })
 
   ipcMain.handle('mpv:play', (_, url, crossfade) => {
     let rawPath = url
@@ -3995,6 +4004,11 @@ app.whenReady().then(() => {
       label: 'Thoát hoàn toàn', 
       click: () => { 
         isQuitting = true; 
+        if (mpvManager) mpvManager.killAll();
+        if (tray) {
+          try { tray.destroy(); } catch (e) {}
+          tray = null;
+        }
         app.quit(); 
       } 
     }
@@ -4067,7 +4081,18 @@ app.whenReady().then(() => {
   })
 })
 
+app.on('before-quit', () => {
+  isQuitting = true
+  if (mpvManager) mpvManager.killAll()
+  if (discordRpcManager) discordRpcManager.destroy()
+  if (tray) {
+    try { tray.destroy() } catch (e) {}
+    tray = null
+  }
+})
+
 app.on('window-all-closed', () => {
+  if (mpvManager) mpvManager.killAll()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -4075,4 +4100,23 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  if (mpvManager) mpvManager.killAll()
+  if (tray) {
+    try { tray.destroy() } catch (e) {}
+    tray = null
+  }
+  // Đảm bảo toàn bộ tiến trình ứng dụng thoát hoàn toàn trong vòng 1s, tránh treo ngầm
+  setTimeout(() => {
+    app.exit(0)
+  }, 1000).unref()
+})
+
+process.on('SIGINT', () => {
+  if (mpvManager) mpvManager.killAll()
+  app.exit(0)
+})
+
+process.on('SIGTERM', () => {
+  if (mpvManager) mpvManager.killAll()
+  app.exit(0)
 })
