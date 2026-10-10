@@ -394,6 +394,8 @@ export interface TranslationDictionary {
       placeholderTitle: string
       artist: string
       placeholderArtist: string
+      multiArtistHint: string
+      detectedArtists: string
       album: string
       placeholderAlbum: string
       lyrics: string

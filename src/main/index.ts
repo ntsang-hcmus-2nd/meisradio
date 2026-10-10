@@ -18,6 +18,7 @@ import { DiscordRpcManager, DiscordRpcConfig, DiscordPresencePayload, DEFAULT_DI
 import { 
   getScUserProfile, 
   getScTrendingCharts, 
+  getScMixedSelections,
   getScUserStream, 
   getScUserLikes, 
   searchSoundCloud, 
@@ -173,16 +174,37 @@ export const PRESERVED_ARTIST_NAMES = [
   'AC/DC',
   'Tyler, The Creator',
   'Earth, Wind & Fire',
+  'Earth Wind & Fire',
   'Simon & Garfunkel',
   'Hall & Oates',
   'Daryl Hall & John Oates',
   'Crosby, Stills, Nash & Young',
+  'Crosby, Stills & Nash',
   'Emerson, Lake & Palmer',
   'Blood, Sweat & Tears',
   'Brooks & Dunn',
   'Bell, Book & Candle',
   'K/DA',
-  'Panic! At The Disco'
+  'Panic! At The Disco',
+  'Florence + The Machine',
+  'Florence and the Machine',
+  'Tom Petty and the Heartbreakers',
+  'KC & The Sunshine Band',
+  'K-Ci & JoJo',
+  'Meg & Dia',
+  'Katrina and the Waves',
+  'Huey Lewis & The News',
+  'Joan Jett & the Blackhearts',
+  'Bob Marley & The Wailers',
+  'Marina & The Diamonds',
+  'Of Monsters and Men',
+  'Above & Beyond',
+  'Arms and Sleepers',
+  'Me & My',
+  'Jack & Jack',
+  'Dan + Shay',
+  'King & Prince',
+  'Sunstroke Project & Olia Tira'
 ]
 
 /**
@@ -212,11 +234,14 @@ export function splitArtistString(raw: string): string[] {
     }
   })
 
+  // Bảo vệ hậu tố danh xưng đi kèm dấu phẩy (ví dụ: Grover Washington, Jr. hoặc Sammy Davis, Jr.)
+  working = working.replace(/,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;\/|)\]])/gi, (_, g1) => `___JRSR___${g1}`)
+
   // Chuẩn hóa định dạng feat / ft trong ngoặc: (feat. X) -> feat. X
   working = working.replace(/[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]\}]+)[\)\]\}]/gi, ' feat. $1')
 
   // Tách bằng các ký hiệu phân cách phổ biến
-  const splitRegex = /(?:\s*;\s*|\0+|\s*[\/\\]\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX]\s+|,\s*)/i
+  const splitRegex = /(?:\s*;\s*|\0+|\s*[\/\\]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
 
   const parts = working.split(splitRegex)
   const result: string[] = []
@@ -225,8 +250,12 @@ export function splitArtistString(raw: string): string[] {
     for (const p of placeholders) {
       part = part.replace(new RegExp(p.token, 'g'), p.original)
     }
+    part = part.replace(/___JRSR___/g, ', ')
+
     const clean = part.trim().replace(/^[\(\[\{]/, '').replace(/[\)\]\}]$/, '').trim()
     if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
+      if (/^(jr\.?|sr\.?|iii|ii|iv)$/i.test(clean)) continue
+
       if (!result.some(existing => existing.toLowerCase() === clean.toLowerCase())) {
         result.push(clean)
       }
@@ -236,35 +265,135 @@ export function splitArtistString(raw: string): string[] {
   return result.length > 0 ? result : [trimmed]
 }
 
+function normalizeForComparison(name: string): string {
+  return name.toLowerCase().replace(/[,.\s_-]/g, '')
+}
+
 /**
- * Trích xuất danh sách nghệ sĩ từ music-metadata (hỗ trợ cả metadata.common.artists và metadata.common.artist)
+ * Trích xuất toàn diện danh sách nghệ sĩ từ music-metadata (hỗ trợ Vorbis comments nhiều ARTIST, ID3v2 TPE1, iTunes, và tiêu đề feat)
  */
-export function extractArtists(metadata: any): { artist: string; artists: string[] } {
+export function extractArtists(metadata: any, fallbackTitle: string = ''): { artist: string; artists: string[] } {
   const rawArtistsList: string[] = []
 
+  // 1. Lấy từ metadata.common.artists (mảng)
   if (Array.isArray(metadata?.common?.artists) && metadata.common.artists.length > 0) {
     for (const a of metadata.common.artists) {
       if (typeof a === 'string' && a.trim()) rawArtistsList.push(a.trim())
     }
   }
 
-  if (rawArtistsList.length === 0 && typeof metadata?.common?.artist === 'string' && metadata.common.artist.trim()) {
-    rawArtistsList.push(metadata.common.artist.trim())
+  // 2. Lấy từ metadata.common.artist (chuỗi)
+  if (typeof metadata?.common?.artist === 'string' && metadata.common.artist.trim()) {
+    const artStr = metadata.common.artist.trim()
+    if (!rawArtistsList.includes(artStr)) {
+      rawArtistsList.push(artStr)
+    }
   }
 
-  const parsedArtists: string[] = []
-  for (const rawItem of rawArtistsList) {
-    const split = splitArtistString(rawItem)
-    for (const s of split) {
-      if (s && !parsedArtists.some(ex => ex.toLowerCase() === s.toLowerCase())) {
-        parsedArtists.push(s)
+  // 3. Quét sâu vào metadata.native (Vorbis, ID3v2, iTunes)
+  if (metadata?.native) {
+    for (const tagFormat of Object.keys(metadata.native)) {
+      const tagList = metadata.native[tagFormat]
+      if (Array.isArray(tagList)) {
+        for (const t of tagList) {
+          const tid = String(t.id || '').toUpperCase()
+          // Vorbis / APE tags
+          if (tid === 'ARTIST' || tid === 'ARTISTS') {
+            if (typeof t.value === 'string' && t.value.trim()) {
+              rawArtistsList.push(t.value.trim())
+            }
+          }
+          // ID3 tags
+          else if (tid === 'TPE1' || tid === 'TXXX:ARTISTS' || tid === 'TXXX:ARTIST') {
+            if (typeof t.value === 'string' && t.value.trim()) {
+              rawArtistsList.push(t.value.trim())
+            } else if (Array.isArray(t.value)) {
+              for (const v of t.value) {
+                if (typeof v === 'string' && v.trim()) rawArtistsList.push(v.trim())
+              }
+            }
+          }
+          // iTunes / MP4 tags
+          else if (tid === '©ART' || tid === '----:COM.APPLE.ITUNES:ARTISTS') {
+            if (typeof t.value === 'string' && t.value.trim()) {
+              rawArtistsList.push(t.value.trim())
+            }
+          }
+        }
       }
     }
   }
 
-  const mainArtist = (metadata?.common?.artist && metadata.common.artist.trim())
-    ? metadata.common.artist.trim()
-    : (parsedArtists.length > 0 ? parsedArtists.join(', ') : 'Unknown')
+  // 4. Kiểm tra xem tiêu đề bài hát có chứa (feat. XYZ) hoặc [feat. XYZ] không
+  const titleToCheck = metadata?.common?.title || fallbackTitle || ''
+  if (titleToCheck) {
+    const featMatch = titleToCheck.match(/[\(\[]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]]+)[\)\]]/i)
+    if (featMatch && featMatch[1]) {
+      rawArtistsList.push(featMatch[1].trim())
+    }
+  }
+
+  // 5. Phân tách và làm sạch tất cả nghệ sĩ thu thập được
+  const parsedArtists: string[] = []
+  for (const rawItem of rawArtistsList) {
+    const split = splitArtistString(rawItem)
+    for (const s of split) {
+      if (!s) continue
+      if (/^(jr\.?|sr\.?|iii|ii|iv)$/i.test(s.trim())) continue
+
+      // Trùng lặp chính xác
+      const existingIdx = parsedArtists.findIndex(ex => ex.toLowerCase() === s.toLowerCase())
+      if (existingIdx !== -1) continue
+
+      // Trùng lặp gần đúng
+      const normS = normalizeForComparison(s)
+      const nearIdx = parsedArtists.findIndex(ex => normalizeForComparison(ex) === normS)
+      if (nearIdx !== -1) {
+        if (s.length > parsedArtists[nearIdx].length) {
+          parsedArtists[nearIdx] = s
+        }
+        continue
+      }
+
+      // Kiểm tra nghệ sĩ kèm hậu tố Jr/Sr
+      const isSubOfExisting = parsedArtists.some(ex => {
+        const normEx = normalizeForComparison(ex)
+        return normEx.startsWith(normS) && (normEx.endsWith('jr') || normEx.endsWith('sr') || normEx.endsWith('iii'))
+      })
+      if (isSubOfExisting) continue
+
+      const subIdx = parsedArtists.findIndex(ex => {
+        const normEx = normalizeForComparison(ex)
+        return normS.startsWith(normEx) && (normS.endsWith('jr') || normS.endsWith('sr') || normS.endsWith('iii'))
+      })
+      if (subIdx !== -1) {
+        parsedArtists[subIdx] = s
+        continue
+      }
+
+      parsedArtists.push(s)
+    }
+  }
+
+  // 6. Xây dựng chuỗi nghệ sĩ hiển thị chính (artist)
+  let mainArtist = ''
+  if (typeof metadata?.common?.artist === 'string' && metadata.common.artist.trim()) {
+    const commonArt = metadata.common.artist.trim()
+    if (parsedArtists.length > 1) {
+      const matchesAll = parsedArtists.every(a => commonArt.toLowerCase().includes(a.toLowerCase()))
+      if (matchesAll) {
+        mainArtist = commonArt
+      } else {
+        mainArtist = parsedArtists.join(', ')
+      }
+    } else {
+      mainArtist = commonArt
+    }
+  }
+
+  if (!mainArtist) {
+    mainArtist = parsedArtists.length > 0 ? parsedArtists.join(', ') : 'Unknown'
+  }
 
   return {
     artist: mainArtist,
@@ -964,13 +1093,20 @@ app.whenReady().then(() => {
         const cachedPaths = Array.isArray(cached.libraryPaths) ? cached.libraryPaths : (cached.libraryPath ? [cached.libraryPath] : [])
         const isSamePaths = cachedPaths.length === validPaths.length && cachedPaths.every((p: string, idx: number) => p === validPaths[idx])
         const hasGenreInfo = Array.isArray(cached.tracks) && cached.tracks.length > 0 && cached.tracks.some((t: any) => t.genre !== undefined && t.genre !== 'Unknown')
-        if (cached && isSamePaths && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5)) {
-          const enrichedTracks = cached.tracks.map((t: any) => ({
-            ...t,
-            artists: (Array.isArray(t.artists) && t.artists.length > 0)
+        const hasMultiArtistVersion = cached.multiArtistVersion === 2
+        if (cached && isSamePaths && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5) && hasMultiArtistVersion) {
+          const enrichedTracks = cached.tracks.map((t: any) => {
+            const artists = (Array.isArray(t.artists) && t.artists.length > 0)
               ? t.artists
               : splitArtistString(t.artist || '')
-          }))
+            return {
+              ...t,
+              artists,
+              artist: (artists.length > 1 && (!t.artist || t.artist === 'Unknown' || artists.every((a: string) => t.artist.toLowerCase().includes(a.toLowerCase()))))
+                ? t.artist
+                : (artists.length > 0 ? artists.join(', ') : (t.artist || 'Unknown'))
+            }
+          })
           return { 
             success: true, 
             fromCache: true, 
@@ -1021,9 +1157,9 @@ app.whenReady().then(() => {
 
       // KIỂM TRA CACHE: Nếu file đã có và mtime không đổi -> TÁI SỬ DỤNG HOÀN TOÀN, KHÔNG ĐỌC LẠI FILE
       const cached = metadataCache[trackPath]
-      if (cached && cached.mtime === stat.mtimeMs && cached.data && cached.data.genre !== undefined && cached.data.genre !== 'Unknown') {
+      if (!forceRefresh && cached && cached.mtime === stat.mtimeMs && cached.data && cached.data.genre !== undefined && cached.data.genre !== 'Unknown' && cached.data.multiArtistVersion === 2) {
         const existingTrack = previousTrackMap.get(trackPath) || previousTrackMap.get(cached.data.filePath)
-        if (existingTrack && existingTrack.genre !== undefined && existingTrack.genre !== 'Unknown') {
+        if (existingTrack && existingTrack.genre !== undefined && existingTrack.genre !== 'Unknown' && existingTrack.multiArtistVersion === 2) {
           if (!existingTrack.artists || existingTrack.artists.length === 0) {
             existingTrack.artists = splitArtistString(existingTrack.artist || '')
           }
@@ -1128,7 +1264,7 @@ app.whenReady().then(() => {
 
         const yearVal = metadata.common.year || (metadata.common.date ? parseInt(metadata.common.date) : null)
 
-        const { artist, artists } = extractArtists(metadata)
+        const { artist, artists } = extractArtists(metadata, subItemName)
 
         const trackData = {
           id: trackPath,
@@ -1136,6 +1272,7 @@ app.whenReady().then(() => {
           title: metadata.common.title || subItemName.replace(/\.[^/.]+$/, ""),
           artist: artist,
           artists: artists,
+          multiArtistVersion: 2,
           album: metadata.common.album || 'Unknown',
           genre: genreStr,
           year: yearVal,
@@ -1165,6 +1302,7 @@ app.whenReady().then(() => {
           title: subItemName,
           artist: 'Unknown',
           artists: ['Unknown'],
+          multiArtistVersion: 2,
           album: 'Unknown',
           genre: 'Unknown',
           year: null,
@@ -1294,7 +1432,8 @@ app.whenReady().then(() => {
         libraryPath: primaryRootPath, 
         libraryPaths: validPaths, 
         tracks, 
-        playlists 
+        playlists,
+        multiArtistVersion: 2
       }))
     } catch (e) {}
 
@@ -1653,9 +1792,11 @@ app.whenReady().then(() => {
 
       if (isFlac) {
         // Ghi trực tiếp vào file FLAC
+        const targetArtists = splitArtistString(newTags.artist || '')
         const flacRes = await writeFlacMetadata(rawPath, {
           title: newTags.title,
           artist: newTags.artist,
+          artists: targetArtists,
           album: newTags.album,
           lyrics: newTags.lyrics
         }, newImagePath)
@@ -1755,6 +1896,7 @@ app.whenReady().then(() => {
           title: newTags.title || existingCached.title,
           artist: targetArtist,
           artists: targetArtists.length > 0 ? targetArtists : [targetArtist],
+          multiArtistVersion: 2,
           album: newTags.album || existingCached.album,
           genre: newTags.genre || existingCached.genre,
           lyrics: newTags.lyrics || existingCached.lyrics,
@@ -1775,6 +1917,7 @@ app.whenReady().then(() => {
                   title: newTags.title || libData.tracks[i].title,
                   artist: targetArtist,
                   artists: targetArtists.length > 0 ? targetArtists : [targetArtist],
+                  multiArtistVersion: 2,
                   album: newTags.album || libData.tracks[i].album,
                   genre: newTags.genre || libData.tracks[i].genre,
                   lyrics: newTags.lyrics || libData.tracks[i].lyrics,
@@ -1962,13 +2105,14 @@ app.whenReady().then(() => {
           // const buffer = Buffer.from(picture.data)
           coverBase64 = null
         }
-        const { artist, artists } = extractArtists(metadata)
+        const { artist, artists } = extractArtists(metadata, file)
         tracks.push({
           id: filePath,
           filePath: pathToFileURL(filePath).href,
           title: metadata.common.title || file.replace(/\.[^/.]+$/, ""),
           artist: artist,
           artists: artists,
+          multiArtistVersion: 2,
           album: metadata.common.album || 'Unknown Album',
           duration: metadata.format.duration,
           format: metadata.format.container || file.split('.').pop()?.toUpperCase() || 'Unknown',
@@ -2726,7 +2870,7 @@ app.whenReady().then(() => {
           coverBase64 = null
         }
 
-        const { artist, artists } = extractArtists(metadata)
+        const { artist, artists } = extractArtists(metadata, fileName)
 
         importedTracks.push({
           id: destPath,
@@ -2734,6 +2878,7 @@ app.whenReady().then(() => {
           title: metadata.common.title || fileName.replace(/\.[^/.]+$/, ""),
           artist: artist,
           artists: artists,
+          multiArtistVersion: 2,
           album: metadata.common.album || 'Unknown Album',
           duration: metadata.format.duration,
           format: metadata.format.container || fileName.split('.').pop()?.toUpperCase(),
@@ -3544,7 +3689,7 @@ app.whenReady().then(() => {
     }
   })
 
-  // 4. API: Lấy Dashboard SoundCloud (Trending, Liked Tracks, Stream)
+  // 4. API: Lấy Dashboard SoundCloud (Trending, Liked Tracks, Stream, Curated Playlists)
   ipcMain.handle('music:getScDashboard', async (_, genre: string = 'all-music') => {
     const config = getConfig()
     const oauthToken = config.scOAuthToken
@@ -3553,7 +3698,7 @@ app.whenReady().then(() => {
     try {
       const sections: any[] = []
 
-      // Nếu đã đăng nhập: Lấy Likes & Stream cá nhân
+      // 1. Nếu đã đăng nhập: Lấy Likes & Stream cá nhân
       if (oauthToken && userInfo?.id) {
         try {
           const likedTracks = await getScUserLikes(userInfo.id, oauthToken, 30)
@@ -3563,7 +3708,9 @@ app.whenReady().then(() => {
               contents: likedTracks
             })
           }
-        } catch (e) {}
+        } catch (e: any) {
+          console.warn('[SoundCloud] Lỗi lấy Liked Tracks:', e.message)
+        }
 
         try {
           const streamTracks = await getScUserStream(oauthToken, 30)
@@ -3573,29 +3720,63 @@ app.whenReady().then(() => {
               contents: streamTracks
             })
           }
-        } catch (e) {}
+        } catch (e: any) {
+          console.warn('[SoundCloud] Lỗi lấy User Stream:', e.message)
+        }
       }
 
-      // Lấy Bảng xếp hạng Top Charts theo thể loại đang chọn
-      const trendingTracks = await getScTrendingCharts(genre, 30)
-      if (trendingTracks.length > 0) {
-        const genreLabel = genre === 'all-music' ? 'Tất cả' : genre.toUpperCase()
-        sections.push({
-          title: `Bảng xếp hạng Top SoundCloud (${genreLabel})`,
-          contents: trendingTracks
-        })
+      // 2. Lấy Bảng xếp hạng / Đề xuất theo thể loại đang chọn
+      try {
+        const trendingTracks = await getScTrendingCharts(genre, 30)
+        if (trendingTracks.length > 0) {
+          const GENRE_LABELS: Record<string, string> = {
+            'all-music': 'Tất cả thịnh hành',
+            electronic: 'Electronic & EDM',
+            hiphoprap: 'Hip-hop & Rap',
+            pop: 'Pop Hits',
+            chill: 'Lo-fi & Chill',
+            rock: 'Rock Classics & Hits',
+            ambient: 'Ambient Relax',
+            danceedm: 'Dance & EDM'
+          }
+          const genreLabel = GENRE_LABELS[genre] || (genre === 'all-music' ? 'Tất cả' : genre.toUpperCase())
+          sections.push({
+            title: `Bảng xếp hạng SoundCloud (${genreLabel})`,
+            contents: trendingTracks
+          })
+        }
+      } catch (e: any) {
+        console.warn('[SoundCloud] Lỗi lấy Trending Tracks:', e.message)
       }
 
-      // Lấy thêm các thể loại phổ biến nếu danh sách còn ít
+      // 3. Nếu đang ở 'all-music', bổ sung Playlist tuyển chọn từ SoundCloud (Mixed Selections)
+      if (genre === 'all-music') {
+        try {
+          const mixedSections = await getScMixedSelections()
+          for (const s of mixedSections) {
+            sections.push(s)
+          }
+        } catch (e: any) {
+          console.warn('[SoundCloud] Lỗi lấy Mixed Selections:', e.message)
+        }
+      }
+
+      // 4. Lấy thêm các thể loại phổ biến nếu danh sách còn ít
       if (sections.length < 3) {
-        const extraGenres = ['electronic', 'hiphoprap', 'pop', 'chill']
+        const extraGenres = ['chill', 'electronic', 'pop', 'hiphoprap']
         for (const g of extraGenres) {
           if (g === genre) continue
           try {
             const extra = await getScTrendingCharts(g, 15)
             if (extra.length > 0) {
+              const GENRE_LABELS: Record<string, string> = {
+                electronic: 'Electronic & EDM',
+                hiphoprap: 'Hip-Hop & Rap',
+                pop: 'Pop Hits',
+                chill: 'Lo-Fi Chill Beats'
+              }
               sections.push({
-                title: `SoundCloud ${g.charAt(0).toUpperCase() + g.slice(1)}`,
+                title: `SoundCloud ${GENRE_LABELS[g] || g}`,
                 contents: extra
               })
             }
@@ -3605,6 +3786,7 @@ app.whenReady().then(() => {
 
       return { success: true, data: sections }
     } catch (e: any) {
+      console.error('[SoundCloud] Lỗi getScDashboard:', e.message)
       return { success: false, error: 'Lỗi tải SoundCloud: ' + e.message }
     }
   })

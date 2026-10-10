@@ -42,23 +42,44 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
-const PRESERVED_ARTIST_NAMES = [
+export const PRESERVED_ARTIST_NAMES = [
   'AC/DC',
   'Tyler, The Creator',
   'Earth, Wind & Fire',
+  'Earth Wind & Fire',
   'Simon & Garfunkel',
   'Hall & Oates',
   'Daryl Hall & John Oates',
   'Crosby, Stills, Nash & Young',
+  'Crosby, Stills & Nash',
   'Emerson, Lake & Palmer',
   'Blood, Sweat & Tears',
   'Brooks & Dunn',
   'Bell, Book & Candle',
   'K/DA',
-  'Panic! At The Disco'
+  'Panic! At The Disco',
+  'Florence + The Machine',
+  'Florence and the Machine',
+  'Tom Petty and the Heartbreakers',
+  'KC & The Sunshine Band',
+  'K-Ci & JoJo',
+  'Meg & Dia',
+  'Katrina and the Waves',
+  'Huey Lewis & The News',
+  'Joan Jett & the Blackhearts',
+  'Bob Marley & The Wailers',
+  'Marina & The Diamonds',
+  'Of Monsters and Men',
+  'Above & Beyond',
+  'Arms and Sleepers',
+  'Me & My',
+  'Jack & Jack',
+  'Dan + Shay',
+  'King & Prince',
+  'Sunstroke Project & Olia Tira'
 ]
 
-const splitArtistString = (raw: string): string[] => {
+export const splitArtistString = (raw: string): string[] => {
   if (!raw || typeof raw !== 'string') return []
   const trimmed = raw.trim()
   if (!trimmed || trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'unknown artist') {
@@ -82,8 +103,14 @@ const splitArtistString = (raw: string): string[] => {
     }
   })
 
+  // Bảo vệ hậu tố danh xưng đi kèm dấu phẩy (ví dụ: Grover Washington, Jr. hoặc Sammy Davis, Jr.)
+  working = working.replace(/,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;\/|)\]])/gi, (_, g1) => `___JRSR___${g1}`)
+
+  // Chuẩn hóa định dạng feat / ft trong ngoặc: (feat. X) -> feat. X
   working = working.replace(/[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]\}]+)[\)\]\}]/gi, ' feat. $1')
-  const splitRegex = /(?:\s*;\s*|\0+|\s*[\/\\]\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX]\s+|,\s*)/i
+
+  // Tách bằng các ký hiệu phân cách phổ biến
+  const splitRegex = /(?:\s*;\s*|\0+|\s*[\/\\]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
   const parts = working.split(splitRegex)
   const result: string[] = []
 
@@ -91,8 +118,12 @@ const splitArtistString = (raw: string): string[] => {
     for (const p of placeholders) {
       part = part.replace(new RegExp(p.token, 'g'), p.original)
     }
+    part = part.replace(/___JRSR___/g, ', ')
+
     const clean = part.trim().replace(/^[\(\[\{]/, '').replace(/[\)\]\}]$/, '').trim()
     if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
+      if (/^(jr\.?|sr\.?|iii|ii|iv)$/i.test(clean)) continue
+
       if (!result.some(existing => existing.toLowerCase() === clean.toLowerCase())) {
         result.push(clean)
       }
@@ -187,8 +218,68 @@ const VirtuosoComponents = {
   TableRow: (props: any) => <tr {...props} className="group border-b border-theme-30/20 transition-colors cursor-pointer hover:bg-white/5" />
 };
 
+// Thành phần hiển thị danh sách nghệ sĩ có thể nhấp để điều hướng
+export const ArtistLinks = React.memo(({
+  artists,
+  fallbackArtist,
+  onArtistClick,
+  className = '',
+  itemClassName = '',
+  separator = ', '
+}: {
+  artists?: string[] | null
+  fallbackArtist?: string | null
+  onArtistClick?: (artistName: string) => void
+  className?: string
+  itemClassName?: string
+  separator?: string
+}) => {
+  const list = useMemo(() => {
+    if (Array.isArray(artists) && artists.length > 0) {
+      return artists.map(a => a?.trim()).filter(Boolean)
+    }
+    if (fallbackArtist) {
+      return splitArtistString(fallbackArtist)
+    }
+    return []
+  }, [artists, fallbackArtist])
+
+  if (list.length === 0) {
+    return <span className={className}>{fallbackArtist || 'Unknown Artist'}</span>
+  }
+
+  return (
+    <span className={className}>
+      {list.map((artist, idx) => {
+        const isClickable = !!onArtistClick
+        return (
+          <React.Fragment key={`${artist}-${idx}`}>
+            {isClickable ? (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onArtistClick(artist)
+                }}
+                className={`hover:text-theme-10 hover:underline transition-colors cursor-pointer ${itemClassName}`}
+                title={artist}
+              >
+                {artist}
+              </span>
+            ) : (
+              <span className={itemClassName}>{artist}</span>
+            )}
+            {idx < list.length - 1 && <span className="text-zinc-500 pointer-events-none select-none">{separator}</span>}
+          </React.Fragment>
+        )
+      })}
+    </span>
+  )
+});
+
 // TỐI ƯU HÓA: Ghi nhớ từng dòng bài hát, ngăn React vẽ lại toàn bộ bảng khi thao tác
-const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, openTagEditor, onContextMenu }: any) => {
+const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, openTagEditor, onContextMenu, onArtistClick }: any) => {
   return (
     <>
       <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-center text-zinc-500 group-hover:text-white">
@@ -203,7 +294,7 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
           </div>
           <div className="truncate w-48 lg:w-64">
             <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>{track.title}</p>
-            <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
+            <ArtistLinks artists={track.artists} fallbackArtist={track.artist} onArtistClick={onArtistClick} className="text-xs text-zinc-400 block truncate" />
           </div>
         </div>
       </td>
@@ -216,7 +307,7 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
 });
 
 // Thẻ bài hát dạng Lưới (Grid Item)
-const TrackGridItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, onContextMenu }: any) => {
+const TrackGridItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, onContextMenu, onArtistClick }: any) => {
   return (
     <div 
       key={track.id || index}
@@ -247,7 +338,7 @@ const TrackGridItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying,
         <h4 className={`font-semibold text-sm truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'} transition-colors`}>
           {track.title}
         </h4>
-        <p className="text-xs text-zinc-400 truncate mt-0.5">{track.artist}</p>
+        <ArtistLinks artists={track.artists} fallbackArtist={track.artist} onArtistClick={onArtistClick} className="text-xs text-zinc-400 block truncate mt-0.5" />
         <div className="flex items-center justify-between text-[11px] text-zinc-500 mt-2 pt-2 border-t border-theme-30/30">
           <span className="truncate max-w-[90px]">{track.album || 'Unknown'}</span>
           <span>{formatDuration(track.duration)}</span>
@@ -258,7 +349,7 @@ const TrackGridItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying,
 });
 
 // Chế độ xem Lưới thẻ bìa (Grid View - Ảo hóa với VirtuosoGrid)
-const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor }: any) => {
+const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor, onArtistClick }: any) => {
   return (
     <div className="flex-1 min-h-[300px] h-full w-full overflow-hidden">
       <VirtuosoGrid
@@ -277,6 +368,7 @@ const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleR
             handleRowClick={handleRowClick}
             tracks={tracks}
             onContextMenu={onContextMenu}
+            onArtistClick={onArtistClick}
           />
         )}
       />
@@ -285,7 +377,7 @@ const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleR
 });
 
 // Hàng bài hát dạng Thu gọn (Compact Row Item)
-const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, onContextMenu, openTagEditor }: any) => {
+const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, onContextMenu, openTagEditor, onArtistClick }: any) => {
   return (
     <div 
       onClick={() => handleRowClick(track, tracks)}
@@ -298,13 +390,12 @@ const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlayi
       <div className="w-7 h-7 bg-theme-30 rounded overflow-hidden flex-shrink-0 relative flex items-center justify-center">
         {(!isLite && track.coverArt) ? <img loading="lazy" decoding="async" src={track.coverArt} className="w-full h-full object-cover" /> : <Music size={12} className="text-zinc-500" />}
       </div>
-      <div className="flex-1 min-w-0 flex items-center gap-3">
+      <div className="flex-1 min-w-0 flex items-center gap-2">
         <span className={`font-medium truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>
           {track.title}
         </span>
-        <span className="text-zinc-400 truncate text-[11px]">
-          • {track.artist}
-        </span>
+        <span className="text-zinc-500 text-[11px] shrink-0">•</span>
+        <ArtistLinks artists={track.artists} fallbackArtist={track.artist} onArtistClick={onArtistClick} className="text-zinc-400 truncate text-[11px]" />
       </div>
       <span className="text-zinc-500 truncate max-w-[140px] hidden md:block">
         {track.album || ''}
@@ -328,7 +419,7 @@ const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlayi
 });
 
 // Chế độ xem Danh sách thu gọn (Compact View - Ảo hóa với Virtuoso)
-const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor }: any) => {
+const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor, onArtistClick }: any) => {
   return (
     <div className="flex-1 min-h-[300px] h-full w-full bg-theme-60/20 rounded-lg border border-theme-30/50 overflow-hidden">
       <Virtuoso
@@ -346,6 +437,7 @@ const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, 
             tracks={tracks}
             onContextMenu={onContextMenu}
             openTagEditor={openTagEditor}
+            onArtistClick={onArtistClick}
           />
         )}
       />
@@ -490,7 +582,7 @@ const PlaylistItemCompact = React.memo(({ pl, idx, isLite, onOpen, onPlay, onCon
   )
 });
 
-const SortableQueueItem = React.memo(({ id, track, isActive, isPlaying, isLite, onPlay, onContextMenu }: any) => {
+const SortableQueueItem = React.memo(({ id, track, isActive, isPlaying, isLite, onPlay, onContextMenu, onArtistClick }: any) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -513,7 +605,7 @@ const SortableQueueItem = React.memo(({ id, track, isActive, isPlaying, isLite, 
       </div>
       <div className="truncate flex-1">
         <p className={`text-sm font-semibold truncate ${isActive ? 'text-theme-10' : 'text-white'}`}>{track.title}</p>
-        <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
+        <ArtistLinks artists={track.artists} fallbackArtist={track.artist} onArtistClick={onArtistClick} className="text-xs text-zinc-500 block truncate" />
       </div>
     </div>
   );
@@ -2874,6 +2966,35 @@ export default function App() {
     setPlaylistRename({ isOpen: true, oldName: name, newName: name })
   }, [])
 
+  const navigateToArtist = useCallback((artistName: string) => {
+    if (!artistName) return
+    const cleanName = artistName.trim()
+    if (!cleanName) return
+
+    const found = artistsData.artistsList.find(a => a.name.toLowerCase() === cleanName.toLowerCase())
+    if (found) {
+      setActiveArtist(found)
+    } else {
+      const matchingTracks = libraryTracks.filter(t => {
+        const arts = Array.isArray(t.artists) && t.artists.length > 0 ? t.artists : splitArtistString(t.artist || '')
+        return arts.some((a: string) => a.toLowerCase() === cleanName.toLowerCase())
+      })
+      setActiveArtist({
+        name: cleanName,
+        tracks: matchingTracks,
+        albums: [],
+        albumCount: 0,
+        trackCount: matchingTracks.length,
+        coverArt: matchingTracks.find(t => t.coverArt)?.coverArt || null
+      })
+    }
+    setActiveView('artists')
+    setActiveAlbum(null)
+    setActiveGenre(null)
+    setActivePlaylist(null)
+    setActiveUserPlaylist(null)
+  }, [artistsData.artistsList, libraryTracks])
+
   // Lấy Sample Rate chuẩn của bài hát hiện tại (Mặc định 44100Hz nếu không rõ)
   const currentSampleRate = currentTrack?.sampleRate && currentTrack.sampleRate >= 8000 && currentTrack.sampleRate <= 384000 
     ? currentTrack.sampleRate 
@@ -3640,6 +3761,7 @@ export default function App() {
           handleRowClick={handleRowClick}
           onContextMenu={handleTrackContextMenu}
           openTagEditor={openTagEditor}
+          onArtistClick={navigateToArtist}
         />
       );
     }
@@ -3654,6 +3776,7 @@ export default function App() {
           handleRowClick={handleRowClick}
           onContextMenu={handleTrackContextMenu}
           openTagEditor={openTagEditor}
+          onArtistClick={navigateToArtist}
         />
       );
     }
@@ -3711,6 +3834,7 @@ export default function App() {
               tracks={tracks}
               openTagEditor={openTagEditor}
               onContextMenu={handleTrackContextMenu}
+              onArtistClick={navigateToArtist}
             />
           )}
         />
@@ -3900,7 +4024,11 @@ export default function App() {
           <div className="flex-1 ml-4 flex flex-col justify-center overflow-hidden pointer-events-none">
             <div className="truncate mb-2 pr-4">
               <h4 className="text-sm font-bold text-white truncate">{currentTrack ? currentTrack.title : 'Meis Radio'}</h4>
-              <p className="text-xs text-zinc-400 truncate">{currentTrack ? currentTrack.artist : 'Sẵn sàng phát nhạc'}</p>
+              <p className="text-xs text-zinc-400 truncate">
+                {currentTrack 
+                  ? (Array.isArray(currentTrack.artists) && currentTrack.artists.length > 0 ? currentTrack.artists.join(', ') : (currentTrack.artist || 'Unknown Artist'))
+                  : 'Sẵn sàng phát nhạc'}
+              </p>
             </div>
             
             <div className="flex items-center gap-3 pointer-events-auto" style={{ WebkitAppRegion: 'no-drag' } as any}>
@@ -4375,9 +4503,7 @@ export default function App() {
                                 <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}>
                                   {track.title || t('common.unknown')}
                                 </p>
-                                <p className="text-xs text-zinc-400 truncate mt-0.5">
-                                  {track.artist || t('player.unknownArtist')}
-                                </p>
+                                <ArtistLinks artists={track.artists} fallbackArtist={track.artist || t('player.unknownArtist')} onArtistClick={navigateToArtist} className="text-xs text-zinc-400 block truncate mt-0.5" />
                               </div>
 
                               <span className="text-[11px] text-zinc-500 shrink-0 pr-2">
@@ -4440,7 +4566,7 @@ export default function App() {
                               <p className={`text-xs font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}>
                                 {track.title}
                               </p>
-                              <p className="text-[11px] text-zinc-500 truncate mt-0.5">{track.artist}</p>
+                              <ArtistLinks artists={track.artists} fallbackArtist={track.artist} onArtistClick={navigateToArtist} className="text-[11px] text-zinc-500 block truncate mt-0.5" />
                             </div>
                           )
                         })}
@@ -4500,9 +4626,7 @@ export default function App() {
                                 <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}>
                                   {track.title || t('common.unknown')}
                                 </p>
-                                <p className="text-xs text-zinc-400 truncate mt-0.5">
-                                  {track.artist || t('player.unknownArtist')}
-                                </p>
+                                <ArtistLinks artists={track.artists} fallbackArtist={track.artist || t('player.unknownArtist')} onArtistClick={navigateToArtist} className="text-xs text-zinc-400 block truncate mt-0.5" />
                               </div>
 
                               <span className="text-[11px] text-zinc-500 shrink-0 pr-2">
@@ -6671,6 +6795,7 @@ export default function App() {
                               isLite={isLite} 
                               onPlay={handlePlayTrack} 
                               onContextMenu={handleTrackContextMenu}
+                              onArtistClick={navigateToArtist}
                             />
                           )
                         })}
@@ -6696,14 +6821,14 @@ export default function App() {
                     <img 
                       loading="lazy" 
                       src={originalCover || currentTrack.coverArt} 
-                      className="w-full h-full object-cover animate-spin-slow"
+                      className="w-full h-full object-cover animate-spin-slow" 
                       style={{ willChange: 'transform', animationPlayState: isPlaying ? 'running' : 'paused' }} 
                     />
                   ) : (
                     <img 
                       loading="lazy" 
                       src={meiSingingPlaceholder} 
-                      className="w-full h-full object-cover animate-spin-slow"
+                      className="w-full h-full object-cover animate-spin-slow" 
                       style={{ willChange: 'transform', animationPlayState: isPlaying ? 'running' : 'paused' }} 
                     />
                   )}
@@ -6726,7 +6851,15 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="text-center"><h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2><p className="text-theme-10 text-lg">{currentTrack?.artist}</p></div>
+                <div className="text-center">
+                  <h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2>
+                  <ArtistLinks 
+                    artists={currentTrack?.artists} 
+                    fallbackArtist={currentTrack?.artist} 
+                    onArtistClick={navigateToArtist} 
+                    className="text-theme-10 text-lg"
+                  />
+                </div>
               </div>
               <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">
                  {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-32 text-xl">{t('lyrics.noLyrics')}</p> : lyrics.map((line, index) => {
@@ -6748,7 +6881,18 @@ export default function App() {
           </div>
           <div className="truncate">
             <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : t('player.noTrack')}</h4>
-            <p className="text-xs text-zinc-400 mt-1 truncate">{currentTrack ? currentTrack.artist : t('player.unknownArtist')}</p>
+            <div className="text-xs text-zinc-400 mt-1 truncate">
+              {currentTrack ? (
+                <ArtistLinks 
+                  artists={currentTrack.artists} 
+                  fallbackArtist={currentTrack.artist || t('player.unknownArtist')} 
+                  onArtistClick={navigateToArtist} 
+                  className="text-xs text-zinc-400"
+                />
+              ) : (
+                t('player.unknownArtist')
+              )}
+            </div>
             {currentTrack && (
               <div className="flex items-center gap-2 mt-1">
                 <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md">

@@ -5,6 +5,7 @@ import { nativeImage } from 'electron'
 interface FlacTags {
   title?: string
   artist?: string
+  artists?: string[]
   album?: string
   lyrics?: string
   genre?: string
@@ -59,11 +60,13 @@ function parseFlacBlocks(fileBuffer: Buffer): { header: Buffer; blocks: FlacBloc
 }
 
 /**
- * Tạo block VORBIS_COMMENT cho FLAC
+ * Tạo block VORBIS_COMMENT cho FLAC (Hỗ trợ nhiều nghệ sĩ / multiple ARTIST tags)
  */
 function createVorbisCommentBlock(tags: FlacTags, existingComments: string[] = []): Buffer {
   const vendorString = 'Meis Radio Audio Engine'
   const vendorBuf = Buffer.from(vendorString, 'utf-8')
+
+  const isUpdatingArtist = tags.artist !== undefined || (Array.isArray(tags.artists) && tags.artists.length > 0)
 
   // Giữ lại các trường khác không bị ghi đè
   const commentMap = new Map<string, string>()
@@ -72,12 +75,14 @@ function createVorbisCommentBlock(tags: FlacTags, existingComments: string[] = [
     if (eqIdx !== -1) {
       const key = c.substring(0, eqIdx).toUpperCase()
       const val = c.substring(eqIdx + 1)
+      if (isUpdatingArtist && (key === 'ARTIST' || key === 'ARTISTS')) {
+        continue
+      }
       commentMap.set(key, val)
     }
   }
 
   if (tags.title !== undefined) commentMap.set('TITLE', tags.title)
-  if (tags.artist !== undefined) commentMap.set('ARTIST', tags.artist)
   if (tags.album !== undefined) commentMap.set('ALBUM', tags.album)
   if (tags.genre !== undefined) commentMap.set('GENRE', tags.genre)
   if (tags.date !== undefined) commentMap.set('DATE', tags.date)
@@ -91,6 +96,24 @@ function createVorbisCommentBlock(tags: FlacTags, existingComments: string[] = [
   for (const [k, v] of commentMap.entries()) {
     if (v && v.trim() !== '') {
       commentStrings.push(`${k}=${v}`)
+    }
+  }
+
+  // Thêm các thẻ ARTIST độc lập cho từng nghệ sĩ (Chuẩn Vorbis Comment đa nghệ sĩ)
+  if (isUpdatingArtist) {
+    const artistList = (Array.isArray(tags.artists) && tags.artists.length > 0)
+      ? tags.artists
+      : (tags.artist ? [tags.artist] : [])
+
+    for (const a of artistList) {
+      if (a && a.trim()) {
+        commentStrings.push(`ARTIST=${a.trim()}`)
+      }
+    }
+    if (artistList.length > 1) {
+      commentStrings.push(`ARTISTS=${artistList.join(', ')}`)
+    } else if (tags.artist && tags.artist.trim() && !commentStrings.some(c => c.startsWith('ARTIST='))) {
+      commentStrings.push(`ARTIST=${tags.artist.trim()}`)
     }
   }
 

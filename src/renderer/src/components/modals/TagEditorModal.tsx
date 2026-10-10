@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Image as ImageIcon, Music } from 'lucide-react'
 import { useTranslation } from '../../locales'
+import { splitArtistString } from '../../App'
 
 interface TagEditorModalProps {
   track: any
@@ -21,6 +22,10 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
 
   const isFlac = track.filePath?.toLowerCase().endsWith('.flac') || track.format === 'FLAC'
   const isMp3 = track.filePath?.toLowerCase().endsWith('.mp3') || track.format === 'MP3'
+
+  const detectedArtists = useMemo(() => {
+    return splitArtistString(tags.artist || '')
+  }, [tags.artist])
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -71,7 +76,10 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
             </div>
 
             <div>
-              <label className="text-zinc-400 font-medium mb-1 block">{t('modals.tagEditor.artist')}</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-zinc-400 font-medium">{t('modals.tagEditor.artist')}</label>
+                <span className="text-[10px] text-zinc-500 font-mono">{t('modals.tagEditor.multiArtistHint')}</span>
+              </div>
               <input 
                 type="text" 
                 value={tags.artist} 
@@ -79,6 +87,16 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
                 className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10" 
                 placeholder={t('modals.tagEditor.placeholderArtist')}
               />
+              {detectedArtists.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-2 p-2 rounded-lg bg-zinc-950/80 border border-zinc-800/80">
+                  <span className="text-[10px] text-zinc-500 font-medium shrink-0">{t('modals.tagEditor.detectedArtists')}:</span>
+                  {detectedArtists.map((art, idx) => (
+                    <span key={idx} className="px-2 py-0.5 rounded-full bg-theme-10/15 border border-theme-10/30 text-theme-10 text-[10px] font-medium shadow-sm">
+                      {art}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">

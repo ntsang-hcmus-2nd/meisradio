@@ -394,6 +394,8 @@ export const vi: TranslationDictionary = {
       placeholderTitle: 'Nhập tên bài hát...',
       artist: 'Nghệ sĩ (Artist)',
       placeholderArtist: 'Nhập tên nghệ sĩ...',
+      multiArtistHint: 'Hỗ trợ nhiều nghệ sĩ (cách nhau bởi dấu phẩy, feat, &, ...)',
+      detectedArtists: 'Nghệ sĩ nhận diện',
       album: 'Album',
       placeholderAlbum: 'Nhập tên album...',
       lyrics: 'Lời bài hát (Định dạng LRC hoặc văn bản)',

@@ -394,6 +394,8 @@ export const en: TranslationDictionary = {
       placeholderTitle: 'Enter track title...',
       artist: 'Artist',
       placeholderArtist: 'Enter artist name...',
+      multiArtistHint: 'Supports multiple artists (comma, feat, &, ...)',
+      detectedArtists: 'Detected artists',
       album: 'Album',
       placeholderAlbum: 'Enter album name...',
       lyrics: 'Lyrics (LRC format or plain text)',
