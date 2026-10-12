@@ -766,7 +766,6 @@ export default function App() {
 
   // Audio Devices & EQ States
   const [isEqEnabled, setIsEqEnabled] = useState(false)
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
   const [availableAudioDevices, setAvailableAudioDevices] = useState<{ name: string; description: string }[]>([])
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('auto')
   const selectedDeviceRef = useRef<string>('auto');
@@ -1601,8 +1600,11 @@ export default function App() {
         const fadeInterval = setInterval(() => {
           if (fadeAudio.volume - step > 0) fadeAudio.volume -= step
           else {
-            fadeAudio.pause()
             clearInterval(fadeInterval)
+            fadeAudio.pause()
+            fadeAudio.removeAttribute('src')
+            fadeAudio.src = ''
+            fadeAudio.load()
           }
         }, 50)
       } catch (e) {}
@@ -2315,6 +2317,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--bg-blur', `${customBgBlur}px`)
+    document.documentElement.style.setProperty('--bg-filter', customBgBlur > 0 ? `blur(${customBgBlur}px)` : 'none')
   }, [customBgBlur])
 
   // Change Audio Device
@@ -2352,6 +2355,17 @@ export default function App() {
       lyrics: rawLyrics 
     })
     setEditImagePath(null)
+
+    if (!rawLyrics && (window as any).api?.readLrcFile) {
+      const targetPath = track.filePath || track.id
+      if (targetPath) {
+        ;(window as any).api.readLrcFile(targetPath).then((lrc: string | null) => {
+          if (lrc) {
+            setEditTags(prev => ({ ...prev, lyrics: lrc }))
+          }
+        }).catch(() => {})
+      }
+    }
   }
 
   const handleSelectTagImage = async () => {
@@ -3039,17 +3053,8 @@ export default function App() {
       } catch (err) {
         console.error("Lỗi lấy danh sách thiết bị MPV:", err)
       }
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices()
-        const audioOutputs = devices.filter(device => device.kind === 'audiooutput')
-        setAudioDevices(audioOutputs)
-      } catch (err) {
-        console.error("Lỗi lấy danh sách thiết bị WebAudio:", err)
-      }
     }
     getDevices()
-    navigator.mediaDevices.addEventListener('devicechange', getDevices)
-    return () => navigator.mediaDevices.removeEventListener('devicechange', getDevices)
   }, [])
 
   // Fetch Original High-Res Cover for Fullscreen Lyrics

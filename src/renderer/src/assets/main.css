@@ -25,6 +25,7 @@
   --bg-image: url('');
   --bg-opacity: 1;
   --bg-blur: 0px;
+  --bg-filter: none;
 }
 
 @theme {
@@ -102,7 +103,7 @@ body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: blur(var(--bg-blur));
+  filter: var(--bg-filter, none);
   transform: translateZ(0);
   image-rendering: -webkit-optimize-contrast;
   will-change: opacity;

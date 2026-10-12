@@ -646,13 +646,8 @@ const ytdlp = is.dev
       process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
     ));
 
-app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=128 --optimize-for-size');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('disable-http-cache');
-app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-hardware-overlays');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
+app.commandLine.appendSwitch('disable-features', 'VideoCaptureService');
 
 let tray: Tray | null = null
 let isQuitting = false 
@@ -1163,10 +1158,12 @@ app.whenReady().then(() => {
           if (!existingTrack.artists || existingTrack.artists.length === 0) {
             existingTrack.artists = splitArtistString(existingTrack.artist || '')
           }
-          return existingTrack
+          const { lyrics: _discardExisting, ...existingNoLyrics } = existingTrack
+          return existingNoLyrics
         }
+        const { lyrics: _discardCached, ...cachedWithoutLyrics } = cached.data
         return {
-          ...cached.data,
+          ...cachedWithoutLyrics,
           filePath: pathToFileURL(trackPath).href,
           artists: (Array.isArray(cached.data.artists) && cached.data.artists.length > 0)
             ? cached.data.artists
@@ -1294,7 +1291,8 @@ app.whenReady().then(() => {
           data: trackData
         }
         cacheModified = true
-        return trackData
+        const { lyrics: _discardFresh, ...trackDataNoLyrics } = trackData
+        return trackDataNoLyrics
       } catch (e) {
         const fallbackTrack = {
           id: trackPath,
@@ -1736,10 +1734,29 @@ app.whenReady().then(() => {
       for (const lrcExt of ['.lrc', '.LRC']) {
         const lrcPath = path.join(dir, `${fileNameWithoutExt}${lrcExt}`)
         try {
-          const content = (await fs.promises.readFile(lrcPath, 'utf-8')).replace(/^\uFEFF/, '')
-          if (content.trim()) return content
+          if (fs.existsSync(lrcPath)) {
+            const content = (await fs.promises.readFile(lrcPath, 'utf-8')).replace(/^\uFEFF/, '')
+            if (content.trim()) return content
+          }
         } catch (e) {}
       }
+
+      // Fallback 1: Trả về lời từ metadataCache trong RAM nếu có
+      const cached = metadataCache[rawPath]
+      if (cached?.data?.lyrics && typeof cached.data.lyrics === 'string' && cached.data.lyrics.trim()) {
+        return cached.data.lyrics
+      }
+
+      // Fallback 2: Đọc trực tiếp tag nhúng trong file âm thanh
+      try {
+        const metadata = await mm.parseFile(rawPath)
+        const embedded = extractEmbeddedLyrics(metadata)
+        if (embedded && embedded.trim()) {
+          if (cached?.data) cached.data.lyrics = embedded
+          return embedded
+        }
+      } catch (e) {}
+
       return null
     } catch (error) { return null }
   })

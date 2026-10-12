@@ -328,6 +328,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
         if (!isCancelled) {
           ctx.putImageData(imageData, 0, 0)
+          if (spectrogramCache.size >= 8) {
+            const oldest = spectrogramCache.keys().next().value
+            if (oldest) spectrogramCache.delete(oldest)
+          }
           spectrogramCache.set(trackKey, imageData)
           setLoading(false)
         }
