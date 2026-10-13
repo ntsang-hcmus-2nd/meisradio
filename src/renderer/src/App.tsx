@@ -36,6 +36,14 @@ import { extractThemeColors, initThemeColorCache } from './utils/colorUtils'
 import { DynamicCoverArt, setGlobalStreamPort } from './components/DynamicCoverArt'
 import { removeAccents, matchesQuery } from './utils/textUtils'
 import { fisherYatesShuffle } from './utils/arrayUtils'
+import { 
+  usePlayerStore, 
+  useUIStore, 
+  useLibraryStore, 
+  useSettingsStore, 
+  useAudioStore, 
+  useLyricsStore 
+} from './stores'
 
 // --- HELPER FUNCTIONS & INTERFACES (OUTSIDE COMPONENT) ---
 const formatDuration = (seconds: number) => {
@@ -664,38 +672,158 @@ export default function App() {
   const activeLyricRef = useRef<HTMLParagraphElement | null>(null)
 
   // ==========================================
-  // 2. STATES
+  // 2. ZUSTAND STORES & HOOKS
   // ==========================================
 
-  // State cho Dashboard
-  const [dashboardData, setDashboardData] = useState<any[]>([])
-  const [activeAlbum, setActiveAlbum] = useState<{ title: string, tracks: any[] } | null>(null)
-  const [isAlbumLoading, setIsAlbumLoading] = useState(false)
-  const preloadedRef = useRef<string | null>(null) // Đánh dấu ID đã được preload
+  // Player Store
+  const {
+    currentTrack, setCurrentTrack,
+    isPlaying, setIsPlaying,
+    isShuffle, setIsShuffle,
+    originalQueue, setOriginalQueue,
+    playQueue, setPlayQueue,
+    repeatMode, setRepeatMode,
+    volume, setVolume,
+    prevVolume, setPrevVolume,
+    bitPerfectEnabled, setBitPerfectEnabled,
+    crossfadeEnabled, setCrossfadeEnabled,
+    crossfadeDuration, setCrossfadeDuration,
+    mpvOutParams, setMpvOutParams,
+    smartAutoplay, setSmartAutoplay,
+    lyricOffset, setLyricOffset,
+    sleepTimerMode, setSleepTimerMode,
+    sleepTimerRemaining, setSleepTimerRemaining,
+    showSleepTimerMenu, setShowSleepTimerMenu
+  } = usePlayerStore()
 
-  // State Chế độ hiệu suất
-  const [appMode, setAppMode] = useState<'default' | 'lite' | 'core'>('default')
-  const isLite = appMode === 'lite' || appMode === 'core' // Dùng chung cho việc tắt ảnh bìa, màu sắc
-  const isCore = appMode === 'core' // Chỉ định cắt luồng mảng Audio và UI mạng
+  // UI Store
+  const {
+    activeView, setActiveView,
+    viewMode, setViewMode,
+    themeColor, setThemeColor,
+    toast, setToast,
+    customDialog, setCustomDialog,
+    showQueuePanel, setShowQueuePanel,
+    showEQ, setShowEQ,
+    showVisualizer, setShowVisualizer,
+    showSpectrogramModal, setShowSpectrogramModal,
+    showLyricsPanel, setShowLyricsPanel,
+    isLyricsMaximized, setIsLyricsMaximized,
+    isMiniPlayer, setIsMiniPlayer,
+    showCreateUserPlaylistModal, setShowCreateUserPlaylistModal,
+    showAddSongsToUserPlaylistModal, setShowAddSongsToUserPlaylistModal,
+    editingUserPlaylist, setEditingUserPlaylist,
+    showEditUserPlaylistModal, setShowEditUserPlaylistModal,
+    showCreateModal, setShowCreateModal,
+    showAddSongsModal, setShowAddSongsModal,
+    playlistRename, setPlaylistRename
+  } = useUIStore()
+
+  // Library Store
+  const {
+    libraryPath, setLibraryPath,
+    libraryPaths, setLibraryPaths,
+    libraryTracks, setLibraryTracks,
+    playlists, setPlaylists,
+    userPlaylists, setUserPlaylists,
+    activeAlbum, setActiveAlbum,
+    activeArtist, setActiveArtist,
+    activeGenre, setActiveGenre,
+    activePlaylist, setActivePlaylist,
+    activeUserPlaylist, setActiveUserPlaylist,
+    playlistsRenderLimit, setPlaylistsRenderLimit,
+    collapsedArtistLetters, setCollapsedArtistLetters,
+    sortField, setSortField,
+    sortOrder, setSortOrder,
+    searchQuery, setSearchQuery,
+    searchInput, setSearchInput,
+    recentlyPlayed, setRecentlyPlayed,
+    dashboardData, setDashboardData,
+    isAlbumLoading, setIsAlbumLoading,
+    scDashboardData, setScDashboardData,
+    isScLoading, setIsScLoading,
+    scUser, setScUser,
+    selectedScGenre, setSelectedScGenre,
+    isYtmLoggedIn, setIsYtmLoggedIn
+  } = useLibraryStore()
+
+  // Settings Store
+  const {
+    appMode, setAppMode,
+    customBgImage, setCustomBgImage,
+    useTrackCoverAsBg, setUseTrackCoverAsBg,
+    bgImageInput, setBgImageInput,
+    customBgOpacity, setCustomBgOpacity,
+    customBgBlur, setCustomBgBlur,
+    isReloading, setIsReloading,
+    isConfigLoaded, setIsConfigLoaded,
+    streamPort, setStreamPort,
+    minimizeToTray, setMinimizeToTray,
+    closeToTray, setCloseToTray,
+    discordRpcEnabled, setDiscordRpcEnabled,
+    discordClientId, setDiscordClientId,
+    discordShowDetails, setDiscordShowDetails,
+    discordShowTime, setDiscordShowTime,
+    discordShowCover, setDiscordShowCover,
+    discordShowQuality, setDiscordShowQuality,
+    discordShowButtons, setDiscordShowButtons,
+    discordShowIdle, setDiscordShowIdle,
+    discordConnected, setDiscordConnected,
+    googleDriveApiKey, setGoogleDriveApiKey,
+    driveLink, setDriveLink,
+    isFetchingDrive, setIsFetchingDrive,
+    driveFiles, setDriveFiles,
+    cloudActionTrack, setCloudActionTrack,
+    isDownloading, setIsDownloading,
+    downloadProgress, setDownloadProgress
+  } = useSettingsStore()
+
+  // Audio & EQ Store
+  const {
+    isEqEnabled, setIsEqEnabled,
+    availableAudioDevices, setAvailableAudioDevices,
+    selectedDeviceId, setSelectedDeviceId,
+    eqBands, setEqBands,
+    preampGain, setPreampGain
+  } = useAudioStore()
+
+  // Lyrics Store
+  const {
+    lyrics, setLyrics,
+    currentLyricIndex, setCurrentLyricIndex,
+    originalCover, setOriginalCover
+  } = useLyricsStore()
+
+  // Computed & Local Refs
+  const isLite = appMode === 'lite' || appMode === 'core'
+  const isCore = appMode === 'core'
+  const deferredSearchQuery = useDeferredValue(searchQuery)
+
+  const preloadedRef = useRef<string | null>(null)
+  const playlistsLoadMoreRef = useRef<HTMLDivElement>(null)
+  const sleepTimerOriginalVolRef = useRef<number | null>(null)
+
+  // DnD Sensors (Móc Hook ở cấp cao nhất để tránh lỗi Rules of Hooks)
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const selectedDeviceRef = useRef<string>('auto')
+  const pendingSeekTimeRef = useRef<number | null>(null)
+  useEffect(() => { 
+    selectedDeviceRef.current = selectedDeviceId 
+  }, [selectedDeviceId])
+
+  // Tag Editor Local States
+  const [editingTrack, setEditingTrack] = useState<any | null>(null)
+  const [editTags, setEditTags] = useState({ title: '', artist: '', album: '', genre: '', lyrics: '' })
+  const [editImagePath, setEditImagePath] = useState<string | null>(null)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-mode', appMode)
   }, [appMode])
-  
-  // UI & General App States
-  const [activeView, setActiveView] = useState<'home' | 'home-ytm' | 'home-soundcloud' | 'songs' | 'playlists' | 'artists' | 'genres' | 'user-playlists' | 'settings' | 'drive'>('home')
-  const [themeColor, setThemeColor] = useState('rgba(39, 39, 42, 0)')
-  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info', visible: boolean}>({message: '', type: 'info', visible: false})
-  const [customBgImage, setCustomBgImage] = useState<string | null>(null)
-  const [useTrackCoverAsBg, setUseTrackCoverAsBg] = useState<boolean>(false)
-  const [bgImageInput, setBgImageInput] = useState<string>('')
-  const [customBgOpacity, setCustomBgOpacity] = useState<number>(1)
-  const [customBgBlur, setCustomBgBlur] = useState<number>(0)
-  const [isReloading, setIsReloading] = useState(false)
-  const [isConfigLoaded, setIsConfigLoaded] = useState(false) // Flag để ngăn ghi đè config
 
-  // Stream Server Port cho Dynamic Cover Art scaling
-  const [streamPort, setStreamPort] = useState<number>(0)
   useEffect(() => {
     window.api?.getStreamPort?.().then((port: number) => {
       if (port) {
@@ -704,156 +832,6 @@ export default function App() {
       }
     })
   }, [])
-
-  // Recently Played State (Lưu lịch sử bài hát đã nghe)
-  const [recentlyPlayed, setRecentlyPlayed] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem('meis_recent_played')
-      return saved ? JSON.parse(saved) : []
-    } catch (e) {
-      return []
-    }
-  })
-
-  // SoundCloud & YTM Auth States
-  const [scDashboardData, setScDashboardData] = useState<any[]>([])
-  const [isScLoading, setIsScLoading] = useState<boolean>(false)
-  const [scUser, setScUser] = useState<any | null>(null)
-  const [selectedScGenre, setSelectedScGenre] = useState<string>('all-music')
-  const [isYtmLoggedIn, setIsYtmLoggedIn] = useState<boolean>(false)
-  
-  // Library & Search States
-  const [libraryPath, setLibraryPath] = useState<string | null>(null)
-  const [libraryPaths, setLibraryPaths] = useState<string[]>([])
-  const [libraryTracks, setLibraryTracks] = useState<any[]>([])
-  const [playlists, setPlaylists] = useState<any[]>([])
-  const [userPlaylists, setUserPlaylists] = useState<any[]>([])
-  const [activePlaylist, setActivePlaylist] = useState<any | null>(null)
-  const [activeUserPlaylist, setActiveUserPlaylist] = useState<any | null>(null)
-  const [activeArtist, setActiveArtist] = useState<any | null>(null)
-  const [activeGenre, setActiveGenre] = useState<any | null>(null)
-  const [playlistsRenderLimit, setPlaylistsRenderLimit] = useState(36)
-  const playlistsLoadMoreRef = useRef<HTMLDivElement>(null)
-  const [viewMode, setViewMode] = useState<'table' | 'grid' | 'compact'>(() => {
-    return (localStorage.getItem('meis_view_mode') as any) || 'table'
-  })
-  const [showCreateUserPlaylistModal, setShowCreateUserPlaylistModal] = useState(false)
-  const [showAddSongsToUserPlaylistModal, setShowAddSongsToUserPlaylistModal] = useState(false)
-  const [editingUserPlaylist, setEditingUserPlaylist] = useState<any | null>(null)
-  const [showEditUserPlaylistModal, setShowEditUserPlaylistModal] = useState(false)
-  const [collapsedArtistLetters, setCollapsedArtistLetters] = useState<Record<string, boolean>>({})
-  
-  const [sortField, setSortField] = useState<string | null>(null)
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const deferredSearchQuery = useDeferredValue(searchQuery)
-
-  // Sleep Timer States (Hẹn giờ tắt nhạc)
-  const [sleepTimerMode, setSleepTimerMode] = useState<'off' | '15' | '30' | '45' | '60' | 'end_of_track'>('off')
-  const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null)
-  const [showSleepTimerMenu, setShowSleepTimerMenu] = useState(false)
-  const sleepTimerOriginalVolRef = useRef<number | null>(null)
-
-  // Lyric Offset State (Tinh chỉnh độ trễ lời bài hát, lưu vào localStorage)
-  const [lyricOffset, setLyricOffset] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('meis_lyric_offset')
-      return saved ? parseFloat(saved) || 0 : 0
-    } catch (e) {
-      return 0
-    }
-  })
-
-  // Player & Queue States
-  const [currentTrack, setCurrentTrack] = useState<any | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isShuffle, setIsShuffle] = useState(false)
-
-  const [playQueue, setPlayQueue] = useState<any[]>([])
-
-  // DnD Sensors (Móc Hook ở cấp cao nhất để tránh lỗi Rules of Hooks)
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-  const [originalQueue, setOriginalQueue] = useState<any[]>([])
-  const [repeatMode, setRepeatMode] = useState<0 | 1 | 2>(0)
-  const [volume, setVolume] = useState(1)
-  const [prevVolume, setPrevVolume] = useState<number>(1)
-  const [bitPerfectEnabled, setBitPerfectEnabled] = useState(false)
-  const [crossfadeEnabled, setCrossfadeEnabled] = useState(false)
-  const [crossfadeDuration, setCrossfadeDuration] = useState(3)
-  const [mpvOutParams, setMpvOutParams] = useState<{ samplerate?: number; format?: string; channels?: string } | null>(null)
-
-  const [minimizeToTray, setMinimizeToTray] = useState(false)
-  const [closeToTray, setCloseToTray] = useState(false)
-  const [isMiniPlayer, setIsMiniPlayer] = useState(false)
-
-  // Discord Rich Presence States
-  const [discordRpcEnabled, setDiscordRpcEnabled] = useState(true)
-  const [discordClientId, setDiscordClientId] = useState('1539993441851670589')
-  const [discordShowDetails, setDiscordShowDetails] = useState(true)
-  const [discordShowTime, setDiscordShowTime] = useState(true)
-  const [discordShowCover, setDiscordShowCover] = useState(true)
-  const [discordShowQuality, setDiscordShowQuality] = useState(true)
-  const [discordShowButtons, setDiscordShowButtons] = useState(true)
-  const [discordShowIdle, setDiscordShowIdle] = useState(true)
-  const [discordConnected, setDiscordConnected] = useState(false)
-
-  // Modals & Panels Visibility
-  const [showQueuePanel, setShowQueuePanel] = useState<boolean>(false)
-  const [showEQ, setShowEQ] = useState(false)
-  const [showVisualizer, setShowVisualizer] = useState(true)
-  const [showSpectrogramModal, setShowSpectrogramModal] = useState(false)
-  const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false)
-  const [isLyricsMaximized, setIsLyricsMaximized] = useState<boolean>(false)
-
-  useEffect(() => {
-    if (isLyricsMaximized) {
-      setIsLyricsMaximized(false)
-    }
-  }, [activeView])
-
-  // Audio Devices & EQ States
-  const [isEqEnabled, setIsEqEnabled] = useState(false)
-  const [availableAudioDevices, setAvailableAudioDevices] = useState<{ name: string; description: string }[]>([])
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('auto')
-  const selectedDeviceRef = useRef<string>('auto');
-  const pendingSeekTimeRef = useRef<number | null>(null);
-  useEffect(() => { 
-    selectedDeviceRef.current = selectedDeviceId; 
-  }, [selectedDeviceId]);
-  const [eqBands, setEqBands] = useState<EQBand[]>([
-    { id: '1', frequency: 60, gain: 0, type: 'peaking', q: 1.4 },
-    { id: '2', frequency: 230, gain: 0, type: 'peaking', q: 1.4 },
-    { id: '3', frequency: 910, gain: 0, type: 'peaking', q: 1.4 },
-    { id: '4', frequency: 3600, gain: 0, type: 'peaking', q: 1.4 },
-    { id: '5', frequency: 14000, gain: 0, type: 'peaking', q: 1.4 },
-  ])
-  const [preampGain, setPreampGain] = useState<number>(0)
-
-  // Lyrics States
-  const [lyrics, setLyrics] = useState<LyricLine[]>([])
-  const [currentLyricIndex, setCurrentLyricIndex] = useState<number>(-1)
-  const [originalCover, setOriginalCover] = useState<string | null>(null)
-
-  // Tag Editor & Renaming States
-  const [editingTrack, setEditingTrack] = useState<any | null>(null)
-  const [editTags, setEditTags] = useState({ title: '', artist: '', album: '', genre: '', lyrics: '' })
-  const [editImagePath, setEditImagePath] = useState<string | null>(null)
-  const [playlistRename, setPlaylistRename] = useState<{ isOpen: boolean, oldName: string, newName: string, id?: string }>({ isOpen: false, oldName: '', newName: '', id: undefined })
-
-  // Smart Autoplay State (Gợi ý thông minh)
-  const [smartAutoplay, setSmartAutoplay] = useState<boolean>(() => {
-    return localStorage.getItem('meis_smart_autoplay') === 'true'
-  })
-  useEffect(() => {
-    localStorage.setItem('meis_smart_autoplay', String(smartAutoplay))
-  }, [smartAutoplay])
-
-  // Custom Dialog Modal State (Hộp thoại xác nhận / cảnh báo đồng bộ giao diện)
-  const [customDialog, setCustomDialog] = useState<DialogOptions | null>(null)
 
   const showConfirm = (options: {
     title?: string
@@ -1031,19 +1009,6 @@ export default function App() {
       if (typeof unlistenForward === 'function') unlistenForward()
     }
   }, [activeAlbum, activeArtist, activeGenre, activePlaylist, activeUserPlaylist, searchQuery, searchInput, activeView])
-
-  // Cloud & Google Drive States
-  const [googleDriveApiKey, setGoogleDriveApiKey] = useState('')
-  const [driveLink, setDriveLink] = useState('')
-  const [isFetchingDrive, setIsFetchingDrive] = useState(false)
-  const [driveFiles, setDriveFiles] = useState<any[]>([])
-  const [cloudActionTrack, setCloudActionTrack] = useState<any | null>(null) 
-  const [isDownloading, setIsDownloading] = useState(false)
-  const [downloadProgress, setDownloadProgress] = useState<{current: number, total: number, fileName: string} | null>(null)
-
-  // Create playlists
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showAddSongsModal, setShowAddSongsModal] = useState(false)
 
 
   // ==========================================
@@ -1346,9 +1311,9 @@ export default function App() {
   }
 
   // --- Library Management ---
-  const loadLibrary = async (forceRefresh: boolean = false) => {
+  const loadLibrary = async (forceRefresh: boolean = false, hardRescan: boolean = false) => {
     // @ts-ignore
-    const res = await window.api.getLibrary(forceRefresh)
+    const res = await window.api.getLibrary(forceRefresh, hardRescan)
     if (res.success) {
       setLibraryPath(res.libraryPath)
       setLibraryPaths(res.libraryPaths || (res.libraryPath ? [res.libraryPath] : []))
@@ -1378,10 +1343,10 @@ export default function App() {
     }
   }, [userPlaylists]);
 
-  const handleReloadLibrary = async () => {
+  const handleReloadLibrary = async (hardRescan: boolean = false) => {
     setIsReloading(true)
     try {
-      await loadLibrary(true)
+      await loadLibrary(true, hardRescan)
     } catch (e) {
       console.error(e)
     } finally {

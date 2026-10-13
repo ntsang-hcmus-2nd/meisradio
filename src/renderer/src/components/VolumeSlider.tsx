@@ -1,14 +1,27 @@
 import React from 'react'
 import { Volume2, VolumeX } from 'lucide-react'
+import { usePlayerStore } from '../stores/playerStore'
 
 interface VolumeSliderProps {
-  volume: number
-  setVolume: (val: number) => void
+  volume?: number
+  setVolume?: (val: number) => void
   audioRef: React.RefObject<HTMLAudioElement | null>
   bitPerfectEnabled?: boolean
 }
 
-export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, setVolume, audioRef, bitPerfectEnabled }) => {
+export const VolumeSlider: React.FC<VolumeSliderProps> = ({ 
+  volume: propVolume, 
+  setVolume: propSetVolume, 
+  audioRef, 
+  bitPerfectEnabled: propBitPerfect 
+}) => {
+  const storeVolume = usePlayerStore((s) => s.volume)
+  const storeSetVolume = usePlayerStore((s) => s.setVolume)
+  const storeBitPerfect = usePlayerStore((s) => s.bitPerfectEnabled)
+
+  const volume = propVolume !== undefined ? propVolume : storeVolume
+  const setVolume = propSetVolume || storeSetVolume
+  const bitPerfectEnabled = propBitPerfect !== undefined ? propBitPerfect : storeBitPerfect
   const toggleMute = () => {
     if (volume === 0) {
       const prev = parseFloat(localStorage.getItem('player_volume_prev') || '1')

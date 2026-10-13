@@ -3,26 +3,60 @@ import { Home, Library, Disc, Mic2, Tag, ListPlus, Cloud, Settings, ChevronDown,
 import logoImg from '../../../../resources/HoT_Chibi_Icon.png'
 import { useTranslation } from '../locales'
 
+import { useUIStore } from '../stores/uiStore'
+import { useLibraryStore } from '../stores/libraryStore'
+import { useSettingsStore } from '../stores/settingsStore'
+
 interface SidebarProps {
-  activeView: string
-  setActiveView: (view: any) => void
-  setSearchQuery: (q: string) => void
-  setSearchInput: (q: string) => void
-  setActiveAlbum: (a: any) => void
-  setActivePlaylist: (p: any) => void
+  activeView?: string
+  setActiveView?: (view: any) => void
+  setSearchQuery?: (q: string) => void
+  setSearchInput?: (q: string) => void
+  setActiveAlbum?: (a: any) => void
+  setActivePlaylist?: (p: any) => void
   setActiveArtist?: (a: any) => void
   setActiveGenre?: (g: any) => void
   setActiveUserPlaylist?: (p: any) => void
   fetchDashboard: () => void
   fetchScDashboard?: () => void
-  isCore: boolean // <-- MỚI: Nhận trạng thái Core Mode
+  isCore?: boolean
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
-  activeView, setActiveView, setSearchQuery, setSearchInput, 
-  setActiveAlbum, setActivePlaylist, setActiveArtist, setActiveGenre, setActiveUserPlaylist,
-  fetchDashboard, fetchScDashboard, isCore 
+  activeView: propActiveView, 
+  setActiveView: propSetActiveView, 
+  setSearchQuery: propSetSearchQuery, 
+  setSearchInput: propSetSearchInput, 
+  setActiveAlbum: propSetActiveAlbum, 
+  setActivePlaylist: propSetActivePlaylist, 
+  setActiveArtist: propSetActiveArtist, 
+  setActiveGenre: propSetActiveGenre, 
+  setActiveUserPlaylist: propSetActiveUserPlaylist,
+  fetchDashboard, 
+  fetchScDashboard, 
+  isCore: propIsCore 
 }) => {
+  const storeActiveView = useUIStore((s) => s.activeView)
+  const storeSetActiveView = useUIStore((s) => s.setActiveView)
+  const storeSetSearchQuery = useLibraryStore((s) => s.setSearchQuery)
+  const storeSetSearchInput = useLibraryStore((s) => s.setSearchInput)
+  const storeSetActiveAlbum = useLibraryStore((s) => s.setActiveAlbum)
+  const storeSetActivePlaylist = useLibraryStore((s) => s.setActivePlaylist)
+  const storeSetActiveArtist = useLibraryStore((s) => s.setActiveArtist)
+  const storeSetActiveGenre = useLibraryStore((s) => s.setActiveGenre)
+  const storeSetActiveUserPlaylist = useLibraryStore((s) => s.setActiveUserPlaylist)
+  const storeAppMode = useSettingsStore((s) => s.appMode)
+
+  const activeView = propActiveView !== undefined ? propActiveView : storeActiveView
+  const setActiveView = propSetActiveView || storeSetActiveView
+  const setSearchQuery = propSetSearchQuery || storeSetSearchQuery
+  const setSearchInput = propSetSearchInput || storeSetSearchInput
+  const setActiveAlbum = propSetActiveAlbum || storeSetActiveAlbum
+  const setActivePlaylist = propSetActivePlaylist || storeSetActivePlaylist
+  const setActiveArtist = propSetActiveArtist || storeSetActiveArtist
+  const setActiveGenre = propSetActiveGenre || storeSetActiveGenre
+  const setActiveUserPlaylist = propSetActiveUserPlaylist || storeSetActiveUserPlaylist
+  const isCore = propIsCore !== undefined ? propIsCore : storeAppMode === 'core'
   const { t } = useTranslation()
   const isHomeActive = activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud'
   const [isHomeExpanded, setIsHomeExpanded] = useState<boolean>(true)
@@ -36,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   const handleNavClick = (view: string) => {
-    setActiveView(view)
+    setActiveView(view as any)
     setSearchQuery('')
     setSearchInput('')
     if (view === 'home') {

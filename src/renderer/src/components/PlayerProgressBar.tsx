@@ -7,19 +7,38 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
+import { usePlayerStore } from '../stores/playerStore'
+
 interface PlayerProgressBarProps {
   audioRef: React.RefObject<HTMLAudioElement | null>
-  currentTrack: any
-  crossfadeEnabled: boolean
-  crossfadeDuration: number
-  repeatMode: number
+  currentTrack?: any
+  crossfadeEnabled?: boolean
+  crossfadeDuration?: number
+  repeatMode?: number
   onNext: () => void
   bitPerfectEnabled?: boolean
 }
 
 export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
-  audioRef, currentTrack, crossfadeEnabled, crossfadeDuration, repeatMode, onNext, bitPerfectEnabled
+  audioRef, 
+  currentTrack: propTrack, 
+  crossfadeEnabled: propCrossfade, 
+  crossfadeDuration: propCrossfadeDuration, 
+  repeatMode: propRepeatMode, 
+  onNext, 
+  bitPerfectEnabled: propBitPerfect
 }) => {
+  const storeTrack = usePlayerStore((s) => s.currentTrack)
+  const storeCrossfade = usePlayerStore((s) => s.crossfadeEnabled)
+  const storeCrossfadeDuration = usePlayerStore((s) => s.crossfadeDuration)
+  const storeRepeatMode = usePlayerStore((s) => s.repeatMode)
+  const storeBitPerfect = usePlayerStore((s) => s.bitPerfectEnabled)
+
+  const currentTrack = propTrack !== undefined ? propTrack : storeTrack
+  const crossfadeEnabled = propCrossfade !== undefined ? propCrossfade : storeCrossfade
+  const crossfadeDuration = propCrossfadeDuration !== undefined ? propCrossfadeDuration : storeCrossfadeDuration
+  const repeatMode = propRepeatMode !== undefined ? propRepeatMode : storeRepeatMode
+  const bitPerfectEnabled = propBitPerfect !== undefined ? propBitPerfect : storeBitPerfect
   const [currentTime, setCurrentTime] = useState(0)
   const [isDragging, setIsDragging] = useState(false) // Trạng thái kéo chuột
 

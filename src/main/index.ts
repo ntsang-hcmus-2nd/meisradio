@@ -1061,7 +1061,7 @@ app.whenReady().then(() => {
   })
 
   // 2. Đọc toàn bộ thư viện (Tất cả bài hát + Playlists đa thư mục) với cơ chế quét gia tăng (Incremental Scan)
-  ipcMain.handle('music:getLibrary', async (_, forceRefresh: boolean = false) => {
+  ipcMain.handle('music:getLibrary', async (_, forceRefresh: boolean = false, hardRescan: boolean = false) => {
     const config = getConfig()
     const libraryPaths: string[] = (config.libraryPaths && config.libraryPaths.length > 0) 
       ? config.libraryPaths 
@@ -1081,15 +1081,15 @@ app.whenReady().then(() => {
     
     const primaryRootPath = validPaths[0]
 
-    // 1. NẾU MỞ APP BÌNH THƯỜNG (KHÔNG FORCE REFRESH): ĐỌC TRỰC TIẾP TỪ CACHE, 0% QUÉT Ổ CỨNG
-    if (!forceRefresh && fs.existsSync(LIBRARY_CACHE_PATH)) {
+    // 1. NẾU MỞ APP BÌNH THƯỜNG (KHÔNG FORCE REFRESH VÀ KHÔNG HARD RESCAN): ĐỌC TRỰC TIẾP TỪ CACHE, 0% QUÉT Ổ CỨNG
+    if (!forceRefresh && !hardRescan && fs.existsSync(LIBRARY_CACHE_PATH)) {
       try {
         const cached = JSON.parse(fs.readFileSync(LIBRARY_CACHE_PATH, 'utf-8'))
         const cachedPaths = Array.isArray(cached.libraryPaths) ? cached.libraryPaths : (cached.libraryPath ? [cached.libraryPath] : [])
         const isSamePaths = cachedPaths.length === validPaths.length && cachedPaths.every((p: string, idx: number) => p === validPaths[idx])
         const hasGenreInfo = Array.isArray(cached.tracks) && cached.tracks.length > 0 && cached.tracks.some((t: any) => t.genre !== undefined && t.genre !== 'Unknown')
         const hasMultiArtistVersion = cached.multiArtistVersion === 2
-        if (cached && isSamePaths && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5) && hasMultiArtistVersion) {
+        if (cached && isSamePaths && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5 || hasMultiArtistVersion) && hasMultiArtistVersion) {
           const enrichedTracks = cached.tracks.map((t: any) => {
             const artists = (Array.isArray(t.artists) && t.artists.length > 0)
               ? t.artists
@@ -1150,11 +1150,12 @@ app.whenReady().then(() => {
         coverUrl = pathToFileURL(centralThumbPath).href
       }
 
-      // KIỂM TRA CACHE: Nếu file đã có và mtime không đổi -> TÁI SỬ DỤNG HOÀN TOÀN, KHÔNG ĐỌC LẠI FILE
+      // KIỂM TRA CACHE: Nếu không phải hardRescan, file đã có và mtime không đổi -> TÁI SỬ DỤNG HOÀN TOÀN, KHÔNG ĐỌC LẠI FILE
       const cached = metadataCache[trackPath]
-      if (!forceRefresh && cached && cached.mtime === stat.mtimeMs && cached.data && cached.data.genre !== undefined && cached.data.genre !== 'Unknown' && cached.data.multiArtistVersion === 2) {
+      const isMtimeMatch = cached && (cached.mtime === stat.mtimeMs || Math.abs(cached.mtime - stat.mtimeMs) < 1000)
+      if (!hardRescan && isMtimeMatch && cached.data && cached.data.multiArtistVersion === 2) {
         const existingTrack = previousTrackMap.get(trackPath) || previousTrackMap.get(cached.data.filePath)
-        if (existingTrack && existingTrack.genre !== undefined && existingTrack.genre !== 'Unknown' && existingTrack.multiArtistVersion === 2) {
+        if (existingTrack && existingTrack.multiArtistVersion === 2) {
           if (!existingTrack.artists || existingTrack.artists.length === 0) {
             existingTrack.artists = splitArtistString(existingTrack.artist || '')
           }
@@ -3289,7 +3290,9 @@ app.whenReady().then(() => {
 
       let targetPath = rawTrackPath.replace(/^file:\/\/\/?/, '');
       if (process.platform === 'win32') {
-        targetPath = decodeURIComponent(targetPath);
+        try {
+          targetPath = decodeURIComponent(targetPath);
+        } catch (_) {}
         if (/^\/[a-zA-Z]:/.test(targetPath)) targetPath = targetPath.slice(1);
         targetPath = targetPath.replace(/\//g, '\\');
       }
