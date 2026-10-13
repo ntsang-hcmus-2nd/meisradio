@@ -249,6 +249,7 @@ export async function writeFlacMetadata(
   tags: FlacTags,
   imagePath?: string | null
 ): Promise<{ success: boolean; error?: string }> {
+  let tempPath: string | null = null
   try {
     if (!fs.existsSync(filePath)) {
       return { success: false, error: 'Tệp FLAC không tồn tại' }
@@ -317,12 +318,16 @@ export async function writeFlacMetadata(
     audioData.copy(outBuffer, writePos)
 
     // Ghi an toàn bằng tệp tạm rồi rename
-    const tempPath = `${filePath}.tmp_${Date.now()}`
+    tempPath = `${filePath}.tmp_${Date.now()}`
     fs.writeFileSync(tempPath, outBuffer)
     fs.renameSync(tempPath, filePath)
+    tempPath = null
 
     return { success: true }
   } catch (error: any) {
+    if (tempPath && fs.existsSync(tempPath)) {
+      try { fs.unlinkSync(tempPath) } catch (_) {}
+    }
     return { success: false, error: error.message || 'Lỗi không xác định khi ghi thẻ FLAC' }
   }
 }

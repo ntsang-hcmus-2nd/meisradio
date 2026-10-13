@@ -494,10 +494,25 @@ try {
   metadataCache = {};
 }
 
-function saveMetadataCache() {
-  try {
-    fs.writeFileSync(METADATA_CACHE_PATH, JSON.stringify(metadataCache));
-  } catch (e) {}
+let metadataSaveTimer: NodeJS.Timeout | null = null;
+function saveMetadataCache(immediate: boolean = false) {
+  if (immediate) {
+    if (metadataSaveTimer) {
+      clearTimeout(metadataSaveTimer);
+      metadataSaveTimer = null;
+    }
+    try {
+      fs.writeFileSync(METADATA_CACHE_PATH, JSON.stringify(metadataCache));
+    } catch (e) {}
+    return;
+  }
+  if (metadataSaveTimer) return;
+  metadataSaveTimer = setTimeout(async () => {
+    metadataSaveTimer = null;
+    try {
+      await fs.promises.writeFile(METADATA_CACHE_PATH, JSON.stringify(metadataCache));
+    } catch (e) {}
+  }, 2000);
 }
 
 let themeColorsCache: Record<string, { primary60: string; secondary30: string; accent10: string }> = {};
@@ -509,10 +524,25 @@ try {
   themeColorsCache = {};
 }
 
-function saveThemeColorsCache() {
-  try {
-    fs.writeFileSync(THEME_COLORS_CACHE_PATH, JSON.stringify(themeColorsCache, null, 2));
-  } catch (e) {}
+let themeColorsSaveTimer: NodeJS.Timeout | null = null;
+function saveThemeColorsCache(immediate: boolean = false) {
+  if (immediate) {
+    if (themeColorsSaveTimer) {
+      clearTimeout(themeColorsSaveTimer);
+      themeColorsSaveTimer = null;
+    }
+    try {
+      fs.writeFileSync(THEME_COLORS_CACHE_PATH, JSON.stringify(themeColorsCache, null, 2));
+    } catch (e) {}
+    return;
+  }
+  if (themeColorsSaveTimer) return;
+  themeColorsSaveTimer = setTimeout(async () => {
+    themeColorsSaveTimer = null;
+    try {
+      await fs.promises.writeFile(THEME_COLORS_CACHE_PATH, JSON.stringify(themeColorsCache, null, 2));
+    } catch (e) {}
+  }, 2000);
 }
 
 function extractThemeColorsFromImage(img: Electron.NativeImage): { primary60: string; secondary30: string; accent10: string } {
@@ -646,7 +676,7 @@ const ytdlp = is.dev
       process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
     ));
 
-app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=256');
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=2048');
 app.commandLine.appendSwitch('disable-features', 'VideoCaptureService');
 
 let tray: Tray | null = null
@@ -4385,6 +4415,8 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  saveMetadataCache(true)
+  saveThemeColorsCache(true)
   if (mpvManager) mpvManager.killAll()
   if (discordRpcManager) discordRpcManager.destroy()
   if (tray) {

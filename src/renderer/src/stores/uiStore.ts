@@ -40,6 +40,11 @@ export interface UIState {
   showAddSongsModal: boolean
   playlistRename: { isOpen: boolean; oldName: string; newName: string; id?: string }
 
+  // New Feature Modals
+  showCommandPalette: boolean
+  showInsightsModal: boolean
+  showBackupModal: boolean
+
   // Actions
   setActiveView: (view: ActiveViewType | ((prev: ActiveViewType) => ActiveViewType)) => void
   setViewMode: (mode: 'table' | 'grid' | 'compact' | ((prev: 'table' | 'grid' | 'compact') => 'table' | 'grid' | 'compact')) => void
@@ -65,6 +70,10 @@ export interface UIState {
   setShowCreateModal: (show: boolean | ((prev: boolean) => boolean)) => void
   setShowAddSongsModal: (show: boolean | ((prev: boolean) => boolean)) => void
   setPlaylistRename: (rename: { isOpen: boolean; oldName: string; newName: string; id?: string } | ((prev: any) => any)) => void
+
+  setShowCommandPalette: (show: boolean | ((prev: boolean) => boolean)) => void
+  setShowInsightsModal: (show: boolean | ((prev: boolean) => boolean)) => void
+  setShowBackupModal: (show: boolean | ((prev: boolean) => boolean)) => void
 }
 
 const resolveVal = <T>(valOrFn: T | ((prev: T) => T), prev: T): T => {
@@ -103,6 +112,10 @@ export const useUIStore = create<UIState>((set) => ({
   showAddSongsModal: false,
   playlistRename: { isOpen: false, oldName: '', newName: '', id: undefined },
 
+  showCommandPalette: false,
+  showInsightsModal: false,
+  showBackupModal: false,
+
   setActiveView: (valOrFn) => set((s) => {
     const next = resolveVal(valOrFn, s.activeView)
     // Tự động thu nhỏ lyrics khi chuyển view
@@ -134,5 +147,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   setShowCreateModal: (valOrFn) => set((s) => ({ showCreateModal: resolveVal(valOrFn, s.showCreateModal) })),
   setShowAddSongsModal: (valOrFn) => set((s) => ({ showAddSongsModal: resolveVal(valOrFn, s.showAddSongsModal) })),
-  setPlaylistRename: (valOrFn) => set((s) => ({ playlistRename: resolveVal(valOrFn, s.playlistRename) }))
+  setPlaylistRename: (valOrFn) => set((s) => ({ playlistRename: resolveVal(valOrFn, s.playlistRename) })),
+
+  setShowCommandPalette: (valOrFn) => set((s) => ({ showCommandPalette: resolveVal(valOrFn, s.showCommandPalette) })),
+  setShowInsightsModal: (valOrFn) => set((s) => ({ showInsightsModal: resolveVal(valOrFn, s.showInsightsModal) })),
+  setShowBackupModal: (valOrFn) => set((s) => ({ showBackupModal: resolveVal(valOrFn, s.showBackupModal) }))
 }))

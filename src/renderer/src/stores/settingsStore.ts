@@ -33,6 +33,7 @@ export interface SettingsState {
   cloudActionTrack: any | null
   isDownloading: boolean
   downloadProgress: { current: number; total: number; fileName: string } | null
+  loudnessNormalization: boolean
 
   // Actions
   setAppMode: (mode: 'default' | 'lite' | 'core' | ((prev: 'default' | 'lite' | 'core') => 'default' | 'lite' | 'core')) => void
@@ -65,10 +66,19 @@ export interface SettingsState {
   setCloudActionTrack: (track: any | null | ((prev: any) => any)) => void
   setIsDownloading: (downloading: boolean | ((prev: boolean) => boolean)) => void
   setDownloadProgress: (progress: { current: number; total: number; fileName: string } | null | ((prev: any) => any)) => void
+  setLoudnessNormalization: (enabled: boolean | ((prev: boolean) => boolean)) => void
 }
 
 const resolveVal = <T>(valOrFn: T | ((prev: T) => T), prev: T): T => {
   return typeof valOrFn === 'function' ? (valOrFn as (prev: T) => T)(prev) : valOrFn
+}
+
+const getInitialLoudnessNorm = (): boolean => {
+  try {
+    return localStorage.getItem('meis_loudness_norm') === 'true'
+  } catch {
+    return false
+  }
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -102,6 +112,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   cloudActionTrack: null,
   isDownloading: false,
   downloadProgress: null,
+  loudnessNormalization: getInitialLoudnessNorm(),
 
   setAppMode: (valOrFn) => set((s) => {
     const next = resolveVal(valOrFn, s.appMode)
@@ -136,5 +147,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setDriveFiles: (valOrFn) => set((s) => ({ driveFiles: resolveVal(valOrFn, s.driveFiles) })),
   setCloudActionTrack: (valOrFn) => set((s) => ({ cloudActionTrack: resolveVal(valOrFn, s.cloudActionTrack) })),
   setIsDownloading: (valOrFn) => set((s) => ({ isDownloading: resolveVal(valOrFn, s.isDownloading) })),
-  setDownloadProgress: (valOrFn) => set((s) => ({ downloadProgress: resolveVal(valOrFn, s.downloadProgress) }))
+  setDownloadProgress: (valOrFn) => set((s) => ({ downloadProgress: resolveVal(valOrFn, s.downloadProgress) })),
+  setLoudnessNormalization: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.loudnessNormalization)
+    try { localStorage.setItem('meis_loudness_norm', String(next)) } catch {}
+    return { loudnessNormalization: next }
+  })
 }))

@@ -47,7 +47,11 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
   className
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const reqAnimRef = useRef<number | undefined>(undefined)
+  const isPlayingRef = useRef(isPlaying)
+  const reqAnimRef = useRef<number | null>(null)
+  useEffect(() => {
+    isPlayingRef.current = isPlaying
+  }, [isPlaying])
 
   useEffect(() => {
     if (isLite || !showSpectrogram || !canvasRef.current || !analyserNodeRef.current) return
@@ -170,7 +174,7 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
       if (elapsed < fpsInterval) return
       lastDrawTime = now - (elapsed % fpsInterval)
 
-      if (isPlaying && analyserNodeRef.current) {
+      if (isPlayingRef.current && analyserNodeRef.current) {
         analyserNodeRef.current.getByteFrequencyData(dataArray)
 
         gl.bindTexture(gl.TEXTURE_2D, texture)
@@ -198,7 +202,7 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
       if (texture) gl.deleteTexture(texture)
       if (positionBuffer) gl.deleteBuffer(positionBuffer)
     }
-  }, [isPlaying, isLite, showSpectrogram, analyserNodeRef])
+  }, [isLite, showSpectrogram, analyserNodeRef])
 
   if (isLite || !showSpectrogram) return null
 

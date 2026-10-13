@@ -31,6 +31,10 @@ import { EQPanel } from './components/EQPanel'
 import { VolumeSlider } from './components/VolumeSlider'
 import { SpectrogramModal } from './components/SpectrogramModal'
 import { ContextMenu, ContextMenuItem } from './components/ContextMenu'
+import { CommandPaletteModal } from './components/modals/CommandPaletteModal'
+import { MusicInsightsModal } from './components/modals/MusicInsightsModal'
+import { BackupModal } from './components/modals/BackupModal'
+import { DragDropOverlay } from './components/DragDropOverlay'
 
 import { extractThemeColors, initThemeColorCache } from './utils/colorUtils'
 import { DynamicCoverArt, setGlobalStreamPort } from './components/DynamicCoverArt'
@@ -716,7 +720,10 @@ export default function App() {
     showEditUserPlaylistModal, setShowEditUserPlaylistModal,
     showCreateModal, setShowCreateModal,
     showAddSongsModal, setShowAddSongsModal,
-    playlistRename, setPlaylistRename
+    playlistRename, setPlaylistRename,
+    showCommandPalette, setShowCommandPalette,
+    showInsightsModal, setShowInsightsModal,
+    showBackupModal, setShowBackupModal
   } = useUIStore()
 
   // Library Store
@@ -775,7 +782,8 @@ export default function App() {
     driveFiles, setDriveFiles,
     cloudActionTrack, setCloudActionTrack,
     isDownloading, setIsDownloading,
-    downloadProgress, setDownloadProgress
+    downloadProgress, setDownloadProgress,
+    loudnessNormalization, setLoudnessNormalization
   } = useSettingsStore()
 
   // Audio & EQ Store
@@ -802,6 +810,9 @@ export default function App() {
   const preloadedRef = useRef<string | null>(null)
   const playlistsLoadMoreRef = useRef<HTMLDivElement>(null)
   const sleepTimerOriginalVolRef = useRef<number | null>(null)
+  const hasTriggeredCrossfadeRef = useRef(false)
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
+  const dragCounterRef = useRef(0)
 
   // DnD Sensors (Móc Hook ở cấp cao nhất để tránh lỗi Rules of Hooks)
   const dndSensors = useSensors(
@@ -1593,17 +1604,22 @@ export default function App() {
 
   // --- Player Controls ---
   const handlePlayTrack = async (track: any) => {
+    hasTriggeredCrossfadeRef.current = false
     if (crossfadeEnabled && isPlaying && audioRef.current && currentTrack && !bitPerfectEnabled) {
       try {
         const fadeAudio = new Audio(audioRef.current.src)
         fadeAudio.currentTime = audioRef.current.currentTime
-        fadeAudio.volume = volume
+        const curVol = Math.max(0, Math.min(1, volume))
+        fadeAudio.volume = curVol
         fadeAudio.play().catch(() => {})
         
-        const step = volume / (crossfadeDuration * 20)
+        const steps = Math.max(1, crossfadeDuration * 20)
+        const step = curVol / steps
         const fadeInterval = setInterval(() => {
-          if (fadeAudio.volume - step > 0) fadeAudio.volume -= step
-          else {
+          const nextVol = fadeAudio.volume - step
+          if (nextVol > 0.01) {
+            fadeAudio.volume = Math.max(0, Math.min(1, nextVol))
+          } else {
             clearInterval(fadeInterval)
             fadeAudio.pause()
             fadeAudio.removeAttribute('src')
@@ -1778,8 +1794,59 @@ export default function App() {
     return pool[Math.floor(Math.random() * pool.length)]
   }
 
+  // --- TÍNH NĂNG 6: SMART RADIO (TẠO HÀNG ĐỢI GỢI Ý THÔNG MINH DỰA TRÊN SEED TRACK) ---
+  const handleStartRadio = (seedTrack?: any) => {
+    const seed = seedTrack || currentTrack || (libraryTracks.length > 0 ? libraryTracks[0] : null)
+    if (!seed) {
+      showToast(language === 'vi' ? 'Không có bài hát để tạo Radio' : 'No track available to start Radio', 'error')
+      return
+    }
+
+    const seedGenre = (seed.genre || '').toString().toLowerCase().trim()
+    const seedArtists = ((Array.isArray(seed.artists) && seed.artists.length > 0)
+      ? seed.artists
+      : splitArtistString(seed.artist || '')
+    ).map((a: string) => a.toLowerCase().trim()).filter((a: string) => a && a !== 'unknown')
+
+    const otherTracks = libraryTracks.filter(t => (t.id || t.filePath) !== (seed.id || seed.filePath))
+    
+    const scoredTracks = otherTracks.map(track => {
+      let score = 0
+      const tGenre = (track.genre || '').toString().toLowerCase().trim()
+      if (seedGenre && tGenre && (seedGenre.includes(tGenre) || tGenre.includes(seedGenre))) {
+        score += 3
+      }
+      const tArtists = ((Array.isArray(track.artists) && track.artists.length > 0)
+        ? track.artists
+        : splitArtistString(track.artist || '')
+      ).map((a: string) => a.toLowerCase().trim())
+      if (tArtists.some(ta => seedArtists.some(sa => ta.includes(sa) || sa.includes(ta)))) {
+        score += 5
+      }
+      if (track.album && seed.album && track.album.toLowerCase() === seed.album.toLowerCase()) {
+        score += 2
+      }
+      return { track, score }
+    })
+
+    const matching = scoredTracks.filter(s => s.score > 0).sort((a, b) => b.score - a.score).map(s => s.track)
+    const nonMatching = scoredTracks.filter(s => s.score === 0).map(s => s.track)
+    
+    const radioQueue = [seed, ...fisherYatesShuffle(matching), ...fisherYatesShuffle(nonMatching)].slice(0, 50)
+    
+    setPlayQueue(radioQueue)
+    setOriginalQueue(radioQueue)
+    handlePlayTrack(seed)
+    showToast(
+      language === 'vi' 
+        ? `Đã khởi tạo Smart Radio dựa trên "${seed.title || 'bài hát'}" (${radioQueue.length} bài)`
+        : `Started Smart Radio based on "${seed.title || 'track'}" (${radioQueue.length} tracks)`,
+      'success'
+    )
+  }
+
   const handleNext = () => {
-    if (audioRef.current) audioRef.current.currentTime = 0;
+    if (audioRef.current && !crossfadeEnabled) audioRef.current.currentTime = 0;
     if (!currentTrack) return
     if (!playQueue || playQueue.length === 0) return
 
@@ -2488,6 +2555,12 @@ export default function App() {
           setPlayQueue(prev => [...prev, track])
           showToast(t('toasts.addedToQueue', { title: track.title }), 'success')
         }
+      },
+      {
+        id: 'start-radio',
+        label: language === 'vi' ? 'Khởi tạo Smart Radio từ bài này' : 'Start Smart Radio from this track',
+        icon: <Radio size={14} />,
+        onClick: () => handleStartRadio(track)
       },
       {
         id: 'add-to-playlist',
@@ -3417,8 +3490,9 @@ export default function App() {
       })
       filterNodesRef.current = []
 
-      // Độ lợi tuyến tính của Preamp: G = 10^(dB / 20)
-      const linearPreamp = isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0
+      // Độ lợi tuyến tính của Preamp & Cân bằng âm lượng (Loudness Normalization)
+      const normGainDb = loudnessNormalization ? ((currentTrack as any)?.replayGain ?? -3.0) : 0
+      const linearPreamp = (isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0) * Math.pow(10, normGainDb / 20)
       preampNodeRef.current.gain.value = linearPreamp
 
       if (isCore) {
@@ -3459,12 +3533,13 @@ export default function App() {
     return () => {
       isCancelled = true
     }
-  }, [isEqEnabled, currentSampleRate, isCore])
+  }, [isEqEnabled, currentSampleRate, isCore, eqBands.length, loudnessNormalization])
 
   // EFFECT 2: THAY ĐỔI EQ & PREAMP REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
   useEffect(() => {
     if (preampNodeRef.current) {
-      const linearPreamp = isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0
+      const normGainDb = loudnessNormalization ? ((currentTrack as any)?.replayGain ?? -3.0) : 0
+      const linearPreamp = (isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0) * Math.pow(10, normGainDb / 20)
       preampNodeRef.current.gain.value = linearPreamp
     }
     if (!isEqEnabled || filterNodesRef.current.length === 0) return
@@ -3479,7 +3554,7 @@ export default function App() {
         filter.type = band.type || 'peaking'
       }
     })
-  }, [eqBands, isEqEnabled, preampGain])
+  }, [eqBands, isEqEnabled, preampGain, loudnessNormalization, currentTrack])
 
   // Track Cover Loading
   useEffect(() => {
@@ -3499,6 +3574,7 @@ export default function App() {
   // Audio Playing Effect
   useEffect(() => {
     if (bitPerfectEnabled) return;
+    let fadeInterval: any = null
     if (audioRef.current && audioCtxRef.current) {
       if (isPlaying) {
         // Đánh thức lại AudioContext khi bấm Play
@@ -3511,17 +3587,21 @@ export default function App() {
         })
         if (crossfadeEnabled) {
           audioRef.current.volume = 0
-          const step = volume / (crossfadeDuration * 20)
-          const fadeInterval = setInterval(() => {
-            if (audioRef.current && audioRef.current.volume + step < volume) {
-              audioRef.current.volume += step
+          const curVol = Math.max(0, Math.min(1, volume))
+          const steps = Math.max(1, crossfadeDuration * 20)
+          const step = curVol / steps
+          let cur = 0
+          fadeInterval = setInterval(() => {
+            cur += step
+            if (audioRef.current && cur < curVol) {
+              audioRef.current.volume = Math.max(0, Math.min(1, cur))
             } else {
-              if (audioRef.current) audioRef.current.volume = volume
+              if (audioRef.current) audioRef.current.volume = curVol
               clearInterval(fadeInterval)
             }
           }, 50)
         } else {
-          audioRef.current.volume = volume
+          audioRef.current.volume = Math.max(0, Math.min(1, volume))
         }
       } else {
         audioRef.current.pause()
@@ -3531,7 +3611,10 @@ export default function App() {
         }
       }
     }
-  }, [isPlaying, currentTrack, bitPerfectEnabled])
+    return () => {
+      if (fadeInterval) clearInterval(fadeInterval)
+    }
+  }, [isPlaying, currentTrack, bitPerfectEnabled, crossfadeEnabled, crossfadeDuration, volume])
 
   // Load Lyrics — thứ tự ưu tiên: file .lrc -> lời trong metadata -> lời online (Musixmatch)
   useEffect(() => {
@@ -3645,11 +3728,30 @@ export default function App() {
           }
         }
       }
+
+      // --- LOGIC 3: CROSSFADE TRANSITION SANG BÀI KẾ TIẾP ---
+      if (
+        crossfadeEnabled &&
+        !bitPerfectEnabled &&
+        audio.duration &&
+        audio.duration > crossfadeDuration &&
+        (audio.duration - audio.currentTime <= crossfadeDuration) &&
+        !hasTriggeredCrossfadeRef.current
+      ) {
+        hasTriggeredCrossfadeRef.current = true
+        handleNext()
+      } else if (
+        hasTriggeredCrossfadeRef.current &&
+        audio.duration &&
+        (audio.duration - audio.currentTime > crossfadeDuration + 2)
+      ) {
+        hasTriggeredCrossfadeRef.current = false
+      }
     }
 
     audio.addEventListener('timeupdate', handleTimeUpdate)
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [lyrics, currentLyricIndex, playQueue, currentTrack, repeatMode, lyricOffset])
+  }, [lyrics, currentLyricIndex, playQueue, currentTrack, repeatMode, lyricOffset, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, handleNext])
 
   // Scroll Active Lyric
   useEffect(() => {
@@ -3661,6 +3763,13 @@ export default function App() {
   // In-App Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+K / Cmd+K -> Spotlight Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setShowCommandPalette(prev => !prev)
+        return
+      }
+
       const target = e.target as HTMLElement
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
 
@@ -3796,6 +3905,98 @@ export default function App() {
       })
     }
   }, [])
+
+  // Global Drag & Drop File Handler (Tính năng 10)
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      dragCounterRef.current++
+      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+        setIsDraggingFile(true)
+      }
+    }
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      dragCounterRef.current--
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0
+        setIsDraggingFile(false)
+      }
+    }
+
+    const handleDrop = async (e: DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      dragCounterRef.current = 0
+      setIsDraggingFile(false)
+
+      if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return
+
+      const files = Array.from(e.dataTransfer.files)
+      const audioExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.opus', '.aac', '.alac', '.aiff', '.wma']
+      const droppedPaths: string[] = []
+
+      for (const file of files) {
+        const filePath = (file as any).path || (file as any).name
+        if (filePath) {
+          const lower = filePath.toLowerCase()
+          if (audioExtensions.some(ext => lower.endsWith(ext))) {
+            droppedPaths.push(filePath)
+          }
+        }
+      }
+
+      if (droppedPaths.length === 0) {
+        showToast(language === 'vi' ? 'Không tìm thấy tệp âm thanh hợp lệ' : 'No supported audio files found', 'error')
+        return
+      }
+
+      const newTracks = droppedPaths.map(p => {
+        const fileName = p.split(/[\\/]/).pop() || 'Unknown'
+        const title = fileName.replace(/\.[^/.]+$/, '')
+        return {
+          id: p,
+          title,
+          artist: 'Unknown Artist',
+          album: 'Local Drops',
+          filePath: p,
+          duration: 0,
+          format: p.split('.').pop()?.toUpperCase() || 'AUDIO'
+        }
+      })
+
+      setPlayQueue(prev => [...prev, ...newTracks])
+      showToast(
+        language === 'vi' 
+          ? `Đã thêm ${newTracks.length} bài hát vào hàng đợi` 
+          : `Added ${newTracks.length} tracks to queue`, 
+        'success'
+      )
+      if (!isPlaying && newTracks.length > 0) {
+        handlePlayTrack(newTracks[0])
+      }
+    }
+
+    window.addEventListener('dragenter', handleDragEnter)
+    window.addEventListener('dragover', handleDragOver)
+    window.addEventListener('dragleave', handleDragLeave)
+    window.addEventListener('drop', handleDrop)
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter)
+      window.removeEventListener('dragover', handleDragOver)
+      window.removeEventListener('dragleave', handleDragLeave)
+      window.removeEventListener('drop', handleDrop)
+    }
+  }, [isPlaying, language])
 
   // Windows Media Session API Integration (Fn Media Keys & OS OSD)
   useEffect(() => {
@@ -4067,6 +4268,22 @@ export default function App() {
     const unTime = window.api.onMpvTime((val) => {
       if (bitPerfectEnabled && audioRef.current) {
         (audioRef.current as any)._currentTime = val
+        const dur = (audioRef.current as any)._duration || currentTrack?.duration || 0
+        if (
+          crossfadeEnabled &&
+          dur > crossfadeDuration &&
+          (dur - val <= crossfadeDuration) &&
+          !hasTriggeredCrossfadeRef.current
+        ) {
+          hasTriggeredCrossfadeRef.current = true
+          handleNext()
+        } else if (
+          hasTriggeredCrossfadeRef.current &&
+          dur > crossfadeDuration &&
+          (dur - val > crossfadeDuration + 2)
+        ) {
+          hasTriggeredCrossfadeRef.current = false
+        }
         if (!document.hidden && lyrics.length > 0 && !lyrics[0].unsynced) {
           const visualTime = val + 0.3 + (lyricOffset || 0)
           const index = lyrics.findIndex((line, i) => {
@@ -4097,7 +4314,12 @@ export default function App() {
         showToast(t('player.sleepTimerStoppedToast'), 'info')
         return
       }
-      if (bitPerfectEnabled && !crossfadeEnabled) handleNext()
+      if (bitPerfectEnabled) {
+        if (!hasTriggeredCrossfadeRef.current) {
+          handleNext()
+        }
+        hasTriggeredCrossfadeRef.current = false
+      }
     })
     const unError = (window.api as any)?.onMpvError?.((err: string) => {
       showToast(`${language === 'vi' ? 'Lỗi âm thanh WASAPI' : 'WASAPI Audio error'}: ${err}`, 'error')
@@ -4115,7 +4337,7 @@ export default function App() {
       if (typeof unError === 'function') unError()
       if (typeof unAudioParams === 'function') unAudioParams()
     }
-  }, [handleNext, crossfadeEnabled, bitPerfectEnabled])
+  }, [handleNext, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, sleepTimerMode, currentTrack, lyrics, currentLyricIndex, lyricOffset])
 
   useEffect(() => {
     if (!bitPerfectEnabled) {
@@ -4211,7 +4433,10 @@ export default function App() {
             showToast(t('player.sleepTimerStoppedToast'), 'info')
             return
           }
-          if (!crossfadeEnabled) handleNext() 
+          if (!hasTriggeredCrossfadeRef.current) {
+            handleNext()
+          }
+          hasTriggeredCrossfadeRef.current = false
         }}
         onLoadedMetadata={handleLoadedMetadata}
         onError={() => {
@@ -4419,6 +4644,14 @@ export default function App() {
         dialog={customDialog} 
         onClose={() => setCustomDialog(null)} 
       />
+
+      <CommandPaletteModal 
+        onPlayTrack={handlePlayTrack} 
+        onStartRadio={() => handleStartRadio()} 
+      />
+      <MusicInsightsModal />
+      <BackupModal />
+      <DragDropOverlay isDragging={isDraggingFile} />
 
       {contextMenu && (
         <ContextMenu
@@ -5719,6 +5952,20 @@ export default function App() {
                             ))}
                         </select>
                       </div>
+
+                      {/* Cân bằng âm lượng (Loudness Normalization) */}
+                      <div className="flex items-center justify-between mt-5 pt-4 border-t border-theme-30/40">
+                        <div>
+                          <span className="text-zinc-300 text-sm font-medium">{language === 'vi' ? 'Cân bằng âm lượng (Loudness Normalization)' : 'Loudness Normalization'}</span>
+                          <p className="text-xs text-zinc-500 mt-0.5">{language === 'vi' ? 'Tự động cân bằng mức âm lượng giữa các bài hát khác nhau theo chuẩn ReplayGain / EBU R128.' : 'Automatically normalize track loudness to prevent volume jumps across different recordings.'}</p>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={loudnessNormalization} 
+                          onChange={(e) => setLoudnessNormalization(e.target.checked)} 
+                          className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
+                        />
+                      </div>
                     </div>
 
                     <div className="border-t border-theme-30 pt-6 mt-6">
@@ -5962,6 +6209,28 @@ export default function App() {
                           </div>
                         </div>
                       )}
+                    </div>
+
+                    {/* DỮ LIỆU, THỐNG KÊ & SAO LƯU */}
+                    <div className="border-t border-theme-30 pt-6 mt-6">
+                      <h3 className="text-theme-10 font-semibold mb-2">{language === 'vi' ? 'Dữ liệu, Thống kê & Sao lưu' : 'Data, Insights & Backup'}</h3>
+                      <p className="text-sm text-zinc-400 mb-4">{language === 'vi' ? 'Quản lý sao lưu cấu hình, xuất/nhập danh sách phát M3U8 và theo dõi thống kê thói quen nghe nhạc.' : 'Manage backups, export/import M3U8 playlists, and analyze listening habits.'}</p>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowBackupModal(true)}
+                          className="flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        >
+                          <Download size={16} /> <span>{language === 'vi' ? 'Sao lưu & Khôi phục (M3U8 / Config)' : 'Backup & Restore (M3U8 / Config)'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowInsightsModal(true)}
+                          className="flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        >
+                          <BarChart2 size={16} /> <span>{language === 'vi' ? 'Xem thống kê nghe nhạc (Insights)' : 'View Music Insights'}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -7243,8 +7512,15 @@ export default function App() {
 
         <div className="flex flex-col items-center justify-center w-1/3 max-w-md relative">
           <div className="relative w-full flex items-center justify-center mb-2">
-            {/* 5 nút điều khiển đối xứng tuyệt đối qua nút Play ở giữa */}
-            <div className="flex items-center gap-6 justify-center">
+            {/* Nút điều khiển đối xứng qua nút Play ở giữa */}
+            <div className="flex items-center gap-5 justify-center">
+              <button 
+                onClick={() => handleStartRadio()} 
+                className="text-zinc-400 hover:text-theme-10 transition cursor-pointer" 
+                title={language === 'vi' ? 'Khởi tạo Smart Radio từ bài hát đang phát' : 'Start Smart Radio from current track'}
+              >
+                <Radio size={17} />
+              </button>
               <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
               <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
               <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
