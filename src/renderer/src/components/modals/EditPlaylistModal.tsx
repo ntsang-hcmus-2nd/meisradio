@@ -108,12 +108,12 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                 ) : (
                   <div className="flex flex-col items-center justify-center text-zinc-600 gap-1">
                     <ImageIcon size={32} />
-                    <span className="text-[10px] text-zinc-500 font-medium">Chọn ảnh</span>
+                    <span className="text-[10px] text-zinc-500 font-medium">{t('modals.editPlaylist.chooseImageShort')}</span>
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1">
                   <FolderOpen size={20} />
-                  <span>Đổi ảnh</span>
+                  <span>{t('modals.editPlaylist.changeImageShort')}</span>
                 </div>
               </div>
 

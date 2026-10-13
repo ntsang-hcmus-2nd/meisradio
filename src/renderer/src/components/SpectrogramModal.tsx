@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Radio, X, Loader2, Sparkles } from 'lucide-react'
+import { Radio, X, Loader2 } from 'lucide-react'
 import { useTranslation } from '../locales'
+import { AudioSignalPath } from './AudioSignalPath'
 
 interface SpectrogramModalProps {
   isOpen: boolean
@@ -104,7 +105,8 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   isOpen,
   onClose,
   currentTrack,
-  audioRef
+  audioRef,
+  isPlaying
 }) => {
   const { t } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -406,7 +408,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-fade-in">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl h-[84vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl h-[88vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* MODAL HEADER */}
         <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70 shrink-0">
@@ -449,7 +451,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
         </div>
 
         {/* SPECTROGRAM DISPLAY AREA */}
-        <div className="flex-1 relative flex bg-black overflow-hidden select-none">
+        <div className="flex-1 min-h-[220px] relative flex bg-black overflow-hidden select-none">
           
           {/* Y-AXIS FREQUENCY LABELS (0Hz to Sample Rate) */}
           <div className="w-18 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[11px] text-zinc-400 font-mono text-center z-10 shrink-0">
@@ -534,18 +536,18 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
           <span>{formatTime(duration)}</span>
         </div>
 
-        {/* MODAL FOOTER NOTE */}
-        <div className="p-3.5 border-t border-zinc-800 bg-zinc-950/90 flex items-center justify-between text-xs text-zinc-400 shrink-0">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-theme-10" />
-            <span>{t('modals.spectrogram.seekInstruction')}</span>
-          </div>
-          <p className="text-zinc-500 italic">
-            {t('modals.spectrogram.intensityLegend')}
-          </p>
-        </div>
+        {/* AUDIO SIGNAL FLOW (PIPELINE) */}
+        <AudioSignalPath
+          currentTrack={currentTrack}
+          activeSampleRate={activeSampleRate}
+          detectedBitDepth={detectedBitDepth}
+          isPlaying={isPlaying}
+        />
+
 
       </div>
     </div>
   )
 })
+
+SpectrogramModal.displayName = 'SpectrogramModal'

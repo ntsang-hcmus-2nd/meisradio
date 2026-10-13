@@ -653,6 +653,7 @@ let tray: Tray | null = null
 let isQuitting = false 
 let closeToTray = false
 let minimizeToTray = false
+let updateTrayMenu: () => void = () => {}
 
 function getConfig() {
   try {
@@ -917,6 +918,7 @@ app.whenReady().then(() => {
   ipcMain.handle('music:getConfig', () => getConfig())
   ipcMain.handle('music:saveConfig', (_, data) => {
     saveConfig(data)
+    updateTrayMenu()
     return { success: true }
   })
 
@@ -3575,16 +3577,19 @@ app.whenReady().then(() => {
     
     // Kiểm tra trùng lặp và hiện Hộp thoại (Dialog)
     if (fs.existsSync(destPath)) {
+      const isEn = getConfig().language === 'en';
       const response = dialog.showMessageBoxSync(mainWindow!, {
         type: 'question',
-        buttons: ['Thay thế', 'Lưu thành tệp mới', 'Hủy'],
+        buttons: isEn ? ['Replace', 'Save as New File', 'Cancel'] : ['Thay thế', 'Lưu thành tệp mới', 'Hủy'],
         defaultId: 0,
         cancelId: 2,
-        title: 'Tệp đã tồn tại',
-        message: `Bài hát "${safeTitle}" đã có sẵn trong thư mục "${safeAlbum}". Bạn muốn làm gì?`
+        title: isEn ? 'File Already Exists' : 'Tệp đã tồn tại',
+        message: isEn
+          ? `Track "${safeTitle}" already exists in folder "${safeAlbum}". What would you like to do?`
+          : `Bài hát "${safeTitle}" đã có sẵn trong thư mục "${safeAlbum}". Bạn muốn làm gì?`
       });
       
-      if (response === 2) return { success: false, canceled: true }; // Người dùng chọn Hủy
+      if (response === 2) return { success: false, canceled: true }; // Cancel / Hủy
       if (response === 1) {
         // Lưu thành tệp mới (Thêm ID thời gian)
         destPath = join(albumPath, `${safeTitle}_${Date.now()}.mp3`);
@@ -4283,28 +4288,35 @@ app.whenReady().then(() => {
   // KHỞI TẠO SYSTEM TRAY (KHAY HỆ THỐNG)
   // ==========================================
   tray = new Tray(icon)
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Hiển thị Meis Radio', click: () => { mainWindow?.show(); mainWindow?.restore(); } },
-    { type: 'separator' },
-    { label: 'Phát / Tạm dừng', click: () => sendShortcut('play-pause') },
-    { label: 'Bài tiếp theo', click: () => sendShortcut('next') },
-    { label: 'Bài trước đó', click: () => sendShortcut('prev') },
-    { type: 'separator' },
-    { 
-      label: 'Thoát hoàn toàn', 
-      click: () => { 
-        isQuitting = true; 
-        if (mpvManager) mpvManager.killAll();
-        if (tray) {
-          try { tray.destroy(); } catch (e) {}
-          tray = null;
-        }
-        app.quit(); 
-      } 
-    }
-  ])
   tray.setToolTip('Meis Radio')
-  tray.setContextMenu(contextMenu)
+
+  updateTrayMenu = () => {
+    if (!tray) return
+    const isEn = getConfig().language === 'en'
+    const contextMenu = Menu.buildFromTemplate([
+      { label: isEn ? 'Show Meis Radio' : 'Hiển thị Meis Radio', click: () => { mainWindow?.show(); mainWindow?.restore(); } },
+      { type: 'separator' },
+      { label: isEn ? 'Play / Pause' : 'Phát / Tạm dừng', click: () => sendShortcut('play-pause') },
+      { label: isEn ? 'Next Track' : 'Bài tiếp theo', click: () => sendShortcut('next') },
+      { label: isEn ? 'Previous Track' : 'Bài trước đó', click: () => sendShortcut('prev') },
+      { type: 'separator' },
+      { 
+        label: isEn ? 'Quit' : 'Thoát hoàn toàn', 
+        click: () => { 
+          isQuitting = true; 
+          if (mpvManager) mpvManager.killAll();
+          if (tray) {
+            try { tray.destroy(); } catch (e) {}
+            tray = null;
+          }
+          app.quit(); 
+        } 
+      }
+    ])
+    tray.setContextMenu(contextMenu)
+  }
+
+  updateTrayMenu()
   
   // Click đúp vào icon ở Tray để mở nhanh app
   tray.on('double-click', () => {

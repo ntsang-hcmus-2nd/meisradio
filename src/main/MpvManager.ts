@@ -47,13 +47,13 @@ export function getMpvBinaryPath(): string {
 export async function getMpvAudioDevices(): Promise<{ name: string; description: string }[]> {
   const binPath = getMpvBinaryPath()
   if (!fs.existsSync(binPath)) {
-    return [{ name: 'auto', description: 'Tự động chọn (Auto / Default)' }]
+    return [{ name: 'auto', description: 'System Default' }]
   }
 
   return new Promise((resolve) => {
     execFile(binPath, ['--audio-device=help'], { timeout: 4000 }, (err, stdout) => {
       if (err && !stdout) {
-        return resolve([{ name: 'auto', description: 'Tự động chọn (Auto / Default)' }])
+        return resolve([{ name: 'auto', description: 'System Default' }])
       }
       const lines = (stdout || '').split('\n')
       const devices: { name: string; description: string }[] = []
@@ -68,7 +68,7 @@ export async function getMpvAudioDevices(): Promise<{ name: string; description:
         }
       }
       if (devices.length === 0) {
-        devices.push({ name: 'auto', description: 'Tự động chọn (Auto / Default)' })
+        devices.push({ name: 'auto', description: 'System Default' })
       }
       resolve(devices)
     })

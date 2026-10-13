@@ -90,7 +90,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         if (!text) return
         const parsed = parsePeaceEqText(text)
         if (parsed.bands.length === 0) {
-          alert('Không tìm thấy dải tần số nào hợp lệ trong tệp!')
+          alert(t('modals.eq.noBandsFound'))
           return
         }
 
@@ -109,7 +109,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         setEqBands(newBands)
         setIsEqEnabled(true)
       } catch (err: any) {
-        alert('Lỗi đọc tệp cấu hình: ' + err.message)
+        alert(t('common.error') + ': ' + err.message)
       }
     }
     reader.readAsText(file)

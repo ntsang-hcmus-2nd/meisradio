@@ -549,7 +549,7 @@ const PlaylistItemRow = React.memo(({ pl, idx, isLite, onOpen, onPlay, onContext
         </div>
         <div className="min-w-0">
           <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
-          <p className="text-xs text-zinc-500 truncate mt-0.5">Playlist thư mục</p>
+          <p className="text-xs text-zinc-500 truncate mt-0.5">{t('sidebar.myPlaylists')}</p>
         </div>
       </div>
       <div className="col-span-2 text-center">
@@ -1015,19 +1015,6 @@ export default function App() {
   // 3. UTILITIES & HANDLERS
   // ==========================================
 
-  // Thêm log kiểm tra lệch Sample Rate
-  useEffect(() => {
-    if (audioCtxRef.current && currentTrack) {
-      const ctxRate = audioCtxRef.current.sampleRate;
-      const fileRate = currentTrack.sampleRate;
-
-      console.log(`[Audio Check] AudioContext Rate: ${ctxRate}Hz | File Rate: ${fileRate}Hz`);
-      
-      if (fileRate && ctxRate !== fileRate) {
-        console.warn(`[Warning] Đang xảy ra Resampling từ ${fileRate}Hz sang ${ctxRate}Hz!`);
-      }
-    }
-  }, [currentTrack]);
 
   // --- Dashboard & Online Music ---
   const fetchDashboard = async () => {
@@ -1218,7 +1205,7 @@ export default function App() {
       };
       
       setIsDownloading(true);
-      setDownloadProgress({ current: 0, total: 1, fileName: `Đang tải: ${item.title}` });
+      setDownloadProgress({ current: 0, total: 1, fileName: `${t('toasts.downloadProgress')} ${item.title}` });
       
       // @ts-ignore
       const res = await window.api.downloadOnline(track);
@@ -1469,7 +1456,7 @@ export default function App() {
       }
       showToast(t('toasts.playlistUpdatedSuccess'), 'success')
     } else {
-      showAlert({ title: t('common.error'), message: res?.error || 'Lỗi cập nhật playlist' })
+      showAlert({ title: t('common.error'), message: res?.error || t('toasts.deletePlaylistError') })
     }
   }
 
@@ -2102,7 +2089,7 @@ export default function App() {
   const handleDriveSubmit = async () => {
     const match = driveLink.match(/folders\/([-\w]+)/) || driveLink.match(/id=([-\w]+)/)
     if (!match) {
-      showAlert({ title: t('common.warning'), message: 'Vui lòng nhập link thư mục Google Drive hợp lệ!' })
+      showAlert({ title: t('common.warning'), message: language === 'vi' ? 'Vui lòng nhập liên kết thư mục Google Drive hợp lệ!' : 'Please enter a valid Google Drive folder link!' })
       return
     }
     setIsFetchingDrive(true)
@@ -2111,11 +2098,11 @@ export default function App() {
       // @ts-ignore
       const result = await window.api.fetchDriveFiles(folderId) 
       if (result.success) {
-        if (result.tracks.length === 0) showAlert({ title: t('common.notice'), message: 'Không tìm thấy file âm thanh nào. Hãy đảm bảo thư mục đã bật "Bất kỳ ai có liên kết"!' })
+        if (result.tracks.length === 0) showAlert({ title: t('common.notice'), message: language === 'vi' ? 'Không tìm thấy tệp âm thanh nào. Hãy đảm bảo thư mục đã bật "Bất kỳ ai có liên kết"!' : 'No audio files found. Please ensure the folder is shared with "Anyone with the link"!' })
         else setDriveFiles(result.tracks)
-      } else showAlert({ title: t('common.error'), message: 'Lỗi từ hệ thống: ' + result.error })
+      } else showAlert({ title: t('common.error'), message: (language === 'vi' ? 'Lỗi từ hệ thống: ' : 'System error: ') + result.error })
     } catch (err) {
-      showAlert({ title: t('common.error'), message: 'Lỗi kết nối tới hệ thống!' })
+      showAlert({ title: t('common.error'), message: language === 'vi' ? 'Lỗi kết nối tới hệ thống!' : 'Failed to connect to system!' })
     }
     setIsFetchingDrive(false)
   }
@@ -2161,13 +2148,13 @@ export default function App() {
         // @ts-ignore
         const result = await window.api.downloadCloudFile(cloudActionTrack.url, `${cloudActionTrack.title}.${ext}`, libraryTracks)
         if (result.success) {
-          showAlert({ title: t('common.notice'), message: 'Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.' })
+          showAlert({ title: t('common.notice'), message: language === 'vi' ? 'Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.' : 'Download complete! Playback will begin from your computer.' })
           handlePlayTrack({ ...cloudActionTrack, filePath: result.localPath, isCloud: false })
           loadLibrary()
         } else if (result.canceled) {
           // Cancelled
         } else {
-          showAlert({ title: t('common.error'), message: 'Lỗi tải file: ' + result.error })
+          showAlert({ title: t('common.error'), message: (language === 'vi' ? 'Lỗi tải tệp: ' : 'File download error: ') + result.error })
         }
       } catch (e) {}
       setIsDownloading(false)
@@ -3032,6 +3019,21 @@ export default function App() {
     ? currentTrack.sampleRate 
     : 44100;
 
+  // Log kiểm tra lệch Sample Rate
+  useEffect(() => {
+    if (audioCtxRef.current && currentTrack) {
+      const ctxRate = audioCtxRef.current.sampleRate;
+      const fileRate = currentTrack.sampleRate;
+
+      console.log(`[Audio Check] AudioContext Rate: ${ctxRate}Hz | File Rate: ${fileRate || 44100}Hz`);
+      
+      // Chỉ cảnh báo nếu AudioContext đã đồng bộ với currentSampleRate mà phần cứng vẫn bị lệch
+      if (fileRate && ctxRate !== fileRate && ctxRate === currentSampleRate && !bitPerfectEnabled) {
+        console.warn(`[Warning] Đang xảy ra Resampling từ ${fileRate}Hz sang ${ctxRate}Hz!`);
+      }
+    }
+  }, [currentTrack, currentSampleRate, bitPerfectEnabled]);
+
 
   // ==========================================
   // 5. EFFECTS
@@ -3346,32 +3348,40 @@ export default function App() {
   // EFFECT 1: CHỈ KHỞI TẠO LẠI BỘ LỌC KHI ĐỔI BÀI HOẶC BẬT/TẮT EQ (Tiết kiệm CPU)
   useEffect(() => {
     if (!audioRef.current) return
+    let isCancelled = false
+
     const setupAudio = async () => {
       if (audioCtxRef.current && audioCtxRef.current.sampleRate !== currentSampleRate) {
         try { await audioCtxRef.current.close() } catch (e) {}
+        if (isCancelled) return
         audioCtxRef.current = null
         sourceNodeRef.current = null
         analyserNodeRef.current = null
         preampNodeRef.current = null
+        compressorNodeRef.current = null
         filterNodesRef.current = []
       }
+      if (isCancelled) return
+
       if (!audioCtxRef.current) {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
         try { audioCtxRef.current = new AudioContextClass({ sampleRate: currentSampleRate }) } 
         catch (e) { audioCtxRef.current = new AudioContextClass() }
         
         // Bơm lại thiết bị đầu ra cho Context mới ngay khi nó vừa được tái tạo
-        const targetId = selectedDeviceRef.current === 'default' ? '' : selectedDeviceRef.current;
+        const isWasapiOrAuto = !selectedDeviceRef.current || selectedDeviceRef.current === 'auto' || selectedDeviceRef.current === 'default' || selectedDeviceRef.current.startsWith('wasapi/')
+        const targetId = isWasapiOrAuto ? '' : selectedDeviceRef.current
         if (typeof (audioCtxRef.current as any).setSinkId === 'function') {
-          (audioCtxRef.current as any).setSinkId(targetId).catch(console.error);
+          (audioCtxRef.current as any).setSinkId(targetId).catch(() => {})
         }
       }
       const ctx = audioCtxRef.current
-      if (!analyserNodeRef.current) { 
+
+      if (!analyserNodeRef.current || analyserNodeRef.current.context !== ctx) { 
         analyserNodeRef.current = ctx.createAnalyser()
         analyserNodeRef.current.fftSize = 2048 
       }
-      if (!sourceNodeRef.current) {
+      if (!sourceNodeRef.current || sourceNodeRef.current.context !== ctx) {
         try { 
           if (!audioRef.current || !(audioRef.current instanceof HTMLAudioElement)) return
           sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current) 
@@ -3379,12 +3389,25 @@ export default function App() {
           return 
         }
       }
-      if (!preampNodeRef.current) {
+      if (!sourceNodeRef.current) return
+
+      if (!preampNodeRef.current || preampNodeRef.current.context !== ctx) {
         preampNodeRef.current = ctx.createGain()
       }
+      if (!compressorNodeRef.current || compressorNodeRef.current.context !== ctx) {
+        const comp = ctx.createDynamicsCompressor()
+        comp.threshold.value = -18
+        comp.knee.value = 12
+        comp.ratio.value = 4
+        comp.attack.value = 0.005
+        comp.release.value = 0.15
+        compressorNodeRef.current = comp
+      }
 
-      try { sourceNodeRef.current.disconnect() } catch (e) {}
-      try { preampNodeRef.current.disconnect() } catch (e) {}
+      try { sourceNodeRef.current?.disconnect() } catch (e) {}
+      try { preampNodeRef.current?.disconnect() } catch (e) {}
+      try { analyserNodeRef.current?.disconnect() } catch (e) {}
+      try { compressorNodeRef.current?.disconnect() } catch (e) {}
       filterNodesRef.current.forEach(node => {
         try {
           node.disconnect()
@@ -3422,20 +3445,20 @@ export default function App() {
           filterNodesRef.current.push(filter)
         })
       }
-      if (!compressorNodeRef.current) {
-        const comp = ctx.createDynamicsCompressor()
-        comp.threshold.value = -18
-        comp.knee.value = 12
-        comp.ratio.value = 4
-        comp.attack.value = 0.005
-        comp.release.value = 0.15
-        compressorNodeRef.current = comp
-      }
+
       prevNode.connect(analyserNodeRef.current)
       analyserNodeRef.current.connect(compressorNodeRef.current)
       compressorNodeRef.current.connect(ctx.destination)
+
+      if (isPlaying && ctx.state === 'suspended') {
+        await ctx.resume().catch(() => {})
+      }
     }
     setupAudio().catch(e => console.error('[setupAudio error]', e))
+
+    return () => {
+      isCancelled = true
+    }
   }, [isEqEnabled, currentSampleRate, isCore])
 
   // EFFECT 2: THAY ĐỔI EQ & PREAMP REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
@@ -3563,7 +3586,7 @@ export default function App() {
               setLyrics([
                 ...plainOnline,
                 { time: 0, text: '', unsynced: true },
-                { time: 0, text: `(Lời bài hát được cung cấp bởi ${mmRes.source === 'lrclib' ? 'LRCLIB' : 'Musixmatch'})`, unsynced: true }
+                { time: 0, text: `(${t('lyrics.sourceNote', { source: mmRes.source === 'lrclib' ? 'LRCLIB' : 'Musixmatch' })})`, unsynced: true }
               ])
               return
             }
@@ -3854,14 +3877,14 @@ export default function App() {
         if (bitPerfectEnabled) window.api?.mpvSetVolume?.(sleepTimerOriginalVolRef.current)
         sleepTimerOriginalVolRef.current = null
       }
-      showToast('Đã tắt hẹn giờ', 'info')
+      showToast(t('player.sleepTimerOffToast'), 'info')
       return
     }
 
     if (mode === 'end_of_track') {
       sleepTimerTargetTimeRef.current = null
       setSleepTimerRemaining(null)
-      showToast('Hẹn giờ: Sẽ dừng sau khi bài hát kết thúc', 'success')
+      showToast(t('player.sleepTimerEndTrackToast'), 'success')
       return
     }
 
@@ -3871,7 +3894,7 @@ export default function App() {
       sleepTimerTargetTimeRef.current = targetTime
       setSleepTimerRemaining(mins * 60)
       sleepTimerOriginalVolRef.current = volume
-      showToast(`Hẹn giờ tắt nhạc sau ${mins} phút`, 'success')
+      showToast(t('player.sleepTimerMinsToast', { mins }), 'success')
     }
   }
 
@@ -3913,7 +3936,7 @@ export default function App() {
         }
         setSleepTimerMode('off')
         setSleepTimerRemaining(null)
-        showToast('Hẹn giờ: Đã dừng phát nhạc', 'info')
+        showToast(t('player.sleepTimerStoppedToast'), 'info')
       }
     }, 1000)
 
@@ -3924,7 +3947,7 @@ export default function App() {
     setLyricOffset(prev => {
       const next = Math.round((prev + delta) * 10) / 10
       try { localStorage.setItem('meis_lyric_offset', String(next)) } catch (e) {}
-      showToast(`Độ trễ lời: ${next > 0 ? `+${next}` : next}s`, 'info')
+      showToast(t('player.lyricOffsetToast', { offset: next > 0 ? `+${next}` : next }), 'info')
       return next
     })
   }
@@ -3932,7 +3955,7 @@ export default function App() {
   const resetLyricOffset = () => {
     setLyricOffset(0)
     try { localStorage.setItem('meis_lyric_offset', '0') } catch (e) {}
-    showToast('Đã đặt lại độ trễ lời về 0s', 'info')
+    showToast(t('player.lyricOffsetResetToast'), 'info')
   }
 
   // ==========================================
@@ -4071,13 +4094,13 @@ export default function App() {
         setSleepTimerRemaining(null)
         setIsPlaying(false)
         window.api?.mpvPause?.()
-        showToast('Hẹn giờ: Đã dừng phát sau khi hết bài hát', 'info')
+        showToast(t('player.sleepTimerStoppedToast'), 'info')
         return
       }
       if (bitPerfectEnabled && !crossfadeEnabled) handleNext()
     })
     const unError = (window.api as any)?.onMpvError?.((err: string) => {
-      showToast(`Lỗi âm thanh WASAPI: ${err}`, 'error')
+      showToast(`${language === 'vi' ? 'Lỗi âm thanh WASAPI' : 'WASAPI Audio error'}: ${err}`, 'error')
     })
     const unAudioParams = (window.api as any)?.onMpvAudioParams?.((params: any) => {
       if (params && params.samplerate) {
@@ -4185,7 +4208,7 @@ export default function App() {
             setSleepTimerRemaining(null)
             setIsPlaying(false)
             if (audio) audio.pause()
-            showToast('Hẹn giờ: Đã dừng phát sau khi hết bài hát', 'info')
+            showToast(t('player.sleepTimerStoppedToast'), 'info')
             return
           }
           if (!crossfadeEnabled) handleNext() 
@@ -4234,7 +4257,7 @@ export default function App() {
             <button 
               onClick={handleToggleMiniPlayer} 
               className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition z-20" 
-              title="Trở về chế độ Đầy đủ"
+              title={language === 'vi' ? 'Trở về chế độ đầy đủ' : 'Return to Standard Mode'}
               style={{ WebkitAppRegion: 'no-drag' } as any}
             >
               <Maximize2 size={14} />
@@ -4246,8 +4269,8 @@ export default function App() {
               <h4 className="text-sm font-bold text-white truncate">{currentTrack ? currentTrack.title : 'Meis Radio'}</h4>
               <p className="text-xs text-zinc-400 truncate">
                 {currentTrack 
-                  ? (Array.isArray(currentTrack.artists) && currentTrack.artists.length > 0 ? currentTrack.artists.join(', ') : (currentTrack.artist || 'Unknown Artist'))
-                  : 'Sẵn sàng phát nhạc'}
+                  ? (Array.isArray(currentTrack.artists) && currentTrack.artists.length > 0 ? currentTrack.artists.join(', ') : (currentTrack.artist || (language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')))
+                  : (language === 'vi' ? 'Sẵn sàng phát nhạc' : 'Ready to play')}
               </p>
             </div>
             
@@ -4286,7 +4309,7 @@ export default function App() {
         <div className="fixed bottom-28 right-8 z-[90] bg-theme-60/95 backdrop-blur-md border border-zinc-700/80 rounded-xl p-5 w-80 shadow-2xl flex flex-col animate-fade-in pointer-events-none">
           <div className="flex items-center gap-3 mb-2">
             <Cloud size={20} className="text-theme-10 animate-pulse" />
-            <h3 className="text-sm font-bold text-white">Đang tải xuống...</h3>
+            <h3 className="text-sm font-bold text-white">{t('toasts.downloadProgress')}</h3>
           </div>
           
           <p className="text-xs text-zinc-400 mb-4 truncate w-full" title={downloadProgress.fileName}>
@@ -4302,7 +4325,7 @@ export default function App() {
           
           <div className="flex items-center justify-between w-full text-[10px] font-medium">
             <span className="text-theme-10">{Math.round((downloadProgress.current / downloadProgress.total) * 100)}%</span>
-            <span className="text-zinc-500">{downloadProgress.current} / {downloadProgress.total} tệp</span>
+            <span className="text-zinc-500">{downloadProgress.current} / {downloadProgress.total} {t('common.files')}</span>
           </div>
         </div>
       )}
@@ -4465,7 +4488,7 @@ export default function App() {
                             setDashboardData(res.data);
                           }
                         } else {
-                          showAlert({ title: t('common.error'), message: 'Lỗi tìm kiếm YouTube Music: ' + res.error });
+                          showAlert({ title: t('common.error'), message: (language === 'vi' ? 'Lỗi tìm kiếm YouTube Music: ' : 'YouTube Music search error: ') + res.error });
                         }
                       });
                     } else if (activeView === 'home-soundcloud') {
@@ -4475,19 +4498,19 @@ export default function App() {
                           const sections: any[] = [];
                           if (res.tracks && res.tracks.length > 0) {
                             sections.push({
-                              title: `Kết quả tìm kiếm: "${searchInput}"`,
+                              title: `${t('songsView.searchResults')}: "${searchInput}"`,
                               contents: res.tracks
                             });
                           }
                           if (res.playlists && res.playlists.length > 0) {
                             sections.push({
-                              title: `Danh sách phát liên quan`,
+                              title: language === 'vi' ? 'Danh sách phát liên quan' : 'Related Playlists',
                               contents: res.playlists
                             });
                           }
                           setScDashboardData(sections);
                         } else {
-                          showAlert({ title: t('common.error'), message: 'Lỗi tìm kiếm SoundCloud: ' + res.error });
+                          showAlert({ title: t('common.error'), message: (language === 'vi' ? 'Lỗi tìm kiếm SoundCloud: ' : 'SoundCloud search error: ') + res.error });
                         }
                       });
                     } else {
@@ -5455,7 +5478,7 @@ export default function App() {
                       
                       {isCore ? (
                         <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
-                          {language === 'vi' ? 'Tính năng hình nền & giao diện màu sắc bị tắt hoàn toàn ở Chế độ cốt lõi (Core Mode) để tối ưu hiệu năng.' : 'Background and dynamic theme are completely disabled in Core Mode for maximum performance.'}
+                          {language === 'vi' ? 'Tính năng hình nền & giao diện màu sắc bị tắt hoàn toàn ở Chế độ tối giản để tối ưu hiệu năng.' : 'Background and dynamic theme are completely disabled in Core Mode for maximum performance.'}
                         </p>
                       ) : (
                         <>
@@ -5640,7 +5663,7 @@ export default function App() {
                             try {
                               await window.api.setBitPerfect(val, volume)
                             } catch (err: any) {
-                              showToast(`Không thể cấu hình Bit-perfect: ${err?.message || err}`, 'error')
+                              showToast(`${language === 'vi' ? 'Không thể cấu hình Bit-perfect' : 'Could not configure Bit-perfect'}: ${err?.message || err}`, 'error')
                               return
                             }
 
@@ -6100,7 +6123,7 @@ export default function App() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Nghệ sĩ</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">{t('artistsView.title')}</p>
                         <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">{activeArtist.name}</h2>
                         <p className="text-sm text-zinc-400 mb-4">
                           {activeArtist.albums.length} {t('artistsView.albumCount')} • {activeArtist.tracks.length} {t('artistsView.trackCount')}
@@ -6217,7 +6240,7 @@ export default function App() {
                               <div className="col-span-5">{t('genresView.title')}</div>
                               <div className="col-span-4">{t('genresView.topArtists')}</div>
                               <div className="col-span-1 text-center">{t('common.songs')}</div>
-                              <div className="col-span-1 text-right">Phát</div>
+                              <div className="col-span-1 text-right">{t('player.play')}</div>
                             </div>
                             <div className="divide-y divide-theme-30/20">
                               {filteredGenres.map((genre, idx) => (
@@ -6370,7 +6393,7 @@ export default function App() {
                         <Tag size={48} className="text-theme-10" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Thể loại</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">{t('genresView.title')}</p>
                         <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">{activeGenre.name}</h2>
                         <p className="text-sm text-zinc-400 mb-4">
                           {activeGenre.tracks.length} {t('common.songs')} • {activeGenre.artistCount} {t('artistsView.artistCount')}
@@ -6478,7 +6501,7 @@ export default function App() {
                               <div className="col-span-1 text-center">#</div>
                               <div className="col-span-6">{t('userPlaylistsView.title')}</div>
                               <div className="col-span-3 text-center">{t('common.songs')}</div>
-                              <div className="col-span-2 text-right">Thao tác</div>
+                              <div className="col-span-2 text-right">{t('trackTable.actions')}</div>
                             </div>
                             <div className="divide-y divide-theme-30/20">
                               {matchedUserPlaylists.map((pl, idx) => {
@@ -6512,7 +6535,7 @@ export default function App() {
                                       </div>
                                       <div className="min-w-0">
                                         <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
-                                        <p className="text-xs text-zinc-500 truncate mt-0.5">Playlist của tôi</p>
+                                        <p className="text-xs text-zinc-500 truncate mt-0.5">{t('userPlaylistsView.title')}</p>
                                       </div>
                                     </div>
                                     <div className="col-span-3 text-center">
@@ -6791,7 +6814,7 @@ export default function App() {
                                 <div className="col-span-1 text-center">#</div>
                                 <div className="col-span-7">{t('playlistsView.title')}</div>
                                 <div className="col-span-2 text-center">{t('common.songs')}</div>
-                                <div className="col-span-2 text-right">Thao tác</div>
+                                <div className="col-span-2 text-right">{t('trackTable.actions')}</div>
                               </div>
                               <div className="divide-y divide-theme-30/20">
                                 {visiblePlaylists.map((pl, idx) => (
@@ -6850,7 +6873,7 @@ export default function App() {
                               className="w-full py-6 flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer transition"
                               onClick={() => setPlaylistsRenderLimit(prev => Math.min(prev + 36, matchedPlaylists.length))}
                             >
-                              <span>{`Hiển thị ${visiblePlaylists.length} / ${matchedPlaylists.length} danh sách phát (Cuộn xuống để tải thêm)`}</span>
+                              <span>{language === 'vi' ? `Hiển thị ${visiblePlaylists.length} / ${matchedPlaylists.length} danh sách phát (Cuộn xuống để tải thêm)` : `Showing ${visiblePlaylists.length} / ${matchedPlaylists.length} playlists (Scroll down to load more)`}</span>
                             </div>
                           )}
                         </div>
@@ -6958,21 +6981,21 @@ export default function App() {
                   <div className="flex items-center gap-1.5 text-xs">
                     <button 
                       onClick={() => changeLyricOffset(-0.5)} 
-                      title="Chỉnh lời nhanh hơn 0.5s"
+                      title={t('player.lyricOffsetFast')}
                       className="px-1.5 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 font-mono transition"
                     >
                       -0.5s
                     </button>
                     <button 
                       onClick={resetLyricOffset} 
-                      title="Bấm để đặt lại độ trễ lời về 0s"
+                      title={t('player.lyricOffsetReset')}
                       className={`px-1.5 py-0.5 rounded font-mono transition ${lyricOffset !== 0 ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30' : 'bg-zinc-800/60 text-zinc-400'}`}
                     >
                       {lyricOffset > 0 ? `+${lyricOffset}` : lyricOffset}s
                     </button>
                     <button 
                       onClick={() => changeLyricOffset(0.5)} 
-                      title="Chỉnh lời chậm hơn 0.5s"
+                      title={t('player.lyricOffsetSlow')}
                       className="px-1.5 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 font-mono transition"
                     >
                       +0.5s
@@ -7015,12 +7038,12 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     {playQueue.length > 0 && (
                       <button 
-                        onClick={() => { setPlayQueue([]); showToast('Đã xóa danh sách chờ', 'info') }} 
+                        onClick={() => { setPlayQueue([]); showToast(t('player.queueCleared'), 'info') }} 
                         className="text-xs text-zinc-400 hover:text-red-400 px-2 py-1 rounded hover:bg-theme-30 flex items-center gap-1 transition cursor-pointer"
-                        title="Xóa tất cả bài hát khỏi hàng đợi"
+                        title={t('player.clearQueueTitle')}
                       >
                         <Trash2 size={12}/>
-                        <span>Xóa hết</span>
+                        <span>{t('player.clearQueue')}</span>
                       </button>
                     )}
                     <button onClick={() => setShowQueuePanel(false)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><X size={16}/></button>
@@ -7075,24 +7098,24 @@ export default function App() {
           <div className="flex-1 flex flex-col bg-transparent z-40 relative animate-fade-in" style={{ willChange: 'opacity, transform' }}>
             <div className="absolute top-8 right-8 flex items-center gap-3 z-50">
               <div className="flex items-center gap-1.5 text-xs bg-theme-60/80 backdrop-blur-md border border-theme-30/60 p-1.5 px-3 rounded-full shadow-lg">
-                <span className="text-zinc-400 text-[11px] mr-1">Độ trễ lời:</span>
+                <span className="text-zinc-400 text-[11px] mr-1">{t('player.lyricOffset')}:</span>
                 <button 
                   onClick={() => changeLyricOffset(-0.5)} 
-                  title="Chỉnh lời nhanh hơn 0.5s"
+                  title={t('player.lyricOffsetFast')}
                   className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono transition cursor-pointer"
                 >
                   -0.5s
                 </button>
                 <button 
                   onClick={resetLyricOffset} 
-                  title="Bấm để đặt lại về 0s"
+                  title={t('player.lyricOffsetReset')}
                   className={`px-2 py-0.5 rounded font-mono transition cursor-pointer ${lyricOffset !== 0 ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30' : 'bg-zinc-800 text-zinc-400'}`}
                 >
                   {lyricOffset > 0 ? `+${lyricOffset}` : lyricOffset}s
                 </button>
                 <button 
                   onClick={() => changeLyricOffset(0.5)} 
-                  title="Chỉnh lời chậm hơn 0.5s"
+                  title={t('player.lyricOffsetSlow')}
                   className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono transition cursor-pointer"
                 >
                   +0.5s
@@ -7281,12 +7304,12 @@ export default function App() {
                 <button 
                   onClick={() => setShowSleepTimerMenu(prev => !prev)} 
                   className={`transition flex items-center gap-1 cursor-pointer ${sleepTimerMode !== 'off' ? 'text-theme-10' : 'hover:text-white'}`} 
-                  title={sleepTimerMode !== 'off' ? (sleepTimerMode === 'end_of_track' ? 'Hẹn giờ: Dừng khi hết bài' : `Hẹn giờ tắt: ${Math.floor((sleepTimerRemaining || 0) / 60)}p${(sleepTimerRemaining || 0) % 60}s`) : 'Hẹn giờ tắt nhạc'}
+                  title={sleepTimerMode !== 'off' ? (sleepTimerMode === 'end_of_track' ? t('player.sleepTimerStopEndTitle') : t('player.sleepTimerRemainingTitle', { time: `${Math.floor((sleepTimerRemaining || 0) / 60)}m${(sleepTimerRemaining || 0) % 60}s` })) : t('player.sleepTimer')}
                 >
                   <Timer size={18} />
                   {sleepTimerMode !== 'off' && (
                     <span className="text-[10px] font-mono font-bold leading-none bg-theme-10/20 text-theme-10 px-1 py-0.5 rounded">
-                      {sleepTimerMode === 'end_of_track' ? 'Bài' : `${Math.ceil((sleepTimerRemaining || 0) / 60)}m`}
+                      {sleepTimerMode === 'end_of_track' ? (language === 'vi' ? 'Bài' : 'Trk') : `${Math.ceil((sleepTimerRemaining || 0) / 60)}m`}
                     </span>
                   )}
                 </button>
@@ -7294,16 +7317,16 @@ export default function App() {
                 {showSleepTimerMenu && (
                   <div className="absolute bottom-full right-0 mb-3 w-48 bg-zinc-900/95 border border-theme-30/70 backdrop-blur-md rounded-xl p-2 shadow-2xl z-50 text-xs space-y-1 animate-fade-in select-none">
                     <div className="px-2 py-1 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5"><Clock size={12}/> Hẹn giờ tắt</span>
+                      <span className="flex items-center gap-1.5"><Clock size={12}/> {t('player.sleepTimer')}</span>
                       {sleepTimerMode !== 'off' && <span className="text-theme-10 font-mono">{sleepTimerRemaining ? `${Math.floor(sleepTimerRemaining / 60)}:${String(sleepTimerRemaining % 60).padStart(2, '0')}` : ''}</span>}
                     </div>
                     {[
-                      { mode: 'off', label: 'Tắt hẹn giờ' },
-                      { mode: '15', label: 'Sau 15 phút' },
-                      { mode: '30', label: 'Sau 30 phút' },
-                      { mode: '45', label: 'Sau 45 phút' },
-                      { mode: '60', label: 'Sau 1 giờ' },
-                      { mode: 'end_of_track', label: 'Hết bài hát này' }
+                      { mode: 'off', label: t('player.sleepTimerOff') },
+                      { mode: '15', label: t('player.sleepTimer15') },
+                      { mode: '30', label: t('player.sleepTimer30') },
+                      { mode: '45', label: t('player.sleepTimer45') },
+                      { mode: '60', label: t('player.sleepTimer60') },
+                      { mode: 'end_of_track', label: t('player.sleepTimerEndTrack') }
                     ].map(opt => (
                       <button
                         key={opt.mode}

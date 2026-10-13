@@ -314,6 +314,28 @@ export interface TranslationDictionary {
     smartAutoplay: string
     smartAutoplayDesc: string
     smartAutoplayPlaying: string
+    clearQueue: string
+    clearQueueTitle: string
+    queueCleared: string
+    lyricOffset: string
+    lyricOffsetFast: string
+    lyricOffsetSlow: string
+    lyricOffsetReset: string
+    lyricOffsetToast: string
+    lyricOffsetResetToast: string
+    sleepTimer: string
+    sleepTimerOff: string
+    sleepTimer15: string
+    sleepTimer30: string
+    sleepTimer45: string
+    sleepTimer60: string
+    sleepTimerEndTrack: string
+    sleepTimerOffToast: string
+    sleepTimerEndTrackToast: string
+    sleepTimerMinsToast: string
+    sleepTimerStoppedToast: string
+    sleepTimerRemainingTitle: string
+    sleepTimerStopEndTitle: string
   }
   lyrics: {
     title: string
@@ -321,6 +343,7 @@ export interface TranslationDictionary {
     syncing: string
     maximize: string
     minimize: string
+    sourceNote: string
   }
   queue: {
     title: string
@@ -375,6 +398,8 @@ export interface TranslationDictionary {
       descPlaceholder: string
       coverLabel: string
       chooseImage: string
+      chooseImageShort: string
+      changeImageShort: string
       removeImage: string
       save: string
       cancel: string
@@ -412,6 +437,30 @@ export interface TranslationDictionary {
       ensureLocalFile: string
       seekInstruction: string
       intensityLegend: string
+      signalPathTitle: string
+      signalPathSub: string
+      sourceStage: string
+      decodeStage: string
+      dspStage: string
+      driverStage: string
+      outputStage: string
+      bitPerfectBadge: string
+      dspActiveBadge: string
+      directBadge: string
+      bypassDsp: string
+      parametricEq: string
+      eqBypassed: string
+      wasapiExclusive: string
+      wasapiShared: string
+      exclusiveDesc: string
+      sharedDesc: string
+      defaultDevice: string
+      autoDevice: string
+      pcmStream: string
+      dsdStream: string
+      dspNoFilter: string
+      dspDirect: string
+      dspBitAccurate: string
     }
     eq: {
       title: string
