@@ -2839,6 +2839,17 @@ app.whenReady().then(() => {
     return result
   })
 
+  ipcMain.handle('music:fetchLrclibLyrics', async (_, title: string, artist: string, album?: string, duration?: number): Promise<MxmResult> => {
+    if (typeof title !== 'string' || typeof artist !== 'string' || !title.trim() || !artist.trim()) {
+      return { success: false, code: 'NOT_FOUND', error: 'Thiếu tên bài hát hoặc nghệ sĩ' }
+    }
+    try {
+      return await fetchLrclibLyrics(title, artist, typeof album === 'string' ? album : undefined, typeof duration === 'number' ? duration : undefined)
+    } catch (e: any) {
+      return { success: false, code: 'NETWORK', error: e?.message || 'Lỗi khi gọi LRCLIB' }
+    }
+  })
+
   // ==========================================
   // NHẬP FILE TỪ MÁY TÍNH / Ổ CỨNG RỜI
   // ==========================================
@@ -2956,9 +2967,9 @@ app.whenReady().then(() => {
   })
 
   // ==========================================
-  // API TRÍCH XUẤT ẢNH BÌA CHẤT LƯỢNG GỐC CHO THEME & LYRICS (STREAM IN-MEMORY)
+  // API TRÍCH XUẤT ẢNH BÌA DYNAMIC SCALING CHO THEME & LYRICS (STREAM IN-MEMORY)
   // ==========================================
-  ipcMain.handle('music:getOriginalTrackCover', async (_, filePath: string) => {
+  ipcMain.handle('music:getOriginalTrackCover', async (_, filePath: string, size?: number) => {
     try {
       if (!filePath || filePath.startsWith('http') || !streamPort) return null
       let rawPath = filePath.replace(/^file:\/\/\/?/, '')
@@ -2970,10 +2981,13 @@ app.whenReady().then(() => {
 
       if (!fs.existsSync(rawPath)) return null
 
-      return `http://127.0.0.1:${streamPort}/cover?path=${encodeURIComponent(rawPath)}`
+      const sizeQuery = typeof size === 'number' && size > 0 ? `&size=${Math.round(size)}` : ''
+      return `http://127.0.0.1:${streamPort}/cover?path=${encodeURIComponent(rawPath)}${sizeQuery}`
     } catch (e) {}
     return null
   })
+
+  ipcMain.handle('music:getStreamPort', () => streamPort)
 
   // ==========================================
   // HỆ THỐNG TẠO PLAYLIST THỦ CÔNG
@@ -3047,6 +3061,7 @@ app.whenReady().then(() => {
   // ==========================================
   ipcMain.handle('music:forceGC', () => {
     // Kích hoạt dọn rác thủ công giải phóng RAM
+    coverResizeCache.clear()
     if (typeof global.gc === 'function') {
       global.gc()
     }
@@ -3057,6 +3072,15 @@ app.whenReady().then(() => {
   // ==========================================
   let streamPort = 0;
   const streamUrlCache = new Map<string, { url: string, expires: number }>();
+  const coverResizeCache = new Map<string, Buffer>();
+
+  function setCoverResizeCache(key: string, buf: Buffer) {
+    if (coverResizeCache.size >= 120) {
+      const oldestKey = coverResizeCache.keys().next().value;
+      if (oldestKey) coverResizeCache.delete(oldestKey);
+    }
+    coverResizeCache.set(key, buf);
+  }
 
   function getProxyImageUrl(url: string | null | undefined, id: string) {
     if (!url || !streamPort) return url || null;
@@ -3257,9 +3281,10 @@ app.whenReady().then(() => {
         imgRes.data.pipe(res);
       } catch (e) { if (!res.headersSent) res.writeHead(500).end(); }
     }
-    // --- LUỒNG 3: TRUYỀN TẢI ẢNH BÌA GỐC IN-MEMORY (0 BYTES Ổ ĐĨA) ---
+    // --- LUỒNG 3: TRUYỀN TẢI ẢNH BÌA DYNAMIC SCALING & GỐC IN-MEMORY (0 BYTES Ổ ĐĨA) ---
     else if (parsedUrl.pathname === '/cover') {
       const rawTrackPath = parsedUrl.searchParams.get('path');
+      const targetSize = parseInt(parsedUrl.searchParams.get('size') || '0', 10);
       if (!rawTrackPath) { res.writeHead(400).end('Thiếu đường dẫn bài hát'); return; }
 
       let targetPath = rawTrackPath.replace(/^file:\/\/\/?/, '');
@@ -3274,39 +3299,102 @@ app.whenReady().then(() => {
         return;
       }
 
+      const cacheKey = `${targetPath}_size_${targetSize}`;
+      if (targetSize > 0 && coverResizeCache.has(cacheKey)) {
+        const cached = coverResizeCache.get(cacheKey)!;
+        res.writeHead(200, {
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'public, max-age=604800, immutable',
+          'Content-Length': cached.length
+        });
+        res.end(cached);
+        return;
+      }
+
       try {
-        const metadata = await mm.parseFile(targetPath);
-        if (metadata.common.picture && metadata.common.picture.length > 0) {
-          const pic = metadata.common.picture[0];
-          let mime = pic.format || 'image/jpeg';
-          if (!mime.includes('/')) mime = `image/${mime}`;
-          
-          res.writeHead(200, {
-            'Content-Type': mime,
-            'Cache-Control': 'public, max-age=86400',
-            'Content-Length': pic.data.length
-          });
-          res.end(Buffer.from(pic.data));
-          return;
+        let rawBuffer: Buffer | null = null;
+        let mime = 'image/jpeg';
+
+        // 1. Kiểm tra thumbnail có sẵn trên đĩa trước (nhanh hơn rất nhiều so với đọc toàn bộ file audio)
+        const trackHash = crypto.createHash('md5').update(targetPath).digest('hex');
+        const centralThumbPath = join(IMAGE_CACHE_DIR, `${trackHash}.jpg`);
+        const localThumbPath = join(dirname(targetPath), '.thumbnails', `${trackHash}.jpg`);
+        if (fs.existsSync(centralThumbPath)) {
+          try { rawBuffer = fs.readFileSync(centralThumbPath); mime = 'image/jpeg'; } catch (_) {}
+        } else if (fs.existsSync(localThumbPath)) {
+          try { rawBuffer = fs.readFileSync(localThumbPath); mime = 'image/jpeg'; } catch (_) {}
         }
 
-        // Fallback tìm ảnh bìa trong cùng thư mục
-        const trackDir = dirname(targetPath);
-        const commonCoverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'album.png', 'front.jpg', 'front.png'];
-        for (const name of commonCoverNames) {
-          const candidate = join(trackDir, name);
-          if (fs.existsSync(candidate)) {
-            const ext = name.split('.').pop() || 'jpeg';
-            res.writeHead(200, {
-              'Content-Type': `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-              'Cache-Control': 'public, max-age=86400'
-            });
-            fs.createReadStream(candidate).pipe(res);
-            return;
+        // 2. Nếu chưa có thumbnail trên đĩa, đọc metadata chỉ lấy ảnh (duration: false)
+        if (!rawBuffer) {
+          const metadata = await mm.parseFile(targetPath, { skipCovers: false, duration: false });
+          if (metadata.common.picture && metadata.common.picture.length > 0) {
+            const pic = metadata.common.picture[0];
+            mime = pic.format || 'image/jpeg';
+            if (!mime.includes('/')) mime = `image/${mime}`;
+            rawBuffer = Buffer.from(pic.data);
+          } else {
+            // Fallback tìm ảnh bìa trong cùng thư mục
+            const trackDir = dirname(targetPath);
+            const commonCoverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'album.png', 'front.jpg', 'front.png'];
+            for (const name of commonCoverNames) {
+              const candidate = join(trackDir, name);
+              if (fs.existsSync(candidate)) {
+                const ext = name.split('.').pop() || 'jpeg';
+                mime = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+                try {
+                  rawBuffer = fs.readFileSync(candidate);
+                } catch (_) {}
+                break;
+              }
+            }
           }
         }
 
-        res.writeHead(404).end('Không tìm thấy ảnh bìa');
+        if (!rawBuffer) {
+          res.writeHead(404).end('Không tìm thấy ảnh bìa');
+          return;
+        }
+
+        // Nếu client yêu cầu kích thước dynamic cụ thể (size > 0)
+        if (targetSize > 0) {
+          try {
+            const nativeImg = nativeImage.createFromBuffer(rawBuffer);
+            const curSize = nativeImg.getSize();
+            if (curSize.width > 0 && curSize.height > 0) {
+              if (curSize.width > targetSize || curSize.height > targetSize) {
+                let newW = targetSize;
+                let newH = targetSize;
+                if (curSize.width >= curSize.height) {
+                  newH = Math.max(1, Math.round((curSize.height / curSize.width) * targetSize));
+                } else {
+                  newW = Math.max(1, Math.round((curSize.width / curSize.height) * targetSize));
+                }
+                const resized = nativeImg.resize({ width: newW, height: newH, quality: 'good' });
+                const jpegBuf = resized.toJPEG(85);
+                setCoverResizeCache(cacheKey, jpegBuf);
+                res.writeHead(200, {
+                  'Content-Type': 'image/jpeg',
+                  'Cache-Control': 'public, max-age=604800, immutable',
+                  'Content-Length': jpegBuf.length
+                });
+                res.end(jpegBuf);
+                return;
+              }
+            }
+          } catch (resizeErr) {
+            console.warn('[Cover Stream] Resize thất bại, trả về ảnh gốc:', resizeErr);
+          }
+        }
+
+        // Trả về ảnh gốc nếu không resize hoặc ảnh nhỏ hơn targetSize
+        res.writeHead(200, {
+          'Content-Type': mime,
+          'Cache-Control': 'public, max-age=86400',
+          'Content-Length': rawBuffer.length
+        });
+        res.end(rawBuffer);
+        return;
       } catch (e) {
         if (!res.headersSent) res.writeHead(500).end();
       }

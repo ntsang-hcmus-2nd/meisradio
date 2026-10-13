@@ -95,7 +95,9 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
       ctx.clearRect(0, 0, width, height)
 
       const analyser = analyserNodeRef.current
+      let hasActivity = false
       if (analyser && isPlaying) {
+        hasActivity = true
         if (analyser.context && (analyser.context as any).state === 'suspended') {
           try { (analyser.context as any).resume?.().catch(() => {}) } catch (e) {}
         }
@@ -137,9 +139,13 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
           }
         }
       } else {
+        // Khi pause, hạ dần các dải tần số về 0
         for (let i = 0; i < numBands; i++) {
           smoothedValues[i] = Math.max(0, smoothedValues[i] - 0.05)
           peakValues[i] = Math.max(0, peakValues[i] - 0.02)
+          if (smoothedValues[i] > 0.001 || peakValues[i] > 0.001) {
+            hasActivity = true
+          }
         }
       }
 
@@ -182,13 +188,40 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
       }
 
       ctx.restore()
+
+      // Tối ưu hóa: Nếu đã dừng phát và toàn bộ sóng đã rơi về 0, ngưng gọi requestAnimationFrame để tiết kiệm 100% CPU
+      if ((isPlaying || hasActivity) && !document.hidden) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+      } else {
+        reqAnimRef.current = undefined
+      }
     }
 
-    reqAnimRef.current = requestAnimationFrame(draw)
+    const startDrawLoop = () => {
+      if (!reqAnimRef.current && (isPlaying || !document.hidden)) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (reqAnimRef.current) {
+          cancelAnimationFrame(reqAnimRef.current)
+          reqAnimRef.current = undefined
+        }
+      } else if (isPlaying) {
+        startDrawLoop()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    startDrawLoop()
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       resizeObserver.disconnect()
       if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
+      reqAnimRef.current = undefined
     }
   }, [isPlaying, isLite, showVisualizer, analyserNodeRef, barCount])
 

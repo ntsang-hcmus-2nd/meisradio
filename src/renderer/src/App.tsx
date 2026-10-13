@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue } from 'react'
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1,
   Volume2, VolumeX, Sliders, Cloud, HardDrive, Search, Library, 
@@ -8,7 +8,7 @@ import {
   Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw, PictureInPicture2,
   Home, ArrowLeft, Radio, BarChart2, LayoutGrid, Rows3, Disc, Tag, Music,
   Folder, FolderOpen, MoreVertical, ChevronRight, ChevronDown, ChevronUp, Layers, ListPlus,
-  Leaf, Cpu, Zap, BatteryCharging, History, Compass
+  Leaf, Cpu, Zap, BatteryCharging, History, Compass, Timer, Clock
 } from 'lucide-react'
 import { TableVirtuoso, Virtuoso, VirtuosoGrid } from 'react-virtuoso'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -33,6 +33,9 @@ import { SpectrogramModal } from './components/SpectrogramModal'
 import { ContextMenu, ContextMenuItem } from './components/ContextMenu'
 
 import { extractThemeColors, initThemeColorCache } from './utils/colorUtils'
+import { DynamicCoverArt, setGlobalStreamPort } from './components/DynamicCoverArt'
+import { removeAccents, matchesQuery } from './utils/textUtils'
+import { fisherYatesShuffle } from './utils/arrayUtils'
 
 // --- HELPER FUNCTIONS & INTERFACES (OUTSIDE COMPONENT) ---
 const formatDuration = (seconds: number) => {
@@ -289,8 +292,14 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-theme-30 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
             {/* TỐI ƯU HÓA: Xóa bỏ loading="lazy" vì Virtuoso đã tự động Lazy Load, kết hợp cả 2 sẽ gây spike CPU */}
-            {(!isLite && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover" /> : <img src={thumbnailHolder} className="w-3/4 h-3/4 object-contain" />}
-            {track.isCloud && <div className="absolute top-0 right-0 bg-theme-10/80 p-0.5 rounded-bl-md"><Cloud size={10} className="text-white" /></div>}
+            <DynamicCoverArt
+              track={track}
+              tier="sm"
+              isLite={isLite}
+              fallbackImageSrc={thumbnailHolder}
+              className="w-full h-full"
+            />
+            {track.isCloud && <div className="absolute top-0 right-0 bg-theme-10/80 p-0.5 rounded-bl-md z-10"><Cloud size={10} className="text-white" /></div>}
           </div>
           <div className="truncate w-48 lg:w-64">
             <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>{track.title}</p>
@@ -316,13 +325,14 @@ const TrackGridItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying,
       className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between track-card-optimized h-full"
     >
       <div className="aspect-square bg-theme-30/80 rounded-lg mb-3 overflow-hidden relative shadow-md">
-        {(!isLite && track.coverArt) ? (
-          <img loading="lazy" decoding="async" src={track.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
-            <Music size={32} />
-          </div>
-        )}
+        <DynamicCoverArt
+          track={track}
+          tier="md"
+          isLite={isLite}
+          smartAspect={true}
+          fallbackIcon={<Music size={32} />}
+          className="w-full h-full group-hover:scale-105 transition duration-300"
+        />
         <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${isThisTrackPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           <div className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition">
             {isThisTrackPlaying && isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
@@ -388,7 +398,13 @@ const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlayi
         {isThisTrackPlaying && isPlaying ? <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" /> : index + 1}
       </span>
       <div className="w-7 h-7 bg-theme-30 rounded overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-        {(!isLite && track.coverArt) ? <img loading="lazy" decoding="async" src={track.coverArt} className="w-full h-full object-cover" /> : <Music size={12} className="text-zinc-500" />}
+        <DynamicCoverArt
+          track={track}
+          tier="sm"
+          isLite={isLite}
+          fallbackIcon={<Music size={12} className="text-zinc-500" />}
+          className="w-full h-full"
+        />
       </div>
       <div className="flex-1 min-w-0 flex items-center gap-2">
         <span className={`font-medium truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>
@@ -600,8 +616,14 @@ const SortableQueueItem = React.memo(({ id, track, isActive, isPlaying, isLite, 
       className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${isActive ? 'bg-theme-10/20 border border-theme-10/30' : 'hover:bg-theme-30/50 border border-transparent'}`}
     >
       <div className="w-10 h-10 bg-theme-30 rounded flex-shrink-0 overflow-hidden relative flex items-center justify-center">
-         {(!isLite && track.coverArt) ? <img src={track.coverArt} className="w-full h-full object-cover pointer-events-none" /> : <ListMusic size={16} className="text-zinc-500" />}
-         {isActive && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><div className="w-3 h-3 bg-theme-10 rounded-full animate-pulse" /></div>}
+         <DynamicCoverArt
+           track={track}
+           tier="sm"
+           isLite={isLite}
+           fallbackIcon={<ListMusic size={16} className="text-zinc-500" />}
+           className="w-full h-full pointer-events-none"
+         />
+         {isActive && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10"><div className="w-3 h-3 bg-theme-10 rounded-full animate-pulse" /></div>}
       </div>
       <div className="truncate flex-1">
         <p className={`text-sm font-semibold truncate ${isActive ? 'text-theme-10' : 'text-white'}`}>{track.title}</p>
@@ -635,6 +657,7 @@ export default function App() {
   const preampNodeRef = useRef<GainNode | null>(null)
   const filterNodesRef = useRef<BiquadFilterNode[]>([])
   const analyserNodeRef = useRef<AnalyserNode | null>(null)
+  const compressorNodeRef = useRef<DynamicsCompressorNode | null>(null)
   const visualizerCanvasRef = useRef<HTMLCanvasElement>(null)
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const reqAnimRef = useRef<number>(0)
@@ -670,6 +693,17 @@ export default function App() {
   const [customBgBlur, setCustomBgBlur] = useState<number>(0)
   const [isReloading, setIsReloading] = useState(false)
   const [isConfigLoaded, setIsConfigLoaded] = useState(false) // Flag để ngăn ghi đè config
+
+  // Stream Server Port cho Dynamic Cover Art scaling
+  const [streamPort, setStreamPort] = useState<number>(0)
+  useEffect(() => {
+    window.api?.getStreamPort?.().then((port: number) => {
+      if (port) {
+        setStreamPort(port)
+        setGlobalStreamPort(port)
+      }
+    })
+  }, [])
 
   // Recently Played State (Lưu lịch sử bài hát đã nghe)
   const [recentlyPlayed, setRecentlyPlayed] = useState<any[]>(() => {
@@ -713,6 +747,23 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchInput, setSearchInput] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
+
+  // Sleep Timer States (Hẹn giờ tắt nhạc)
+  const [sleepTimerMode, setSleepTimerMode] = useState<'off' | '15' | '30' | '45' | '60' | 'end_of_track'>('off')
+  const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null)
+  const [showSleepTimerMenu, setShowSleepTimerMenu] = useState(false)
+  const sleepTimerOriginalVolRef = useRef<number | null>(null)
+
+  // Lyric Offset State (Tinh chỉnh độ trễ lời bài hát, lưu vào localStorage)
+  const [lyricOffset, setLyricOffset] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('meis_lyric_offset')
+      return saved ? parseFloat(saved) || 0 : 0
+    } catch (e) {
+      return 0
+    }
+  })
 
   // Player & Queue States
   const [currentTrack, setCurrentTrack] = useState<any | null>(null)
@@ -1577,13 +1628,14 @@ export default function App() {
   }
 
   const getFilteredTracks = (tracks: any[]) => {
-    if (!searchQuery.trim()) return tracks
-    const lowerQuery = searchQuery.toLowerCase()
+    const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
+    if (!rawQuery) return tracks
+    const normalizedQuery = removeAccents(rawQuery)
     return tracks.filter(t => 
-      (t.title && t.title.toLowerCase().includes(lowerQuery)) ||
-      (t.artist && t.artist.toLowerCase().includes(lowerQuery)) ||
-      (Array.isArray(t.artists) && t.artists.some((a: string) => a?.toLowerCase().includes(lowerQuery))) ||
-      (t.album && t.album.toLowerCase().includes(lowerQuery))
+      matchesQuery(t.title, normalizedQuery) ||
+      matchesQuery(t.artist, normalizedQuery) ||
+      (Array.isArray(t.artists) && t.artists.some((a: string) => matchesQuery(a, normalizedQuery))) ||
+      matchesQuery(t.album, normalizedQuery)
     )
   }
 
@@ -1723,7 +1775,7 @@ export default function App() {
   // Tuyển tập ngẫu nhiên "Khám phá từ thư mục nhạc"
   const randomDiscoverTracks = useMemo(() => {
     if (!libraryTracks || libraryTracks.length === 0) return []
-    return [...libraryTracks].sort(() => Math.random() - 0.5).slice(0, 12)
+    return fisherYatesShuffle(libraryTracks).slice(0, 12)
   }, [libraryTracks])
 
   // Thuật toán tìm bài hát gợi ý thông minh dựa trên Thể loại / Nghệ sĩ
@@ -1907,7 +1959,7 @@ export default function App() {
 
   const toggleShuffle = () => {
     if (!isShuffle) {
-      setPlayQueue([...originalQueue].sort(() => Math.random() - 0.5))
+      setPlayQueue(fisherYatesShuffle(originalQueue))
     } else {
       setPlayQueue(originalQueue)
     }
@@ -1960,7 +2012,7 @@ export default function App() {
   const handleRowClick = async (track: any, contextList?: any[]) => {
     if (contextList) {
       setOriginalQueue(contextList);
-      setPlayQueue(isShuffle ? [...contextList].sort(() => Math.random() - 0.5) : contextList);
+      setPlayQueue(isShuffle ? fisherYatesShuffle(contextList) : contextList);
     }
     if (track.isCloud && !track.isOnline) {
       setCloudActionTrack(track);
@@ -2175,7 +2227,7 @@ export default function App() {
     if (!currentTrack.isCloud && (currentTrack.id || currentTrack.filePath)) {
       let isCurrent = true
       // @ts-ignore
-      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath).then((cover: string | null) => {
+      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath, 1200).then((cover: string | null) => {
         if (isCurrent) {
           setTrackHighResCover(cover || currentTrack.coverArt || null)
         }
@@ -2949,19 +3001,20 @@ export default function App() {
   const processedLibraryTracks = useMemo(() => {
     const filtered = getFilteredTracks(libraryTracks)
     return getSortedTracks(filtered)
-  }, [libraryTracks, searchQuery, sortField, sortOrder])
+  }, [libraryTracks, deferredSearchQuery, sortField, sortOrder])
 
   const processedPlaylistTracks = useMemo(() => {
     if (!activePlaylist) return []
     const filtered = getFilteredTracks(activePlaylist.tracks)
     return getSortedTracks(filtered)
-  }, [activePlaylist, searchQuery, sortField, sortOrder])
+  }, [activePlaylist, deferredSearchQuery, sortField, sortOrder])
 
   const matchedPlaylists = useMemo(() => {
-    if (!searchQuery) return playlists
-    const lowerQuery = searchQuery.toLowerCase().trim()
-    return playlists.filter(pl => pl.name.toLowerCase().includes(lowerQuery))
-  }, [playlists, searchQuery])
+    const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
+    if (!rawQuery) return playlists
+    const normalizedQuery = removeAccents(rawQuery)
+    return playlists.filter(pl => matchesQuery(pl.name, normalizedQuery))
+  }, [playlists, deferredSearchQuery])
 
   const visiblePlaylists = useMemo(() => {
     return matchedPlaylists.slice(0, playlistsRenderLimit)
@@ -3070,7 +3123,7 @@ export default function App() {
     else if (!currentTrack.isCloud && currentTrack.coverArt?.includes('.thumbnails')) {
       let isCurrent = true
       // @ts-ignore
-      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath).then(cover => {
+      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath, 800).then(cover => {
         if (isCurrent && cover) setOriginalCover(cover)
       })
       return () => { isCurrent = false }
@@ -3404,8 +3457,18 @@ export default function App() {
           filterNodesRef.current.push(filter)
         })
       }
+      if (!compressorNodeRef.current) {
+        const comp = ctx.createDynamicsCompressor()
+        comp.threshold.value = -18
+        comp.knee.value = 12
+        comp.ratio.value = 4
+        comp.attack.value = 0.005
+        comp.release.value = 0.15
+        compressorNodeRef.current = comp
+      }
       prevNode.connect(analyserNodeRef.current)
-      analyserNodeRef.current.connect(ctx.destination)
+      analyserNodeRef.current.connect(compressorNodeRef.current)
+      compressorNodeRef.current.connect(ctx.destination)
     }
     setupAudio().catch(e => console.error('[setupAudio error]', e))
   }, [isEqEnabled, currentSampleRate, isCore])
@@ -3566,7 +3629,7 @@ export default function App() {
         // Lời thô không có mốc thời gian: không highlight theo thời gian phát
         if (currentLyricIndex !== -1) setCurrentLyricIndex(-1)
       } else if (!document.hidden && lyrics.length > 0) {
-        const visualTime = audio.currentTime + 0.3
+        const visualTime = audio.currentTime + 0.3 + (lyricOffset || 0)
         const index = lyrics.findIndex((line, i) => {
           const nextLine = lyrics[i + 1]
           if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
@@ -3598,7 +3661,7 @@ export default function App() {
 
     audio.addEventListener('timeupdate', handleTimeUpdate)
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [lyrics, currentLyricIndex, playQueue, currentTrack, repeatMode])
+  }, [lyrics, currentLyricIndex, playQueue, currentTrack, repeatMode, lyricOffset])
 
   // Scroll Active Lyric
   useEffect(() => {
@@ -3744,8 +3807,168 @@ export default function App() {
         }
       })
     }
-  }, [currentTrack, isPlaying, bitPerfectEnabled, playQueue, repeatMode, volume, prevVolume])
+  }, [])
 
+  // Windows Media Session API Integration (Fn Media Keys & OS OSD)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+
+    if (!currentTrack) {
+      navigator.mediaSession.metadata = null
+      navigator.mediaSession.playbackState = 'none'
+      return
+    }
+
+    const artworkList: { src: string; sizes: string; type: string }[] = []
+    if (currentTrack.coverArt && typeof currentTrack.coverArt === 'string') {
+      artworkList.push({ src: currentTrack.coverArt, sizes: '512x512', type: 'image/jpeg' })
+    }
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title || 'Untitled',
+        artist: currentTrack.artist || 'Unknown Artist',
+        album: currentTrack.album || 'Unknown Album',
+        artwork: artworkList
+      })
+    } catch (e) {}
+
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
+
+    const actionHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['play', () => { handlePlayPause() }],
+      ['pause', () => { handlePlayPause() }],
+      ['previoustrack', () => { handlePrev() }],
+      ['nexttrack', () => { handleNext() }],
+      ['seekto', (details) => {
+        if (details.seekTime !== undefined && details.seekTime !== null) {
+          if (bitPerfectEnabled) {
+            window.api?.mpvSeek?.(details.seekTime, 'absolute')
+          } else if (audioRef.current) {
+            audioRef.current.currentTime = details.seekTime
+          }
+        }
+      }],
+      ['seekbackward', (details) => {
+        const offset = details.seekOffset || 5
+        if (bitPerfectEnabled) {
+          window.api?.mpvSeek?.(-offset, 'relative')
+        } else if (audioRef.current) {
+          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - offset)
+        }
+      }],
+      ['seekforward', (details) => {
+        const offset = details.seekOffset || 5
+        if (bitPerfectEnabled) {
+          window.api?.mpvSeek?.(offset, 'relative')
+        } else if (audioRef.current && audioRef.current.duration) {
+          audioRef.current.currentTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + offset)
+        }
+      }]
+    ]
+
+    for (const [action, handler] of actionHandlers) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler)
+      } catch (e) {}
+    }
+  }, [currentTrack, isPlaying, bitPerfectEnabled, handlePlayPause, handlePrev, handleNext])
+
+  // Sleep Timer Countdown & Volume Fade-out
+  const sleepTimerTargetTimeRef = useRef<number | null>(null)
+
+  const handleSetSleepTimer = (mode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track') => {
+    setSleepTimerMode(mode)
+    setShowSleepTimerMenu(false)
+    if (mode === 'off') {
+      sleepTimerTargetTimeRef.current = null
+      setSleepTimerRemaining(null)
+      if (sleepTimerOriginalVolRef.current !== null) {
+        setVolume(sleepTimerOriginalVolRef.current)
+        if (audioRef.current) audioRef.current.volume = sleepTimerOriginalVolRef.current
+        if (bitPerfectEnabled) window.api?.mpvSetVolume?.(sleepTimerOriginalVolRef.current)
+        sleepTimerOriginalVolRef.current = null
+      }
+      showToast('Đã tắt hẹn giờ', 'info')
+      return
+    }
+
+    if (mode === 'end_of_track') {
+      sleepTimerTargetTimeRef.current = null
+      setSleepTimerRemaining(null)
+      showToast('Hẹn giờ: Sẽ dừng sau khi bài hát kết thúc', 'success')
+      return
+    }
+
+    const mins = parseInt(mode, 10)
+    if (!isNaN(mins) && mins > 0) {
+      const targetTime = Date.now() + mins * 60 * 1000
+      sleepTimerTargetTimeRef.current = targetTime
+      setSleepTimerRemaining(mins * 60)
+      sleepTimerOriginalVolRef.current = volume
+      showToast(`Hẹn giờ tắt nhạc sau ${mins} phút`, 'success')
+    }
+  }
+
+  useEffect(() => {
+    if (sleepTimerMode === 'off' || sleepTimerMode === 'end_of_track' || !sleepTimerTargetTimeRef.current) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      const targetTime = sleepTimerTargetTimeRef.current
+      if (!targetTime) return
+      const now = Date.now()
+      const remainingSeconds = Math.max(0, Math.round((targetTime - now) / 1000))
+      setSleepTimerRemaining(remainingSeconds)
+
+      // Trong 30 giây cuối cùng: tự động giảm dần âm lượng (Fade-out)
+      if (remainingSeconds <= 30 && remainingSeconds > 0) {
+        if (sleepTimerOriginalVolRef.current === null) {
+          sleepTimerOriginalVolRef.current = volume
+        }
+        const fadeRatio = remainingSeconds / 30
+        const fadedVolume = (sleepTimerOriginalVolRef.current || 1) * fadeRatio
+        if (audioRef.current) audioRef.current.volume = fadedVolume
+        if (bitPerfectEnabled) window.api?.mpvSetVolume?.(fadedVolume)
+      }
+
+      // Khi hết thời gian: Tắt nhạc
+      if (remainingSeconds <= 0) {
+        clearInterval(interval)
+        sleepTimerTargetTimeRef.current = null
+        if (audioRef.current) audioRef.current.pause()
+        if (bitPerfectEnabled) window.api?.mpvPause?.()
+        setIsPlaying(false)
+        if (sleepTimerOriginalVolRef.current !== null) {
+          setVolume(sleepTimerOriginalVolRef.current)
+          if (audioRef.current) audioRef.current.volume = sleepTimerOriginalVolRef.current
+          if (bitPerfectEnabled) window.api?.mpvSetVolume?.(sleepTimerOriginalVolRef.current)
+          sleepTimerOriginalVolRef.current = null
+        }
+        setSleepTimerMode('off')
+        setSleepTimerRemaining(null)
+        showToast('Hẹn giờ: Đã dừng phát nhạc', 'info')
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [sleepTimerMode, volume, bitPerfectEnabled])
+
+  const changeLyricOffset = (delta: number) => {
+    setLyricOffset(prev => {
+      const next = Math.round((prev + delta) * 10) / 10
+      try { localStorage.setItem('meis_lyric_offset', String(next)) } catch (e) {}
+      showToast(`Độ trễ lời: ${next > 0 ? `+${next}` : next}s`, 'info')
+      return next
+    })
+  }
+
+  const resetLyricOffset = () => {
+    setLyricOffset(0)
+    try { localStorage.setItem('meis_lyric_offset', '0') } catch (e) {}
+    showToast('Đã đặt lại độ trễ lời về 0s', 'info')
+  }
 
   // ==========================================
   // 6. RENDERERS
@@ -3856,6 +4079,15 @@ export default function App() {
     const unTime = window.api.onMpvTime((val) => {
       if (bitPerfectEnabled && audioRef.current) {
         (audioRef.current as any)._currentTime = val
+        if (!document.hidden && lyrics.length > 0 && !lyrics[0].unsynced) {
+          const visualTime = val + 0.3 + (lyricOffset || 0)
+          const index = lyrics.findIndex((line, i) => {
+            const nextLine = lyrics[i + 1]
+            if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
+            return visualTime >= line.time
+          })
+          if (index !== currentLyricIndex) setCurrentLyricIndex(index)
+        }
       }
     })
     const unDuration = window.api.onMpvDuration((val) => {
@@ -3869,6 +4101,14 @@ export default function App() {
       }
     })
     const unEnded = window.api.onMpvEnded(() => {
+      if (sleepTimerMode === 'end_of_track') {
+        setSleepTimerMode('off')
+        setSleepTimerRemaining(null)
+        setIsPlaying(false)
+        window.api?.mpvPause?.()
+        showToast('Hẹn giờ: Đã dừng phát sau khi hết bài hát', 'info')
+        return
+      }
       if (bitPerfectEnabled && !crossfadeEnabled) handleNext()
     })
     const unError = (window.api as any)?.onMpvError?.((err: string) => {
@@ -3975,6 +4215,14 @@ export default function App() {
             audio.play();
             return;
           }
+          if (sleepTimerMode === 'end_of_track') {
+            setSleepTimerMode('off')
+            setSleepTimerRemaining(null)
+            setIsPlaying(false)
+            if (audio) audio.pause()
+            showToast('Hẹn giờ: Đã dừng phát sau khi hết bài hát', 'info')
+            return
+          }
           if (!crossfadeEnabled) handleNext() 
         }}
         onLoadedMetadata={handleLoadedMetadata}
@@ -4009,16 +4257,18 @@ export default function App() {
           {!isLite && <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />}
           
           <div className="w-24 h-24 bg-theme-30 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group" style={{ WebkitAppRegion: 'no-drag' } as any}>
-            {(!isLite && currentTrack?.coverArt) ? (
-              <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover pointer-events-none" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                <ListMusic size={32} />
-              </div>
-            )}
+            <DynamicCoverArt
+              track={currentTrack}
+              streamPort={streamPort}
+              tier="md"
+              isLite={isLite}
+              smartAspect={true}
+              fallbackIconSize={32}
+              className="w-full h-full pointer-events-none"
+            />
             <button 
               onClick={handleToggleMiniPlayer} 
-              className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition" 
+              className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition z-20" 
               title="Trở về chế độ Đầy đủ"
               style={{ WebkitAppRegion: 'no-drag' } as any}
             >
@@ -4387,7 +4637,7 @@ export default function App() {
                       <button 
                         onClick={() => {
                           if (libraryTracks.length > 0) {
-                            const shuffled = [...libraryTracks].sort(() => Math.random() - 0.5)
+                            const shuffled = fisherYatesShuffle(libraryTracks)
                             handleRowClick(shuffled[0], shuffled)
                           }
                         }}
@@ -4488,13 +4738,13 @@ export default function App() {
                               }`}
                             >
                               <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden relative shrink-0 shadow-md">
-                                {track.coverArt ? (
-                                  <img src={track.coverArt} alt={track.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
-                                    <Music size={18} />
-                                  </div>
-                                )}
+                                <DynamicCoverArt
+                                  track={track}
+                                  tier="sm"
+                                  isLite={isLite}
+                                  fallbackIcon={<Music size={18} className="text-zinc-600" />}
+                                  className="w-full h-full group-hover:scale-105 transition duration-300"
+                                />
                                 <div className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                                   {isCurrent && isPlaying ? (
                                     <span className="w-3.5 h-3.5 rounded-full bg-theme-10 animate-pulse"></span>
@@ -4551,13 +4801,14 @@ export default function App() {
                               className="min-w-[140px] max-w-[140px] snap-start group cursor-pointer"
                             >
                               <div className="w-full aspect-square rounded-2xl bg-theme-30 mb-2.5 overflow-hidden relative shadow-lg border border-theme-30/40">
-                                {track.coverArt ? (
-                                  <img src={track.coverArt} alt={track.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
-                                    <Music size={28} />
-                                  </div>
-                                )}
+                                <DynamicCoverArt
+                                  track={track}
+                                  tier="md"
+                                  isLite={isLite}
+                                  smartAspect={true}
+                                  fallbackIcon={<Music size={28} className="text-zinc-600" />}
+                                  className="w-full h-full group-hover:scale-105 transition duration-300"
+                                />
                                 <div className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                                   {isCurrent && isPlaying ? (
                                     <span className="w-5 h-5 rounded-full bg-theme-10 animate-pulse"></span>
@@ -4611,13 +4862,13 @@ export default function App() {
                               }`}
                             >
                               <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden relative shrink-0 shadow-md">
-                                {track.coverArt ? (
-                                  <img src={track.coverArt} alt={track.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
-                                    <Music size={18} />
-                                  </div>
-                                )}
+                                <DynamicCoverArt
+                                  track={track}
+                                  tier="sm"
+                                  isLite={isLite}
+                                  fallbackIcon={<Music size={18} className="text-zinc-600" />}
+                                  className="w-full h-full group-hover:scale-105 transition duration-300"
+                                />
                                 <div className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                                   {isCurrent && isPlaying ? (
                                     <span className="w-3.5 h-3.5 rounded-full bg-theme-10 animate-pulse"></span>
@@ -4677,7 +4928,7 @@ export default function App() {
                                   </button>
                                   <button 
                                     onClick={() => {
-                                      const shuffled = [...activeAlbum.tracks].sort(() => Math.random() - 0.5)
+                                      const shuffled = fisherYatesShuffle(activeAlbum.tracks)
                                       handleRowClick(shuffled[0], shuffled)
                                     }}
                                     className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
@@ -4873,7 +5124,7 @@ export default function App() {
                                   </button>
                                   <button 
                                     onClick={() => {
-                                      const shuffled = [...activeAlbum.tracks].sort(() => Math.random() - 0.5)
+                                      const shuffled = fisherYatesShuffle(activeAlbum.tracks)
                                       handleRowClick(shuffled[0], shuffled)
                                     }}
                                     className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
@@ -5106,7 +5357,7 @@ export default function App() {
                         onClick={() => {
                           if (processedLibraryTracks.length > 0) {
                             setIsShuffle(true)
-                            const shuffled = [...processedLibraryTracks].sort(() => Math.random() - 0.5)
+                            const shuffled = fisherYatesShuffle(processedLibraryTracks)
                             handleRowClick(shuffled[0], shuffled)
                           }
                         }}
@@ -5759,9 +6010,10 @@ export default function App() {
                   {/* Danh sách nhóm theo Alphabet A-Z */}
                   <div className="flex-1 overflow-y-auto space-y-8 pr-2">
                     {(() => {
-                      const lowerQuery = searchQuery.toLowerCase().trim()
-                      const filteredArtists = searchQuery 
-                        ? artistsData.artistsList.filter(a => a.name.toLowerCase().includes(lowerQuery))
+                      const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
+                      const normQuery = removeAccents(rawQuery)
+                      const filteredArtists = rawQuery 
+                        ? artistsData.artistsList.filter(a => matchesQuery(a.name, normQuery))
                         : null
 
                       if (filteredArtists) {
@@ -5902,7 +6154,7 @@ export default function App() {
                           <button 
                             onClick={() => {
                               if (activeArtist.tracks.length > 0) {
-                                const shuffled = [...activeArtist.tracks].sort(() => Math.random() - 0.5)
+                                const shuffled = fisherYatesShuffle(activeArtist.tracks)
                                 handleRowClick(shuffled[0], shuffled)
                               }
                             }}
@@ -5982,9 +6234,10 @@ export default function App() {
 
                   <div className="flex-1 overflow-y-auto pr-2">
                     {(() => {
-                      const lowerQuery = searchQuery.toLowerCase().trim()
-                      const filteredGenres = searchQuery 
-                        ? genresData.filter(g => g.name.toLowerCase().includes(lowerQuery))
+                      const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
+                      const normQuery = removeAccents(rawQuery)
+                      const filteredGenres = rawQuery 
+                        ? genresData.filter(g => matchesQuery(g.name, normQuery))
                         : genresData
 
                       if (filteredGenres.length === 0) {
@@ -6171,7 +6424,7 @@ export default function App() {
                           <button 
                             onClick={() => {
                               if (activeGenre.tracks.length > 0) {
-                                const shuffled = [...activeGenre.tracks].sort(() => Math.random() - 0.5)
+                                const shuffled = fisherYatesShuffle(activeGenre.tracks)
                                 handleRowClick(shuffled[0], shuffled)
                               }
                             }}
@@ -6232,9 +6485,10 @@ export default function App() {
 
                   <div className="flex-1 overflow-y-auto pr-2">
                     {(() => {
-                      const lowerQuery = searchQuery.toLowerCase().trim()
-                      const matchedUserPlaylists = searchQuery 
-                        ? userPlaylists.filter(pl => pl.name.toLowerCase().includes(lowerQuery))
+                      const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
+                      const normQuery = removeAccents(rawQuery)
+                      const matchedUserPlaylists = rawQuery 
+                        ? userPlaylists.filter(pl => matchesQuery(pl.name, normQuery))
                         : userPlaylists
 
                       if (matchedUserPlaylists.length === 0) {
@@ -6483,7 +6737,7 @@ export default function App() {
                             <button 
                               onClick={() => {
                                 if (activeUserPlaylistTracks.length > 0) {
-                                  const shuffled = [...activeUserPlaylistTracks].sort(() => Math.random() - 0.5)
+                                  const shuffled = fisherYatesShuffle(activeUserPlaylistTracks)
                                   handleRowClick(shuffled[0], shuffled)
                                 }
                               }}
@@ -6699,7 +6953,7 @@ export default function App() {
                             <button 
                               onClick={() => {
                                 if (processedPlaylistTracks.length > 0) {
-                                  const shuffled = [...processedPlaylistTracks].sort(() => Math.random() - 0.5)
+                                  const shuffled = fisherYatesShuffle(processedPlaylistTracks)
                                   handleRowClick(shuffled[0], shuffled)
                                 }
                               }}
@@ -6736,7 +6990,30 @@ export default function App() {
               <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
                 <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
                   <h3 className="font-bold text-white flex items-center gap-2"><Mic2 size={16} className="text-theme-10"/> {t('lyrics.title')}</h3>
-                  <button onClick={() => setIsLyricsMaximized(true)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><Maximize2 size={16}/></button>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <button 
+                      onClick={() => changeLyricOffset(-0.5)} 
+                      title="Chỉnh lời nhanh hơn 0.5s"
+                      className="px-1.5 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 font-mono transition"
+                    >
+                      -0.5s
+                    </button>
+                    <button 
+                      onClick={resetLyricOffset} 
+                      title="Bấm để đặt lại độ trễ lời về 0s"
+                      className={`px-1.5 py-0.5 rounded font-mono transition ${lyricOffset !== 0 ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30' : 'bg-zinc-800/60 text-zinc-400'}`}
+                    >
+                      {lyricOffset > 0 ? `+${lyricOffset}` : lyricOffset}s
+                    </button>
+                    <button 
+                      onClick={() => changeLyricOffset(0.5)} 
+                      title="Chỉnh lời chậm hơn 0.5s"
+                      className="px-1.5 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 font-mono transition"
+                    >
+                      +0.5s
+                    </button>
+                    <button onClick={() => setIsLyricsMaximized(true)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30 ml-1"><Maximize2 size={16}/></button>
+                  </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
                   {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-10">{t('lyrics.noLyrics')}</p> : lyrics.map((line, index) => {
@@ -6766,8 +7043,23 @@ export default function App() {
             {showQueuePanel && (
               <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
                 <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
-                  <h3 className="font-bold text-white flex items-center gap-2"><List size={16} className="text-theme-10"/> {t('queue.title')}</h3>
-                  <button onClick={() => setShowQueuePanel(false)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><X size={16}/></button>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-white flex items-center gap-2"><List size={16} className="text-theme-10"/> {t('queue.title')}</h3>
+                    <span className="text-xs text-zinc-500 font-mono">({playQueue.length})</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {playQueue.length > 0 && (
+                      <button 
+                        onClick={() => { setPlayQueue([]); showToast('Đã xóa danh sách chờ', 'info') }} 
+                        className="text-xs text-zinc-400 hover:text-red-400 px-2 py-1 rounded hover:bg-theme-30 flex items-center gap-1 transition cursor-pointer"
+                        title="Xóa tất cả bài hát khỏi hàng đợi"
+                      >
+                        <Trash2 size={12}/>
+                        <span>Xóa hết</span>
+                      </button>
+                    )}
+                    <button onClick={() => setShowQueuePanel(false)} className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"><X size={16}/></button>
+                  </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                   {playQueue.length === 0 ? (
@@ -6816,31 +7108,55 @@ export default function App() {
         {/* FULLSCREEN LYRICS */}
         {isLyricsMaximized && showLyricsPanel && (
           <div className="flex-1 flex flex-col bg-transparent z-40 relative animate-fade-in" style={{ willChange: 'opacity, transform' }}>
-            <button onClick={() => setIsLyricsMaximized(false)} className="absolute top-8 right-8 text-zinc-400 hover:text-white bg-theme-30 p-3 rounded-full hover:scale-110 transition-transform"><Minimize2 size={24}/></button>
+            <div className="absolute top-8 right-8 flex items-center gap-3 z-50">
+              <div className="flex items-center gap-1.5 text-xs bg-theme-60/80 backdrop-blur-md border border-theme-30/60 p-1.5 px-3 rounded-full shadow-lg">
+                <span className="text-zinc-400 text-[11px] mr-1">Độ trễ lời:</span>
+                <button 
+                  onClick={() => changeLyricOffset(-0.5)} 
+                  title="Chỉnh lời nhanh hơn 0.5s"
+                  className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono transition cursor-pointer"
+                >
+                  -0.5s
+                </button>
+                <button 
+                  onClick={resetLyricOffset} 
+                  title="Bấm để đặt lại về 0s"
+                  className={`px-2 py-0.5 rounded font-mono transition cursor-pointer ${lyricOffset !== 0 ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30' : 'bg-zinc-800 text-zinc-400'}`}
+                >
+                  {lyricOffset > 0 ? `+${lyricOffset}` : lyricOffset}s
+                </button>
+                <button 
+                  onClick={() => changeLyricOffset(0.5)} 
+                  title="Chỉnh lời chậm hơn 0.5s"
+                  className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono transition cursor-pointer"
+                >
+                  +0.5s
+                </button>
+              </div>
+              <button onClick={() => setIsLyricsMaximized(false)} className="text-zinc-400 hover:text-white bg-theme-30 p-3 rounded-full hover:scale-110 transition-transform cursor-pointer"><Minimize2 size={24}/></button>
+            </div>
             <div className="flex-1 flex items-center justify-center p-12">
               <div className="w-1/2 flex flex-col items-center justify-center gap-6">
-                <div className="w-[25vw] max-w-[400px] min-w-[250px] aspect-square rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
+                <div className="w-[min(28vw,38vh)] max-w-[420px] min-w-[240px] aspect-square rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
                   <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-10 rounded-full mix-blend-overlay"></div>
                   <div className="w-12 h-12 bg-zinc-950 rounded-full absolute z-20 border-2 border-zinc-700 shadow-inner"></div>
-                  {(!isLite && (originalCover || currentTrack?.coverArt)) ? (
-                    <img 
-                      loading="lazy" 
-                      src={originalCover || currentTrack.coverArt} 
-                      className="w-full h-full object-cover animate-spin-slow" 
-                      style={{ willChange: 'transform', animationPlayState: isPlaying ? 'running' : 'paused' }} 
-                    />
-                  ) : (
-                    <img 
-                      loading="lazy" 
-                      src={meiSingingPlaceholder} 
-                      className="w-full h-full object-cover animate-spin-slow" 
-                      style={{ willChange: 'transform', animationPlayState: isPlaying ? 'running' : 'paused' }} 
-                    />
-                  )}
+                  <DynamicCoverArt
+                    track={currentTrack}
+                    src={originalCover || currentTrack?.coverArt}
+                    highResSrc={originalCover || currentTrack?.coverArtHighRes}
+                    streamPort={streamPort}
+                    tier="xl"
+                    isLite={isLite}
+                    animateSpin={true}
+                    isPlaying={isPlaying}
+                    fallbackImageSrc={meiSingingPlaceholder}
+                    className="w-full h-full"
+                    imageClassName="w-full h-full object-cover rounded-full"
+                  />
                 </div>
 
                 {/* VISUALIZER DƯỚI ĐĨA THAN */}
-                <div className="w-[25vw] max-w-[400px] min-w-[250px] h-14 rounded-xl bg-zinc-950/50 border border-theme-30/50 p-2 overflow-hidden flex items-center justify-center shadow-inner">
+                <div className="w-[min(28vw,38vh)] max-w-[420px] min-w-[240px] h-14 rounded-xl bg-zinc-950/50 border border-theme-30/50 p-2 overflow-hidden flex items-center justify-center shadow-inner">
                   {bitPerfectEnabled ? (
                     <div className="flex items-center gap-2 text-xs text-emerald-400/90 font-medium bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -6882,7 +7198,15 @@ export default function App() {
         
         <div className="flex items-center gap-4 w-1/3">
           <div className="w-14 h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
-            {(!isLite && currentTrack?.coverArt) ? <img loading="lazy" src={currentTrack.coverArt} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-600"><ListMusic size={24} /></div>}
+            <DynamicCoverArt
+              track={currentTrack}
+              streamPort={streamPort}
+              tier="md"
+              isLite={isLite}
+              smartAspect={true}
+              fallbackIconSize={24}
+              className="w-full h-full"
+            />
           </div>
           <div className="truncate">
             <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : t('player.noTrack')}</h4>
@@ -6986,6 +7310,52 @@ export default function App() {
               <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title={t('player.miniPlayer')}><PictureInPicture2 size={18} /></button>
               <button onClick={handleToggleQueue} className={`transition ${showQueuePanel ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.queue')}><List size={18} /></button>
               <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.equalizer')}><Sliders size={18} /></button>
+
+              {/* Nút Hẹn Giờ Tắt Nhạc (Sleep Timer) */}
+              <div className="relative">
+                <button 
+                  onClick={() => setShowSleepTimerMenu(prev => !prev)} 
+                  className={`transition flex items-center gap-1 cursor-pointer ${sleepTimerMode !== 'off' ? 'text-theme-10' : 'hover:text-white'}`} 
+                  title={sleepTimerMode !== 'off' ? (sleepTimerMode === 'end_of_track' ? 'Hẹn giờ: Dừng khi hết bài' : `Hẹn giờ tắt: ${Math.floor((sleepTimerRemaining || 0) / 60)}p${(sleepTimerRemaining || 0) % 60}s`) : 'Hẹn giờ tắt nhạc'}
+                >
+                  <Timer size={18} />
+                  {sleepTimerMode !== 'off' && (
+                    <span className="text-[10px] font-mono font-bold leading-none bg-theme-10/20 text-theme-10 px-1 py-0.5 rounded">
+                      {sleepTimerMode === 'end_of_track' ? 'Bài' : `${Math.ceil((sleepTimerRemaining || 0) / 60)}m`}
+                    </span>
+                  )}
+                </button>
+
+                {showSleepTimerMenu && (
+                  <div className="absolute bottom-full right-0 mb-3 w-48 bg-zinc-900/95 border border-theme-30/70 backdrop-blur-md rounded-xl p-2 shadow-2xl z-50 text-xs space-y-1 animate-fade-in select-none">
+                    <div className="px-2 py-1 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5"><Clock size={12}/> Hẹn giờ tắt</span>
+                      {sleepTimerMode !== 'off' && <span className="text-theme-10 font-mono">{sleepTimerRemaining ? `${Math.floor(sleepTimerRemaining / 60)}:${String(sleepTimerRemaining % 60).padStart(2, '0')}` : ''}</span>}
+                    </div>
+                    {[
+                      { mode: 'off', label: 'Tắt hẹn giờ' },
+                      { mode: '15', label: 'Sau 15 phút' },
+                      { mode: '30', label: 'Sau 30 phút' },
+                      { mode: '45', label: 'Sau 45 phút' },
+                      { mode: '60', label: 'Sau 1 giờ' },
+                      { mode: 'end_of_track', label: 'Hết bài hát này' }
+                    ].map(opt => (
+                      <button
+                        key={opt.mode}
+                        onClick={() => handleSetSleepTimer(opt.mode as any)}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${
+                          sleepTimerMode === opt.mode 
+                            ? 'bg-theme-10/20 text-theme-10 font-bold' 
+                            : 'text-zinc-300 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span>{opt.label}</span>
+                        {sleepTimerMode === opt.mode && <span className="w-1.5 h-1.5 rounded-full bg-theme-10"/>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
 

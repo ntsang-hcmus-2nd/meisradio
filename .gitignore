@@ -142,3 +142,7 @@ resources/bin/mpv.exe
 
 #src-tauri
 src-tauri/
+
+#memory-bank
+.antigravityrules
+memory-bank/
