@@ -81,6 +81,15 @@ const getInitialLoudnessNorm = (): boolean => {
   }
 }
 
+const getInitialStreamPort = (): number => {
+  try {
+    if (typeof window !== 'undefined' && (window as any).api?.getStreamPortSync) {
+      return (window as any).api.getStreamPortSync() || 0
+    }
+  } catch {}
+  return 0
+}
+
 export const useSettingsStore = create<SettingsState>((set) => ({
   appMode: 'default',
   customBgImage: null,
@@ -90,7 +99,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   customBgBlur: 0,
   isReloading: false,
   isConfigLoaded: false,
-  streamPort: 0,
+  streamPort: getInitialStreamPort(),
 
   minimizeToTray: false,
   closeToTray: false,

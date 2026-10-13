@@ -42,6 +42,7 @@ export interface MeisRadioApi {
   getTrackCover: (filePath: string) => Promise<any>
   getOriginalTrackCover: (filePath: string, size?: number) => Promise<any>
   getStreamPort: () => Promise<number>
+  getStreamPortSync: () => number
   onDownloadProgress: (callback: (data: any) => void) => () => void
   updateTrayConfig: (config: any) => Promise<any>
   toggleMiniPlayer: (isMini: boolean) => Promise<any>

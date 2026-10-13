@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Radio, X, Loader2 } from 'lucide-react'
 import { useTranslation } from '../locales'
 import { AudioSignalPath } from './AudioSignalPath'
+import { formatAudioSource } from '../utils/urlUtils'
 
 interface SpectrogramModalProps {
   isOpen: boolean
@@ -202,17 +203,8 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
         }
       }
 
-      // 2. Fallback: Đọc bằng fetch trực tiếp với URL được encode chuẩn
-      let url = key
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        let normalized = key.replace(/\\/g, '/')
-        if (normalized.startsWith('file://')) {
-          url = encodeURI(normalized)
-        } else {
-          if (!normalized.startsWith('/')) normalized = '/' + normalized
-          url = encodeURI('file://' + normalized)
-        }
-      }
+      // 2. Fallback: Đọc bằng fetch trực tiếp với URL được stream an toàn qua HTTP Stream Server
+      const url = formatAudioSource(key)
 
       const response = await fetch(url)
       if (!response.ok) {

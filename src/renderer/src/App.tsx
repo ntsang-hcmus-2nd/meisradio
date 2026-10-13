@@ -40,6 +40,7 @@ import { extractThemeColors, initThemeColorCache } from './utils/colorUtils'
 import { DynamicCoverArt, setGlobalStreamPort } from './components/DynamicCoverArt'
 import { removeAccents, matchesQuery } from './utils/textUtils'
 import { fisherYatesShuffle } from './utils/arrayUtils'
+import { formatAudioSource, formatImageSource } from './utils/urlUtils'
 import { 
   usePlayerStore, 
   useUIStore, 
@@ -166,14 +167,9 @@ interface LyricLine {
   unsynced?: boolean // true: lời thô không có mốc thời gian (không highlight / không tua)
 }
 
-// Chuẩn hóa đường dẫn hình ảnh cho Background
+// Chuẩn hóa đường dẫn hình ảnh cho Background (Hỗ trợ webSecurity: true và ký tự đặc biệt #, ?, %)
 const normalizeImagePath = (input: string): string => {
-  if (!input) return ''
-  let cleaned = input.trim()
-  if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) return cleaned
-  cleaned = cleaned.replace(/^file:\/\/\/?/, '')
-  if (navigator.userAgent.includes('Windows')) cleaned = decodeURIComponent(cleaned).replace(/\\/g, '/')
-  return `file:///${cleaned}`
+  return formatImageSource(input)
 }
 
 // Bộ nhớ đệm màu chủ đạo trong RAM (LRU Cache tối đa 50 bài hát gần nhất)
@@ -2266,6 +2262,11 @@ export default function App() {
     ? (trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt || null)
     : customBgImage
 
+  // Chuẩn hóa ảnh nền thành URL an toàn (hỗ trợ streamPort, #, ?, %, và webSecurity: true)
+  const resolvedBgImage = useMemo(() => {
+    return effectiveBgImage ? formatImageSource(effectiveBgImage, streamPort) : null
+  }, [effectiveBgImage, streamPort])
+
   // Quản lý Dual-layer Background Crossfade cho chế độ Standard (Chống stutter khi chuyển bài)
   const [bgLayerA, setBgLayerA] = useState<string | null>(null)
   const [bgLayerB, setBgLayerB] = useState<string | null>(null)
@@ -2278,7 +2279,7 @@ export default function App() {
       return
     }
 
-    if (!effectiveBgImage) {
+    if (!resolvedBgImage) {
       setBgLayerA(null)
       setBgLayerB(null)
       return
@@ -2286,7 +2287,7 @@ export default function App() {
 
     if (isLite) {
       // Chế độ Lite: Cập nhật trực tiếp 1 layer, không chạy animation crossfade
-      setBgLayerA(effectiveBgImage)
+      setBgLayerA(resolvedBgImage)
       setActiveBgLayer('A')
       return
     }
@@ -2298,26 +2299,26 @@ export default function App() {
     const applyTransition = () => {
       if (isCancelled) return
       if (targetLayer === 'B') {
-        setBgLayerB(effectiveBgImage)
+        setBgLayerB(resolvedBgImage)
         setActiveBgLayer('B')
       } else {
-        setBgLayerA(effectiveBgImage)
+        setBgLayerA(resolvedBgImage)
         setActiveBgLayer('A')
       }
     }
 
     const img = new Image()
-    if (effectiveBgImage.startsWith('http://') || effectiveBgImage.startsWith('https://')) {
+    if (resolvedBgImage.startsWith('http://') || resolvedBgImage.startsWith('https://')) {
       img.crossOrigin = 'anonymous'
     }
     img.onload = applyTransition
     img.onerror = applyTransition
-    img.src = effectiveBgImage
+    img.src = resolvedBgImage
 
     return () => {
       isCancelled = true
     }
-  }, [effectiveBgImage, isLite, isCore])
+  }, [resolvedBgImage, isLite, isCore])
 
   // Khởi tạo và nạp trước Theme Colors Cache từ JSON vào RAM
   useEffect(() => {
@@ -4010,7 +4011,10 @@ export default function App() {
 
     const artworkList: { src: string; sizes: string; type: string }[] = []
     if (currentTrack.coverArt && typeof currentTrack.coverArt === 'string') {
-      artworkList.push({ src: currentTrack.coverArt, sizes: '512x512', type: 'image/jpeg' })
+      const safeArt = formatImageSource(currentTrack.coverArt, streamPort)
+      if (safeArt && (safeArt.startsWith('http://') || safeArt.startsWith('https://') || safeArt.startsWith('data:'))) {
+        artworkList.push({ src: safeArt, sizes: '512x512', type: 'image/jpeg' })
+      }
     }
 
     try {
@@ -4411,8 +4415,9 @@ export default function App() {
         key={currentSampleRate} // Tự động remount khi Sample Rate thay đổi
         ref={audioRef}
         crossOrigin="anonymous" // QUAN TRỌNG: Ổn định luồng CORS cho Web Audio API
+        preload="auto"
         autoPlay={!bitPerfectEnabled}
-        src={currentTrack ? (currentTrack.filePath?.startsWith('http') || currentTrack.filePath?.startsWith('file://') ? currentTrack.filePath : `file://${currentTrack.filePath}`) : undefined}
+        src={currentTrack ? formatAudioSource(currentTrack.filePath, streamPort) : undefined}
         onEnded={() => { 
           const audio = audioRef.current;
           // BẢO HIỂM 2 (CHỐNG ĐỨT LUỒNG NGẦM):
@@ -4439,10 +4444,14 @@ export default function App() {
           hasTriggeredCrossfadeRef.current = false
         }}
         onLoadedMetadata={handleLoadedMetadata}
-        onError={() => {
+        onError={(e) => {
           // BẢO HIỂM 3 (CHỐNG TREO THẺ AUDIO & LẶP VÔ HẠN):
           const audio = audioRef.current;
+          const mediaErr = (e.currentTarget as HTMLAudioElement).error;
+          console.warn('[Audio Tag Error]', mediaErr?.code, mediaErr?.message, audio?.src);
           if (audio && currentTrack) {
+            // Nếu src rỗng hoặc chưa tải, không skip bài hát mù quáng
+            if (!audio.src || audio.src === window.location.href) return;
             // Nếu lỗi ngay từ giây đầu tiên (Server sập 500), bỏ qua luôn bài này để tránh kẹt
             if (audio.currentTime === 0) {
               console.warn(`[Player] Luồng dữ liệu bị hỏng hoàn toàn. Bỏ qua bài: ${currentTrack.title}`);
@@ -4453,7 +4462,7 @@ export default function App() {
               const time = audio.currentTime;
               audio.load();
               audio.currentTime = time;
-              audio.play();
+              audio.play().catch(() => {});
             }
           }
         }}

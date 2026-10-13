@@ -46,6 +46,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   getTrackCover: (filePath: string) => ipcRenderer.invoke('music:getTrackCover', filePath),
   getOriginalTrackCover: (filePath: string, size?: number) => ipcRenderer.invoke('music:getOriginalTrackCover', filePath, size),
   getStreamPort: () => ipcRenderer.invoke('music:getStreamPort'),
+  getStreamPortSync: () => ipcRenderer.sendSync('music:getStreamPortSync'),
   onDownloadProgress: (callback: (data: any) => void) => {
     const handler = (_event: any, data: any) => callback(data)
     ipcRenderer.on('download-progress', handler)

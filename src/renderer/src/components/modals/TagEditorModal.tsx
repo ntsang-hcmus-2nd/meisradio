@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { Image as ImageIcon, Music } from 'lucide-react'
 import { useTranslation } from '../../locales'
 import { splitArtistString } from '../../App'
+import { formatImageSource } from '../../utils/urlUtils'
 
 interface TagEditorModalProps {
   track: any
@@ -47,7 +48,7 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
           <div className="w-1/3 flex flex-col gap-3 items-center">
             <div className="w-36 h-36 bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center relative shadow-inner group">
               {imagePath ? (
-                <img src={`file://${imagePath}`} className="w-full h-full object-cover" />
+                <img src={formatImageSource(imagePath)} className="w-full h-full object-cover" />
               ) : track.coverArt ? (
                 <img src={track.coverArt} className="w-full h-full object-cover" />
               ) : (

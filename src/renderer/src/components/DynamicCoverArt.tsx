@@ -45,13 +45,18 @@ export interface DynamicCoverArtProps {
   style?: React.CSSProperties
 }
 
-let globalStreamPort = 0
+let globalStreamPort = (typeof window !== 'undefined' && (window as any).api?.getStreamPortSync?.()) || 0
 
 export function setGlobalStreamPort(port: number): void {
   globalStreamPort = port
 }
 
 export function getGlobalStreamPort(): number {
+  if (globalStreamPort <= 0 && typeof window !== 'undefined' && (window as any).api?.getStreamPortSync) {
+    try {
+      globalStreamPort = (window as any).api.getStreamPortSync() || 0
+    } catch (_) {}
+  }
   return globalStreamPort
 }
 

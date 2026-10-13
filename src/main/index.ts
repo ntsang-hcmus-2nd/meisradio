@@ -835,7 +835,7 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      webSecurity: false
+      webSecurity: true
     }
   })
 
@@ -979,12 +979,20 @@ app.whenReady().then(() => {
 
   ipcMain.handle('mpv:play', (_, url, crossfade) => {
     let rawPath = url
-    if (typeof rawPath === 'string' && rawPath.startsWith('file://')) {
-      try {
-        const { fileURLToPath } = require('url')
-        rawPath = fileURLToPath(rawPath)
-      } catch (e) {
-        rawPath = decodeURIComponent(rawPath.replace(/^file:\/\/\/?/, ''))
+    if (typeof rawPath === 'string') {
+      if (rawPath.startsWith('file://')) {
+        try {
+          const { fileURLToPath } = require('url')
+          rawPath = fileURLToPath(rawPath)
+        } catch (e) {
+          rawPath = decodeURIComponent(rawPath.replace(/^file:\/\/\/?/, ''))
+        }
+      } else if (rawPath.includes('/local-audio?path=')) {
+        try {
+          const parsed = new URL(rawPath)
+          const p = parsed.searchParams.get('path')
+          if (p) rawPath = p
+        } catch (_) {}
       }
     }
     mpvManager?.playTrack(rawPath, crossfade)
@@ -1753,8 +1761,16 @@ app.whenReady().then(() => {
   // 6. Đăng ký IPC handler để đọc lời bài hát
   ipcMain.handle('music:read-lyrics', async (_event, audioFilePath: string) => {
     try {
-      if (!audioFilePath || audioFilePath.startsWith('http')) return null
+      if (!audioFilePath) return null
       let rawPath = audioFilePath
+      if (rawPath.includes('/local-audio?path=')) {
+        try {
+          const parsed = new URL(rawPath)
+          const p = parsed.searchParams.get('path')
+          if (p) rawPath = p
+        } catch (_) {}
+      }
+      if (rawPath.startsWith('http')) return null
       if (rawPath.startsWith('file://')) {
         const { fileURLToPath } = require('url')
         rawPath = fileURLToPath(rawPath)
@@ -1798,10 +1814,20 @@ app.whenReady().then(() => {
   ipcMain.handle('music:readAudioBuffer', async (_event, audioFilePath: string) => {
     try {
       if (!audioFilePath) return { success: false, error: 'Đường dẫn rỗng' }
-      if (audioFilePath.startsWith('http')) return { success: false, error: 'Chỉ hỗ trợ file cục bộ' }
-      let rawPath = audioFilePath.replace(/^file:\/\/\/?/, '')
+      let rawPath = audioFilePath
+      if (rawPath.includes('/local-audio?path=')) {
+        try {
+          const parsed = new URL(rawPath)
+          const p = parsed.searchParams.get('path')
+          if (p) rawPath = p
+        } catch (_) {}
+      }
+      if (rawPath.startsWith('http')) return { success: false, error: 'Chỉ hỗ trợ file cục bộ' }
+      rawPath = rawPath.replace(/^file:\/\/\/?/, '')
       if (process.platform === 'win32') {
         try { rawPath = decodeURIComponent(rawPath) } catch (e) {}
+        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+        rawPath = rawPath.replace(/\//g, '\\')
       }
       if (fs.existsSync(rawPath)) {
         const fileBuffer = fs.readFileSync(rawPath)
@@ -3021,6 +3047,9 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('music:getStreamPort', () => streamPort)
+  ipcMain.on('music:getStreamPortSync', (event) => {
+    event.returnValue = streamPort
+  })
 
   // ==========================================
   // HỆ THỐNG TẠO PLAYLIST THỦ CÔNG
@@ -3185,6 +3214,14 @@ app.whenReady().then(() => {
 
   const streamServer = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Origin');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length, Content-Type');
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
     const parsedUrl = new URL(req.url || '', `http://${req.headers.host}`);
     
     // --- LUỒNG 1: TRUYỀN TẢI NHẠC ---
@@ -3350,14 +3387,34 @@ app.whenReady().then(() => {
         let rawBuffer: Buffer | null = null;
         let mime = 'image/jpeg';
 
+        // 0. Nếu targetPath trực tiếp là một tệp hình ảnh (jpg, png, webp, gif, bmp, svg)
+        const extLower = path.extname(targetPath).toLowerCase();
+        const directImgMimes: Record<string, string> = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.webp': 'image/webp',
+          '.gif': 'image/gif',
+          '.bmp': 'image/bmp',
+          '.svg': 'image/svg+xml'
+        };
+        if (directImgMimes[extLower]) {
+          try {
+            rawBuffer = fs.readFileSync(targetPath);
+            mime = directImgMimes[extLower];
+          } catch (_) {}
+        }
+
         // 1. Kiểm tra thumbnail có sẵn trên đĩa trước (nhanh hơn rất nhiều so với đọc toàn bộ file audio)
-        const trackHash = crypto.createHash('md5').update(targetPath).digest('hex');
-        const centralThumbPath = join(IMAGE_CACHE_DIR, `${trackHash}.jpg`);
-        const localThumbPath = join(dirname(targetPath), '.thumbnails', `${trackHash}.jpg`);
-        if (fs.existsSync(centralThumbPath)) {
-          try { rawBuffer = fs.readFileSync(centralThumbPath); mime = 'image/jpeg'; } catch (_) {}
-        } else if (fs.existsSync(localThumbPath)) {
-          try { rawBuffer = fs.readFileSync(localThumbPath); mime = 'image/jpeg'; } catch (_) {}
+        if (!rawBuffer) {
+          const trackHash = crypto.createHash('md5').update(targetPath).digest('hex');
+          const centralThumbPath = join(IMAGE_CACHE_DIR, `${trackHash}.jpg`);
+          const localThumbPath = join(dirname(targetPath), '.thumbnails', `${trackHash}.jpg`);
+          if (fs.existsSync(centralThumbPath)) {
+            try { rawBuffer = fs.readFileSync(centralThumbPath); mime = 'image/jpeg'; } catch (_) {}
+          } else if (fs.existsSync(localThumbPath)) {
+            try { rawBuffer = fs.readFileSync(localThumbPath); mime = 'image/jpeg'; } catch (_) {}
+          }
         }
 
         // 2. Nếu chưa có thumbnail trên đĩa, đọc metadata chỉ lấy ảnh (duration: false)
@@ -3431,6 +3488,146 @@ app.whenReady().then(() => {
         res.end(rawBuffer);
         return;
       } catch (e) {
+        if (!res.headersSent) res.writeHead(500).end();
+      }
+    }
+    // --- LUỒNG 4: STREAM AUDIO CỤC BỘ (HỖ TRỢ WEBSECURITY: TRUE & RANGE HEADERS HTTP 206) ---
+    else if (parsedUrl.pathname === '/local-audio') {
+      const rawTrackPath = parsedUrl.searchParams.get('path');
+      if (!rawTrackPath) { res.writeHead(400).end('Thiếu đường dẫn bài hát'); return; }
+
+      let targetPath = rawTrackPath.replace(/^file:\/\/\/?/, '');
+      if (process.platform === 'win32') {
+        try { targetPath = decodeURIComponent(targetPath); } catch (_) {}
+        if (/^\/[a-zA-Z]:/.test(targetPath)) targetPath = targetPath.slice(1);
+        targetPath = targetPath.replace(/\//g, '\\');
+      }
+
+      if (!fs.existsSync(targetPath)) {
+        res.writeHead(404).end('File không tồn tại');
+        return;
+      }
+
+      try {
+        const stat = fs.statSync(targetPath);
+        const fileSize = stat.size;
+        const ext = path.extname(targetPath).toLowerCase();
+
+        const mimeMap: Record<string, string> = {
+          '.mp3': 'audio/mpeg',
+          '.flac': 'audio/flac',
+          '.wav': 'audio/wav',
+          '.m4a': 'audio/mp4',
+          '.aac': 'audio/aac',
+          '.ogg': 'audio/ogg',
+          '.opus': 'audio/opus',
+          '.alac': 'audio/alac',
+          '.aiff': 'audio/aiff',
+          '.wma': 'audio/x-ms-wma'
+        };
+        const contentType = mimeMap[ext] || 'application/octet-stream';
+
+        if (req.method === 'HEAD') {
+          res.writeHead(200, {
+            'Content-Length': fileSize,
+            'Content-Type': contentType,
+            'Accept-Ranges': 'bytes',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Type'
+          });
+          res.end();
+          return;
+        }
+
+        const range = req.headers.range;
+        if (range) {
+          const parts = range.replace(/bytes=/, '').split('-');
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+          if (isNaN(start) || start >= fileSize || (parts[1] && (isNaN(end) || end >= fileSize || start > end))) {
+            res.writeHead(416, {
+              'Content-Range': `bytes */${fileSize}`,
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
+            }).end();
+            return;
+          }
+
+          const chunksize = end - start + 1;
+          const fileStream = fs.createReadStream(targetPath, { start, end });
+          res.writeHead(206, {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize,
+            'Content-Type': contentType,
+            'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Type'
+          });
+          fileStream.pipe(res);
+          req.on('close', () => { fileStream.destroy(); });
+          fileStream.on('error', () => { if (!res.headersSent) res.writeHead(500).end(); });
+        } else {
+          res.writeHead(200, {
+            'Content-Length': fileSize,
+            'Content-Type': contentType,
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length, Content-Type'
+          });
+          const fileStream = fs.createReadStream(targetPath);
+          fileStream.pipe(res);
+          req.on('close', () => { fileStream.destroy(); });
+          fileStream.on('error', () => { if (!res.headersSent) res.writeHead(500).end(); });
+        }
+      } catch (err) {
+        if (!res.headersSent) res.writeHead(500).end();
+      }
+    }
+    // --- LUỒNG 5: TRUYỀN TẢI FILE TĨNH CỤC BỘ (BACKGROUND IMAGE / CUSTOM COVERS) ---
+    else if (parsedUrl.pathname === '/local-file') {
+      const rawFilePath = parsedUrl.searchParams.get('path');
+      if (!rawFilePath) { res.writeHead(400).end('Thiếu đường dẫn tệp'); return; }
+
+      let targetPath = rawFilePath.replace(/^file:\/\/\/?/, '');
+      if (process.platform === 'win32') {
+        try { targetPath = decodeURIComponent(targetPath); } catch (_) {}
+        if (/^\/[a-zA-Z]:/.test(targetPath)) targetPath = targetPath.slice(1);
+        targetPath = targetPath.replace(/\//g, '\\');
+      }
+
+      if (!fs.existsSync(targetPath)) {
+        res.writeHead(404).end('Tệp không tồn tại');
+        return;
+      }
+
+      try {
+        const stat = fs.statSync(targetPath);
+        const ext = path.extname(targetPath).toLowerCase();
+        const imgMimeMap: Record<string, string> = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.webp': 'image/webp',
+          '.gif': 'image/gif',
+          '.bmp': 'image/bmp',
+          '.svg': 'image/svg+xml'
+        };
+        const contentType = imgMimeMap[ext] || 'application/octet-stream';
+        res.writeHead(200, {
+          'Content-Length': stat.size,
+          'Content-Type': contentType,
+          'Cache-Control': 'public, max-age=86400',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'Content-Length, Content-Type'
+        });
+        const fileStream = fs.createReadStream(targetPath);
+        fileStream.pipe(res);
+        req.on('close', () => { fileStream.destroy(); });
+        fileStream.on('error', () => { if (!res.headersSent) res.writeHead(500).end(); });
+      } catch (err) {
         if (!res.headersSent) res.writeHead(500).end();
       }
     }
