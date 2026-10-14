@@ -236,11 +236,16 @@ export const vi: TranslationDictionary = {
       autoCategorize: 'Tự động phân loại Album'
     },
     bitPerfect: {
-      title: 'Chế độ Bit-perfect (WASAPI Độc quyền)',
+      title: 'Chế độ Bit-perfect (Âm thanh nguyên bản)',
       label: 'Chế độ Bit-perfect',
-      note: 'Lưu ý: Bật chế độ này sẽ chiếm quyền phát âm thanh độc quyền; các ứng dụng khác sẽ không có tiếng. Thay đổi sẽ khởi động lại luồng âm thanh.',
-      deviceLabel: 'Thiết bị đầu ra âm thanh',
-      deviceAuto: 'Tự động (Mặc định hệ thống)'
+      note: 'Lưu ý: Bật chế độ này sẽ xuất trực tiếp luồng bitstream nguyên bản tới DAC/Soundcard, bỏ qua toàn bộ bộ trộn của Windows. Thay đổi sẽ áp dụng ngay cho bài hát tiếp theo.',
+      outputType: 'Giao thức xuất âm thanh',
+      wasapiOption: 'WASAPI Độc quyền',
+      asioOption: 'ASIO (Hỗ trợ DSD Native)',
+      deviceLabel: 'Thiết bị đầu ra / DAC',
+      deviceAuto: 'Tự động (Mặc định hệ thống)',
+      asioDesc: 'Giao thức ASIO chuyên dụng cho Audiophile, hỗ trợ truyền luồng DSD Native 1-bit trực tiếp đến chip giải mã DAC.',
+      wasapiDesc: 'Giao thức WASAPI Độc quyền của Windows, độc chiếm phần cứng âm thanh và bảo toàn nguyên vẹn độ sâu bit PCM.'
     },
     googleDrive: {
       title: 'Khóa API Google Drive',
@@ -413,6 +418,7 @@ export const vi: TranslationDictionary = {
       title: 'Chỉnh sửa thông tin bài hát',
       flacTag: 'Thẻ FLAC Vorbis',
       mp3Tag: 'Thẻ MP3 ID3v2',
+      dsdTag: 'Thẻ DSD (ID3v2)',
       audioTag: 'Thẻ âm thanh',
       chooseCover: 'Chọn ảnh bìa',
       trackTitle: 'Tên bài hát',
@@ -460,7 +466,10 @@ export const vi: TranslationDictionary = {
       dsdStream: 'Luồng tín hiệu DSD',
       dspNoFilter: '0% DSP • Không lọc âm',
       dspDirect: '0 dB • Không can thiệp',
-      dspBitAccurate: 'Bảo toàn bit 100%'
+      dspBitAccurate: 'Bảo toàn bit 100%',
+      asioDriver: 'Driver ASIO (DSD Native / DoP)',
+      asioDriverDesc: 'Chiếm dụng trực tiếp phần cứng qua driver ASIO • Bỏ qua bộ trộn Windows',
+      dsdNativeBadge: 'DSD Native (Bản thu gốc)'
     },
     eq: {
       title: 'Bộ cân bằng tham số',

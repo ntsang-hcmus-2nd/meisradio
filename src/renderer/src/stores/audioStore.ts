@@ -8,17 +8,26 @@ export interface EQBand {
   q?: number
 }
 
+export interface AudioDevice {
+  name: string
+  description: string
+  type?: 'wasapi' | 'asio'
+  id?: string
+}
+
 export interface AudioState {
   isEqEnabled: boolean
-  availableAudioDevices: { name: string; description: string }[]
+  availableAudioDevices: AudioDevice[]
   selectedDeviceId: string
+  bitPerfectType: 'wasapi' | 'asio'
   eqBands: EQBand[]
   preampGain: number
 
   // Actions
   setIsEqEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
-  setAvailableAudioDevices: (devices: { name: string; description: string }[] | ((prev: any[]) => any[])) => void
+  setAvailableAudioDevices: (devices: AudioDevice[] | ((prev: AudioDevice[]) => AudioDevice[])) => void
   setSelectedDeviceId: (id: string | ((prev: string) => string)) => void
+  setBitPerfectType: (type: 'wasapi' | 'asio' | ((prev: 'wasapi' | 'asio') => 'wasapi' | 'asio')) => void
   setEqBands: (bands: EQBand[] | ((prev: EQBand[]) => EQBand[])) => void
   setPreampGain: (gain: number | ((prev: number) => number)) => void
 }
@@ -39,12 +48,14 @@ export const useAudioStore = create<AudioState>((set) => ({
   isEqEnabled: false,
   availableAudioDevices: [],
   selectedDeviceId: 'auto',
+  bitPerfectType: 'asio',
   eqBands: defaultBands,
   preampGain: 0,
 
   setIsEqEnabled: (valOrFn) => set((s) => ({ isEqEnabled: resolveVal(valOrFn, s.isEqEnabled) })),
   setAvailableAudioDevices: (valOrFn) => set((s) => ({ availableAudioDevices: resolveVal(valOrFn, s.availableAudioDevices) })),
   setSelectedDeviceId: (valOrFn) => set((s) => ({ selectedDeviceId: resolveVal(valOrFn, s.selectedDeviceId) })),
+  setBitPerfectType: (valOrFn) => set((s) => ({ bitPerfectType: resolveVal(valOrFn, s.bitPerfectType) })),
   setEqBands: (valOrFn) => set((s) => ({ eqBands: resolveVal(valOrFn, s.eqBands) })),
   setPreampGain: (valOrFn) => set((s) => ({ preampGain: resolveVal(valOrFn, s.preampGain) }))
 }))

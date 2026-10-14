@@ -79,7 +79,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   getYtmArtist: (artistId: string) => ipcRenderer.invoke('music:getYtmArtist', artistId), // <-- DÒNG MỚI NÀY
   preloadStream: (targetId: string) => ipcRenderer.invoke('music:preloadStream', targetId),
 
-  // MPV API
+  // BASS & Bit-Perfect Audio API (WASAPI & ASIO + DSD Native)
   mpvPlay: (url: string, crossfade: number) => ipcRenderer.invoke('mpv:play', url, crossfade),
   mpvResume: () => ipcRenderer.invoke('mpv:resume'),
   mpvPause: () => ipcRenderer.invoke('mpv:pause'),
@@ -87,10 +87,19 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   mpvSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') => ipcRenderer.invoke('mpv:seek', pos, mode),
   mpvSetVolume: (vol: number) => ipcRenderer.invoke('mpv:setVolume', vol),
   mpvSetEqualizer: (bands: any[], preamp?: number) => ipcRenderer.invoke('mpv:setEqualizer', bands, preamp),
-  setBitPerfect: (val: boolean, currentVol?: number) => ipcRenderer.invoke('mpv:setBitPerfect', val, currentVol),
+  setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => ipcRenderer.invoke('mpv:setBitPerfect', val, currentVol, outputType),
+  setBitPerfectOutputType: (type: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setOutputType', type),
   setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
-  getAudioDevices: () => ipcRenderer.invoke('music:getAudioDevices'),
-  
+  getAudioDevices: (type?: 'wasapi' | 'asio') => ipcRenderer.invoke('music:getAudioDevices', type),
+
+  bassPlay: (url: string, crossfade?: number) => ipcRenderer.invoke('bass:play', url, crossfade),
+  bassResume: () => ipcRenderer.invoke('bass:resume'),
+  bassPause: () => ipcRenderer.invoke('bass:pause'),
+  bassStop: () => ipcRenderer.invoke('bass:stop'),
+  bassSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') => ipcRenderer.invoke('bass:seek', pos, mode),
+  bassSetVolume: (vol: number) => ipcRenderer.invoke('bass:setVolume', vol),
+  setBassBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setBitPerfect', val, currentVol, outputType),
+
   onMpvTime: (callback: (val: number) => void) => {
     const handler = (_e: any, val: number) => callback(val)
     ipcRenderer.on('mpv:time', handler)
@@ -120,6 +129,11 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     const handler = (_e: any, params: any) => callback(params)
     ipcRenderer.on('mpv:audio-out-params', handler)
     return () => ipcRenderer.removeListener('mpv:audio-out-params', handler)
+  },
+  onBassAudioParams: (callback: (params: any) => void) => {
+    const handler = (_e: any, params: any) => callback(params)
+    ipcRenderer.on('bass:audio-out-params', handler)
+    return () => ipcRenderer.removeListener('bass:audio-out-params', handler)
   },
   getThemeColorsCache: () => ipcRenderer.invoke('music:getThemeColorsCache'),
   cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),

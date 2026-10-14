@@ -12,7 +12,7 @@ import NodeID3 from 'node-id3'
 import ytdlpDefault, { create } from 'yt-dlp-exec' // Đã sửa lỗi import yt-dlp
 import axios from 'axios'
 import http from 'http'
-import { MpvManager, getMpvAudioDevices } from './MpvManager'
+import { BassManager } from './BassManager'
 import { writeFlacMetadata } from './flacMetadata'
 import { DiscordRpcManager, DiscordRpcConfig, DiscordPresencePayload, DEFAULT_DISCORD_CLIENT_ID } from './DiscordRpcManager'
 import { 
@@ -26,7 +26,7 @@ import {
   resolveScStreamUrl 
 } from './soundcloud'
 
-export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma']
+export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma', '.dsf', '.dff', '.dsd']
 
 /**
  * Chuẩn hóa tên thư mục, đảm bảo không kết thúc bằng dấu chấm hoặc khoảng trắng (Lỗi Windows Win32)
@@ -401,7 +401,7 @@ export function extractArtists(metadata: any, fallbackTitle: string = ''): { art
   }
 }
 
-let mpvManager: MpvManager | null = null
+let bassManager: BassManager | null = null
 let discordRpcManager: DiscordRpcManager | null = null
 
 // Hàm tìm thư mục chứa binary (ffmpeg, ffprobe, mpv) đa môi trường (Dev, Packaged, Portable)
@@ -800,6 +800,7 @@ function saveConfig(data: any) {
 let mainWindow: BrowserWindow | null = null
 let isInMiniPlayer = false
 let preMiniPlayerState: { bounds: Electron.Rectangle; isMaximized: boolean; isFullScreen: boolean } | null = null
+let streamPort = 0
 
 // Lưu trạng thái cửa sổ khi thay đổi (chỉ lưu khi không ở chế độ Mini Player)
 const saveWindowState = () => {
@@ -883,7 +884,7 @@ function createWindow(): void {
       mainWindow?.hide()
     } else {
       isQuitting = true
-      if (mpvManager) mpvManager.killAll()
+      if (bassManager) bassManager.killSync()
     }
   })
 
@@ -909,7 +910,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.electron')
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
 
@@ -953,31 +954,50 @@ app.whenReady().then(() => {
   })
 
   // ==========================================
-  // MPV AUDIO BACKEND IPC
+  // BASS AUDIO BACKEND IPC (BIT-PERFECT WASAPI & ASIO + DSD NATIVE)
   // ==========================================
-  mpvManager = new MpvManager()
-  mpvManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false, currentConfig.volume ?? 1.0).catch(console.error) // auto init on start
-  
-  mpvManager.on('time', (val) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:time', val)
+  bassManager = new BassManager()
+  const bitPerfectType = (currentConfig.bitPerfectType as 'wasapi' | 'asio') || 'asio'
+  bassManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false, currentConfig.volume ?? 1.0, bitPerfectType).catch(console.error)
+
+  bassManager.on('time', (val) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mpv:time', val)
+      mainWindow.webContents.send('bass:time', val)
+    }
   })
-  mpvManager.on('duration', (val) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:duration', val)
+  bassManager.on('duration', (val) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mpv:duration', val)
+      mainWindow.webContents.send('bass:duration', val)
+    }
   })
-  mpvManager.on('paused', (val) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:paused', val)
+  bassManager.on('paused', (val) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mpv:paused', val)
+      mainWindow.webContents.send('bass:paused', val)
+    }
   })
-  mpvManager.on('ended', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:ended')
+  bassManager.on('ended', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mpv:ended')
+      mainWindow.webContents.send('bass:ended')
+    }
   })
-  mpvManager.on('error', (err) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:error', err)
+  bassManager.on('error', (err) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mpv:error', err)
+      mainWindow.webContents.send('bass:error', err)
+    }
   })
-  mpvManager.on('audio-out-params', (params) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mpv:audio-out-params', params)
+  bassManager.on('audio-out-params', (params) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('mpv:audio-out-params', params)
+      mainWindow.webContents.send('bass:audio-out-params', params)
+    }
   })
 
-  ipcMain.handle('mpv:play', (_, url, crossfade) => {
+  const handlePlayAudio = (_: any, url: string, crossfade?: number) => {
     let rawPath = url
     if (typeof rawPath === 'string') {
       if (rawPath.startsWith('file://')) {
@@ -995,29 +1015,69 @@ app.whenReady().then(() => {
         } catch (_) {}
       }
     }
-    mpvManager?.playTrack(rawPath, crossfade)
-  })
-  ipcMain.handle('mpv:resume', () => mpvManager?.play())
-  ipcMain.handle('mpv:pause', () => mpvManager?.pause())
-  ipcMain.handle('mpv:stop', () => mpvManager?.stop())
-  ipcMain.handle('mpv:seek', (_, pos, mode = 'absolute') => mpvManager?.seek(pos, mode))
+    bassManager?.playTrack(rawPath, crossfade || 0)
+  }
+
+  ipcMain.handle('mpv:play', handlePlayAudio)
+  ipcMain.handle('bass:play', handlePlayAudio)
+  ipcMain.handle('mpv:resume', () => bassManager?.play())
+  ipcMain.handle('bass:resume', () => bassManager?.play())
+  ipcMain.handle('mpv:pause', () => bassManager?.pause())
+  ipcMain.handle('bass:pause', () => bassManager?.pause())
+  ipcMain.handle('mpv:stop', () => bassManager?.stop())
+  ipcMain.handle('bass:stop', () => bassManager?.stop())
+  ipcMain.handle('mpv:seek', (_, pos, mode = 'absolute') => bassManager?.seek(pos, mode))
+  ipcMain.handle('bass:seek', (_, pos, mode = 'absolute') => bassManager?.seek(pos, mode))
   ipcMain.handle('mpv:setVolume', (_, vol) => {
     if (typeof vol === 'number') {
       const config = getConfig()
       config.volume = vol
       saveConfig(config)
     }
-    mpvManager?.setVolume(vol)
+    bassManager?.setVolume(vol)
   })
-  ipcMain.handle('mpv:setEqualizer', (_, bands, preamp = 0) => mpvManager?.setEqualizer(bands, preamp))
-  ipcMain.handle('mpv:setBitPerfect', async (_, val, currentVol?: number) => {
+  ipcMain.handle('bass:setVolume', (_, vol) => {
+    if (typeof vol === 'number') {
+      const config = getConfig()
+      config.volume = vol
+      saveConfig(config)
+    }
+    bassManager?.setVolume(vol)
+  })
+  ipcMain.handle('mpv:setEqualizer', (_, bands, preamp = 0) => bassManager?.setEqualizer(bands, preamp))
+
+  ipcMain.handle('mpv:setBitPerfect', async (_, val, currentVol?: number, outputType?: 'wasapi' | 'asio') => {
     const config = getConfig()
     config.bitPerfectEnabled = val
+    if (outputType) {
+      config.bitPerfectType = outputType
+    }
     if (typeof currentVol === 'number') {
       config.volume = currentVol
     }
     saveConfig(config)
-    await mpvManager?.init(config.audioDevice, val, typeof currentVol === 'number' ? currentVol : config.volume)
+    await bassManager?.init(config.audioDevice, val, typeof currentVol === 'number' ? currentVol : config.volume, (config.bitPerfectType as 'wasapi' | 'asio') || 'asio')
+    return { success: true }
+  })
+  ipcMain.handle('bass:setBitPerfect', async (_, val, currentVol?: number, outputType?: 'wasapi' | 'asio') => {
+    const config = getConfig()
+    config.bitPerfectEnabled = val
+    if (outputType) {
+      config.bitPerfectType = outputType
+    }
+    if (typeof currentVol === 'number') {
+      config.volume = currentVol
+    }
+    saveConfig(config)
+    await bassManager?.init(config.audioDevice, val, typeof currentVol === 'number' ? currentVol : config.volume, (config.bitPerfectType as 'wasapi' | 'asio') || 'asio')
+    return { success: true }
+  })
+
+  ipcMain.handle('bass:setOutputType', async (_, type: 'wasapi' | 'asio') => {
+    const config = getConfig()
+    config.bitPerfectType = type
+    saveConfig(config)
+    bassManager?.setOutputType(type)
     return { success: true }
   })
 
@@ -1025,19 +1085,26 @@ app.whenReady().then(() => {
     const config = getConfig()
     config.audioDevice = deviceId
     saveConfig(config)
-    mpvManager?.setAudioDevice(deviceId)
+    bassManager?.setAudioDevice(deviceId)
     return { success: true }
   })
 
-  ipcMain.handle('music:getAudioDevices', async () => {
+  ipcMain.handle('music:getAudioDevices', async (_, type?: 'wasapi' | 'asio') => {
     try {
-      const devices = await getMpvAudioDevices()
+      const config = getConfig()
+      const targetType = type || (config.bitPerfectType as 'wasapi' | 'asio') || 'asio'
+      const rawDevices = bassManager ? bassManager.getAudioDevices(targetType) : []
+      const devices = rawDevices.map((d) => ({
+        name: d.id,
+        description: d.description || d.name,
+        type: d.type
+      }))
       return { success: true, devices }
     } catch (err: any) {
       return { 
         success: false, 
         error: err?.message || 'Unknown error', 
-        devices: [{ name: 'auto', description: 'Tự động chọn (Auto / Default)' }] 
+        devices: [] 
       }
     }
   })
@@ -1102,6 +1169,8 @@ app.whenReady().then(() => {
 
   // 2. Đọc toàn bộ thư viện (Tất cả bài hát + Playlists đa thư mục) với cơ chế quét gia tăng (Incremental Scan)
   ipcMain.handle('music:getLibrary', async (_, forceRefresh: boolean = false, hardRescan: boolean = false) => {
+    const isHardRescan = typeof hardRescan === 'boolean' ? hardRescan : false
+    const isForceRefresh = typeof forceRefresh === 'boolean' ? forceRefresh : false
     const config = getConfig()
     const libraryPaths: string[] = (config.libraryPaths && config.libraryPaths.length > 0) 
       ? config.libraryPaths 
@@ -1122,14 +1191,15 @@ app.whenReady().then(() => {
     const primaryRootPath = validPaths[0]
 
     // 1. NẾU MỞ APP BÌNH THƯỜNG (KHÔNG FORCE REFRESH VÀ KHÔNG HARD RESCAN): ĐỌC TRỰC TIẾP TỪ CACHE, 0% QUÉT Ổ CỨNG
-    if (!forceRefresh && !hardRescan && fs.existsSync(LIBRARY_CACHE_PATH)) {
+    if (!isForceRefresh && !isHardRescan && fs.existsSync(LIBRARY_CACHE_PATH)) {
       try {
         const cached = JSON.parse(fs.readFileSync(LIBRARY_CACHE_PATH, 'utf-8'))
         const cachedPaths = Array.isArray(cached.libraryPaths) ? cached.libraryPaths : (cached.libraryPath ? [cached.libraryPath] : [])
         const isSamePaths = cachedPaths.length === validPaths.length && cachedPaths.every((p: string, idx: number) => p === validPaths[idx])
         const hasGenreInfo = Array.isArray(cached.tracks) && cached.tracks.length > 0 && cached.tracks.some((t: any) => t.genre !== undefined && t.genre !== 'Unknown')
         const hasMultiArtistVersion = cached.multiArtistVersion === 2
-        if (cached && isSamePaths && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5 || hasMultiArtistVersion) && hasMultiArtistVersion) {
+        const hasDsdVersion = cached.dsdVersion === 1
+        if (cached && isSamePaths && hasDsdVersion && Array.isArray(cached.tracks) && cached.tracks.length > 0 && (hasGenreInfo || cached.tracks.length < 5 || hasMultiArtistVersion) && hasMultiArtistVersion) {
           const enrichedTracks = cached.tracks.map((t: any) => {
             const artists = (Array.isArray(t.artists) && t.artists.length > 0)
               ? t.artists
@@ -1193,7 +1263,7 @@ app.whenReady().then(() => {
       // KIỂM TRA CACHE: Nếu không phải hardRescan, file đã có và mtime không đổi -> TÁI SỬ DỤNG HOÀN TOÀN, KHÔNG ĐỌC LẠI FILE
       const cached = metadataCache[trackPath]
       const isMtimeMatch = cached && (cached.mtime === stat.mtimeMs || Math.abs(cached.mtime - stat.mtimeMs) < 1000)
-      if (!hardRescan && isMtimeMatch && cached.data && cached.data.multiArtistVersion === 2) {
+      if (!isHardRescan && isMtimeMatch && cached.data && cached.data.multiArtistVersion === 2) {
         const existingTrack = previousTrackMap.get(trackPath) || previousTrackMap.get(cached.data.filePath)
         if (existingTrack && existingTrack.multiArtistVersion === 2) {
           if (!existingTrack.artists || existingTrack.artists.length === 0) {
@@ -1203,6 +1273,15 @@ app.whenReady().then(() => {
           return existingNoLyrics
         }
         const { lyrics: _discardCached, ...cachedWithoutLyrics } = cached.data
+        const ext = path.extname(trackPath).toLowerCase()
+        const isDsd = ext === '.dsf' || ext === '.dff' || ext === '.dsd'
+        if (isDsd) {
+          if (!cachedWithoutLyrics.format || /dsdiff/i.test(cachedWithoutLyrics.format)) {
+            cachedWithoutLyrics.format = ext === '.dsf' ? 'DSF' : (ext === '.dff' ? 'DFF' : 'DSD')
+          }
+          cachedWithoutLyrics.lossless = true
+          if (!cachedWithoutLyrics.bitDepth) cachedWithoutLyrics.bitDepth = 1
+        }
         return {
           ...cachedWithoutLyrics,
           filePath: pathToFileURL(trackPath).href,
@@ -1225,13 +1304,19 @@ app.whenReady().then(() => {
             const img = nativeImage.createFromBuffer(rawBuf)
             if (!coverUrl) {
               const resized = img.resize({ width: 128, height: 128, quality: 'good' })
+              const thumbBuf = resized.toJPEG(80)
               try {
-                fs.writeFileSync(thumbPath, resized.toJPEG(80))
+                fs.writeFileSync(thumbPath, thumbBuf)
                 coverUrl = pathToFileURL(thumbPath).href
-              } catch(e) {
-                fs.writeFileSync(centralThumbPath, resized.toJPEG(80))
-                coverUrl = pathToFileURL(centralThumbPath).href
-              }
+              } catch(e) {}
+              try {
+                if (!fs.existsSync(centralThumbPath)) {
+                  fs.writeFileSync(centralThumbPath, thumbBuf)
+                }
+                if (!coverUrl) {
+                  coverUrl = pathToFileURL(centralThumbPath).href
+                }
+              } catch(e) {}
             }
             if (!calculatedColors) {
               calculatedColors = extractThemeColorsFromImage(img)
@@ -1304,6 +1389,19 @@ app.whenReady().then(() => {
 
         const { artist, artists } = extractArtists(metadata, subItemName)
 
+        const ext = path.extname(subItemName).toLowerCase()
+        const isDsdExt = ext === '.dsf' || ext === '.dff' || ext === '.dsd'
+        let rawFormat = metadata.format.container || subItemName.split('.').pop()?.toUpperCase() || 'AUDIO'
+        if (isDsdExt) {
+          rawFormat = ext === '.dsf' ? 'DSF' : (ext === '.dff' ? 'DFF' : 'DSD')
+        } else if (metadata.format.codec === 'DSD' || (metadata.format.container && /dsd/i.test(metadata.format.container))) {
+          rawFormat = 'DSD'
+        }
+
+        const isLossless = Boolean(metadata.format.lossless || isDsdExt || rawFormat === 'DSF' || rawFormat === 'DFF' || rawFormat === 'DSD')
+        const effectiveBitDepth = isDsdExt ? 1 : (metadata.format.bitsPerSample || (isLossless && metadata.format.sampleRate ? 16 : undefined))
+        const effectiveSampleRate = metadata.format.sampleRate || (isDsdExt ? 2822400 : undefined)
+
         const trackData = {
           id: trackPath,
           filePath: pathToFileURL(trackPath).href,
@@ -1316,11 +1414,11 @@ app.whenReady().then(() => {
           year: yearVal,
           trackNo: metadata.common.track?.no || null,
           duration: metadata.format.duration,
-          format: metadata.format.container || subItemName.split('.').pop()?.toUpperCase(),
+          format: rawFormat,
           bitrate: metadata.format.bitrate,
-          sampleRate: metadata.format.sampleRate,
-          bitDepth: metadata.format.bitsPerSample,
-          lossless: metadata.format.lossless,
+          sampleRate: effectiveSampleRate,
+          bitDepth: effectiveBitDepth,
+          lossless: isLossless,
           isCloud: false,
           coverArt: coverUrl,
           themeColors: themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || null,
@@ -1335,16 +1433,23 @@ app.whenReady().then(() => {
         const { lyrics: _discardFresh, ...trackDataNoLyrics } = trackData
         return trackDataNoLyrics
       } catch (e) {
+        const ext = path.extname(subItemName).toLowerCase()
+        const isDsdExt = ext === '.dsf' || ext === '.dff' || ext === '.dsd'
         const fallbackTrack = {
           id: trackPath,
           filePath: pathToFileURL(trackPath).href,
-          title: subItemName,
+          title: subItemName.replace(/\.[^/.]+$/, ""),
           artist: 'Unknown',
           artists: ['Unknown'],
           multiArtistVersion: 2,
           album: 'Unknown',
           genre: 'Unknown',
           year: null,
+          duration: 0,
+          format: isDsdExt ? (ext === '.dsf' ? 'DSF' : (ext === '.dff' ? 'DFF' : 'DSD')) : (ext.replace('.', '').toUpperCase() || 'AUDIO'),
+          sampleRate: isDsdExt ? 2822400 : undefined,
+          bitDepth: isDsdExt ? 1 : undefined,
+          lossless: isDsdExt || ['.flac', '.wav', '.alac', '.aiff'].includes(ext),
           isCloud: false,
           coverArt: coverUrl
         }
@@ -1472,7 +1577,8 @@ app.whenReady().then(() => {
         libraryPaths: validPaths, 
         tracks, 
         playlists,
-        multiArtistVersion: 2
+        multiArtistVersion: 2,
+        dsdVersion: 1
       }))
     } catch (e) {}
 
@@ -2316,9 +2422,8 @@ app.whenReady().then(() => {
       
       // Lọc ra các file âm thanh từ mảng tổng
       const audioFiles = allFiles.filter((f: any) => 
-        f.mimeType.startsWith('audio/') || 
-        f.name.endsWith('.mp3') || f.name.endsWith('.flac') ||
-        f.name.endsWith('.wav') || f.name.endsWith('.m4a')
+        (f.mimeType && f.mimeType.startsWith('audio/')) || 
+        SUPPORTED_AUDIO_EXTS.some(ext => (f.name || '').toLowerCase().endsWith(ext))
       )
       
       const tracks = audioFiles.map((file: any) => {
@@ -2926,7 +3031,7 @@ app.whenReady().then(() => {
     // Mở hộp thoại chọn nhiều file nhạc
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Audio Files', extensions: ['mp3', 'flac', 'wav', 'm4a', 'opus', 'ogg', 'aac', 'alac', 'aiff', 'wma'] }]
+      filters: [{ name: 'Audio Files', extensions: SUPPORTED_AUDIO_EXTS.map(ext => ext.replace(/^\./, '')) }]
     })
 
     if (canceled || filePaths.length === 0) return { success: false, canceled: true }
@@ -2989,13 +3094,18 @@ app.whenReady().then(() => {
   // ==========================================
   ipcMain.handle('music:getTrackCover', async (_, filePath: string) => {
     try {
-      if (filePath.startsWith('http')) return null
+      if (!filePath || filePath.startsWith('http')) return null
 
       let rawPath = filePath.replace(/^file:\/\/\/?/, '')
+      rawPath = rawPath.split('?')[0]
       if (process.platform === 'win32') {
-        rawPath = decodeURIComponent(rawPath)
+        try { rawPath = decodeURIComponent(rawPath) } catch (_) {}
         if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
         rawPath = rawPath.replace(/\//g, '\\')
+      }
+
+      if (streamPort > 0) {
+        return `http://127.0.0.1:${streamPort}/cover?path=${encodeURIComponent(rawPath)}&size=128`
       }
 
       // 1. Khởi tạo thư mục proxy ảnh
@@ -3032,8 +3142,9 @@ app.whenReady().then(() => {
     try {
       if (!filePath || filePath.startsWith('http') || !streamPort) return null
       let rawPath = filePath.replace(/^file:\/\/\/?/, '')
+      rawPath = rawPath.split('?')[0]
       if (process.platform === 'win32') {
-        rawPath = decodeURIComponent(rawPath)
+        try { rawPath = decodeURIComponent(rawPath) } catch (_) {}
         if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
         rawPath = rawPath.replace(/\//g, '\\')
       }
@@ -3123,7 +3234,8 @@ app.whenReady().then(() => {
   // ==========================================
   ipcMain.handle('music:forceGC', () => {
     // Kích hoạt dọn rác thủ công giải phóng RAM
-    coverResizeCache.clear()
+    smallCoverCache.clear()
+    largeCoverCache.clear()
     if (typeof global.gc === 'function') {
       global.gc()
     }
@@ -3132,16 +3244,32 @@ app.whenReady().then(() => {
   // ==========================================
   // HỆ THỐNG LOCAL BUFFER SERVER & PROXY CACHE ẢNH
   // ==========================================
-  let streamPort = 0;
+  streamPort = 0;
   const streamUrlCache = new Map<string, { url: string, expires: number }>();
-  const coverResizeCache = new Map<string, Buffer>();
+  // BỘ NHỚ ĐỆM RAM PHÂN TẦNG:
+  // - smallCoverCache: Lưu trữ tới 1.500 ảnh nhỏ (<=128px) chỉ tốn ~3.75MB RAM, triệt tiêu 100% disk read khi cuộn danh sách.
+  // - largeCoverCache: Lưu trữ tới 100 ảnh lớn (>128px) chất lượng cao cho PlayerBar, Grid, Vinyl (~5MB RAM).
+  const smallCoverCache = new Map<string, Buffer>();
+  const largeCoverCache = new Map<string, Buffer>();
 
-  function setCoverResizeCache(key: string, buf: Buffer) {
-    if (coverResizeCache.size >= 120) {
-      const oldestKey = coverResizeCache.keys().next().value;
-      if (oldestKey) coverResizeCache.delete(oldestKey);
+  function getCoverFromCache(key: string): Buffer | undefined {
+    return smallCoverCache.get(key) || largeCoverCache.get(key);
+  }
+
+  function setCoverResizeCache(key: string, buf: Buffer, targetSize: number) {
+    if (targetSize > 0 && targetSize <= 128) {
+      if (smallCoverCache.size >= 1500) {
+        const oldestKey = smallCoverCache.keys().next().value;
+        if (oldestKey) smallCoverCache.delete(oldestKey);
+      }
+      smallCoverCache.set(key, buf);
+    } else {
+      if (largeCoverCache.size >= 100) {
+        const oldestKey = largeCoverCache.keys().next().value;
+        if (oldestKey) largeCoverCache.delete(oldestKey);
+      }
+      largeCoverCache.set(key, buf);
     }
-    coverResizeCache.set(key, buf);
   }
 
   function getProxyImageUrl(url: string | null | undefined, id: string) {
@@ -3357,11 +3485,15 @@ app.whenReady().then(() => {
       const targetSize = parseInt(parsedUrl.searchParams.get('size') || '0', 10);
       if (!rawTrackPath) { res.writeHead(400).end('Thiếu đường dẫn bài hát'); return; }
 
-      let targetPath = rawTrackPath.replace(/^file:\/\/\/?/, '');
+      let targetPath = rawTrackPath;
+      if (targetPath.startsWith('file://')) {
+        targetPath = targetPath.replace(/^file:\/\/\/?/, '');
+      }
+      targetPath = targetPath.split('?')[0];
+      try {
+        targetPath = decodeURIComponent(targetPath);
+      } catch (_) {}
       if (process.platform === 'win32') {
-        try {
-          targetPath = decodeURIComponent(targetPath);
-        } catch (_) {}
         if (/^\/[a-zA-Z]:/.test(targetPath)) targetPath = targetPath.slice(1);
         targetPath = targetPath.replace(/\//g, '\\');
       }
@@ -3372,8 +3504,8 @@ app.whenReady().then(() => {
       }
 
       const cacheKey = `${targetPath}_size_${targetSize}`;
-      if (targetSize > 0 && coverResizeCache.has(cacheKey)) {
-        const cached = coverResizeCache.get(cacheKey)!;
+      const cached = targetSize > 0 ? getCoverFromCache(cacheKey) : undefined;
+      if (cached) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
           'Cache-Control': 'public, max-age=604800, immutable',
@@ -3386,9 +3518,6 @@ app.whenReady().then(() => {
       try {
         let rawBuffer: Buffer | null = null;
         let mime = 'image/jpeg';
-
-        // 0. Nếu targetPath trực tiếp là một tệp hình ảnh (jpg, png, webp, gif, bmp, svg)
-        const extLower = path.extname(targetPath).toLowerCase();
         const directImgMimes: Record<string, string> = {
           '.jpg': 'image/jpeg',
           '.jpeg': 'image/jpeg',
@@ -3398,47 +3527,229 @@ app.whenReady().then(() => {
           '.bmp': 'image/bmp',
           '.svg': 'image/svg+xml'
         };
-        if (directImgMimes[extLower]) {
-          try {
-            rawBuffer = fs.readFileSync(targetPath);
-            mime = directImgMimes[extLower];
-          } catch (_) {}
-        }
 
-        // 1. Kiểm tra thumbnail có sẵn trên đĩa trước (nhanh hơn rất nhiều so với đọc toàn bộ file audio)
-        if (!rawBuffer) {
+        let isDir = false;
+        try {
+          isDir = fs.statSync(targetPath).isDirectory();
+        } catch (_) {}
+
+        if (isDir) {
+          // XỬ LÝ KHI TARGETPATH LÀ THƯ MỤC (ALBUM HOẶC DIRECTORY PLAYLIST)
+          const playlistHash = crypto.createHash('md5').update('playlist_' + targetPath).digest('hex');
+          const userPlHash = crypto.createHash('md5').update('user_pl_' + targetPath).digest('hex');
+          const dirThumb = join(targetPath, '.thumbnails', `pl_${playlistHash}.jpg`);
+          const parentThumb = join(dirname(targetPath), '.thumbnails', `pl_${playlistHash}.jpg`);
+          const centralPlThumb = join(IMAGE_CACHE_DIR, `pl_${playlistHash}.jpg`);
+          const centralUserPlThumb = join(IMAGE_CACHE_DIR, `upl_${userPlHash}.jpg`);
+
+          const candidateThumbs = [dirThumb, parentThumb, centralPlThumb, centralUserPlThumb];
+          for (const c of candidateThumbs) {
+            if (fs.existsSync(c)) {
+              try {
+                rawBuffer = fs.readFileSync(c);
+                mime = 'image/jpeg';
+                break;
+              } catch (_) {}
+            }
+          }
+
+          // Fallback 1: Tìm các file ảnh bìa phổ biến trong thư mục
+          if (!rawBuffer) {
+            const commonCoverNames = ['cover', 'folder', 'front', 'artwork', 'album', 'thumb', 'thumbnail', path.basename(targetPath)];
+            const possibleExts = ['.jpg', '.jpeg', '.png', '.webp'];
+            for (const name of commonCoverNames) {
+              for (const ext of possibleExts) {
+                const candidate = join(targetPath, `${name}${ext}`);
+                if (fs.existsSync(candidate)) {
+                  try {
+                    rawBuffer = fs.readFileSync(candidate);
+                    mime = directImgMimes[ext] || 'image/jpeg';
+                    break;
+                  } catch (_) {}
+                }
+              }
+              if (rawBuffer) break;
+            }
+          }
+
+          // Fallback 2: Quét bất kỳ file ảnh nào trong thư mục
+          if (!rawBuffer) {
+            try {
+              const files = fs.readdirSync(targetPath);
+              for (const file of files) {
+                const ext = path.extname(file).toLowerCase();
+                if (directImgMimes[ext]) {
+                  const candidate = join(targetPath, file);
+                  try {
+                    rawBuffer = fs.readFileSync(candidate);
+                    mime = directImgMimes[ext];
+                    break;
+                  } catch (_) {}
+                }
+              }
+            } catch (_) {}
+          }
+
+          // Fallback 3: Lấy cover từ bài hát đầu tiên trong thư mục (KHÔNG gọi mm.parseFile trên thư mục!)
+          if (!rawBuffer) {
+            try {
+              const files = fs.readdirSync(targetPath);
+              const supportedAudioExts = SUPPORTED_AUDIO_EXTS;
+              for (const file of files) {
+                const ext = path.extname(file).toLowerCase();
+                if (supportedAudioExts.includes(ext)) {
+                  const audioPath = join(targetPath, file);
+                  const trackHash = crypto.createHash('md5').update(audioPath).digest('hex');
+                  const audioThumb1 = join(targetPath, '.thumbnails', `${trackHash}.jpg`);
+                  const audioThumb2 = join(IMAGE_CACHE_DIR, `${trackHash}.jpg`);
+                  if (fs.existsSync(audioThumb1)) {
+                    try { rawBuffer = fs.readFileSync(audioThumb1); mime = 'image/jpeg'; break; } catch (_) {}
+                  } else if (fs.existsSync(audioThumb2)) {
+                    try { rawBuffer = fs.readFileSync(audioThumb2); mime = 'image/jpeg'; break; } catch (_) {}
+                  }
+                  if (!rawBuffer) {
+                    try {
+                      const meta = await mm.parseFile(audioPath, { skipCovers: false, duration: false });
+                      if (meta.common.picture && meta.common.picture.length > 0) {
+                        const pic = meta.common.picture[0];
+                        mime = pic.format || 'image/jpeg';
+                        if (!mime.includes('/')) mime = `image/${mime}`;
+                        rawBuffer = Buffer.from(pic.data);
+                        break;
+                      }
+                    } catch (_) {}
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+        } else {
+          // XỬ LÝ KHI TARGETPATH LÀ TỆP
+          const extLower = path.extname(targetPath).toLowerCase();
+          if (directImgMimes[extLower]) {
+            try {
+              rawBuffer = fs.readFileSync(targetPath);
+              mime = directImgMimes[extLower];
+            } catch (_) {}
+          }
+
           const trackHash = crypto.createHash('md5').update(targetPath).digest('hex');
           const centralThumbPath = join(IMAGE_CACHE_DIR, `${trackHash}.jpg`);
-          const localThumbPath = join(dirname(targetPath), '.thumbnails', `${trackHash}.jpg`);
-          if (fs.existsSync(centralThumbPath)) {
-            try { rawBuffer = fs.readFileSync(centralThumbPath); mime = 'image/jpeg'; } catch (_) {}
-          } else if (fs.existsSync(localThumbPath)) {
-            try { rawBuffer = fs.readFileSync(localThumbPath); mime = 'image/jpeg'; } catch (_) {}
-          }
-        }
+          let foundThumb: string | null = null;
 
-        // 2. Nếu chưa có thumbnail trên đĩa, đọc metadata chỉ lấy ảnh (duration: false)
-        if (!rawBuffer) {
-          const metadata = await mm.parseFile(targetPath, { skipCovers: false, duration: false });
-          if (metadata.common.picture && metadata.common.picture.length > 0) {
-            const pic = metadata.common.picture[0];
-            mime = pic.format || 'image/jpeg';
-            if (!mime.includes('/')) mime = `image/${mime}`;
-            rawBuffer = Buffer.from(pic.data);
-          } else {
-            // Fallback tìm ảnh bìa trong cùng thư mục
-            const trackDir = dirname(targetPath);
-            const commonCoverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'album.png', 'front.jpg', 'front.png'];
-            for (const name of commonCoverNames) {
-              const candidate = join(trackDir, name);
-              if (fs.existsSync(candidate)) {
-                const ext = name.split('.').pop() || 'jpeg';
-                mime = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-                try {
-                  rawBuffer = fs.readFileSync(candidate);
-                } catch (_) {}
-                break;
+          // 1. Kiểm tra thumbnail có sẵn trên đĩa trước (Áp dụng đa tầng tra cứu)
+          if (!rawBuffer) {
+            if (fs.existsSync(centralThumbPath)) {
+              foundThumb = centralThumbPath;
+            } else {
+              const localThumbPath = join(dirname(targetPath), '.thumbnails', `${trackHash}.jpg`);
+              if (fs.existsSync(localThumbPath)) {
+                foundThumb = localThumbPath;
+              } else {
+                const config = getConfig();
+                const roots: string[] = (config.libraryPaths && config.libraryPaths.length > 0)
+                  ? config.libraryPaths
+                  : (config.libraryPath ? [config.libraryPath] : []);
+                for (const r of roots) {
+                  const candidate = join(r, '.thumbnails', `${trackHash}.jpg`);
+                  if (fs.existsSync(candidate)) {
+                    foundThumb = candidate;
+                    break;
+                  }
+                }
+                if (!foundThumb) {
+                  let currDir = dirname(targetPath);
+                  let prevDir = '';
+                  while (currDir && currDir !== prevDir && currDir !== path.parse(currDir).root) {
+                    const candidate = join(currDir, '.thumbnails', `${trackHash}.jpg`);
+                    if (fs.existsSync(candidate)) {
+                      foundThumb = candidate;
+                      break;
+                    }
+                    prevDir = currDir;
+                    currDir = dirname(currDir);
+                  }
+                }
               }
+            }
+
+            // Nếu yêu cầu ảnh nhỏ (targetSize <= 128px) và đã tìm thấy thumbnail -> Đọc trực tiếp thumbnail 5KB!
+            if (targetSize > 0 && targetSize <= 128 && foundThumb) {
+              try {
+                rawBuffer = fs.readFileSync(foundThumb);
+                mime = 'image/jpeg';
+              } catch (_) {}
+            }
+          }
+
+          // 2. Nếu targetSize > 128 (cần ảnh gốc nét cao cho Dynamic Scaling) HOẶC chưa có thumbnail nào:
+          // Áp dụng Stream Abort (Ngắt luồng sớm) để chỉ đọc khối Metadata / Picture từ file nhạc gốc!
+          if (!rawBuffer) {
+            let extractedPic: { data: Buffer | Uint8Array; format?: string } | null = null;
+            try {
+              // Kỹ thuật Partial Stream Read (Stream Abort): Đọc với chunk 64KB và ngắt luồng ngay sau khi đọc xong ảnh
+              const readStream = fs.createReadStream(targetPath, { highWaterMark: 64 * 1024 });
+              try {
+                const metadata = await mm.parseStream(readStream, undefined, {
+                  skipCovers: false,
+                  duration: false
+                });
+                if (metadata.common.picture && metadata.common.picture.length > 0) {
+                  extractedPic = metadata.common.picture[0];
+                }
+              } finally {
+                readStream.destroy();
+              }
+            } catch (_) {
+              // Fallback an toàn nếu parseStream gặp định dạng đặc biệt
+              try {
+                const metadata = await mm.parseFile(targetPath, { skipCovers: false, duration: false });
+                if (metadata.common.picture && metadata.common.picture.length > 0) {
+                  extractedPic = metadata.common.picture[0];
+                }
+              } catch (_) {}
+            }
+
+            if (extractedPic) {
+              mime = extractedPic.format || 'image/jpeg';
+              if (!mime.includes('/')) mime = `image/${mime}`;
+              rawBuffer = Buffer.from(extractedPic.data);
+
+              // TỰ ĐỘNG LƯU THUMBNAIL 128PX VÀO CENTRAL CACHE:
+              // Để các lần sau khi render danh sách (size <= 128), tuyệt đối không bao giờ phải đọc lại file audio gốc!
+              if (!fs.existsSync(centralThumbPath)) {
+                try {
+                  const nativeThumb = nativeImage.createFromBuffer(rawBuffer);
+                  const resizedThumb = nativeThumb.resize({ width: 128, height: 128, quality: 'good' });
+                  fs.promises.writeFile(centralThumbPath, resizedThumb.toJPEG(80)).catch(() => {});
+                } catch (_) {}
+              }
+            }
+
+            // Fallback tìm ảnh bìa trong cùng thư mục của file audio
+            if (!rawBuffer) {
+              const trackDir = dirname(targetPath);
+              const commonCoverNames = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'album.jpg', 'album.png', 'front.jpg', 'front.png'];
+              for (const name of commonCoverNames) {
+                const candidate = join(trackDir, name);
+                if (fs.existsSync(candidate)) {
+                  const ext = name.split('.').pop() || 'jpeg';
+                  mime = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+                  try {
+                    rawBuffer = fs.readFileSync(candidate);
+                  } catch (_) {}
+                  break;
+                }
+              }
+            }
+
+            // Fallback an toàn: Nếu không tìm thấy ảnh gốc chất lượng cao hoặc file ảnh rời,
+            // dùng tạm foundThumb (thumbnail 128px có sẵn) thay vì trả về 404!
+            if (!rawBuffer && foundThumb) {
+              try {
+                rawBuffer = fs.readFileSync(foundThumb);
+                mime = 'image/jpeg';
+              } catch (_) {}
             }
           }
         }
@@ -3464,7 +3775,7 @@ app.whenReady().then(() => {
                 }
                 const resized = nativeImg.resize({ width: newW, height: newH, quality: 'good' });
                 const jpegBuf = resized.toJPEG(85);
-                setCoverResizeCache(cacheKey, jpegBuf);
+                setCoverResizeCache(cacheKey, jpegBuf, targetSize);
                 res.writeHead(200, {
                   'Content-Type': 'image/jpeg',
                   'Cache-Control': 'public, max-age=604800, immutable',
@@ -3496,9 +3807,15 @@ app.whenReady().then(() => {
       const rawTrackPath = parsedUrl.searchParams.get('path');
       if (!rawTrackPath) { res.writeHead(400).end('Thiếu đường dẫn bài hát'); return; }
 
-      let targetPath = rawTrackPath.replace(/^file:\/\/\/?/, '');
+      let targetPath = rawTrackPath;
+      if (targetPath.startsWith('file://')) {
+        targetPath = targetPath.replace(/^file:\/\/\/?/, '');
+      }
+      targetPath = targetPath.split('?')[0];
+      try {
+        targetPath = decodeURIComponent(targetPath);
+      } catch (_) {}
       if (process.platform === 'win32') {
-        try { targetPath = decodeURIComponent(targetPath); } catch (_) {}
         if (/^\/[a-zA-Z]:/.test(targetPath)) targetPath = targetPath.slice(1);
         targetPath = targetPath.replace(/\//g, '\\');
       }
@@ -3523,7 +3840,10 @@ app.whenReady().then(() => {
           '.opus': 'audio/opus',
           '.alac': 'audio/alac',
           '.aiff': 'audio/aiff',
-          '.wma': 'audio/x-ms-wma'
+          '.wma': 'audio/x-ms-wma',
+          '.dsf': 'audio/dsf',
+          '.dff': 'audio/x-dff',
+          '.dsd': 'audio/dsd'
         };
         const contentType = mimeMap[ext] || 'application/octet-stream';
 
@@ -3591,9 +3911,15 @@ app.whenReady().then(() => {
       const rawFilePath = parsedUrl.searchParams.get('path');
       if (!rawFilePath) { res.writeHead(400).end('Thiếu đường dẫn tệp'); return; }
 
-      let targetPath = rawFilePath.replace(/^file:\/\/\/?/, '');
+      let targetPath = rawFilePath;
+      if (targetPath.startsWith('file://')) {
+        targetPath = targetPath.replace(/^file:\/\/\/?/, '');
+      }
+      targetPath = targetPath.split('?')[0];
+      try {
+        targetPath = decodeURIComponent(targetPath);
+      } catch (_) {}
       if (process.platform === 'win32') {
-        try { targetPath = decodeURIComponent(targetPath); } catch (_) {}
         if (/^\/[a-zA-Z]:/.test(targetPath)) targetPath = targetPath.slice(1);
         targetPath = targetPath.replace(/\//g, '\\');
       }
@@ -3633,7 +3959,39 @@ app.whenReady().then(() => {
     }
   });
 
-  streamServer.listen(0, '127.0.0.1', () => { streamPort = (streamServer.address() as any).port; });
+  const preferredPort = 49876;
+  await new Promise<void>((resolve) => {
+    let hasResolved = false;
+    const safeResolve = () => {
+      if (!hasResolved) {
+        hasResolved = true;
+        resolve();
+      }
+    };
+
+    const onError = (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`[StreamServer] Cổng ${preferredPort} đã được sử dụng, fallback sang cổng động 0...`);
+        streamServer.removeListener('error', onError);
+        streamServer.listen(0, '127.0.0.1', () => {
+          streamPort = (streamServer.address() as any).port;
+          console.log(`[StreamServer Fallback] Listening on http://127.0.0.1:${streamPort}`);
+          safeResolve();
+        });
+      } else {
+        console.error('[StreamServer] Lỗi khởi động:', err);
+        safeResolve();
+      }
+    };
+
+    streamServer.once('error', onError);
+    streamServer.listen(preferredPort, '127.0.0.1', () => {
+      streamServer.removeListener('error', onError);
+      streamPort = (streamServer.address() as any).port;
+      console.log(`[StreamServer] Listening on http://127.0.0.1:${streamPort}`);
+      safeResolve();
+    });
+  });
 
   // ==========================================
   // HỆ THỐNG ONLINE STREAMING (CHỈ YOUTUBE / YT MUSIC)
@@ -4531,7 +4889,7 @@ app.whenReady().then(() => {
         label: isEn ? 'Quit' : 'Thoát hoàn toàn', 
         click: () => { 
           isQuitting = true; 
-          if (mpvManager) mpvManager.killAll();
+          if (bassManager) bassManager.killSync();
           if (tray) {
             try { tray.destroy(); } catch (e) {}
             tray = null;
@@ -4614,7 +4972,7 @@ app.on('before-quit', () => {
   isQuitting = true
   saveMetadataCache(true)
   saveThemeColorsCache(true)
-  if (mpvManager) mpvManager.killAll()
+  if (bassManager) bassManager.killSync()
   if (discordRpcManager) discordRpcManager.destroy()
   if (tray) {
     try { tray.destroy() } catch (e) {}
@@ -4623,7 +4981,7 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  if (mpvManager) mpvManager.killAll()
+  if (bassManager) bassManager.killSync()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -4631,7 +4989,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
-  if (mpvManager) mpvManager.killAll()
+  if (bassManager) bassManager.killSync()
   if (tray) {
     try { tray.destroy() } catch (e) {}
     tray = null
@@ -4643,11 +5001,11 @@ app.on('will-quit', () => {
 })
 
 process.on('SIGINT', () => {
-  if (mpvManager) mpvManager.killAll()
+  if (bassManager) bassManager.killSync()
   app.exit(0)
 })
 
 process.on('SIGTERM', () => {
-  if (mpvManager) mpvManager.killAll()
+  if (bassManager) bassManager.killSync()
   app.exit(0)
 })

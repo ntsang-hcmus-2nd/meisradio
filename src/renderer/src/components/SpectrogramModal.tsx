@@ -3,6 +3,7 @@ import { Radio, X, Loader2 } from 'lucide-react'
 import { useTranslation } from '../locales'
 import { AudioSignalPath } from './AudioSignalPath'
 import { formatAudioSource } from '../utils/urlUtils'
+import { isDsdTrack, formatAudioSampleRate, getDsdRateLabel } from '../utils/formatUtils'
 
 interface SpectrogramModalProps {
   isOpen: boolean
@@ -109,7 +110,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   audioRef,
   isPlaying
 }) => {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -166,15 +167,28 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   // Track playback time for playhead
   useEffect(() => {
     if (!isOpen) return
-    const updatePlayhead = () => {
-      if (audioRef?.current) {
-        setCurrentTime(audioRef.current.currentTime || 0)
-        setDuration(audioRef.current.duration || currentTrack?.duration || 0)
-      }
+
+    const updatePlayhead = (overrideTime?: number) => {
+      const cur = typeof overrideTime === 'number'
+        ? overrideTime
+        : ((audioRef?.current as any)?._currentTime ?? audioRef?.current?.currentTime ?? 0)
+      setCurrentTime(cur)
+      setDuration(currentTrack?.duration || audioRef?.current?.duration || 0)
     }
-    const interval = setInterval(updatePlayhead, 100)
+
+    let cleanupMpv: (() => void) | undefined
+    if (typeof (window as any).api?.onMpvTime === 'function') {
+      cleanupMpv = (window as any).api.onMpvTime((val: number) => {
+        updatePlayhead(val)
+      })
+    }
+
+    const interval = setInterval(() => updatePlayhead(), 200)
     updatePlayhead()
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      if (typeof cleanupMpv === 'function') cleanupMpv()
+    }
   }, [isOpen, audioRef, currentTrack])
 
   // Full-track STFT Spectrogram Generator
@@ -233,6 +247,16 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
       setLoading(true)
       setErrorMsg(null)
+
+      if (isDsdTrack(currentTrack)) {
+        setErrorMsg(
+          language === 'vi' 
+            ? 'Định dạng DSD (Direct Stream Digital 1-bit) là luồng bitstream nguyên bản cho DAC phần cứng, không hỗ trợ dựng phổ tần số qua Web Audio.'
+            : 'DSD (Direct Stream Digital 1-bit) is a raw bitstream for hardware DACs and does not support browser Web Audio spectrogram rendering.'
+        )
+        setLoading(false)
+        return
+      }
 
       try {
         // 1. Lấy dữ liệu file âm thanh và sampleRate gốc từ metadata
@@ -411,21 +435,24 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
             <div>
               <div className="flex items-center gap-3">
                 <h2 className="text-lg font-bold text-white">{t('modals.spectrogram.title')}</h2>
-                {currentTrack && (
-                  <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
-                    <span className="font-bold text-theme-10 uppercase">
-                      {currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}
-                    </span>
-                    {(detectedBitDepth || currentTrack.bitDepth) && (
-                      <span className="text-blue-400 font-bold">
-                        {detectedBitDepth || currentTrack.bitDepth}-BIT
+                {currentTrack && (() => {
+                  const isDsd = isDsdTrack(currentTrack)
+                  return (
+                    <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
+                      <span className={`font-bold uppercase ${isDsd ? 'text-amber-400' : 'text-theme-10'}`}>
+                        {isDsd ? getDsdRateLabel(currentTrack.sampleRate || activeSampleRate) : (currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3'))}
                       </span>
-                    )}
-                    <span className="text-zinc-400">
-                      {activeSampleRate >= 1000 ? `${(activeSampleRate / 1000).toFixed(1).replace('.0', '')}kHz` : `${activeSampleRate}Hz`}
-                    </span>
-                  </div>
-                )}
+                      {(isDsd || detectedBitDepth || currentTrack.bitDepth) && (
+                        <span className="text-blue-400 font-bold">
+                          {isDsd ? '1-BIT' : `${detectedBitDepth || currentTrack.bitDepth}-BIT`}
+                        </span>
+                      )}
+                      <span className="text-zinc-400">
+                        {formatAudioSampleRate(activeSampleRate)}
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
               <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
                 {currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : t('modals.spectrogram.noTrack')}

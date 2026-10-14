@@ -70,7 +70,7 @@ export interface MeisRadioApi {
   getYtmArtist: (artistId: string) => Promise<any>
   preloadStream: (targetId: string) => Promise<any>
 
-  // MPV API
+  // BASS & Bit-Perfect Audio API (WASAPI & ASIO + DSD Native)
   mpvPlay: (url: string, crossfade: number) => Promise<any>
   mpvResume: () => Promise<any>
   mpvPause: () => Promise<any>
@@ -78,9 +78,18 @@ export interface MeisRadioApi {
   mpvSeek: (pos: number, mode?: 'relative' | 'absolute') => Promise<any>
   mpvSetVolume: (vol: number) => Promise<any>
   mpvSetEqualizer: (bands: any[], preamp?: number) => Promise<any>
-  setBitPerfect: (val: boolean, currentVol?: number) => Promise<any>
+  setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => Promise<any>
+  setBitPerfectOutputType: (type: 'wasapi' | 'asio') => Promise<any>
   setAudioDevice: (deviceId: string) => Promise<any>
-  getAudioDevices: () => Promise<{ name: string; description: string }[]>
+  getAudioDevices: (type?: 'wasapi' | 'asio') => Promise<{ name: string; description: string; type?: 'wasapi' | 'asio' }[]>
+
+  bassPlay: (url: string, crossfade?: number) => Promise<any>
+  bassResume: () => Promise<any>
+  bassPause: () => Promise<any>
+  bassStop: () => Promise<any>
+  bassSeek: (pos: number, mode?: 'relative' | 'absolute') => Promise<any>
+  bassSetVolume: (vol: number) => Promise<any>
+  setBassBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => Promise<any>
 
   onMpvTime: (callback: (val: number) => void) => () => void
   onMpvDuration: (callback: (val: number) => void) => () => void
@@ -88,6 +97,7 @@ export interface MeisRadioApi {
   onMpvEnded: (callback: () => void) => () => void
   onMpvError: (callback: (err: string) => void) => () => void
   onMpvAudioParams: (callback: (params: any) => void) => () => void
+  onBassAudioParams: (callback: (params: any) => void) => () => void
 
   getThemeColorsCache: () => Promise<any>
   cacheThemeColors: (trackPath: string, colors: any) => Promise<any>

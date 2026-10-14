@@ -45,20 +45,14 @@ export interface DynamicCoverArtProps {
   style?: React.CSSProperties
 }
 
-let globalStreamPort = (typeof window !== 'undefined' && (window as any).api?.getStreamPortSync?.()) || 0
+import { 
+  getGlobalStreamPort, 
+  setGlobalStreamPort, 
+  onStreamPortChange, 
+  extractRawFilePath 
+} from '../utils/urlUtils'
 
-export function setGlobalStreamPort(port: number): void {
-  globalStreamPort = port
-}
-
-export function getGlobalStreamPort(): number {
-  if (globalStreamPort <= 0 && typeof window !== 'undefined' && (window as any).api?.getStreamPortSync) {
-    try {
-      globalStreamPort = (window as any).api.getStreamPortSync() || 0
-    } catch (_) {}
-  }
-  return globalStreamPort
-}
+export { getGlobalStreamPort, setGlobalStreamPort }
 
 /**
  * Trợ thủ tạo URL ảnh bìa đã scale linh hoạt từ backend streamServer hoặc high-res CDN
@@ -84,31 +78,58 @@ export function resolveCoverUrl({
   const effectivePath = trackPath || track?.filePath
   const effectiveSrc = src !== undefined ? src : track?.coverArt
   const effectiveHighRes = highResSrc !== undefined ? highResSrc : track?.coverArtHighRes
-  const isOnline = track?.isOnline || (effectiveSrc ? effectiveSrc.startsWith('http') : false)
-  const port = (streamPort && streamPort > 0) ? streamPort : globalStreamPort
+  const port = (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
 
-  // 1. Nhạc online (YouTube Music, SoundCloud)
-  if (isOnline) {
+  // 1. Dạng dữ liệu nhúng trực tiếp (Data URL / Blob URL)
+  if (effectiveSrc && (effectiveSrc.startsWith('data:') || effectiveSrc.startsWith('blob:'))) {
+    return effectiveSrc
+  }
+
+  // 2. Nhạc trực tuyến (YouTube Music, SoundCloud, v.v., không phải localhost/127.0.0.1)
+  const isExternalOnline = track?.isOnline || (
+    effectiveSrc && 
+    (effectiveSrc.startsWith('http://') || effectiveSrc.startsWith('https://')) &&
+    !effectiveSrc.includes('127.0.0.1') &&
+    !effectiveSrc.includes('localhost')
+  )
+
+  if (isExternalOnline) {
     if (targetSize >= 500 && effectiveHighRes) {
       return effectiveHighRes
     }
     return effectiveSrc || effectiveHighRes || null
   }
 
-  // 2. Nhạc local qua stream server (Dynamic resizing in-memory)
-  if (effectivePath && port > 0) {
-    let cleanPath = effectivePath.replace(/^file:\/\/\/?/, '')
-    if (cleanPath.startsWith('/') && /^\/[a-zA-Z]:/.test(cleanPath)) {
-      cleanPath = cleanPath.slice(1)
-    }
+  // 3. Ảnh / bài hát cục bộ qua stream server nội bộ (/cover)
+  const cleanPath = extractRawFilePath(effectivePath)
+  const cleanSrc = extractRawFilePath(effectiveSrc)
+
+  // Ưu tiên 3a: Đối với ảnh nhỏ (tier sm hoặc targetSize <= 128px), nếu đã có sẵn thumbnail (cleanSrc),
+  // tải trực tiếp qua cleanSrc để tránh backend phải mở và phân tích file audio gốc 50MB!
+  if (targetSize <= 128 && cleanSrc && port > 0) {
+    const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
+    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}`
+  }
+
+  // Ưu tiên 3b: Sử dụng effectivePath (file audio hoặc folder playlist) cho kích thước lớn hơn (>128px)
+  // hoặc khi chưa có thumbnail có sẵn, để đảm bảo trích xuất ảnh gốc chất lượng cao cho Dynamic Scaling
+  if (cleanPath && port > 0) {
     const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
     return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanPath)}${sizeQuery}`
   }
 
-  // 3. Fallback khi không có streamPort hoặc đang dùng thumbnail cache sẵn có
-  if (targetSize >= 500 && effectiveHighRes) {
-    return effectiveHighRes
+  // Ưu tiên 3c: Fallback sử dụng cleanSrc cho kích thước lớn nếu không có cleanPath
+  if (cleanSrc && port > 0) {
+    const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
+    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}`
   }
+
+  // 4. Fallback an toàn: Không bao giờ trả về file:// hoặc đường dẫn ổ đĩa Windows trực tiếp
+  // để tránh kích hoạt lỗi "Not allowed to load local resource" của Chromium
+  if (effectiveSrc && (effectiveSrc.startsWith('file://') || /^[a-zA-Z]:[\\/]/.test(effectiveSrc))) {
+    return null
+  }
+
   return effectiveSrc || null
 }
 
@@ -137,6 +158,24 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(({
 }) => {
   const [hasError, setHasError] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [currentPort, setCurrentPort] = useState<number>(() => {
+    return (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
+  })
+
+  useEffect(() => {
+    if (streamPort > 0) {
+      setCurrentPort(streamPort)
+      return
+    }
+    const unsub = onStreamPortChange((newPort) => {
+      setCurrentPort(newPort)
+    })
+    const syncPort = getGlobalStreamPort()
+    if (syncPort > 0 && syncPort !== currentPort) {
+      setCurrentPort(syncPort)
+    }
+    return unsub
+  }, [streamPort])
 
   const resolvedUrl = useMemo(() => {
     if (isLite) return null
@@ -145,7 +184,7 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(({
       src,
       highResSrc,
       trackPath,
-      streamPort,
+      streamPort: currentPort,
       tier,
       size
     })
@@ -159,7 +198,7 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(({
     src,
     highResSrc,
     trackPath,
-    streamPort,
+    currentPort,
     tier,
     size
   ])

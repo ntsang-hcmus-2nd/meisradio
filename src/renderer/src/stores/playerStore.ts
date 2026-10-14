@@ -12,7 +12,7 @@ export interface PlayerState {
   bitPerfectEnabled: boolean
   crossfadeEnabled: boolean
   crossfadeDuration: number
-  mpvOutParams: { samplerate?: number; format?: string; channels?: string } | null
+  mpvOutParams: { samplerate?: number; format?: string; channels?: string; mode?: 'WASAPI' | 'ASIO'; isDsd?: boolean } | null
   smartAutoplay: boolean
   lyricOffset: number
   sleepTimerMode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track'

@@ -239,8 +239,13 @@ export interface TranslationDictionary {
       title: string
       label: string
       note: string
+      outputType: string
+      wasapiOption: string
+      asioOption: string
       deviceLabel: string
       deviceAuto: string
+      asioDesc: string
+      wasapiDesc: string
     }
     googleDrive: {
       title: string
@@ -413,6 +418,7 @@ export interface TranslationDictionary {
       title: string
       flacTag: string
       mp3Tag: string
+      dsdTag: string
       audioTag: string
       chooseCover: string
       trackTitle: string
@@ -461,6 +467,9 @@ export interface TranslationDictionary {
       dspNoFilter: string
       dspDirect: string
       dspBitAccurate: string
+      asioDriver: string
+      asioDriverDesc: string
+      dsdNativeBadge: string
     }
     eq: {
       title: string

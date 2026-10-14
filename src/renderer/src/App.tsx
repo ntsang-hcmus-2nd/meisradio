@@ -41,6 +41,7 @@ import { DynamicCoverArt, setGlobalStreamPort } from './components/DynamicCoverA
 import { removeAccents, matchesQuery } from './utils/textUtils'
 import { fisherYatesShuffle } from './utils/arrayUtils'
 import { formatAudioSource, formatImageSource } from './utils/urlUtils'
+import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate } from './utils/formatUtils'
 import { 
   usePlayerStore, 
   useUIStore, 
@@ -56,6 +57,11 @@ const formatDuration = (seconds: number) => {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
+}
+
+const getBrowserSinkId = (deviceId: string | null | undefined): string => {
+  if (!deviceId || deviceId === 'auto' || deviceId === 'default' || deviceId.startsWith('wasapi/') || /^\d+$/.test(deviceId)) return ''
+  return deviceId
 }
 
 export const PRESERVED_ARTIST_NAMES = [
@@ -195,7 +201,9 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
     return
   }
   const img = new Image()
-  if (imageSrc.startsWith('http://') || imageSrc.startsWith('https://')) {
+  const safeSrc = formatImageSource(imageSrc)
+  const targetSrc = safeSrc || imageSrc
+  if (targetSrc.startsWith('http://') || targetSrc.startsWith('https://')) {
     img.crossOrigin = 'Anonymous'
   }
   img.onload = () => {
@@ -220,7 +228,7 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
     saveDominantColorToCache(imageSrc, colorStr)
     callback(colorStr)
   }
-  img.src = imageSrc
+  img.src = targetSrc
 }
 
 const VirtuosoComponents = {
@@ -316,7 +324,28 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
         </div>
       </td>
       <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
-      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4"><span className="px-2 py-1 bg-theme-30 rounded text-xs text-zinc-300 font-medium uppercase">{track.format || 'MP3'}{track.bitDepth ? ` • ${track.bitDepth}-BIT` : ''}</span></td>
+      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4">
+        {(() => {
+          const isDsd = isDsdTrack(track)
+          if (isDsd) {
+            const dsdRate = getDsdRateLabel(track.sampleRate)
+            return (
+              <span 
+                className="px-2 py-1 bg-amber-500/15 border border-amber-500/30 rounded text-xs text-amber-300 font-semibold tracking-wide inline-flex items-center gap-1 shadow-sm"
+                title={`Direct Stream Digital 1-bit • ${formatAudioSampleRate(track.sampleRate) || '2.82 MHz'}`}
+              >
+                <span>{dsdRate}</span>
+                <span className="text-[10px] text-amber-400/80 font-normal">1-BIT</span>
+              </span>
+            )
+          }
+          return (
+            <span className="px-2 py-1 bg-theme-30 rounded text-xs text-zinc-300 font-medium uppercase">
+              {track.format || 'MP3'}{track.bitDepth ? ` • ${track.bitDepth}-BIT` : ''}
+            </span>
+          )
+        })()}
+      </td>
       <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
       <td onContextMenu={(e) => onContextMenu?.(track, e)} className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
     </>
@@ -346,11 +375,21 @@ const TrackGridItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying,
             {isThisTrackPlaying && isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
           </div>
         </div>
-        {track.format && (
-          <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-black/60 backdrop-blur-md text-zinc-300 uppercase">
-            {track.format}
-          </span>
-        )}
+        {(() => {
+          const isDsd = isDsdTrack(track)
+          if (isDsd) {
+            return (
+              <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/80 backdrop-blur-md text-amber-950 uppercase shadow-sm">
+                {getDsdRateLabel(track.sampleRate)}
+              </span>
+            )
+          }
+          return track.format ? (
+            <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-black/60 backdrop-blur-md text-zinc-300 uppercase">
+              {track.format}
+            </span>
+          ) : null
+        })()}
       </div>
       <div className="min-w-0">
         <h4 className={`font-semibold text-sm truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'} transition-colors`}>
@@ -424,9 +463,21 @@ const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlayi
       <span className="text-zinc-500 truncate max-w-[140px] hidden md:block">
         {track.album || ''}
       </span>
-      <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-30/80 text-zinc-300 uppercase font-mono">
-        {track.format || 'MP3'}
-      </span>
+      {(() => {
+        const isDsd = isDsdTrack(track)
+        if (isDsd) {
+          return (
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase font-mono font-bold">
+              {getDsdRateLabel(track.sampleRate)}
+            </span>
+          )
+        }
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-30/80 text-zinc-300 uppercase font-mono">
+            {track.format || 'MP3'}
+          </span>
+        )
+      })()}
       <span className="w-12 text-right text-zinc-400 font-mono text-[11px]">
         {formatDuration(track.duration)}
       </span>
@@ -478,13 +529,15 @@ const PlaylistItemCard = React.memo(({ pl, isLite, onOpen, onContextMenu, onChan
       onContextMenu={(e) => onContextMenu(pl, e)}
     >
       <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative shadow-md">
-        {(!isLite && pl.thumbnail) ? (
-          <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-zinc-600">
-            <FolderPlus size={40} />
-          </div>
-        )}
+        <DynamicCoverArt
+          src={pl.thumbnail}
+          trackPath={pl.path}
+          tier="lg"
+          isLite={isLite}
+          fallbackIcon={<FolderPlus size={40} className="text-zinc-600" />}
+          className="w-full h-full"
+          imageClassName="group-hover:scale-105 transition duration-300"
+        />
         <button 
           onClick={(e) => { e.stopPropagation(); onChangeImage(pl.name); }} 
           className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition cursor-pointer" 
@@ -530,11 +583,14 @@ const PlaylistItemRow = React.memo(({ pl, idx, isLite, onOpen, onPlay, onContext
       </div>
       <div className="col-span-7 flex items-center gap-3.5 min-w-0">
         <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-          {(!isLite && pl.thumbnail) ? (
-            <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" />
-          ) : (
-            <FolderPlus size={20} className="text-zinc-600" />
-          )}
+          <DynamicCoverArt
+            src={pl.thumbnail}
+            trackPath={pl.path}
+            tier="sm"
+            isLite={isLite}
+            fallbackIcon={<FolderPlus size={20} className="text-zinc-600" />}
+            className="w-full h-full"
+          />
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <button
               onClick={(e) => {
@@ -577,7 +633,14 @@ const PlaylistItemCompact = React.memo(({ pl, idx, isLite, onOpen, onPlay, onCon
       <div className="flex items-center gap-3.5 min-w-0 flex-1">
         <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
         <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-          {(!isLite && pl.thumbnail) ? <img loading="lazy" decoding="async" src={pl.thumbnail} className="w-full h-full object-cover" /> : <FolderPlus size={16} className="text-zinc-600" />}
+          <DynamicCoverArt
+            src={pl.thumbnail}
+            trackPath={pl.path}
+            tier="sm"
+            isLite={isLite}
+            fallbackIcon={<FolderPlus size={16} className="text-zinc-600" />}
+            className="w-full h-full"
+          />
         </div>
         <div className="min-w-0 flex-1">
           <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
@@ -788,7 +851,8 @@ export default function App() {
     availableAudioDevices, setAvailableAudioDevices,
     selectedDeviceId, setSelectedDeviceId,
     eqBands, setEqBands,
-    preampGain, setPreampGain
+    preampGain, setPreampGain,
+    bitPerfectType, setBitPerfectType
   } = useAudioStore()
 
   // Lyrics Store
@@ -821,6 +885,24 @@ export default function App() {
   useEffect(() => { 
     selectedDeviceRef.current = selectedDeviceId 
   }, [selectedDeviceId])
+
+  const [audioRemountCount, setAudioRemountCount] = useState(0)
+  const prevTrackModeRef = useRef<'bass' | 'webaudio'>('webaudio')
+
+  const resetWebAudioPipeline = useCallback(async () => {
+    if (audioCtxRef.current) {
+      try {
+        await audioCtxRef.current.close()
+      } catch (e) {}
+      audioCtxRef.current = null
+    }
+    sourceNodeRef.current = null
+    analyserNodeRef.current = null
+    preampNodeRef.current = null
+    compressorNodeRef.current = null
+    filterNodesRef.current = []
+    setAudioRemountCount((c) => c + 1)
+  }, [])
 
   // Tag Editor Local States
   const [editingTrack, setEditingTrack] = useState<any | null>(null)
@@ -1337,10 +1419,11 @@ export default function App() {
     }
   }, [userPlaylists]);
 
-  const handleReloadLibrary = async (hardRescan: boolean = false) => {
+  const handleReloadLibrary = async (hardRescan?: boolean | any) => {
+    const isHard = typeof hardRescan === 'boolean' ? hardRescan : false
     setIsReloading(true)
     try {
-      await loadLibrary(true, hardRescan)
+      await loadLibrary(true, isHard)
     } catch (e) {
       console.error(e)
     } finally {
@@ -1644,6 +1727,21 @@ export default function App() {
       }
     }
 
+    const nextMode = (bitPerfectEnabled || isDsdTrack(trackToPlay)) ? 'bass' : 'webaudio'
+    if (prevTrackModeRef.current === 'bass' && nextMode === 'webaudio') {
+      await window.api.mpvStop().catch(() => {})
+      await resetWebAudioPipeline()
+    } else if (nextMode === 'webaudio') {
+      window.api.mpvStop().catch(() => {})
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed' || (audioCtxRef.current.state as string) === 'interrupted') {
+        await resetWebAudioPipeline()
+      }
+    }
+    prevTrackModeRef.current = nextMode
+    if (audioRef.current && nextMode === 'webaudio') {
+      audioRef.current.volume = Math.max(0, Math.min(1, volume))
+    }
+
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
     if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
@@ -1868,12 +1966,12 @@ export default function App() {
           return
         } else {
           setIsPlaying(false)
-          if (bitPerfectEnabled && (window.api as any)?.mpvStop) (window.api as any).mpvStop()
+          if ((bitPerfectEnabled || isDsdTrack(currentTrack)) && (window.api as any)?.mpvStop) (window.api as any).mpvStop()
           return
         }
       } else {
         setIsPlaying(false)
-        if (bitPerfectEnabled && (window.api as any)?.mpvStop) (window.api as any).mpvStop()
+        if ((bitPerfectEnabled || isDsdTrack(currentTrack)) && (window.api as any)?.mpvStop) (window.api as any).mpvStop()
         return
       }
     }
@@ -1882,12 +1980,14 @@ export default function App() {
 
   const handlePrev = () => {
     if (!currentTrack) return
-    const curTime = bitPerfectEnabled
+    const isDsd = isDsdTrack(currentTrack)
+    const useMpv = bitPerfectEnabled || isDsd
+    const curTime = useMpv
       ? ((audioRef.current as any)?._currentTime || 0)
       : (audioRef.current?.currentTime || 0)
 
     if (curTime > 3) {
-      if (bitPerfectEnabled) {
+      if (useMpv) {
         window.api.mpvSeek(0, 'absolute')
       } else if (audioRef.current) {
         audioRef.current.currentTime = 0
@@ -1914,7 +2014,9 @@ export default function App() {
       return
     }
     
-    if (bitPerfectEnabled) {
+    const isDsd = isDsdTrack(currentTrack)
+    const useMpv = bitPerfectEnabled || isDsd
+    if (useMpv) {
       if (isPlaying) {
         window.api.mpvPause()
         setIsPlaying(false)
@@ -1927,6 +2029,9 @@ export default function App() {
         audioRef.current.pause()
         setIsPlaying(false)
       } else {
+        if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+          audioCtxRef.current.resume().catch(() => {})
+        }
         audioRef.current.play().catch(console.warn)
         setIsPlaying(true)
       }
@@ -1937,14 +2042,14 @@ export default function App() {
     const val = parseFloat(e.target.value)
     setVolume(val)
     if (audioRef.current) audioRef.current.volume = val
-    if (bitPerfectEnabled) window.api.mpvSetVolume(val)
+    if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.mpvSetVolume(val)
   }
 
   const handleVolumeUp = () => {
     setVolume(prev => {
       const newVol = Math.min(1, Math.round((prev + 0.05) * 100) / 100)
       if (audioRef.current) audioRef.current.volume = newVol
-      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
+      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.mpvSetVolume(newVol)
       return newVol
     })
   }
@@ -1953,22 +2058,23 @@ export default function App() {
     setVolume(prev => {
       const newVol = Math.max(0, Math.round((prev - 0.05) * 100) / 100)
       if (audioRef.current) audioRef.current.volume = newVol
-      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
+      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.mpvSetVolume(newVol)
       return newVol
     })
   }
 
   const toggleMute = () => {
+    const isMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
     if (volume > 0) {
       setPrevVolume(volume)
       setVolume(0)
       if (audioRef.current) audioRef.current.volume = 0
-      if (bitPerfectEnabled) window.api.mpvSetVolume(0)
+      if (isMpv) window.api.mpvSetVolume(0)
     } else {
       const newVol = prevVolume > 0 ? prevVolume : 1
       setVolume(newVol)
       if (audioRef.current) audioRef.current.volume = newVol
-      if (bitPerfectEnabled) window.api.mpvSetVolume(newVol)
+      if (isMpv) window.api.mpvSetVolume(newVol)
     }
   }
 
@@ -2351,11 +2457,12 @@ export default function App() {
     }
 
     // 2. Cập nhật ảnh nền giao diện
-    if (effectiveBgImage) {
-      const sanitizedUrl = effectiveBgImage.replace(/"/g, '\\"')
+    const bgUrlToUse = resolvedBgImage || effectiveBgImage
+    if (bgUrlToUse) {
+      const sanitizedUrl = bgUrlToUse.replace(/"/g, '\\"')
       document.documentElement.style.setProperty('--bg-image', `url("${sanitizedUrl}")`)
       
-      extractThemeColors(effectiveBgImage, trackKey || effectiveBgImage).then(colors => {
+      extractThemeColors(bgUrlToUse, trackKey || bgUrlToUse).then(colors => {
         if (colors && !isCore) {
           document.documentElement.style.setProperty('--theme-60', colors.primary60)
           document.documentElement.style.setProperty('--theme-30', colors.secondary30)
@@ -2365,9 +2472,10 @@ export default function App() {
     } else {
       document.documentElement.style.setProperty('--bg-image', 'none')
       
-      const trackCover = trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt
+      const trackCover = resolvedBgImage || trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt
       if (trackCover) {
-        extractThemeColors(trackCover, trackKey || trackCover).then(colors => {
+        const safeTrackCover = formatImageSource(trackCover, streamPort) || trackCover
+        extractThemeColors(safeTrackCover, trackKey || safeTrackCover).then(colors => {
           if (colors && !isCore) {
             document.documentElement.style.setProperty('--theme-60', colors.primary60)
             document.documentElement.style.setProperty('--theme-30', colors.secondary30)
@@ -2395,8 +2503,7 @@ export default function App() {
   // Change Audio Device
   useEffect(() => {
     if (selectedDeviceId) {
-      const isWasapiOrAuto = selectedDeviceId === 'auto' || selectedDeviceId === 'default' || selectedDeviceId.startsWith('wasapi/')
-      const browserSinkId = isWasapiOrAuto ? '' : selectedDeviceId
+      const browserSinkId = getBrowserSinkId(selectedDeviceId)
       if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
         (audioRef.current as any).setSinkId(browserSinkId).catch(() => {})
       }
@@ -3102,7 +3209,7 @@ export default function App() {
       console.log(`[Audio Check] AudioContext Rate: ${ctxRate}Hz | File Rate: ${fileRate || 44100}Hz`);
       
       // Chỉ cảnh báo nếu AudioContext đã đồng bộ với currentSampleRate mà phần cứng vẫn bị lệch
-      if (fileRate && ctxRate !== fileRate && ctxRate === currentSampleRate && !bitPerfectEnabled) {
+      if (fileRate && ctxRate !== fileRate && ctxRate === currentSampleRate && !bitPerfectEnabled && !isDsdTrack(currentTrack)) {
         console.warn(`[Warning] Đang xảy ra Resampling từ ${fileRate}Hz sang ${ctxRate}Hz!`);
       }
     }
@@ -3134,22 +3241,22 @@ export default function App() {
     return () => observer.disconnect()
   }, [activeView, activePlaylist, matchedPlaylists.length])
 
-  // Get audio output devices (native MPV/WASAPI and browser outputs)
+  // Get audio output devices (BASS WASAPI/ASIO and system endpoints)
   useEffect(() => {
     const getDevices = async () => {
       try {
         if (window.api && (window.api as any).getAudioDevices) {
-          const res = await (window.api as any).getAudioDevices()
+          const res = await (window.api as any).getAudioDevices(bitPerfectType)
           if (res && res.success && Array.isArray(res.devices)) {
             setAvailableAudioDevices(res.devices)
           }
         }
       } catch (err) {
-        console.error("Lỗi lấy danh sách thiết bị MPV:", err)
+        console.error("Lỗi lấy danh sách thiết bị âm thanh:", err)
       }
     }
     getDevices()
-  }, [])
+  }, [bitPerfectType])
 
   // Fetch Original High-Res Cover for Fullscreen Lyrics
   useEffect(() => {
@@ -3177,8 +3284,7 @@ export default function App() {
   useEffect(() => {
     const applyDevice = async () => {
       try {
-        const isWasapiOrAuto = selectedDeviceId === 'auto' || selectedDeviceId === 'default' || selectedDeviceId.startsWith('wasapi/')
-        const targetId = isWasapiOrAuto ? '' : selectedDeviceId
+        const targetId = getBrowserSinkId(selectedDeviceId)
         if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
           await (audioRef.current as any).setSinkId(targetId).catch(() => {})
         }
@@ -3208,12 +3314,13 @@ export default function App() {
       if (cfg.volume !== undefined) setVolume(cfg.volume)
       if (cfg.crossfadeEnabled !== undefined) setCrossfadeEnabled(cfg.crossfadeEnabled)
       if (cfg.bitPerfectEnabled !== undefined) setBitPerfectEnabled(cfg.bitPerfectEnabled)
+      if (cfg.bitPerfectType) setBitPerfectType(cfg.bitPerfectType)
       if (cfg.crossfadeDuration !== undefined) setCrossfadeDuration(cfg.crossfadeDuration)
       if (cfg.eqBands) setEqBands(cfg.eqBands)
       if (cfg.isEqEnabled !== undefined) setIsEqEnabled(cfg.isEqEnabled)
       if (cfg.googleDriveApiKey) setGoogleDriveApiKey(cfg.googleDriveApiKey)
       if (cfg.driveLink) setDriveLink(cfg.driveLink) 
-      if (cfg.selectedDeviceId) setSelectedDeviceId(cfg.selectedDeviceId)
+      if (cfg.selectedDeviceId) setSelectedDeviceId(cfg.selectedDeviceId === '0' ? 'auto' : cfg.selectedDeviceId)
       if (cfg.showVisualizer !== undefined) if (!cfg.bitPerfectEnabled) setShowVisualizer(cfg.showVisualizer)
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
@@ -3383,13 +3490,16 @@ export default function App() {
       }
     }
 
+    const isDsd = isDsdTrack(currentTrack)
+    const useMpvTime = bitPerfectEnabled || isDsd
+
     const curPos = override?.position !== undefined 
       ? override.position 
-      : (bitPerfectEnabled ? ((audioRef.current as any)?._currentTime || 0) : (audioRef.current?.currentTime || 0))
+      : (useMpvTime ? ((audioRef.current as any)?._currentTime || 0) : (audioRef.current?.currentTime || 0))
     
     const curPlaying = override?.isPlaying !== undefined ? override.isPlaying : isPlaying
 
-    const curDur = bitPerfectEnabled 
+    const curDur = useMpvTime 
       ? ((audioRef.current as any)?._duration || currentTrack.duration || 0) 
       : (audioRef.current?.duration || currentTrack.duration || 0)
 
@@ -3425,7 +3535,7 @@ export default function App() {
     let isCancelled = false
 
     const setupAudio = async () => {
-      if (audioCtxRef.current && audioCtxRef.current.sampleRate !== currentSampleRate) {
+      if (audioCtxRef.current && (audioCtxRef.current.sampleRate !== currentSampleRate || audioCtxRef.current.state === 'closed' || (audioCtxRef.current.state as string) === 'interrupted')) {
         try { await audioCtxRef.current.close() } catch (e) {}
         if (isCancelled) return
         audioCtxRef.current = null
@@ -3443,8 +3553,7 @@ export default function App() {
         catch (e) { audioCtxRef.current = new AudioContextClass() }
         
         // Bơm lại thiết bị đầu ra cho Context mới ngay khi nó vừa được tái tạo
-        const isWasapiOrAuto = !selectedDeviceRef.current || selectedDeviceRef.current === 'auto' || selectedDeviceRef.current === 'default' || selectedDeviceRef.current.startsWith('wasapi/')
-        const targetId = isWasapiOrAuto ? '' : selectedDeviceRef.current
+        const targetId = getBrowserSinkId(selectedDeviceRef.current)
         if (typeof (audioCtxRef.current as any).setSinkId === 'function') {
           (audioCtxRef.current as any).setSinkId(targetId).catch(() => {})
         }
@@ -3534,7 +3643,7 @@ export default function App() {
     return () => {
       isCancelled = true
     }
-  }, [isEqEnabled, currentSampleRate, isCore, eqBands.length, loudnessNormalization])
+  }, [isEqEnabled, currentSampleRate, isCore, eqBands.length, loudnessNormalization, bitPerfectEnabled, audioRemountCount])
 
   // EFFECT 2: THAY ĐỔI EQ & PREAMP REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
   useEffect(() => {
@@ -3574,7 +3683,7 @@ export default function App() {
 
   // Audio Playing Effect
   useEffect(() => {
-    if (bitPerfectEnabled) return;
+    if (bitPerfectEnabled || isDsdTrack(currentTrack)) return;
     let fadeInterval: any = null
     if (audioRef.current && audioCtxRef.current) {
       if (isPlaying) {
@@ -3752,7 +3861,7 @@ export default function App() {
 
     audio.addEventListener('timeupdate', handleTimeUpdate)
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [lyrics, currentLyricIndex, playQueue, currentTrack, repeatMode, lyricOffset, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, handleNext])
+  }, [lyrics, currentLyricIndex, playQueue, currentTrack, repeatMode, lyricOffset, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, handleNext, audioRemountCount])
 
   // Scroll Active Lyric
   useEffect(() => {
@@ -3784,7 +3893,7 @@ export default function App() {
       // ArrowRight -> Seek +5s
       if (e.code === 'ArrowRight' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         e.preventDefault()
-        if (bitPerfectEnabled) {
+        if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
           window.api.mpvSeek(5, 'relative')
         } else if (audioRef.current && currentTrack) {
           audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
@@ -3795,7 +3904,7 @@ export default function App() {
       // ArrowLeft -> Seek -5s
       if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         e.preventDefault()
-        if (bitPerfectEnabled) {
+        if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
           window.api.mpvSeek(-5, 'relative')
         } else if (audioRef.current && currentTrack) {
           audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
@@ -3889,14 +3998,14 @@ export default function App() {
             handleVolumeDown()
             break
           case 'seek-forward':
-            if (bitPerfectEnabled) {
+            if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
               window.api.mpvSeek(5, 'relative')
             } else if (audioRef.current && currentTrack) {
               audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
             }
             break
           case 'seek-backward':
-            if (bitPerfectEnabled) {
+            if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
               window.api.mpvSeek(-5, 'relative')
             } else if (audioRef.current && currentTrack) {
               audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
@@ -3942,7 +4051,7 @@ export default function App() {
       if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return
 
       const files = Array.from(e.dataTransfer.files)
-      const audioExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.opus', '.aac', '.alac', '.aiff', '.wma']
+      const audioExtensions = ['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.opus', '.aac', '.alac', '.aiff', '.wma', '.dsf', '.dff', '.dsd']
       const droppedPaths: string[] = []
 
       for (const file of files) {
@@ -3963,6 +4072,8 @@ export default function App() {
       const newTracks = droppedPaths.map(p => {
         const fileName = p.split(/[\\/]/).pop() || 'Unknown'
         const title = fileName.replace(/\.[^/.]+$/, '')
+        const ext = p.split('.').pop()?.toLowerCase() || ''
+        const isDsd = ext === 'dsf' || ext === 'dff' || ext === 'dsd'
         return {
           id: p,
           title,
@@ -3970,7 +4081,10 @@ export default function App() {
           album: 'Local Drops',
           filePath: p,
           duration: 0,
-          format: p.split('.').pop()?.toUpperCase() || 'AUDIO'
+          format: isDsd ? (ext === 'dsf' ? 'DSF' : (ext === 'dff' ? 'DFF' : 'DSD')) : (ext.toUpperCase() || 'AUDIO'),
+          bitDepth: isDsd ? 1 : undefined,
+          sampleRate: isDsd ? 2822400 : undefined,
+          lossless: isDsd || ['flac', 'wav', 'alac', 'aiff'].includes(ext)
         }
       })
 
@@ -4035,7 +4149,7 @@ export default function App() {
       ['nexttrack', () => { handleNext() }],
       ['seekto', (details) => {
         if (details.seekTime !== undefined && details.seekTime !== null) {
-          if (bitPerfectEnabled) {
+          if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
             window.api?.mpvSeek?.(details.seekTime, 'absolute')
           } else if (audioRef.current) {
             audioRef.current.currentTime = details.seekTime
@@ -4044,7 +4158,7 @@ export default function App() {
       }],
       ['seekbackward', (details) => {
         const offset = details.seekOffset || 5
-        if (bitPerfectEnabled) {
+        if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
           window.api?.mpvSeek?.(-offset, 'relative')
         } else if (audioRef.current) {
           audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - offset)
@@ -4052,7 +4166,7 @@ export default function App() {
       }],
       ['seekforward', (details) => {
         const offset = details.seekOffset || 5
-        if (bitPerfectEnabled) {
+        if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
           window.api?.mpvSeek?.(offset, 'relative')
         } else if (audioRef.current && audioRef.current.duration) {
           audioRef.current.currentTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + offset)
@@ -4270,7 +4384,8 @@ export default function App() {
   // MPV Listeners
   useEffect(() => {
     const unTime = window.api.onMpvTime((val) => {
-      if (bitPerfectEnabled && audioRef.current) {
+      const useMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
+      if (useMpv && audioRef.current) {
         (audioRef.current as any)._currentTime = val
         const dur = (audioRef.current as any)._duration || currentTrack?.duration || 0
         if (
@@ -4300,12 +4415,14 @@ export default function App() {
       }
     })
     const unDuration = window.api.onMpvDuration((val) => {
-      if (bitPerfectEnabled && audioRef.current) {
+      const useMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
+      if (useMpv && audioRef.current) {
         (audioRef.current as any)._duration = val
       }
     })
     const unPaused = window.api.onMpvPaused((val) => {
-      if (bitPerfectEnabled) {
+      const useMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
+      if (useMpv) {
         setIsPlaying(!val)
       }
     })
@@ -4318,7 +4435,8 @@ export default function App() {
         showToast(t('player.sleepTimerStoppedToast'), 'info')
         return
       }
-      if (bitPerfectEnabled) {
+      const useMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
+      if (useMpv) {
         if (!hasTriggeredCrossfadeRef.current) {
           handleNext()
         }
@@ -4344,15 +4462,15 @@ export default function App() {
   }, [handleNext, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, sleepTimerMode, currentTrack, lyrics, currentLyricIndex, lyricOffset])
 
   useEffect(() => {
-    if (!bitPerfectEnabled) {
+    if (!bitPerfectEnabled && !isDsdTrack(currentTrack)) {
       setMpvOutParams(null)
     }
-  }, [bitPerfectEnabled])
+  }, [bitPerfectEnabled, currentTrack])
 
   // Watch currentTrack
   useEffect(() => {
     if (currentTrack && currentTrack.filePath) {
-      if (bitPerfectEnabled) {
+      if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
         window.api.mpvPlay(currentTrack.filePath, crossfadeEnabled ? crossfadeDuration : 0)
         if (audioRef.current) audioRef.current.pause()
         if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
@@ -4363,16 +4481,16 @@ export default function App() {
           }, 150)
         }
       } else {
-        // Dừng mpv khi phát bằng HTML Audio
-        window.api.mpvPause()
+        // Dừng BASS/WASAPI khi phát bằng HTML Audio để giải phóng thiết bị
+        window.api.mpvStop().catch(() => {})
       }
     }
-  }, [currentTrack, bitPerfectEnabled, crossfadeEnabled, crossfadeDuration])
+  }, [currentTrack, bitPerfectEnabled, bitPerfectType, crossfadeEnabled, crossfadeDuration])
 
   // Watch EQ & Preamp
   useEffect(() => {
-    // Trong chế độ Bit-Perfect, bypass toàn bộ EQ filter để bảo toàn 100% bit dữ liệu truyền tới DAC
-    if (bitPerfectEnabled) {
+    // Trong chế độ Bit-Perfect hoặc DSD, bypass toàn bộ EQ filter để bảo toàn 100% bit dữ liệu truyền tới DAC
+    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
       window.api.mpvSetEqualizer([], 0)
       return
     }
@@ -4381,14 +4499,16 @@ export default function App() {
     } else {
       window.api.mpvSetEqualizer([], 0)
     }
-  }, [eqBands, isEqEnabled, preampGain, bitPerfectEnabled])
+  }, [eqBands, isEqEnabled, preampGain, bitPerfectEnabled, currentTrack])
 
   // Watch Volume
   useEffect(() => {
-    if (bitPerfectEnabled) {
+    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
       window.api.mpvSetVolume(volume)
+    } else if (audioRef.current) {
+      audioRef.current.volume = Math.max(0, Math.min(1, volume))
     }
-  }, [volume, bitPerfectEnabled])
+  }, [volume, bitPerfectEnabled, currentTrack, audioRemountCount])
 
   return (
     <>
@@ -4412,12 +4532,22 @@ export default function App() {
       )}
       {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG VÀ ÉP THAY ĐỔI SAMPLE RATE */}
       <audio
-        key={currentSampleRate} // Tự động remount khi Sample Rate thay đổi
-        ref={audioRef}
+        key={`${currentSampleRate}_${audioRemountCount}`} // Tự động remount khi Sample Rate hoặc audio pipeline thay đổi
+        ref={(el) => {
+          (audioRef as any).current = el
+          if (el) {
+            el.volume = Math.max(0, Math.min(1, volume))
+          }
+        }}
         crossOrigin="anonymous" // QUAN TRỌNG: Ổn định luồng CORS cho Web Audio API
         preload="auto"
-        autoPlay={!bitPerfectEnabled}
-        src={currentTrack ? formatAudioSource(currentTrack.filePath, streamPort) : undefined}
+        autoPlay={!bitPerfectEnabled && !isDsdTrack(currentTrack)}
+        src={currentTrack && !isDsdTrack(currentTrack) ? formatAudioSource(currentTrack.filePath, streamPort) : undefined}
+        onPlay={() => {
+          if (audioRef.current && !bitPerfectEnabled && !isDsdTrack(currentTrack)) {
+            audioRef.current.volume = Math.max(0, Math.min(1, volume))
+          }
+        }}
         onEnded={() => { 
           const audio = audioRef.current;
           // BẢO HIỂM 2 (CHỐNG ĐỨT LUỒNG NGẦM):
@@ -4445,6 +4575,7 @@ export default function App() {
         }}
         onLoadedMetadata={handleLoadedMetadata}
         onError={(e) => {
+          if (isDsdTrack(currentTrack)) return;
           // BẢO HIỂM 3 (CHỐNG TREO THẺ AUDIO & LẶP VÔ HẠN):
           const audio = audioRef.current;
           const mediaErr = (e.currentTarget as HTMLAudioElement).error;
@@ -4816,7 +4947,7 @@ export default function App() {
                 </div>
               )}
 
-              <button onClick={handleReloadLibrary} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-theme-60/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title={t('header.refreshLibrary')}>
+              <button onClick={() => handleReloadLibrary(false)} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-theme-60/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title={t('header.refreshLibrary')}>
                 <RefreshCw size={16} className={isReloading ? 'animate-spin' : ''} />
                 {isReloading ? t('header.refreshing') : t('header.refresh')}
               </button>
@@ -5141,7 +5272,13 @@ export default function App() {
                           <div className="flex items-end gap-6 min-w-0">
                             {activeAlbum.thumbnail && (
                               <div className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl flex-shrink-0">
-                                <img src={activeAlbum.thumbnail} className="w-full h-full object-cover" />
+                                <DynamicCoverArt
+                                  src={activeAlbum.thumbnail}
+                                  tier="lg"
+                                  isLite={isLite}
+                                  fallbackIcon={<Disc size={48} className="text-zinc-600" />}
+                                  className="w-full h-full"
+                                />
                               </div>
                             )}
                             <div className="min-w-0">
@@ -5337,7 +5474,13 @@ export default function App() {
                           <div className="flex items-end gap-6 min-w-0">
                             {activeAlbum.thumbnail && (
                               <div className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl flex-shrink-0">
-                                <img src={activeAlbum.thumbnail} className="w-full h-full object-cover" />
+                                <DynamicCoverArt
+                                  src={activeAlbum.thumbnail}
+                                  tier="lg"
+                                  isLite={isLite}
+                                  fallbackIcon={<Disc size={48} className="text-amber-500/50" />}
+                                  className="w-full h-full"
+                                />
                               </div>
                             )}
                             <div className="min-w-0">
@@ -5880,7 +6023,7 @@ export default function App() {
                           <Plus size={16} /> {t('settings.library.addFolder')}
                         </button>
                         <button 
-                          onClick={handleReloadLibrary} 
+                          onClick={() => handleReloadLibrary(false)} 
                           disabled={isReloading}
                           className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition"
                         >
@@ -5903,7 +6046,7 @@ export default function App() {
                             const wasPlaying = isPlaying
 
                             try {
-                              await window.api.setBitPerfect(val, volume)
+                              await window.api.setBitPerfect(val, volume, bitPerfectType)
                             } catch (err: any) {
                               showToast(`${language === 'vi' ? 'Không thể cấu hình Bit-perfect' : 'Could not configure Bit-perfect'}: ${err?.message || err}`, 'error')
                               return
@@ -5918,14 +6061,25 @@ export default function App() {
                               if (val) {
                                 if (audioRef.current) audioRef.current.pause()
                               } else {
-                                if (audioRef.current) {
-                                  audioRef.current.currentTime = currentPlaybackTime
-                                  if (wasPlaying) {
-                                    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-                                      await audioCtxRef.current.resume().catch(() => {})
+                                if (isDsdTrack(prevTrack)) {
+                                  // DSD không thể giải mã qua Web Audio HTML5, tiếp tục phát bằng BASS
+                                  window.api.mpvPlay(prevTrack.filePath, 0)
+                                } else {
+                                  // Nhạc PCM: Dừng BASS và giải phóng thiết bị độc quyền ngay lập tức
+                                  await window.api.mpvStop().catch(() => {})
+                                  await resetWebAudioPipeline()
+                                  setTimeout(() => {
+                                    if (audioRef.current) {
+                                      audioRef.current.volume = Math.max(0, Math.min(1, volume))
+                                      audioRef.current.currentTime = currentPlaybackTime
+                                      if (wasPlaying) {
+                                        if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+                                          audioCtxRef.current.resume().catch(() => {})
+                                        }
+                                        audioRef.current.play().catch(console.warn)
+                                      }
                                     }
-                                    audioRef.current.play().catch(console.warn)
-                                  }
+                                  }, 100)
                                 }
                               }
                             }
@@ -5935,32 +6089,139 @@ export default function App() {
                       </div>
                       <p className="text-xs text-zinc-500 mt-2">{t('settings.bitPerfect.note')}</p>
 
-                      {/* Lựa chọn thiết bị đầu ra âm thanh / DAC */}
-                      <div className="mt-4">
-                        <label className="block text-zinc-300 text-xs font-medium mb-1.5">
-                          {t('settings.bitPerfect.deviceLabel')}
-                        </label>
-                        <select
-                          value={selectedDeviceId}
-                          onChange={(e) => {
-                            const newDev = e.target.value
-                            setSelectedDeviceId(newDev)
-                            if (window.api && (window.api as any).setAudioDevice) {
-                              (window.api as any).setAudioDevice(newDev)
-                            }
-                          }}
-                          className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-theme-10 transition-colors"
-                        >
-                          <option value="auto">{t('settings.bitPerfect.deviceAuto')}</option>
-                          {availableAudioDevices
-                            .filter(d => d.name !== 'auto')
-                            .map((dev) => (
-                              <option key={dev.name} value={dev.name}>
-                                {dev.description || dev.name}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
+                      {/* Khi bật Bit-Perfect: Cung cấp 2 lựa chọn WASAPI và ASIO */}
+                      {bitPerfectEnabled && (
+                        <div className="mt-4 p-4 rounded-xl bg-zinc-900/70 border border-theme-30/60 space-y-4">
+                          <div>
+                            <label className="block text-zinc-300 text-xs font-semibold uppercase tracking-wider mb-2">
+                              {t('settings.bitPerfect.outputType')}
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {/* Option WASAPI */}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (bitPerfectType === 'wasapi') return
+                                  const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
+                                  if (currentPlaybackTime > 0) pendingSeekTimeRef.current = currentPlaybackTime
+                                  setBitPerfectType('wasapi')
+                                  await window.api.setBitPerfectOutputType('wasapi')
+                                  const res = await window.api.getAudioDevices('wasapi')
+                                  if (res?.success && Array.isArray(res.devices)) {
+                                    setAvailableAudioDevices(res.devices)
+                                    setSelectedDeviceId('auto')
+                                    window.api.setAudioDevice('auto')
+                                  }
+                                }}
+                                className={`flex flex-col items-start p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                  bitPerfectType === 'wasapi'
+                                    ? 'bg-theme-10/10 border-theme-10 text-white shadow-sm ring-1 ring-theme-10/30'
+                                    : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between w-full mb-1">
+                                  <span className="text-xs font-bold text-zinc-100">{t('settings.bitPerfect.wasapiOption')}</span>
+                                  {bitPerfectType === 'wasapi' && (
+                                    <span className="w-2 h-2 rounded-full bg-theme-10" />
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-zinc-400 leading-relaxed">
+                                  {t('settings.bitPerfect.wasapiDesc')}
+                                </span>
+                              </button>
+
+                              {/* Option ASIO */}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (bitPerfectType === 'asio') return
+                                  const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
+                                  if (currentPlaybackTime > 0) pendingSeekTimeRef.current = currentPlaybackTime
+                                  setBitPerfectType('asio')
+                                  await window.api.setBitPerfectOutputType('asio')
+                                  const res = await window.api.getAudioDevices('asio')
+                                  if (res?.success && Array.isArray(res.devices)) {
+                                    setAvailableAudioDevices(res.devices)
+                                    setSelectedDeviceId('auto')
+                                    window.api.setAudioDevice('auto')
+                                  }
+                                }}
+                                className={`flex flex-col items-start p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                  bitPerfectType === 'asio'
+                                    ? 'bg-theme-10/10 border-theme-10 text-white shadow-sm ring-1 ring-theme-10/30'
+                                    : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between w-full mb-1">
+                                  <span className="text-xs font-bold text-zinc-100">{t('settings.bitPerfect.asioOption')}</span>
+                                  {bitPerfectType === 'asio' && (
+                                    <span className="w-2 h-2 rounded-full bg-theme-10" />
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-zinc-400 leading-relaxed">
+                                  {t('settings.bitPerfect.asioDesc')}
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Lựa chọn thiết bị đầu ra âm thanh / DAC */}
+                          <div>
+                            <label className="block text-zinc-300 text-xs font-medium mb-1.5">
+                              {t('settings.bitPerfect.deviceLabel')} ({bitPerfectType === 'asio' ? 'ASIO Driver' : 'WASAPI Endpoint'})
+                            </label>
+                            <select
+                              value={selectedDeviceId}
+                              onChange={(e) => {
+                                const newDev = e.target.value
+                                setSelectedDeviceId(newDev)
+                                if (window.api && (window.api as any).setAudioDevice) {
+                                  (window.api as any).setAudioDevice(newDev)
+                                }
+                              }}
+                              className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-theme-10 transition-colors"
+                            >
+                              <option value="auto">{t('settings.bitPerfect.deviceAuto')}</option>
+                              {availableAudioDevices
+                                .filter(d => d.name !== 'auto')
+                                .map((dev) => (
+                                  <option key={dev.name} value={dev.name}>
+                                    {dev.description || dev.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Lựa chọn thiết bị khi không bật Bit-Perfect */}
+                      {!bitPerfectEnabled && (
+                        <div className="mt-4">
+                          <label className="block text-zinc-300 text-xs font-medium mb-1.5">
+                            {t('settings.bitPerfect.deviceLabel')}
+                          </label>
+                          <select
+                            value={selectedDeviceId}
+                            onChange={(e) => {
+                              const newDev = e.target.value
+                              setSelectedDeviceId(newDev)
+                              if (window.api && (window.api as any).setAudioDevice) {
+                                (window.api as any).setAudioDevice(newDev)
+                              }
+                            }}
+                            className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-theme-10 transition-colors"
+                          >
+                            <option value="auto">{t('settings.bitPerfect.deviceAuto')}</option>
+                            {availableAudioDevices
+                              .filter(d => d.name !== 'auto')
+                              .map((dev) => (
+                                <option key={dev.name} value={dev.name}>
+                                  {dev.description || dev.name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
 
                       {/* Cân bằng âm lượng (Loudness Normalization) */}
                       <div className="flex items-center justify-between mt-5 pt-4 border-t border-theme-30/40">
@@ -6297,11 +6558,15 @@ export default function App() {
                               >
                                 <div className="flex items-center gap-4 min-w-0">
                                   <div className="w-14 h-14 rounded-full overflow-hidden bg-theme-30 border border-theme-30/80 shadow-md flex items-center justify-center flex-shrink-0">
-                                    {(!isLite && artist.coverArt) ? (
-                                      <img loading="lazy" src={artist.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                                    ) : (
-                                      <Mic2 size={24} className="text-theme-10" />
-                                    )}
+                                    <DynamicCoverArt
+                                      src={artist.coverArt}
+                                      trackPath={artist.tracks?.[0]?.filePath}
+                                      tier="sm"
+                                      isLite={isLite}
+                                      fallbackIcon={<Mic2 size={24} className="text-theme-10" />}
+                                      className="w-full h-full"
+                                      imageClassName="group-hover:scale-105 transition duration-300"
+                                    />
                                   </div>
                                   <div className="min-w-0">
                                     <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">{artist.name}</h3>
@@ -6350,11 +6615,15 @@ export default function App() {
                                   >
                                     <div className="flex items-center gap-4 min-w-0">
                                       <div className="w-14 h-14 rounded-full overflow-hidden bg-theme-30 border border-theme-30/80 shadow-md flex items-center justify-center flex-shrink-0">
-                                        {(!isLite && artist.coverArt) ? (
-                                          <img loading="lazy" src={artist.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                                        ) : (
-                                          <Mic2 size={24} className="text-theme-10" />
-                                        )}
+                                        <DynamicCoverArt
+                                          src={artist.coverArt}
+                                          trackPath={artist.tracks?.[0]?.filePath}
+                                          tier="sm"
+                                          isLite={isLite}
+                                          fallbackIcon={<Mic2 size={24} className="text-theme-10" />}
+                                          className="w-full h-full"
+                                          imageClassName="group-hover:scale-105 transition duration-300"
+                                        />
                                       </div>
                                       <div className="min-w-0">
                                         <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">{artist.name}</h3>
@@ -6394,11 +6663,14 @@ export default function App() {
 
                     <div className="flex items-end gap-6 mb-6">
                       <div className="w-36 h-36 rounded-full overflow-hidden bg-theme-30 border-2 border-theme-10/40 shadow-2xl flex items-center justify-center flex-shrink-0">
-                        {(!isLite && activeArtist.coverArt) ? (
-                          <img src={activeArtist.coverArt} className="w-full h-full object-cover" />
-                        ) : (
-                          <Mic2 size={48} className="text-theme-10" />
-                        )}
+                        <DynamicCoverArt
+                          src={activeArtist.coverArt}
+                          trackPath={activeArtist.tracks?.[0]?.filePath}
+                          tier="lg"
+                          isLite={isLite}
+                          fallbackIcon={<Mic2 size={48} className="text-theme-10" />}
+                          className="w-full h-full"
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">{t('artistsView.title')}</p>
@@ -6451,13 +6723,15 @@ export default function App() {
                             className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between"
                           >
                             <div className="aspect-square bg-theme-30 rounded-lg mb-2.5 overflow-hidden relative shadow-md">
-                              {(!isLite && alb.coverArt) ? (
-                                <img src={alb.coverArt} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
-                                  <Disc size={32} />
-                                </div>
-                              )}
+                              <DynamicCoverArt
+                                src={alb.coverArt}
+                                trackPath={alb.tracks?.[0]?.filePath}
+                                tier="md"
+                                isLite={isLite}
+                                fallbackIcon={<Disc size={32} />}
+                                className="w-full h-full"
+                                imageClassName="group-hover:scale-105 transition duration-300"
+                              />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <div className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg">
                                   <Play size={18} className="ml-0.5 fill-current" />
@@ -6622,7 +6896,13 @@ export default function App() {
                                 {(!isLite && genre.coverArts.length > 0) ? (
                                   <div className="w-full h-full grid grid-cols-2 gap-0.5">
                                     {genre.coverArts.slice(0, 4).map((c, i) => (
-                                      <img key={i} loading="lazy" src={c} className="w-full h-full object-cover" />
+                                      <DynamicCoverArt
+                                        key={i}
+                                        src={c}
+                                        tier="sm"
+                                        isLite={isLite}
+                                        className="w-full h-full"
+                                      />
                                     ))}
                                   </div>
                                 ) : (
@@ -6798,7 +7078,14 @@ export default function App() {
                                     </div>
                                     <div className="col-span-6 flex items-center gap-3.5 min-w-0">
                                       <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-                                        {(!isLite && coverImg) ? <img loading="lazy" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={20} className="text-zinc-600" />}
+                                        <DynamicCoverArt
+                                          src={coverImg}
+                                          trackPath={resolved[0]?.filePath}
+                                          tier="sm"
+                                          isLite={isLite}
+                                          fallbackIcon={<ListPlus size={20} className="text-zinc-600" />}
+                                          className="w-full h-full"
+                                        />
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                           <button
                                             onClick={(e) => {
@@ -6850,7 +7137,14 @@ export default function App() {
                                   <div className="flex items-center gap-3.5 min-w-0 flex-1">
                                     <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
                                     <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                                      {(!isLite && coverImg) ? <img loading="lazy" src={coverImg} className="w-full h-full object-cover" /> : <ListPlus size={16} className="text-zinc-600" />}
+                                      <DynamicCoverArt
+                                        src={coverImg}
+                                        trackPath={resolved[0]?.filePath}
+                                        tier="sm"
+                                        isLite={isLite}
+                                        fallbackIcon={<ListPlus size={16} className="text-zinc-600" />}
+                                        className="w-full h-full"
+                                      />
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{pl.name}</h4>
@@ -6896,13 +7190,15 @@ export default function App() {
                                 className="bg-theme-60/40 hover:bg-theme-30/50 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between shadow-lg track-card-optimized"
                               >
                                 <div className="aspect-square bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-md">
-                                  {(!isLite && coverImg) ? (
-                                    <img loading="lazy" src={coverImg} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
-                                      <ListPlus size={36} />
-                                    </div>
-                                  )}
+                                  <DynamicCoverArt
+                                    src={coverImg}
+                                    trackPath={resolved[0]?.filePath}
+                                    tier="md"
+                                    isLite={isLite}
+                                    fallbackIcon={<ListPlus size={36} className="text-zinc-600" />}
+                                    className="w-full h-full"
+                                    imageClassName="group-hover:scale-105 transition duration-300"
+                                  />
                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <button 
                                       onClick={(e) => {
@@ -6965,16 +7261,14 @@ export default function App() {
                           className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl relative group cursor-pointer flex-shrink-0"
                           title={t('modals.editPlaylist.title')}
                         >
-                          {(!isLite && (activeUserPlaylist.thumbnail || activeUserPlaylistTracks.find(t => t.coverArt)?.coverArt)) ? (
-                            <img 
-                              src={activeUserPlaylist.thumbnail || activeUserPlaylistTracks.find(t => t.coverArt)?.coverArt} 
-                              className="w-full h-full object-cover" 
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-950">
-                              <ListPlus size={44} />
-                            </div>
-                          )}
+                          <DynamicCoverArt 
+                            src={activeUserPlaylist.thumbnail || activeUserPlaylistTracks.find(t => t.coverArt)?.coverArt} 
+                            trackPath={activeUserPlaylistTracks[0]?.filePath}
+                            tier="lg"
+                            isLite={isLite}
+                            fallbackIcon={<ListPlus size={44} className="text-zinc-600" />}
+                            className="w-full h-full"
+                          />
                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1">
                             <ImageIcon size={18} />
                             <span>{t('modals.editPlaylist.title')}</span>
@@ -7192,13 +7486,14 @@ export default function App() {
                     <div className="flex items-end justify-between gap-6 mb-6" onContextMenu={(e) => handlePlaylistContextMenu(activePlaylist, e)}>
                       <div className="flex items-end gap-6 min-w-0">
                         <div className="w-36 h-36 bg-theme-30 rounded-2xl overflow-hidden shadow-2xl relative group shrink-0 border border-theme-30/80">
-                          {(!isLite && activePlaylist.thumbnail) ? (
-                            <img loading="lazy" src={activePlaylist.thumbnail} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                              <FolderPlus size={40} />
-                            </div>
-                          )}
+                          <DynamicCoverArt 
+                            src={activePlaylist.thumbnail} 
+                            trackPath={activePlaylist.path}
+                            tier="lg"
+                            isLite={isLite}
+                            fallbackIcon={<FolderPlus size={40} className="text-zinc-600" />}
+                            className="w-full h-full"
+                          />
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">Playlist</p>
@@ -7288,10 +7583,10 @@ export default function App() {
                   })}
                 </div>
                 <div className="p-3 border-t border-theme-30/50 bg-zinc-950/40 h-16 shrink-0 w-full overflow-hidden flex items-center justify-center">
-                  {bitPerfectEnabled ? (
-                    <div className="flex items-center gap-2 text-xs text-emerald-400/90 font-medium bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Bit-perfect Direct Stream {mpvOutParams?.samplerate ? `(${mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`})` : '(Bypass DSP)'}</span>
+                  {(bitPerfectEnabled || isDsdTrack(currentTrack)) ? (
+                    <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border ${isDsdTrack(currentTrack) ? 'text-amber-400/90 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400/90 bg-emerald-500/10 border-emerald-500/20'}`}>
+                      <span className={`w-2 h-2 rounded-full animate-pulse ${isDsdTrack(currentTrack) ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                      <span>{isDsdTrack(currentTrack) ? `${getDsdRateLabel(currentTrack?.sampleRate) || 'DSD'} Direct Stream` : 'Bit-perfect Direct Stream'} {mpvOutParams?.samplerate ? `(${isDsdTrack(currentTrack) ? formatAudioSampleRate(mpvOutParams.samplerate) : (mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`)})` : '(Bypass DSP)'}</span>
                     </div>
                   ) : (
                     <WebGLVisualizer 
@@ -7423,10 +7718,10 @@ export default function App() {
 
                 {/* VISUALIZER DƯỚI ĐĨA THAN */}
                 <div className="w-[min(28vw,38vh)] max-w-[420px] min-w-[240px] h-14 rounded-xl bg-zinc-950/50 border border-theme-30/50 p-2 overflow-hidden flex items-center justify-center shadow-inner">
-                  {bitPerfectEnabled ? (
-                    <div className="flex items-center gap-2 text-xs text-emerald-400/90 font-medium bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Bit-perfect Direct Stream {mpvOutParams?.samplerate ? `(${mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`})` : '(Bypass DSP)'}</span>
+                  {(bitPerfectEnabled || isDsdTrack(currentTrack)) ? (
+                    <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border ${isDsdTrack(currentTrack) ? 'text-amber-400/90 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400/90 bg-emerald-500/10 border-emerald-500/20'}`}>
+                      <span className={`w-2 h-2 rounded-full animate-pulse ${isDsdTrack(currentTrack) ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                      <span>{isDsdTrack(currentTrack) ? `${getDsdRateLabel(currentTrack?.sampleRate) || 'DSD'} Direct Stream` : 'Bit-perfect Direct Stream'} {mpvOutParams?.samplerate ? `(${isDsdTrack(currentTrack) ? formatAudioSampleRate(mpvOutParams.samplerate) : (mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`)})` : '(Bypass DSP)'}</span>
                     </div>
                   ) : (
                     <WebGLVisualizer 
@@ -7491,27 +7786,45 @@ export default function App() {
             {currentTrack && (
               <div className="flex items-center gap-2 mt-1">
                 <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md">
-                  <span className="text-[10px] uppercase font-bold text-theme-10 bg-theme-10/10 px-1.5 py-0.5 rounded">
-                    {currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}
-                  </span>
+                  {isDsdTrack(currentTrack) ? (
+                    <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                      {getDsdRateLabel(currentTrack.sampleRate) || currentTrack.format || 'DSD'}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase font-bold text-theme-10 bg-theme-10/10 px-1.5 py-0.5 rounded">
+                      {currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}
+                    </span>
+                  )}
                   {currentTrack.bitDepth && (
-                    <span className="text-[10px] uppercase font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                    <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${isDsdTrack(currentTrack) ? 'text-amber-400 bg-amber-500/10' : 'text-blue-500 bg-blue-500/10'}`}>
                       {currentTrack.bitDepth}-BIT
                     </span>
                   )}
-                  {bitPerfectEnabled && (
+                  {(bitPerfectEnabled || isDsdTrack(currentTrack)) && (
                     <span
-                      className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded"
-                      title={mpvOutParams?.samplerate ? `WASAPI Exclusive: ${mpvOutParams.samplerate}Hz • ${mpvOutParams.format || 'Direct'} (Bit-perfect)` : "WASAPI Exclusive: Direct bit-perfect stream to hardware DAC"}
+                      className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                        mpvOutParams?.isDsd 
+                          ? 'text-amber-400 bg-amber-500/10' 
+                          : isDsdTrack(currentTrack)
+                            ? 'text-amber-400/90 bg-amber-500/10'
+                            : bitPerfectType === 'asio'
+                              ? 'text-purple-400 bg-purple-500/10'
+                              : 'text-emerald-400 bg-emerald-500/10'
+                      }`}
+                      title={mpvOutParams?.samplerate ? `${bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Exclusive'}: ${mpvOutParams.samplerate}Hz • ${mpvOutParams.format || 'Direct'} (Bit-perfect)` : (isDsdTrack(currentTrack) ? "BASS DSD Engine" : "Direct bit-perfect stream to hardware DAC")}
                     >
-                      WASAPI Direct
+                      {mpvOutParams?.isDsd 
+                        ? (bitPerfectType === 'asio' ? 'DSD Native' : 'DSD (DoP)') 
+                        : isDsdTrack(currentTrack)
+                          ? (mpvOutParams?.format || 'DSD Engine')
+                          : (bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Direct')}
                     </span>
                   )}
                 </div>
                 <span className="text-[10px] text-zinc-500">
                   {bitPerfectEnabled && mpvOutParams?.samplerate
-                    ? `${mpvOutParams.samplerate / 1000}kHz`
-                    : (currentTrack.sampleRate ? `${currentTrack.sampleRate / 1000}kHz` : '')}
+                    ? (isDsdTrack(currentTrack) ? formatAudioSampleRate(mpvOutParams.samplerate) : (mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`))
+                    : (currentTrack.sampleRate ? (isDsdTrack(currentTrack) ? formatAudioSampleRate(currentTrack.sampleRate) : (currentTrack.sampleRate >= 1000 ? `${currentTrack.sampleRate / 1000}kHz` : `${currentTrack.sampleRate}Hz`)) : '')}
                   {currentTrack.bitrate ? ` | ${Math.round(currentTrack.bitrate / 1000)} kbps` : ''}
                 </span>
               </div>

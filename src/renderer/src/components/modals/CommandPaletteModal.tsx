@@ -109,8 +109,14 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({ onPlay
       subtitle: 'Bypass bộ trộn âm thanh Windows để đạt chất lượng nguyên bản',
       icon: <ShieldCheck size={16} className="text-purple-400" />,
       category: 'action',
-      action: () => {
-        setBitPerfectEnabled(!bitPerfectEnabled)
+      action: async () => {
+        const nextVal = !bitPerfectEnabled
+        try {
+          if ((window as any).api?.setBitPerfect) {
+            await (window as any).api.setBitPerfect(nextVal)
+          }
+        } catch (_) {}
+        setBitPerfectEnabled(nextVal)
         setShow(false)
       }
     },

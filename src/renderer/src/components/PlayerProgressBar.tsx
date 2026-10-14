@@ -8,6 +8,7 @@ const formatDuration = (seconds: number) => {
 }
 
 import { usePlayerStore } from '../stores/playerStore'
+import { isDsdTrack } from '../utils/formatUtils'
 
 interface PlayerProgressBarProps {
   audioRef: React.RefObject<HTMLAudioElement | null>
@@ -29,8 +30,12 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
   const currentTrack = propTrack !== undefined ? propTrack : storeTrack
   const bitPerfectEnabled = propBitPerfect !== undefined ? propBitPerfect : storeBitPerfect
+  const isDsd = isDsdTrack(currentTrack)
+  const useMpvTime = bitPerfectEnabled || isDsd
   const [currentTime, setCurrentTime] = useState(0)
   const [isDragging, setIsDragging] = useState(false) // Trạng thái kéo chuột
+
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
 
   // Reset time when track changes
   useEffect(() => {
@@ -38,7 +43,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
   }, [currentTrack?.id, currentTrack?.filePath])
 
   useEffect(() => {
-    if (bitPerfectEnabled) {
+    if (useMpvTime) {
       // @ts-ignore
       if (window.api?.onMpvTime) {
         // @ts-ignore
@@ -53,18 +58,51 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       return
     }
 
-    const audio = audioRef.current
-    if (!audio) return
+    // Standard HTML5 Audio mode (non bit-perfect)
+    let intervalId: any = null
 
-    const handleTimeUpdate = () => {
-      // TỐI ƯU HÓA: Ngưng cập nhật UI từ Audio nếu người dùng đang dùng tay kéo thanh trượt
-      if (isDragging) return; 
-      setCurrentTime(audio.currentTime)
+    const attachListeners = () => {
+      const audio = audioRef.current
+      if (!audio) return null
+
+      const update = () => {
+        if (!isDragging) setCurrentTime(audio.currentTime || 0)
+      }
+
+      audio.addEventListener('timeupdate', update)
+      audio.addEventListener('seeking', update)
+      audio.addEventListener('seeked', update)
+      audio.addEventListener('play', update)
+      audio.addEventListener('pause', update)
+
+      return () => {
+        audio.removeEventListener('timeupdate', update)
+        audio.removeEventListener('seeking', update)
+        audio.removeEventListener('seeked', update)
+        audio.removeEventListener('play', update)
+        audio.removeEventListener('pause', update)
+      }
     }
 
-    audio.addEventListener('timeupdate', handleTimeUpdate)
-    return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [audioRef, isDragging, bitPerfectEnabled])
+    let cleanupListeners = attachListeners()
+
+    // Backup polling timer (every 200ms while playing) in case audio element remounts or timeupdate is delayed
+    if (isPlaying) {
+      intervalId = setInterval(() => {
+        if (!isDragging && audioRef.current) {
+          setCurrentTime(audioRef.current.currentTime || 0)
+          if (!cleanupListeners && audioRef.current) {
+            cleanupListeners = attachListeners()
+          }
+        }
+      }, 200)
+    }
+
+    return () => {
+      if (cleanupListeners) cleanupListeners()
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [audioRef, isDragging, useMpvTime, isPlaying, currentTrack?.id, currentTrack?.filePath])
 
   // Chỉ cập nhật giao diện thanh trượt (Không gọi API / Tua nhạc)
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +111,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
   // Áp dụng lệnh Tua nhạc thực tế khi THẢ CHUỘT ra
   const handleSeekCommit = () => {
-    if (bitPerfectEnabled) {
+    if (useMpvTime) {
       // @ts-ignore
       if (window.api?.mpvSeek) {
         // @ts-ignore

@@ -3,6 +3,7 @@ import { Image as ImageIcon, Music } from 'lucide-react'
 import { useTranslation } from '../../locales'
 import { splitArtistString } from '../../App'
 import { formatImageSource } from '../../utils/urlUtils'
+import { isDsdTrack } from '../../utils/formatUtils'
 
 interface TagEditorModalProps {
   track: any
@@ -21,6 +22,7 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
 
   if (!track) return null
 
+  const isDsd = isDsdTrack(track)
   const isFlac = track.filePath?.toLowerCase().endsWith('.flac') || track.format === 'FLAC'
   const isMp3 = track.filePath?.toLowerCase().endsWith('.mp3') || track.format === 'MP3'
 
@@ -38,8 +40,12 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
             <Music className="text-theme-10" size={20} />
             <h2 className="text-lg font-bold text-white">{t('modals.tagEditor.title')}</h2>
           </div>
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-theme-10/10 text-theme-10 border border-theme-10/20">
-            {isFlac ? t('modals.tagEditor.flacTag') : isMp3 ? t('modals.tagEditor.mp3Tag') : t('modals.tagEditor.audioTag')}
+          <span className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full border ${
+            isDsd
+              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+              : 'bg-theme-10/10 text-theme-10 border-theme-10/20'
+          }`}>
+            {isDsd ? t('modals.tagEditor.dsdTag') : isFlac ? t('modals.tagEditor.flacTag') : isMp3 ? t('modals.tagEditor.mp3Tag') : t('modals.tagEditor.audioTag')}
           </span>
         </div>
 
@@ -50,7 +56,7 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
               {imagePath ? (
                 <img src={formatImageSource(imagePath)} className="w-full h-full object-cover" />
               ) : track.coverArt ? (
-                <img src={track.coverArt} className="w-full h-full object-cover" />
+                <img src={formatImageSource(track.coverArt)} className="w-full h-full object-cover" />
               ) : (
                 <ImageIcon size={40} className="text-zinc-600" />
               )}

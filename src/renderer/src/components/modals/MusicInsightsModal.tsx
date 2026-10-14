@@ -3,6 +3,7 @@ import { X, BarChart3, Clock, Disc3, Mic2, Music2, Sparkles, Headphones } from '
 import { useUIStore } from '../../stores/uiStore'
 import { useLibraryStore } from '../../stores/libraryStore'
 import { splitArtistString } from '../../App'
+import { isDsdTrack } from '../../utils/formatUtils'
 
 export const MusicInsightsModal: React.FC = () => {
   const show = useUIStore((s) => s.showInsightsModal)
@@ -17,6 +18,7 @@ export const MusicInsightsModal: React.FC = () => {
 
     // 1. Format distribution
     let flacCount = 0
+    let dsdCount = 0
     let mp3Count = 0
     let otherCount = 0
     let onlineCount = 0
@@ -32,7 +34,8 @@ export const MusicInsightsModal: React.FC = () => {
       const fmt = (t.format || '').toUpperCase()
       const ext = (t.filePath || '').toLowerCase()
       if (t.isOnline || t.isCloud) onlineCount++
-      else if (fmt.includes('FLAC') || ext.endsWith('.flac') || ext.endsWith('.wav') || ext.endsWith('.alac')) flacCount++
+      else if (isDsdTrack(t)) dsdCount++
+      else if (t.lossless || fmt.includes('FLAC') || ext.endsWith('.flac') || ext.endsWith('.wav') || ext.endsWith('.alac') || ext.endsWith('.aiff')) flacCount++
       else if (fmt.includes('MP3') || ext.endsWith('.mp3')) mp3Count++
       else otherCount++
 
@@ -70,7 +73,8 @@ export const MusicInsightsModal: React.FC = () => {
     const totalHours = Math.floor(totalDurationSec / 3600)
     const totalMinutes = Math.floor((totalDurationSec % 3600) / 60)
 
-    const losslessPercent = totalTracks > 0 ? Math.round((flacCount / totalTracks) * 100) : 0
+    const totalLosslessCount = flacCount + dsdCount
+    const losslessPercent = totalTracks > 0 ? Math.round((totalLosslessCount / totalTracks) * 100) : 0
     const mp3Percent = totalTracks > 0 ? Math.round((mp3Count / totalTracks) * 100) : 0
     const otherPercent = Math.max(0, 100 - losslessPercent - mp3Percent)
 
@@ -84,6 +88,8 @@ export const MusicInsightsModal: React.FC = () => {
       mp3Percent,
       otherPercent,
       flacCount,
+      dsdCount,
+      totalLosslessCount,
       recentCount: recentlyPlayed.length
     }
   }, [libraryTracks, recentlyPlayed])
@@ -151,7 +157,9 @@ export const MusicInsightsModal: React.FC = () => {
                 <span>Lossless Hi-Res</span>
               </div>
               <p className="text-2xl font-black text-white">{stats.losslessPercent}%</p>
-              <p className="text-[11px] text-zinc-500 mt-1">{stats.flacCount} tệp FLAC/WAV</p>
+              <p className="text-[11px] text-zinc-500 mt-1">
+                {stats.flacCount} tệp FLAC/WAV{stats.dsdCount > 0 ? ` • ${stats.dsdCount} tệp DSD` : ''}
+              </p>
             </div>
           </div>
 
@@ -167,7 +175,11 @@ export const MusicInsightsModal: React.FC = () => {
               </span>
             </div>
             <div className="h-2.5 rounded-full overflow-hidden flex bg-zinc-800">
-              <div style={{ width: `${stats.losslessPercent}%` }} className="bg-emerald-500 h-full transition-all" title="Lossless (FLAC/WAV)" />
+              <div 
+                style={{ width: `${stats.losslessPercent}%` }} 
+                className="bg-emerald-500 h-full transition-all" 
+                title={`Lossless (${stats.flacCount} FLAC/WAV${stats.dsdCount > 0 ? `, ${stats.dsdCount} DSD` : ''})`} 
+              />
               <div style={{ width: `${stats.mp3Percent}%` }} className="bg-sky-500 h-full transition-all" title="MP3 / Compressed" />
               <div style={{ width: `${stats.otherPercent}%` }} className="bg-zinc-600 h-full transition-all" title="Định dạng khác" />
             </div>

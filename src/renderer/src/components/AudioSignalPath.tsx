@@ -15,6 +15,8 @@ import { useAudioStore } from '../stores/audioStore'
 import { usePlayerStore } from '../stores/playerStore'
 import { useTranslation } from '../locales'
 
+import { isDsdTrack, formatAudioSampleRate } from '../utils/formatUtils'
+
 export interface SignalPathTrack {
   id?: string
   filePath?: string
@@ -45,30 +47,31 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
   isPlaying = false
 }) => {
   const { t } = useTranslation()
-  const { isEqEnabled, eqBands, preampGain, selectedDeviceId, availableAudioDevices } = useAudioStore()
+  const { isEqEnabled, eqBands, preampGain, selectedDeviceId, availableAudioDevices, bitPerfectType } = useAudioStore()
   const { bitPerfectEnabled, mpvOutParams } = usePlayerStore()
 
   // Format Helper
   const formatSampleRate = (sr: number): string => {
-    if (!sr) return '44.1 kHz'
-    if (sr >= 1000000) return `${(sr / 1000000).toFixed(2)} MHz`
-    if (sr >= 1000) return `${(sr / 1000).toFixed(1).replace('.0', '')} kHz`
-    return `${sr} Hz`
+    return formatAudioSampleRate(sr) || '44.1 kHz'
   }
 
   // DSD Detection
   const isDsd = Boolean(
-    (currentTrack?.format && /^(dsd|dsf|dff)$/i.test(currentTrack.format)) ||
-    (currentTrack?.filePath && /\.(dsf|dff)$/i.test(currentTrack.filePath)) ||
+    isDsdTrack(currentTrack) ||
     (activeSampleRate >= 2000000) ||
     (currentTrack?.bitDepth === 1)
   )
 
   const getDsdLabel = (sampleRate: number): string => {
+    if (sampleRate >= 45158400) return 'DSD1024 (45.16 MHz)'
     if (sampleRate >= 22579200) return 'DSD512 (22.58 MHz)'
     if (sampleRate >= 11289600) return 'DSD256 (11.29 MHz)'
     if (sampleRate >= 5644800) return 'DSD128 (5.64 MHz)'
     if (sampleRate >= 2822400) return 'DSD64 (2.82 MHz)'
+    if (sampleRate >= 2000000) {
+      const factor = Math.round(sampleRate / 44100)
+      return `DSD${factor} (${(sampleRate / 1000000).toFixed(2)} MHz)`
+    }
     return 'DSD Bitstream'
   }
 
@@ -77,14 +80,21 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
   const isHiRes = isDsd || (activeSampleRate >= 88200) || (effectiveBitDepth >= 24)
   const isLossless = Boolean(currentTrack?.lossless || isDsd || ['FLAC', 'WAV', 'ALAC', 'AIFF', 'APE'].includes(currentTrack?.format?.toUpperCase() || ''))
 
+  // Is using BASS Audio engine (Audiophile pipeline: Bit-Perfect or DSD Native)
+  const isBASS = Boolean(bitPerfectEnabled || isDsd)
+  const actualDriverMode: 'wasapi' | 'asio' = (mpvOutParams?.mode?.toLowerCase() === 'asio' || (!mpvOutParams?.mode && bitPerfectType === 'asio')) ? 'asio' : 'wasapi'
+
   // Output Device friendly name
   const getDeviceDisplayName = (): string => {
-    if (!selectedDeviceId || selectedDeviceId === 'auto' || selectedDeviceId === 'default') {
+    if (!isBASS) {
+      return t('modals.spectrogram.defaultDevice')
+    }
+    if (!selectedDeviceId || selectedDeviceId === 'auto' || selectedDeviceId === 'default' || selectedDeviceId === '0') {
       const autoDev = availableAudioDevices.find(d => d.name === 'auto')
       if (autoDev && autoDev.description && !autoDev.description.includes('Auto') && !autoDev.description.includes('Tự động')) {
         return autoDev.description
       }
-      const firstRealDev = availableAudioDevices.find(d => d.name !== 'auto' && d.description)
+      const firstRealDev = availableAudioDevices.find(d => d.name !== 'auto' && d.name !== '0' && d.description)
       if (firstRealDev) {
         return firstRealDev.description
       }
@@ -99,13 +109,18 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
   }
 
   // Output sample rate
-  const outputSampleRate = (bitPerfectEnabled && mpvOutParams?.samplerate)
+  const outputSampleRate = (isBASS && mpvOutParams?.samplerate)
     ? mpvOutParams.samplerate
     : activeSampleRate
 
-  const outputFormatString = (bitPerfectEnabled && mpvOutParams?.format)
-    ? mpvOutParams.format.toUpperCase()
-    : (bitPerfectEnabled ? 'Direct' : 'Float32')
+  // Output format string
+  const outputFormatString = isBASS
+    ? (mpvOutParams?.format
+        ? mpvOutParams.format.toUpperCase()
+        : (isDsd
+            ? (actualDriverMode === 'asio' ? 'DSD NATIVE 1-BIT' : 'DSD-TO-PCM (176.4kHz)')
+            : (actualDriverMode === 'asio' ? 'ASIO DIRECT' : 'EXCLUSIVE PCM')))
+    : 'WASAPI SHARED (PCM)'
 
   return (
     <div className="border-t border-zinc-800/80 bg-zinc-950/80 px-5 py-3 shrink-0 flex flex-col gap-2.5">
@@ -122,12 +137,20 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
         </div>
 
         <div className="flex items-center gap-2">
-          {bitPerfectEnabled ? (
-            <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-emerald-400">
-              <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${isPlaying ? 'animate-ping' : ''}`} />
-              <ShieldCheck size={12} className="text-emerald-400" />
-              <span>{t('modals.spectrogram.bitPerfectBadge')}</span>
-            </div>
+          {isBASS ? (
+            isDsd ? (
+              <div className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-amber-400">
+                <span className={`w-1.5 h-1.5 rounded-full bg-amber-400 ${isPlaying ? 'animate-ping' : ''}`} />
+                <ShieldCheck size={12} className="text-amber-400" />
+                <span>{t('modals.spectrogram.dsdNativeBadge')}</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-emerald-400">
+                <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${isPlaying ? 'animate-ping' : ''}`} />
+                <ShieldCheck size={12} className="text-emerald-400" />
+                <span>{t('modals.spectrogram.bitPerfectBadge')}</span>
+              </div>
+            )
           ) : isEqEnabled ? (
             <div className="inline-flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-sky-400">
               <span className={`w-1.5 h-1.5 rounded-full bg-sky-400 ${isPlaying ? 'animate-pulse' : ''}`} />
@@ -209,17 +232,27 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
           <div className="my-0.5">
             <div className="text-xs font-bold text-white truncate">
               {isDsd 
-                ? (bitPerfectEnabled ? t('modals.spectrogram.dsdStream') : 'DSD ➔ PCM Transcode')
-                : (bitPerfectEnabled ? `Linear PCM (${effectiveBitDepth}-bit)` : 'Linear PCM (Float32)')
+                ? (actualDriverMode === 'asio' ? t('modals.spectrogram.dsdStream') : 'DSD ➔ PCM (176.4kHz)')
+                : (isBASS ? `Linear PCM (${effectiveBitDepth}-bit)` : 'Linear PCM (Float32)')
               }
             </div>
             <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
-              {bitPerfectEnabled ? 'MPV libavcodec Core' : 'WebAudio Native Decoder'}
+              {isBASS 
+                ? (isDsd 
+                    ? (actualDriverMode === 'asio' ? 'BASS_DSD 1-Bit Raw Engine' : 'BASS_DSD PCM Engine')
+                    : 'BASS Audio Core (Native C-FFI)')
+                : 'WebAudio Native Decoder'
+              }
             </div>
           </div>
 
           <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span>{bitPerfectEnabled ? 'Bit-for-bit lossless' : 'IEEE 32-bit Float'}</span>
+            <span>
+              {isBASS 
+                ? (isDsd && actualDriverMode === 'asio' ? 'Bit-for-bit raw bitstream' : 'Bit-for-bit lossless') 
+                : 'IEEE 32-bit Float'
+              }
+            </span>
             <span className="font-mono text-zinc-400">Stereo</span>
           </div>
         </div>
@@ -231,7 +264,7 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
 
         {/* STAGE 3: XỬ LÝ DSP (DSP ENGINE / EQ) */}
         <div className={`rounded-xl p-2.5 flex-1 min-w-[170px] max-w-[210px] flex flex-col justify-between transition-all group shadow-sm border ${
-          bitPerfectEnabled 
+          isBASS 
             ? 'bg-emerald-950/20 border-emerald-500/30' 
             : isEqEnabled 
               ? 'bg-sky-950/20 border-sky-500/30' 
@@ -240,7 +273,7 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5">
               <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                bitPerfectEnabled 
+                isBASS 
                   ? 'bg-emerald-500/10 text-emerald-400' 
                   : isEqEnabled 
                     ? 'bg-sky-500/10 text-sky-400' 
@@ -253,19 +286,19 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
               </span>
             </div>
             <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
-              bitPerfectEnabled 
+              isBASS 
                 ? 'bg-emerald-500/10 text-emerald-400' 
                 : isEqEnabled 
                   ? 'bg-sky-500/10 text-sky-400' 
                   : 'bg-zinc-800 text-zinc-400'
             }`}>
-              {bitPerfectEnabled ? 'BYPASS' : isEqEnabled ? 'ACTIVE' : 'FLAT'}
+              {isBASS ? 'BYPASS' : isEqEnabled ? 'ACTIVE' : 'FLAT'}
             </span>
           </div>
 
           <div className="my-0.5">
             <div className="text-xs font-bold text-white truncate">
-              {bitPerfectEnabled 
+              {isBASS 
                 ? t('modals.spectrogram.bypassDsp')
                 : isEqEnabled 
                   ? t('modals.spectrogram.parametricEq').replace('{count}', String(eqBands.length))
@@ -273,7 +306,7 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
               }
             </div>
             <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
-              {bitPerfectEnabled ? (
+              {isBASS ? (
                 <span className="text-emerald-400/90">{t('modals.spectrogram.dspNoFilter')}</span>
               ) : isEqEnabled ? (
                 <span className="text-sky-300/90">Preamp: {preampGain >= 0 ? `+${preampGain.toFixed(1)}` : preampGain.toFixed(1)} dB</span>
@@ -284,9 +317,9 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
           </div>
 
           <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span>{bitPerfectEnabled ? t('modals.spectrogram.dspBitAccurate') : (isEqEnabled ? 'Compressor On' : 'Unity Gain')}</span>
+            <span>{isBASS ? t('modals.spectrogram.dspBitAccurate') : (isEqEnabled ? 'Compressor On' : 'Unity Gain')}</span>
             <span className="font-mono text-zinc-400">
-              {bitPerfectEnabled ? 'Pure' : (isEqEnabled ? `${eqBands.length} Filters` : 'Direct')}
+              {isBASS ? 'Pure' : (isEqEnabled ? `${eqBands.length} Filters` : 'Direct')}
             </span>
           </div>
         </div>
@@ -298,14 +331,14 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
 
         {/* STAGE 4: GIAO THỨC DRIVER (OUTPUT DRIVER / ENGINE) */}
         <div className={`rounded-xl p-2.5 flex-1 min-w-[170px] max-w-[210px] flex flex-col justify-between transition-all group shadow-sm border ${
-          bitPerfectEnabled 
+          isBASS 
             ? 'bg-emerald-950/20 border-emerald-500/30' 
             : 'bg-zinc-900/90 border-zinc-800/90 hover:border-zinc-700/80'
         }`}>
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5">
               <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                bitPerfectEnabled 
+                isBASS 
                   ? 'bg-emerald-500/10 text-emerald-400' 
                   : 'bg-zinc-800 text-zinc-400'
               }`}>
@@ -316,26 +349,30 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
               </span>
             </div>
             <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
-              bitPerfectEnabled 
-                ? 'bg-emerald-500/10 text-emerald-400 font-bold' 
+              isBASS 
+                ? (actualDriverMode === 'asio' ? 'bg-purple-500/10 text-purple-400 font-bold' : 'bg-emerald-500/10 text-emerald-400 font-bold') 
                 : 'bg-zinc-800 text-zinc-400'
             }`}>
-              {bitPerfectEnabled ? 'EXCLUSIVE' : 'SHARED'}
+              {isBASS ? (actualDriverMode === 'asio' ? 'ASIO DIRECT' : 'EXCLUSIVE') : 'SHARED'}
             </span>
           </div>
 
           <div className="my-0.5">
             <div className="text-xs font-bold text-white truncate">
-              {bitPerfectEnabled ? t('modals.spectrogram.wasapiExclusive') : t('modals.spectrogram.wasapiShared')}
+              {isBASS 
+                ? (actualDriverMode === 'asio' ? t('modals.spectrogram.asioDriver') : t('modals.spectrogram.wasapiExclusive')) 
+                : t('modals.spectrogram.wasapiShared')}
             </div>
             <div className="text-[11px] font-mono text-zinc-400 mt-0.5 truncate">
-              {bitPerfectEnabled ? t('modals.spectrogram.exclusiveDesc') : t('modals.spectrogram.sharedDesc')}
+              {isBASS 
+                ? (actualDriverMode === 'asio' ? t('modals.spectrogram.asioDriverDesc') : t('modals.spectrogram.exclusiveDesc')) 
+                : t('modals.spectrogram.sharedDesc')}
             </div>
           </div>
 
           <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span>{bitPerfectEnabled ? 'Bypass Windows Mixer' : 'OS Audio Session'}</span>
-            <span className="font-mono text-zinc-400">{bitPerfectEnabled ? 'Direct' : 'Mixer'}</span>
+            <span>{isBASS ? (actualDriverMode === 'asio' ? 'Dedicated ASIO Driver' : 'Bypass Windows Mixer') : 'OS Audio Session'}</span>
+            <span className="font-mono text-zinc-400">{isBASS ? (actualDriverMode === 'asio' ? 'ASIO' : 'Direct') : 'Mixer'}</span>
           </div>
         </div>
 
@@ -372,7 +409,7 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
           </div>
 
           <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span className="truncate max-w-[100px]">{bitPerfectEnabled ? 'Hardware DAC' : 'Default Endpoint'}</span>
+            <span className="truncate max-w-[100px]">{isBASS ? (actualDriverMode === 'asio' ? 'ASIO Hardware DAC' : 'Hardware DAC (Exclusive)') : t('modals.spectrogram.defaultDevice')}</span>
             <span className="font-mono text-zinc-400">L / R</span>
           </div>
         </div>

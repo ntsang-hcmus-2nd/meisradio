@@ -236,11 +236,16 @@ export const en: TranslationDictionary = {
       autoCategorize: 'Auto Categorize by Album'
     },
     bitPerfect: {
-      title: 'Bit-perfect (WASAPI Exclusive)',
-      label: 'Bit-perfect Mode (Bypass Windows Mixer)',
-      note: 'Note: Enabling this mode takes exclusive audio control; other apps will have no sound. Changes will restart the audio stream.',
+      title: 'Bit-perfect Playback (Direct Bitstream)',
+      label: 'Bit-perfect Mode',
+      note: 'Note: Enabling this mode delivers direct unadulterated bitstream to your DAC/Soundcard, bypassing the Windows audio mixer completely.',
+      outputType: 'Audio Output Engine',
+      wasapiOption: 'WASAPI Exclusive',
+      asioOption: 'ASIO (Supports Native DSD)',
       deviceLabel: 'Audio Output Device / DAC',
-      deviceAuto: 'Automatic (System Default)'
+      deviceAuto: 'Automatic (System Default)',
+      asioDesc: 'Dedicated audiophile ASIO protocol supporting 1-bit Native DSD bitstream transmission directly to DAC chip.',
+      wasapiDesc: 'Windows WASAPI Exclusive mode taking exclusive hardware lock to preserve exact PCM bit depth and sample rate.'
     },
     googleDrive: {
       title: 'Google Drive API Key',
@@ -413,6 +418,7 @@ export const en: TranslationDictionary = {
       title: 'Edit Track Metadata',
       flacTag: 'FLAC Vorbis Tag',
       mp3Tag: 'MP3 ID3v2 Tag',
+      dsdTag: 'DSD (ID3v2)',
       audioTag: 'Audio Tag',
       chooseCover: 'Select Cover Art',
       trackTitle: 'Track Title',
@@ -460,7 +466,10 @@ export const en: TranslationDictionary = {
       dsdStream: 'Direct DSD Bitstream',
       dspNoFilter: '0% DSP • Flat filter',
       dspDirect: '0 dB • No Processing',
-      dspBitAccurate: 'Bit-for-bit accurate'
+      dspBitAccurate: 'Bit-for-bit accurate',
+      asioDriver: 'ASIO Driver (DSD Native / DoP)',
+      asioDriverDesc: 'Dedicated ASIO Hardware Channel • Bypass Windows Mixer',
+      dsdNativeBadge: 'DSD Native (Bit-perfect)'
     },
     eq: {
       title: 'Parametric Equalizer',
