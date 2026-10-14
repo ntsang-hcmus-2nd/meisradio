@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Home, Library, Disc, Mic2, Tag, ListPlus, Cloud, Settings, ChevronDown, ChevronRight } from 'lucide-react'
+import { Home, Library, Disc, Mic2, Tag, ListPlus, Cloud, Settings, ChevronDown, ChevronRight, FolderDown } from 'lucide-react'
 import logoImg from '../../../../resources/HoT_Chibi_Icon.png'
 import { useTranslation } from '../locales'
 
@@ -173,6 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <li onClick={() => handleNavClick('artists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'artists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Mic2 size={18} /> {t('sidebar.artists')}</li>
               <li onClick={() => handleNavClick('genres')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'genres' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Tag size={18} /> {t('sidebar.genres')}</li>
               <li onClick={() => handleNavClick('user-playlists')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'user-playlists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><ListPlus size={18} /> {t('sidebar.userPlaylists')}</li>
+              <li onClick={() => handleNavClick('downloads')} className={`flex items-center gap-3 cursor-pointer p-2 rounded-md transition-colors ${activeView === 'downloads' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><FolderDown size={18} /> {t('sidebar.downloads')}</li>
               
               {/* Ẩn tab Stream trực tuyến nếu ở chế độ Core */}
             </ul>

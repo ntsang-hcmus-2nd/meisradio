@@ -10,6 +10,7 @@ export type ActiveViewType =
   | 'artists' 
   | 'genres' 
   | 'user-playlists' 
+  | 'downloads'
   | 'settings' 
   | 'drive'
 

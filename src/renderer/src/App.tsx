@@ -35,6 +35,7 @@ import { CommandPaletteModal } from './components/modals/CommandPaletteModal'
 import { MusicInsightsModal } from './components/modals/MusicInsightsModal'
 import { BackupModal } from './components/modals/BackupModal'
 import { DragDropOverlay } from './components/DragDropOverlay'
+import { DownloadsView } from './components/DownloadsView'
 
 import { extractThemeColors, initThemeColorCache } from './utils/colorUtils'
 import { DynamicCoverArt, setGlobalStreamPort } from './components/DynamicCoverArt'
@@ -5837,7 +5838,13 @@ export default function App() {
                   </div>
                 </div>
               )}
-{/* VIEW: CÀI ĐẶT */}
+
+              {/* VIEW: TẢI XUỐNG (SOULSEEK ENGINE) */}
+              {activeView === 'downloads' && (
+                <DownloadsView onPlayTrack={handlePlayTrack} />
+              )}
+
+              {/* VIEW: CÀI ĐẶT */}
               {activeView === 'settings' && (
                 <div className="w-full max-w-5xl">
                   <h2 className="text-3xl font-bold text-white mb-6">{t('settings.title')}</h2>

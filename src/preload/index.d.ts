@@ -109,6 +109,20 @@ export interface MeisRadioApi {
   discordClearPresence: () => Promise<any>
   discordUpdateConfig: (config: any) => Promise<any>
   discordGetStatus: () => Promise<any>
+
+  // Soulseek Lossless Download Engine
+  soulseekLogin: (credentials: { user: string; pass: string; remember?: boolean }) => Promise<{ success: boolean; username?: string; error?: string }>
+  soulseekLogout: () => Promise<{ success: boolean }>
+  soulseekGetStatus: () => Promise<any>
+  soulseekSearch: (query: string, timeout?: number) => Promise<{ success: boolean; results?: any[]; error?: string }>
+  soulseekDownload: (item: any) => Promise<{ success: boolean; id?: string; error?: string }>
+  soulseekCancelDownload: (id: string) => Promise<boolean>
+  soulseekSelectDownloadFolder: () => Promise<string | null>
+  soulseekSetDownloadFolder: (folder: string) => Promise<{ success: boolean }>
+  soulseekOpenDownloadFolder: () => Promise<{ success: boolean }>
+  onSoulseekStatusChanged: (callback: (status: any) => void) => () => void
+  onSoulseekDownloadProgress: (callback: (data: any) => void) => () => void
+  onSoulseekDownloadCompleted: (callback: (data: any) => void) => () => void
 }
 
 declare global {

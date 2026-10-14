@@ -25,6 +25,7 @@ import {
   getScPlaylistTracks, 
   resolveScStreamUrl 
 } from './soundcloud'
+import { soulseekManager } from './SoulseekManager'
 
 export const SUPPORTED_AUDIO_EXTS = ['.mp3', '.flac', '.wav', '.m4a', '.opus', '.ogg', '.aac', '.alac', '.aiff', '.wma', '.dsf', '.dff', '.dsd']
 
@@ -792,6 +793,13 @@ function saveConfig(data: any) {
       } catch (e) { console.error('Lỗi mã hóa SoundCloud OAuth Token', e) }
     }
 
+    // Mã hóa Soulseek Password
+    if (data.soulseekPassword && !data.soulseekPassword.startsWith('ENC:')) {
+      try {
+        const encryptedBuffer = safeStorage.encryptString(data.soulseekPassword)
+        newConfig.soulseekPassword = `ENC:${encryptedBuffer.toString('base64')}`
+      } catch (e) { console.error('Lỗi mã hóa Soulseek Password', e) }
+    }
   }
 
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2))
@@ -843,6 +851,8 @@ function createWindow(): void {
   if (windowState.isMaximized) {
     mainWindow.maximize()
   }
+
+  soulseekManager.setMainWindow(mainWindow)
   
   mainWindow.on('resized', saveWindowState)
   mainWindow.on('moved', saveWindowState)
@@ -920,6 +930,7 @@ app.whenReady().then(async () => {
   const currentConfig = getConfig()
   discordRpcManager = new DiscordRpcManager()
   discordRpcManager.init(currentConfig.discordRpc)
+  soulseekManager.init(currentConfig)
 
   ipcMain.handle('discord:updatePresence', (_, payload: DiscordPresencePayload) => {
     discordRpcManager?.updatePresence(payload)
@@ -4840,6 +4851,56 @@ app.whenReady().then(async () => {
     }
   })
 
+  // ==========================================
+  // HỆ THỐNG TẢI NHẠC SOULSEEK LOSSLESS ENGINE
+  // ==========================================
+  ipcMain.handle('soulseek:login', async (_, { user, pass, remember }: { user: string; pass: string; remember?: boolean }) => {
+    const res = await soulseekManager.login(user, pass)
+    if (res.success && remember) {
+      saveConfig({ soulseekUsername: user, soulseekPassword: pass, soulseekAutoLogin: true })
+    }
+    return res
+  })
+
+  ipcMain.handle('soulseek:logout', async () => {
+    await soulseekManager.logout()
+    saveConfig({ soulseekUsername: null, soulseekPassword: null, soulseekAutoLogin: false })
+    return { success: true }
+  })
+
+  ipcMain.handle('soulseek:getStatus', () => soulseekManager.getStatus())
+
+  ipcMain.handle('soulseek:search', async (_, query: string, timeout?: number) => {
+    return await soulseekManager.search(query, timeout)
+  })
+
+  ipcMain.handle('soulseek:download', async (_, item: any) => {
+    return await soulseekManager.download(item)
+  })
+
+  ipcMain.handle('soulseek:cancelDownload', (_, id: string) => {
+    return soulseekManager.cancelDownload(id)
+  })
+
+  ipcMain.handle('soulseek:selectDownloadFolder', async () => {
+    const selected = await soulseekManager.selectDownloadFolder()
+    if (selected) {
+      saveConfig({ soulseekDownloadFolder: selected })
+    }
+    return selected
+  })
+
+  ipcMain.handle('soulseek:setDownloadFolder', (_, folder: string) => {
+    soulseekManager.setDownloadFolder(folder)
+    saveConfig({ soulseekDownloadFolder: folder })
+    return { success: true }
+  })
+
+  ipcMain.handle('soulseek:openDownloadFolder', () => {
+    soulseekManager.openDownloadFolder()
+    return { success: true }
+  })
+
   // Khởi tạo cửa sổ
   createWindow()
 
@@ -4974,6 +5035,7 @@ app.on('before-quit', () => {
   saveThemeColorsCache(true)
   if (bassManager) bassManager.killSync()
   if (discordRpcManager) discordRpcManager.destroy()
+  if (soulseekManager) soulseekManager.destroy()
   if (tray) {
     try { tray.destroy() } catch (e) {}
     tray = null
@@ -4982,6 +5044,7 @@ app.on('before-quit', () => {
 
 app.on('window-all-closed', () => {
   if (bassManager) bassManager.killSync()
+  if (soulseekManager) soulseekManager.destroy()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -4990,6 +5053,7 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   if (bassManager) bassManager.killSync()
+  if (soulseekManager) soulseekManager.destroy()
   if (tray) {
     try { tray.destroy() } catch (e) {}
     tray = null

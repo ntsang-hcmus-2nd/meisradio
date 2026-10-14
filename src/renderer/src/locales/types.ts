@@ -38,6 +38,7 @@ export interface TranslationDictionary {
     artists: string
     genres: string
     userPlaylists: string
+    downloads: string
     cloudConnection: string
     googleDrive: string
     settings: string
@@ -524,5 +525,55 @@ export interface TranslationDictionary {
     coverUpdatedSuccess: string
     coverChangeSuccess: string
     coverChangedSuccess: string
+  }
+  downloads: {
+    title: string
+    subtitle: string
+    connectedAs: string
+    connecting: string
+    disconnected: string
+    loginOrRegister: string
+    loginSubtitle: string
+    username: string
+    password: string
+    autoLogin: string
+    loginButton: string
+    logout: string
+    switchAccount: string
+    downloadFolder: string
+    changeFolder: string
+    openFolder: string
+    searchPlaceholder: string
+    searchButton: string
+    searching: string
+    filterAll: string
+    filterLossless: string
+    filter320k: string
+    filterFreeSlots: string
+    sortRelevance: string
+    sortSpeed: string
+    sortBitrate: string
+    sortSize: string
+    tabSearch: string
+    tabTransfers: string
+    downloadNow: string
+    downloading: string
+    completed: string
+    cancel: string
+    playNow: string
+    showInFolder: string
+    freeSlot: string
+    queued: string
+    resultsCount: string
+    noResults: string
+    noDownloads: string
+    registerTip: string
+    speed: string
+    size: string
+    format: string
+    peer: string
+    clearFinished: string
+    noFilterMatches: string
+    resetFilter: string
   }
 }

@@ -157,6 +157,32 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   discordClearPresence: () => ipcRenderer.invoke('discord:clearPresence'),
   discordUpdateConfig: (config: any) => ipcRenderer.invoke('discord:updateConfig', config),
   discordGetStatus: () => ipcRenderer.invoke('discord:getStatus'),
+
+  // Soulseek Lossless Download Engine
+  soulseekLogin: (credentials: { user: string; pass: string; remember?: boolean }) => ipcRenderer.invoke('soulseek:login', credentials),
+  soulseekLogout: () => ipcRenderer.invoke('soulseek:logout'),
+  soulseekGetStatus: () => ipcRenderer.invoke('soulseek:getStatus'),
+  soulseekSearch: (query: string, timeout?: number) => ipcRenderer.invoke('soulseek:search', query, timeout),
+  soulseekDownload: (item: any) => ipcRenderer.invoke('soulseek:download', item),
+  soulseekCancelDownload: (id: string) => ipcRenderer.invoke('soulseek:cancelDownload', id),
+  soulseekSelectDownloadFolder: () => ipcRenderer.invoke('soulseek:selectDownloadFolder'),
+  soulseekSetDownloadFolder: (folder: string) => ipcRenderer.invoke('soulseek:setDownloadFolder', folder),
+  soulseekOpenDownloadFolder: () => ipcRenderer.invoke('soulseek:openDownloadFolder'),
+  onSoulseekStatusChanged: (callback: (status: any) => void) => {
+    const handler = (_event: any, status: any) => callback(status)
+    ipcRenderer.on('soulseek:status-changed', handler)
+    return () => ipcRenderer.removeListener('soulseek:status-changed', handler)
+  },
+  onSoulseekDownloadProgress: (callback: (data: any) => void) => {
+    const handler = (_event: any, data: any) => callback(data)
+    ipcRenderer.on('soulseek:download-progress', handler)
+    return () => ipcRenderer.removeListener('soulseek:download-progress', handler)
+  },
+  onSoulseekDownloadCompleted: (callback: (data: any) => void) => {
+    const handler = (_event: any, data: any) => callback(data)
+    ipcRenderer.on('soulseek:download-completed', handler)
+    return () => ipcRenderer.removeListener('soulseek:download-completed', handler)
+  },
 }
 
 if (process.contextIsolated) {
