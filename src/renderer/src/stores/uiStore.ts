@@ -51,7 +51,7 @@ export interface UIState {
   setViewMode: (mode: 'table' | 'grid' | 'compact' | ((prev: 'table' | 'grid' | 'compact') => 'table' | 'grid' | 'compact')) => void
   setThemeColor: (color: string | ((prev: string) => string)) => void
   setToast: (toast: { message: string; type: 'success' | 'error' | 'info'; visible: boolean } | ((prev: any) => any)) => void
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void
+  showToast: (message: string, type?: 'success' | 'error' | 'info', duration?: number) => void
   hideToast: () => void
   setCustomDialog: (dialog: DialogOptions | null | ((prev: DialogOptions | null) => DialogOptions | null)) => void
 
@@ -88,6 +88,8 @@ const getInitialViewMode = (): 'table' | 'grid' | 'compact' => {
     return 'table'
   }
 }
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useUIStore = create<UIState>((set) => ({
   activeView: 'home',
@@ -128,9 +130,43 @@ export const useUIStore = create<UIState>((set) => ({
     return { viewMode: next }
   }),
   setThemeColor: (valOrFn) => set((s) => ({ themeColor: resolveVal(valOrFn, s.themeColor) })),
-  setToast: (valOrFn) => set((s) => ({ toast: resolveVal(valOrFn, s.toast) })),
-  showToast: (message, type = 'info') => set({ toast: { message, type, visible: true } }),
-  hideToast: () => set((s) => ({ toast: { ...s.toast, visible: false } })),
+  setToast: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.toast)
+    if (next.visible) {
+      if (toastTimer) {
+        clearTimeout(toastTimer)
+        toastTimer = null
+      }
+      toastTimer = setTimeout(() => {
+        set((curr) => ({ toast: { ...curr.toast, visible: false } }))
+        toastTimer = null
+      }, 3500)
+    } else {
+      if (toastTimer) {
+        clearTimeout(toastTimer)
+        toastTimer = null
+      }
+    }
+    return { toast: next }
+  }),
+  showToast: (message, type = 'info', duration = 3500) => {
+    if (toastTimer) {
+      clearTimeout(toastTimer)
+      toastTimer = null
+    }
+    set({ toast: { message, type, visible: true } })
+    toastTimer = setTimeout(() => {
+      set((s) => ({ toast: { ...s.toast, visible: false } }))
+      toastTimer = null
+    }, duration)
+  },
+  hideToast: () => {
+    if (toastTimer) {
+      clearTimeout(toastTimer)
+      toastTimer = null
+    }
+    set((s) => ({ toast: { ...s.toast, visible: false } }))
+  },
   setCustomDialog: (valOrFn) => set((s) => ({ customDialog: resolveVal(valOrFn, s.customDialog) })),
 
   setShowQueuePanel: (valOrFn) => set((s) => ({ showQueuePanel: resolveVal(valOrFn, s.showQueuePanel) })),

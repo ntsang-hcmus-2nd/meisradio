@@ -907,6 +907,8 @@ export default function App() {
     viewMode, setViewMode,
     themeColor, setThemeColor,
     toast, setToast,
+    showToast: storeShowToast,
+    hideToast,
     customDialog, setCustomDialog,
     showQueuePanel, setShowQueuePanel,
     showEQ, setShowEQ,
@@ -1496,10 +1498,9 @@ export default function App() {
   }
 
   // --- UI Utilities ---
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ message, type, visible: true })
-    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000)
-  }
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success', duration?: number) => {
+    storeShowToast(message, type, duration)
+  }, [storeShowToast])
 
   // --- Playlists Management ---
   const handleCreatePlaylistSubmit = async (name: string) => {
@@ -4850,11 +4851,23 @@ export default function App() {
 
       {/* OVERLAYS & MODALS */}
       {toast.visible && (
-        <div className="fixed top-10 right-10 z-[100] animate-fade-in flex items-center gap-3 bg-theme-60 border border-zinc-700 shadow-2xl py-3 px-5 rounded-xl">
-          {toast.type === 'success' && <Sparkles size={18} className="text-theme-10" />}
-          {toast.type === 'error' && <X size={18} className="text-red-400" />}
-          {toast.type === 'info' && <Cloud size={18} className="text-blue-400" />}
+        <div 
+          onClick={hideToast}
+          className="fixed top-10 right-10 z-[100] animate-fade-in flex items-center gap-3 bg-theme-60/95 backdrop-blur-md border border-zinc-700 shadow-2xl py-3 px-5 rounded-xl cursor-pointer select-none hover:bg-zinc-800/80 transition-all duration-200"
+          title={language === 'vi' ? 'Nhấn để đóng thông báo' : 'Click to dismiss'}
+        >
+          {toast.type === 'success' && <Sparkles size={18} className="text-theme-10 flex-shrink-0" />}
+          {toast.type === 'error' && <X size={18} className="text-red-400 flex-shrink-0" />}
+          {toast.type === 'info' && <Cloud size={18} className="text-blue-400 flex-shrink-0" />}
           <span className="text-sm font-medium text-white">{toast.message}</span>
+          <button 
+            type="button" 
+            onClick={(e) => { e.stopPropagation(); hideToast(); }} 
+            className="ml-2 text-zinc-400 hover:text-white transition p-0.5 rounded-full hover:bg-white/10"
+            title={language === 'vi' ? 'Đóng' : 'Close'}
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 
@@ -7952,7 +7965,7 @@ export default function App() {
       {/* PLAYER BAR */}
       <footer className="h-24 bg-theme-60 border-t border-theme-30 flex items-center justify-between px-6 z-20 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
         
-        <div className="flex items-center gap-4 w-1/3">
+        <div className="flex items-center gap-4 w-1/3 min-w-0">
           <div className="w-14 h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
             <DynamicCoverArt
               track={currentTrack}
@@ -8031,13 +8044,6 @@ export default function App() {
           <div className="relative w-full flex items-center justify-center mb-2">
             {/* Nút điều khiển đối xứng qua nút Play ở giữa */}
             <div className="flex items-center gap-5 justify-center">
-              <button 
-                onClick={() => handleStartRadio()} 
-                className="text-zinc-400 hover:text-theme-10 transition cursor-pointer" 
-                title={language === 'vi' ? 'Khởi tạo Smart Radio từ bài hát đang phát' : 'Start Smart Radio from current track'}
-              >
-                <Radio size={17} />
-              </button>
               <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
               <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
               <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
