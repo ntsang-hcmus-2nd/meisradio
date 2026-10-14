@@ -5,9 +5,9 @@ export type CoverTier = 'sm' | 'md' | 'lg' | 'xl' | 'original'
 
 export const TIER_SIZES: Record<CoverTier, number> = {
   sm: 96,       // List item (40-48px @ 2x DPR)
-  md: 256,      // Player bar (56px), Mini player (96px), small cards (120-140px)
-  lg: 512,      // Medium/large grid cards (160-260px @ 2x DPR)
-  xl: 800,      // Fullscreen vinyl disc (250-400px @ 2x DPR)
+  md: 200,      // Player bar (56px), Mini player (96px), small cards (120-140px)
+  lg: 360,      // Medium/large grid cards (160-260px @ 2x DPR)
+  xl: 600,      // Fullscreen vinyl disc (250-400px @ 2x DPR)
   original: 0   // Original full resolution
 }
 
@@ -104,14 +104,14 @@ export function resolveCoverUrl({
   const cleanPath = extractRawFilePath(effectivePath)
   const cleanSrc = extractRawFilePath(effectiveSrc)
 
-  // Ưu tiên 3a: Đối với ảnh nhỏ (tier sm hoặc targetSize <= 128px), nếu đã có sẵn thumbnail (cleanSrc),
+  // Ưu tiên 3a: Đối với ảnh nhỏ và thẻ lưới vừa (tier sm, md hoặc targetSize <= 256px), nếu đã có sẵn thumbnail (cleanSrc),
   // tải trực tiếp qua cleanSrc để tránh backend phải mở và phân tích file audio gốc 50MB!
-  if (targetSize <= 128 && cleanSrc && port > 0) {
+  if (targetSize <= 256 && cleanSrc && port > 0) {
     const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
     return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}`
   }
 
-  // Ưu tiên 3b: Sử dụng effectivePath (file audio hoặc folder playlist) cho kích thước lớn hơn (>128px)
+  // Ưu tiên 3b: Sử dụng effectivePath (file audio hoặc folder playlist) cho kích thước lớn hơn (>256px)
   // hoặc khi chưa có thumbnail có sẵn, để đảm bảo trích xuất ảnh gốc chất lượng cao cho Dynamic Scaling
   if (cleanPath && port > 0) {
     const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''

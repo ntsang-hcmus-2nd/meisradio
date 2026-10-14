@@ -49,8 +49,13 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const isPlayingRef = useRef(isPlaying)
   const reqAnimRef = useRef<number | null>(null)
+  const startDrawLoopRef = useRef<(() => void) | null>(null)
+
   useEffect(() => {
     isPlayingRef.current = isPlaying
+    if (isPlaying) {
+      startDrawLoopRef.current?.()
+    }
   }, [isPlaying])
 
   useEffect(() => {
@@ -168,13 +173,19 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
     }
 
     const draw = (now: number) => {
-      reqAnimRef.current = requestAnimationFrame(draw)
+      if (!isPlayingRef.current || document.hidden) {
+        reqAnimRef.current = null
+        return
+      }
 
       const elapsed = now - lastDrawTime
-      if (elapsed < fpsInterval) return
+      if (elapsed < fpsInterval) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+        return
+      }
       lastDrawTime = now - (elapsed % fpsInterval)
 
-      if (isPlayingRef.current && analyserNodeRef.current) {
+      if (analyserNodeRef.current) {
         analyserNodeRef.current.getByteFrequencyData(dataArray)
 
         gl.bindTexture(gl.TEXTURE_2D, texture)
@@ -186,12 +197,41 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
       const offset = currentColumn / textureWidth
       gl.uniform1f(offsetLoc, offset)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+      if (isPlayingRef.current && !document.hidden) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+      } else {
+        reqAnimRef.current = null
+      }
     }
-    reqAnimRef.current = requestAnimationFrame(draw)
+
+    const startDrawLoop = () => {
+      if (!reqAnimRef.current && isPlayingRef.current && !document.hidden) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+      }
+    }
+    startDrawLoopRef.current = startDrawLoop
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (reqAnimRef.current) {
+          cancelAnimationFrame(reqAnimRef.current)
+          reqAnimRef.current = null
+        }
+      } else if (isPlayingRef.current) {
+        startDrawLoop()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    startDrawLoop()
 
     return () => {
+      startDrawLoopRef.current = null
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       resizeObserver.disconnect()
       if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
+      reqAnimRef.current = null
       try {
         gl.detachShader(program, vs)
         gl.deleteShader(vs)

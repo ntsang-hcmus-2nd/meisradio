@@ -102,6 +102,9 @@ export interface MeisRadioApi {
   getThemeColorsCache: () => Promise<any>
   cacheThemeColors: (trackPath: string, colors: any) => Promise<any>
   clearMemoryCache: () => Promise<any>
+  clearWebFrameCache: () => void
+  forceGC: () => Promise<any> | void
+  forceRendererGC: () => void
   onDeepClean: (callback: () => void) => () => void
   onNavBack: (callback: () => void) => () => void
   onNavForward: (callback: () => void) => () => void

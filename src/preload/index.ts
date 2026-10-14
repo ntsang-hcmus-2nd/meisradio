@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
@@ -132,12 +132,24 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   },
   onBassAudioParams: (callback: (params: any) => void) => {
     const handler = (_e: any, params: any) => callback(params)
-    ipcRenderer.on('bass:audio-out-params', handler)
-    return () => ipcRenderer.removeListener('bass:audio-out-params', handler)
+    ipcRenderer.on('mpv:audio-out-params', handler)
+    return () => ipcRenderer.removeListener('mpv:audio-out-params', handler)
   },
   getThemeColorsCache: () => ipcRenderer.invoke('music:getThemeColorsCache'),
   cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),
   clearMemoryCache: () => ipcRenderer.invoke('app:clearMemoryCache'),
+  clearWebFrameCache: () => {
+    try {
+      webFrame.clearCache()
+    } catch (_) {}
+  },
+  forceRendererGC: () => {
+    try {
+      if (typeof (globalThis as any).gc === 'function') {
+        (globalThis as any).gc()
+      }
+    } catch (_) {}
+  },
   onDeepClean: (callback: () => void) => {
     const handler = () => callback()
     ipcRenderer.on('app:onDeepClean', handler)

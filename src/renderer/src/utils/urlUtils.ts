@@ -143,7 +143,7 @@ export function formatImageSource(filePath: string | undefined | null, streamPor
     const dotIdx = rawPath.lastIndexOf('.')
     const ext = dotIdx !== -1 ? rawPath.slice(dotIdx).toLowerCase() : ''
     if (audioExts.includes(ext)) {
-      return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(rawPath)}&size=1200`
+      return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(rawPath)}&size=480`
     }
 
     return `http://127.0.0.1:${port}/local-file?path=${encodeURIComponent(rawPath)}`

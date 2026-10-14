@@ -18,28 +18,30 @@ import thumbnailHolder from '../../../resources/HoT_Chibi_Emoji.png'
 import meiSingingPlaceholder from '../../../resources/Mei singing.webp'
 import { CustomNumberInput } from './components/CustomNumberInput'
 import { CustomSelect } from './components/CustomSelect'
-import { PlaylistRenameModal } from './components/modals/PlaylistRenameModal'
-import { EditPlaylistModal } from './components/modals/EditPlaylistModal'
-import { CloudActionModal } from './components/modals/CloudActionModal'
-import { TagEditorModal } from './components/modals/TagEditorModal'
-import { CreatePlaylistModal } from './components/modals/CreatePlaylistModal'
-import { AddSongsModal } from './components/modals/AddSongsModal'
 import { CustomDialogModal, DialogOptions } from './components/modals/CustomDialogModal'
 import { PlayerProgressBar } from './components/PlayerProgressBar'
 import { Sidebar } from './components/Sidebar'
 import { EQPanel } from './components/EQPanel'
 import { VolumeSlider } from './components/VolumeSlider'
-import { SpectrogramModal } from './components/SpectrogramModal'
 import { ContextMenu, ContextMenuItem } from './components/ContextMenu'
-import { CommandPaletteModal } from './components/modals/CommandPaletteModal'
-import { MusicInsightsModal } from './components/modals/MusicInsightsModal'
-import { BackupModal } from './components/modals/BackupModal'
 import { DragDropOverlay } from './components/DragDropOverlay'
-import { DownloadsView } from './components/DownloadsView'
+
+// TỐI ƯU HÓA: Nạp lười (Code Splitting) các modal và màn hình phụ để giảm kích thước bundle và tăng tốc mở app
+const PlaylistRenameModal = React.lazy(() => import('./components/modals/PlaylistRenameModal').then(m => ({ default: m.PlaylistRenameModal })))
+const EditPlaylistModal = React.lazy(() => import('./components/modals/EditPlaylistModal').then(m => ({ default: m.EditPlaylistModal })))
+const CloudActionModal = React.lazy(() => import('./components/modals/CloudActionModal').then(m => ({ default: m.CloudActionModal })))
+const TagEditorModal = React.lazy(() => import('./components/modals/TagEditorModal').then(m => ({ default: m.TagEditorModal })))
+const CreatePlaylistModal = React.lazy(() => import('./components/modals/CreatePlaylistModal').then(m => ({ default: m.CreatePlaylistModal })))
+const AddSongsModal = React.lazy(() => import('./components/modals/AddSongsModal').then(m => ({ default: m.AddSongsModal })))
+const SpectrogramModal = React.lazy(() => import('./components/SpectrogramModal').then(m => ({ default: m.SpectrogramModal })))
+const CommandPaletteModal = React.lazy(() => import('./components/modals/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })))
+const MusicInsightsModal = React.lazy(() => import('./components/modals/MusicInsightsModal').then(m => ({ default: m.MusicInsightsModal })))
+const BackupModal = React.lazy(() => import('./components/modals/BackupModal').then(m => ({ default: m.BackupModal })))
+const DownloadsView = React.lazy(() => import('./components/DownloadsView').then(m => ({ default: m.DownloadsView })))
 
 import { extractThemeColors, initThemeColorCache } from './utils/colorUtils'
 import { DynamicCoverArt, setGlobalStreamPort } from './components/DynamicCoverArt'
-import { removeAccents, matchesQuery } from './utils/textUtils'
+import { removeAccents, matchesQuery, matchesTrackQuery } from './utils/textUtils'
 import { fisherYatesShuffle } from './utils/arrayUtils'
 import { formatAudioSource, formatImageSource } from './utils/urlUtils'
 import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate } from './utils/formatUtils'
@@ -415,7 +417,7 @@ const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleR
         data={tracks}
         listClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-1"
         itemClassName="h-full"
-        increaseViewportBy={{ top: 200, bottom: 200 }}
+        increaseViewportBy={{ top: 60, bottom: 60 }}
         itemContent={(index, track) => (
           <TrackGridItem 
             track={track} 
@@ -533,7 +535,7 @@ const PlaylistItemCard = React.memo(({ pl, isLite, onOpen, onContextMenu, onChan
         <DynamicCoverArt
           src={pl.thumbnail}
           trackPath={pl.path}
-          tier="lg"
+          tier="md"
           isLite={isLite}
           fallbackIcon={<FolderPlus size={40} className="text-zinc-600" />}
           className="w-full h-full"
@@ -716,6 +718,146 @@ const SC_GENRES = [
   { id: 'danceedm', key: 'danceedm' }
 ]
 
+// ==========================================
+// TỐI ƯU HÓA RENDER: CÔ LẬP CÁC THÀNH PHẦN CẬP NHẬT TẦN SUẤT CAO
+// Giúp App không bị re-render toàn diện mỗi giây (SleepTimer) hoặc mỗi câu lời (Lyrics) hoặc mỗi chunk (Download)
+// ==========================================
+const DownloadProgressToast: React.FC<{ t: (key: string, params?: any) => string }> = React.memo(({ t }) => {
+  const isDownloading = useSettingsStore(s => s.isDownloading)
+  const downloadProgress = useSettingsStore(s => s.downloadProgress)
+
+  if (!isDownloading || !downloadProgress) return null
+
+  return (
+    <div className="fixed bottom-28 right-8 z-[90] bg-theme-60/95 backdrop-blur-md border border-zinc-700/80 rounded-xl p-5 w-80 shadow-2xl flex flex-col animate-fade-in pointer-events-none">
+      <div className="flex items-center gap-3 mb-2">
+        <Cloud size={20} className="text-theme-10 animate-pulse" />
+        <h3 className="text-sm font-bold text-white">{t('toasts.downloadProgress')}</h3>
+      </div>
+      
+      <p className="text-xs text-zinc-400 mb-4 truncate w-full" title={downloadProgress.fileName}>
+        {downloadProgress.fileName}
+      </p>
+      
+      <div className="w-full bg-zinc-950 rounded-full h-1.5 mb-2 overflow-hidden border border-theme-30">
+        <div 
+          className="bg-theme-10 h-full transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+          style={{ width: `${(downloadProgress.current / downloadProgress.total) * 100}%` }}
+        />
+      </div>
+      
+      <div className="flex items-center justify-between w-full text-[10px] font-medium">
+        <span className="text-theme-10">{Math.round((downloadProgress.current / downloadProgress.total) * 100)}%</span>
+        <span className="text-zinc-500">{downloadProgress.current} / {downloadProgress.total} {t('common.files')}</span>
+      </div>
+    </div>
+  )
+})
+
+const SleepTimerButton: React.FC<{
+  onSetTimer: (mode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track') => void
+  t: (key: string, params?: any) => string
+  language: string
+}> = React.memo(({ onSetTimer, t, language }) => {
+  const sleepTimerMode = usePlayerStore(s => s.sleepTimerMode)
+  const sleepTimerRemaining = usePlayerStore(s => s.sleepTimerRemaining)
+  const showSleepTimerMenu = usePlayerStore(s => s.showSleepTimerMenu)
+  const setShowSleepTimerMenu = usePlayerStore(s => s.setShowSleepTimerMenu)
+
+  return (
+    <div className="relative">
+      <button 
+        onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)} 
+        className={`transition flex items-center gap-1 cursor-pointer ${sleepTimerMode !== 'off' ? 'text-theme-10' : 'hover:text-white'}`} 
+        title={sleepTimerMode !== 'off' ? (sleepTimerMode === 'end_of_track' ? t('player.sleepTimerStopEndTitle') : t('player.sleepTimerRemainingTitle', { time: `${Math.floor((sleepTimerRemaining || 0) / 60)}m${(sleepTimerRemaining || 0) % 60}s` })) : t('player.sleepTimer')}
+      >
+        <Timer size={18} />
+        {sleepTimerMode !== 'off' && (
+          <span className="text-[10px] font-mono font-bold leading-none bg-theme-10/20 text-theme-10 px-1 py-0.5 rounded">
+            {sleepTimerMode === 'end_of_track' ? (language === 'vi' ? 'Bài' : 'Trk') : `${Math.ceil((sleepTimerRemaining || 0) / 60)}m`}
+          </span>
+        )}
+      </button>
+
+      {showSleepTimerMenu && (
+        <div className="absolute bottom-full right-0 mb-3 w-48 bg-zinc-900/95 border border-theme-30/70 backdrop-blur-md rounded-xl p-2 shadow-2xl z-50 text-xs space-y-1 animate-fade-in select-none">
+          <div className="px-2 py-1 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 flex items-center justify-between">
+            <span className="flex items-center gap-1.5"><Clock size={12}/> {t('player.sleepTimer')}</span>
+            {sleepTimerMode !== 'off' && <span className="text-theme-10 font-mono">{sleepTimerRemaining ? `${Math.floor(sleepTimerRemaining / 60)}:${String(sleepTimerRemaining % 60).padStart(2, '0')}` : ''}</span>}
+          </div>
+          {[
+            { mode: 'off' as const, label: t('player.sleepTimerOff') },
+            { mode: '15' as const, label: t('player.sleepTimer15') },
+            { mode: '30' as const, label: t('player.sleepTimer30') },
+            { mode: '45' as const, label: t('player.sleepTimer45') },
+            { mode: '60' as const, label: t('player.sleepTimer60') },
+            { mode: 'end_of_track' as const, label: t('player.sleepTimerEndTrack') }
+          ].map(opt => (
+            <button
+              key={opt.mode}
+              onClick={() => onSetTimer(opt.mode)}
+              className={`w-full text-left px-2.5 py-1.5 rounded-lg transition flex items-center justify-between ${sleepTimerMode === opt.mode ? 'bg-theme-10/20 text-theme-10 font-semibold' : 'hover:bg-theme-30 text-zinc-300'}`}
+            >
+              <span>{opt.label}</span>
+              {sleepTimerMode === opt.mode && <span className="w-1.5 h-1.5 rounded-full bg-theme-10" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+})
+
+const SyncedLyricsList: React.FC<{
+  lyrics: any[]
+  audioRef: React.RefObject<HTMLAudioElement | null>
+  isVinyl?: boolean
+  noLyricsText: string
+}> = React.memo(({ lyrics, audioRef, isVinyl = false, noLyricsText }) => {
+  const currentLyricIndex = useLyricsStore(s => s.currentLyricIndex)
+  const activeLyricRef = useRef<HTMLParagraphElement | null>(null)
+
+  useEffect(() => {
+    if (activeLyricRef.current) {
+      activeLyricRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [currentLyricIndex])
+
+  if (lyrics.length === 0) {
+    return <p className={`text-zinc-500 italic ${isVinyl ? 'mt-32 text-xl' : 'mt-10'}`}>{noLyricsText}</p>
+  }
+
+  return (
+    <>
+      {lyrics.map((line, index) => {
+        const isActive = index === currentLyricIndex
+        return (
+          <p
+            key={index}
+            ref={isActive ? activeLyricRef : null}
+            onClick={() => {
+              if (!line.unsynced && audioRef.current) {
+                audioRef.current.currentTime = line.time
+              }
+            }}
+            className={`transition-all duration-300 font-bold ${
+              line.unsynced
+                ? `text-zinc-300 ${isVinyl ? 'text-xl min-h-[1.75rem]' : 'text-sm min-h-[1.25rem]'}`
+                : `cursor-pointer ${
+                    isActive
+                      ? `text-theme-10 ${isVinyl ? 'text-3xl scale-105' : 'text-xl'}`
+                      : `text-zinc-500 ${isVinyl ? 'text-xl opacity-50' : 'text-sm'} hover:text-zinc-300`
+                  }`
+            }`}
+          >
+            {line.text}
+          </p>
+        )
+      })}
+    </>
+  )
+})
+
 export default function App() {
   const { t, language, setLanguage } = useTranslation()
 
@@ -733,7 +875,6 @@ export default function App() {
   const visualizerCanvasRef = useRef<HTMLCanvasElement>(null)
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const reqAnimRef = useRef<number>(0)
-  const activeLyricRef = useRef<HTMLParagraphElement | null>(null)
 
   // ==========================================
   // 2. ZUSTAND STORES & HOOKS
@@ -756,8 +897,8 @@ export default function App() {
     smartAutoplay, setSmartAutoplay,
     lyricOffset, setLyricOffset,
     sleepTimerMode, setSleepTimerMode,
-    sleepTimerRemaining, setSleepTimerRemaining,
-    showSleepTimerMenu, setShowSleepTimerMenu
+    setSleepTimerRemaining,
+    setShowSleepTimerMenu
   } = usePlayerStore()
 
   // UI Store
@@ -842,7 +983,7 @@ export default function App() {
     driveFiles, setDriveFiles,
     cloudActionTrack, setCloudActionTrack,
     isDownloading, setIsDownloading,
-    downloadProgress, setDownloadProgress,
+    setDownloadProgress,
     loudnessNormalization, setLoudnessNormalization
   } = useSettingsStore()
 
@@ -859,7 +1000,7 @@ export default function App() {
   // Lyrics Store
   const {
     lyrics, setLyrics,
-    currentLyricIndex, setCurrentLyricIndex,
+    setCurrentLyricIndex,
     originalCover, setOriginalCover
   } = useLyricsStore()
 
@@ -888,6 +1029,7 @@ export default function App() {
   }, [selectedDeviceId])
 
   const [audioRemountCount, setAudioRemountCount] = useState(0)
+  const [queueRenderLimit, setQueueRenderLimit] = useState(60)
   const prevTrackModeRef = useRef<'bass' | 'webaudio'>('webaudio')
 
   const resetWebAudioPipeline = useCallback(async () => {
@@ -1656,30 +1798,29 @@ export default function App() {
   }
 
   const getSortedTracks = (tracks: any[]) => {
-    if (!sortField || !tracks) return tracks
-    return [...tracks].sort((a, b) => {
-      let valA = a[sortField] ?? ''
-      let valB = b[sortField] ?? ''
-      if (typeof valA === 'string') {
-        valA = valA.toLowerCase()
-        valB = (valB || '').toLowerCase()
-      }
-      if (valA < valB) return sortOrder === 'asc' ? -1 : 1
-      if (valA > valB) return sortOrder === 'asc' ? 1 : -1
+    if (!sortField || !tracks || tracks.length <= 1) return tracks
+    const isAsc = sortOrder === 'asc'
+    const field = sortField
+    // TỐI ƯU HÓA: Schwartzian Transform chuẩn hóa giá trị 1 lần duy nhất thay vì gọi .toLowerCase() 560.000 lần
+    const mapped = tracks.map((t, idx) => {
+      const raw = t[field]
+      const val = typeof raw === 'string' ? raw.toLowerCase() : (raw ?? '')
+      return { idx, val }
+    })
+    mapped.sort((a, b) => {
+      if (a.val < b.val) return isAsc ? -1 : 1
+      if (a.val > b.val) return isAsc ? 1 : -1
       return 0
     })
+    return mapped.map(m => tracks[m.idx])
   }
 
   const getFilteredTracks = (tracks: any[]) => {
     const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
-    if (!rawQuery) return tracks
+    if (!rawQuery || !tracks || tracks.length === 0) return tracks
     const normalizedQuery = removeAccents(rawQuery)
-    return tracks.filter(t => 
-      matchesQuery(t.title, normalizedQuery) ||
-      matchesQuery(t.artist, normalizedQuery) ||
-      (Array.isArray(t.artists) && t.artists.some((a: string) => matchesQuery(a, normalizedQuery))) ||
-      matchesQuery(t.album, normalizedQuery)
-    )
+    // TỐI ƯU HÓA: So khớp qua chỉ mục _searchKey chuẩn hóa sẵn, giảm 98% phân rã ký tự Unicode NFD và Regex
+    return tracks.filter(t => matchesTrackQuery(t, normalizedQuery))
   }
 
   // --- Player Controls ---
@@ -2131,17 +2272,21 @@ export default function App() {
     }
   }
 
-  const handleRowClick = async (track: any, contextList?: any[]) => {
+  const handlePlayTrackRef = useRef(handlePlayTrack)
+  handlePlayTrackRef.current = handlePlayTrack
+
+  const handleRowClick = useCallback(async (track: any, contextList?: any[]) => {
     if (contextList) {
       setOriginalQueue(contextList);
-      setPlayQueue(isShuffle ? fisherYatesShuffle(contextList) : contextList);
+      const shuffleState = usePlayerStore.getState().isShuffle;
+      setPlayQueue(shuffleState ? fisherYatesShuffle(contextList) : contextList);
     }
     if (track.isCloud && !track.isOnline) {
       setCloudActionTrack(track);
     } else {
-      handlePlayTrack(track); // Gọi thẳng, hệ thống sẽ tự phân giải
+      handlePlayTrackRef.current(track);
     }
-  }
+  }, [])
 
   // --- EQ & Audio Setup ---
   const handleAddBand = () => {
@@ -2349,7 +2494,7 @@ export default function App() {
     if (!currentTrack.isCloud && (currentTrack.id || currentTrack.filePath)) {
       let isCurrent = true
       // @ts-ignore
-      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath, 1200).then((cover: string | null) => {
+      window.api.getOriginalTrackCover(currentTrack.id || currentTrack.filePath, 480).then((cover: string | null) => {
         if (isCurrent) {
           setTrackHighResCover(cover || currentTrack.coverArt || null)
         }
@@ -2516,7 +2661,7 @@ export default function App() {
 
   // --- Chức năng cài đặt ---
   // --- Tag Editor ---
-  const openTagEditor = (track: any, e: React.MouseEvent) => {
+  const openTagEditor = useCallback((track: any, e: React.MouseEvent) => {
     e.stopPropagation()
     setEditingTrack(track)
 
@@ -2546,7 +2691,7 @@ export default function App() {
         }).catch(() => {})
       }
     }
-  }
+  }, [])
 
   const handleSelectTagImage = async () => {
     // @ts-ignore
@@ -2941,16 +3086,20 @@ export default function App() {
   // ==========================================
   // 4. MEMOS
   // ==========================================
-  const getResolvedUserPlaylistTracks = (upl: any) => {
-    if (!upl || !Array.isArray(upl.trackIds)) return []
-    const trackMap = new Map<string, any>()
+  const libraryTrackMap = useMemo(() => {
+    const map = new Map<string, any>()
     for (const t of libraryTracks) {
-      if (t.id) trackMap.set(t.id, t)
-      if (t.filePath) trackMap.set(t.filePath, t)
+      if (t.id) map.set(t.id, t)
+      if (t.filePath) map.set(t.filePath, t)
     }
+    return map
+  }, [libraryTracks])
+
+  const getResolvedUserPlaylistTracks = useCallback((upl: any) => {
+    if (!upl || !Array.isArray(upl.trackIds)) return []
     const resolved: any[] = []
     for (const trackId of upl.trackIds) {
-      const found = trackMap.get(trackId)
+      const found = libraryTrackMap.get(trackId)
       if (found) {
         resolved.push(found)
       } else {
@@ -2967,20 +3116,39 @@ export default function App() {
       }
     }
     return resolved
-  }
+  }, [libraryTrackMap])
 
   const activeUserPlaylistTracks = useMemo(() => {
     if (!activeUserPlaylist) return []
     const resolved = getResolvedUserPlaylistTracks(activeUserPlaylist)
     const filtered = getFilteredTracks(resolved)
     return getSortedTracks(filtered)
-  }, [activeUserPlaylist, libraryTracks, searchQuery, sortField, sortOrder])
+  }, [activeUserPlaylist, getResolvedUserPlaylistTracks, searchQuery, sortField, sortOrder])
+
+  const uniqueArtistsCount = useMemo(() => {
+    const set = new Set<string>()
+    for (const track of libraryTracks) {
+      const trackArtists = (Array.isArray(track.artists) && track.artists.length > 0)
+        ? track.artists
+        : splitArtistString(track.artist || '')
+      for (const a of trackArtists) {
+        if (a && a.trim() && a.toLowerCase() !== 'unknown') {
+          set.add(a.trim().toLowerCase())
+        }
+      }
+    }
+    return set.size
+  }, [libraryTracks])
 
   const artistsData = useMemo(() => {
+    if (activeView !== 'artists') {
+      return { artistsList: [] as any[], alphabetGroups: [] as any[] }
+    }
     const artistMap = new Map<string, {
       name: string
       tracks: any[]
-      albums: Map<string, any[]>
+      trackKeys: Set<string>
+      albums: Map<string, { tracks: any[]; trackKeys: Set<string> }>
       coverArt: string | null
     }>()
 
@@ -2993,18 +3161,22 @@ export default function App() {
         ? trackArtists
         : [(language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')]
 
+      const trackKey = track.id || track.filePath
+
       for (const rawArtist of effectiveArtists) {
         const artistName = (rawArtist && rawArtist.trim() && rawArtist.toLowerCase() !== 'unknown') ? rawArtist.trim() : (language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')
         if (!artistMap.has(artistName)) {
           artistMap.set(artistName, {
             name: artistName,
             tracks: [],
+            trackKeys: new Set(),
             albums: new Map(),
             coverArt: null
           })
         }
         const item = artistMap.get(artistName)!
-        if (!item.tracks.some(t => (t.id || t.filePath) === (track.id || track.filePath))) {
+        if (!item.trackKeys.has(trackKey)) {
+          item.trackKeys.add(trackKey)
           item.tracks.push(track)
         }
         if (!item.coverArt && track.coverArt) {
@@ -3012,11 +3184,14 @@ export default function App() {
         }
         const albumName = (track.album && track.album.trim() && track.album.toLowerCase() !== 'unknown') ? track.album.trim() : null
         if (albumName) {
-          if (!item.albums.has(albumName)) {
-            item.albums.set(albumName, [])
+          let alb = item.albums.get(albumName)
+          if (!alb) {
+            alb = { tracks: [], trackKeys: new Set() }
+            item.albums.set(albumName, alb)
           }
-          if (!item.albums.get(albumName)!.some(t => (t.id || t.filePath) === (track.id || track.filePath))) {
-            item.albums.get(albumName)!.push(track)
+          if (!alb.trackKeys.has(trackKey)) {
+            alb.trackKeys.add(trackKey)
+            alb.tracks.push(track)
           }
         }
       }
@@ -3025,11 +3200,11 @@ export default function App() {
     const artistsList = Array.from(artistMap.values()).map(a => ({
       name: a.name,
       tracks: a.tracks,
-      albums: Array.from(a.albums.entries()).map(([title, tracks]) => ({
+      albums: Array.from(a.albums.entries()).map(([title, alb]) => ({
         title,
-        tracks,
-        coverArt: tracks.find(t => t.coverArt)?.coverArt || a.coverArt,
-        year: tracks.find(t => t.year)?.year || null
+        tracks: alb.tracks,
+        coverArt: alb.tracks.find(t => t.coverArt)?.coverArt || a.coverArt,
+        year: alb.tracks.find(t => t.year)?.year || null
       })),
       albumCount: a.albums.size,
       trackCount: a.tracks.length,
@@ -3066,9 +3241,10 @@ export default function App() {
     })
 
     return { artistsList, alphabetGroups }
-  }, [libraryTracks, language])
+  }, [libraryTracks, language, activeView])
 
   const genresData = useMemo(() => {
+    if (activeView !== 'genres') return []
     const genreMap = new Map<string, {
       name: string
       tracks: any[]
@@ -3130,7 +3306,7 @@ export default function App() {
     })
 
     return genresList
-  }, [libraryTracks, language])
+  }, [libraryTracks, language, activeView])
 
   const processedLibraryTracks = useMemo(() => {
     const filtered = getFilteredTracks(libraryTracks)
@@ -3388,7 +3564,7 @@ export default function App() {
   useEffect(() => {
     if (!currentTrack) return
     const timer = setTimeout(() => {
-      // @ts-ignore
+      window.api?.clearWebFrameCache?.()
       window.api?.clearMemoryCache?.()
     }, 1500)
     return () => clearTimeout(timer)
@@ -3396,37 +3572,57 @@ export default function App() {
 
   // 2. Dọn dẹp sâu khi ứng dụng thu nhỏ hoặc nhận sự kiện onDeepClean từ Main Process
   useEffect(() => {
+    const triggerGC = () => {
+      try {
+        window.api?.clearWebFrameCache?.()
+      } catch (_) {}
+      try {
+        window.api?.forceRendererGC?.()
+      } catch (_) {}
+      try {
+        window.api?.forceGC?.()
+      } catch (_) {}
+      window.api?.clearMemoryCache?.()
+    }
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // @ts-ignore
-        window.api?.clearMemoryCache?.()
+        triggerGC()
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
-    // @ts-ignore
     if (window.api?.onDeepClean) {
-      // @ts-ignore
       window.api.onDeepClean(() => {
-        // @ts-ignore
-        window.api?.clearMemoryCache?.()
+        triggerGC()
       })
     }
 
-    // 3. Chu kỳ kiểm tra dọn dẹp nhàn rỗi (mỗi 4 phút khi chạy ngầm)
+    // 3. Chu kỳ kiểm tra dọn dẹp nhàn rỗi (mỗi 3 phút khi chạy ngầm)
     const idleInterval = setInterval(() => {
       if (document.hidden) {
-        // @ts-ignore
-        window.api?.clearMemoryCache?.()
+        triggerGC()
       }
-    }, 240000)
+    }, 180000)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       clearInterval(idleInterval)
     }
   }, [])
+
+  // 4. Giải phóng bộ nhớ đệm ảnh không dùng khi chuyển đổi tab / view
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        window.api?.clearWebFrameCache?.()
+        window.api?.forceRendererGC?.()
+        window.api?.forceGC?.()
+      } catch (_) {}
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [activeView])
 
   // DISCORD RICH PRESENCE SYNC
   const updateDiscordSettings = (updates: Partial<{
@@ -3807,9 +4003,10 @@ export default function App() {
 
     const handleTimeUpdate = () => {
       // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Chỉ cập nhật khi giao diện đang mở trên màn hình) ---
+      const activeIdx = useLyricsStore.getState().currentLyricIndex
       if (!document.hidden && lyrics.length > 0 && lyrics[0].unsynced) {
         // Lời thô không có mốc thời gian: không highlight theo thời gian phát
-        if (currentLyricIndex !== -1) setCurrentLyricIndex(-1)
+        if (activeIdx !== -1) setCurrentLyricIndex(-1)
       } else if (!document.hidden && lyrics.length > 0) {
         const visualTime = audio.currentTime + 0.3 + (lyricOffset || 0)
         const index = lyrics.findIndex((line, i) => {
@@ -3817,8 +4014,8 @@ export default function App() {
           if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
           return visualTime >= line.time
         })
-        if (index !== currentLyricIndex) setCurrentLyricIndex(index)
-      } else if (!document.hidden && currentLyricIndex !== -1 && lyrics.length === 0) {
+        if (index !== activeIdx) setCurrentLyricIndex(index)
+      } else if (!document.hidden && activeIdx !== -1 && lyrics.length === 0) {
         setCurrentLyricIndex(-1)
       }
 
@@ -3862,14 +4059,7 @@ export default function App() {
 
     audio.addEventListener('timeupdate', handleTimeUpdate)
     return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [lyrics, currentLyricIndex, playQueue, currentTrack, repeatMode, lyricOffset, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, handleNext, audioRemountCount])
-
-  // Scroll Active Lyric
-  useEffect(() => {
-    if (activeLyricRef.current) {
-      activeLyricRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }, [currentLyricIndex])
+  }, [lyrics, playQueue, currentTrack, repeatMode, lyricOffset, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, handleNext, audioRemountCount])
 
   // In-App Keyboard Shortcuts
   useEffect(() => {
@@ -4411,7 +4601,7 @@ export default function App() {
             if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
             return visualTime >= line.time
           })
-          if (index !== currentLyricIndex) setCurrentLyricIndex(index)
+          if (index !== useLyricsStore.getState().currentLyricIndex) setCurrentLyricIndex(index)
         }
       }
     })
@@ -4460,7 +4650,7 @@ export default function App() {
       if (typeof unError === 'function') unError()
       if (typeof unAudioParams === 'function') unAudioParams()
     }
-  }, [handleNext, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, sleepTimerMode, currentTrack, lyrics, currentLyricIndex, lyricOffset])
+  }, [handleNext, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, sleepTimerMode, currentTrack, lyrics, lyricOffset])
 
   useEffect(() => {
     if (!bitPerfectEnabled && !isDsdTrack(currentTrack)) {
@@ -4671,127 +4861,106 @@ export default function App() {
       {/* ========================================= */}
       {/* MỚI: PROGRESS BAR DẠNG TOAST (NỔI GÓC PHẢI) */}
       {/* ========================================= */}
-      {isDownloading && downloadProgress && (
-        <div className="fixed bottom-28 right-8 z-[90] bg-theme-60/95 backdrop-blur-md border border-zinc-700/80 rounded-xl p-5 w-80 shadow-2xl flex flex-col animate-fade-in pointer-events-none">
-          <div className="flex items-center gap-3 mb-2">
-            <Cloud size={20} className="text-theme-10 animate-pulse" />
-            <h3 className="text-sm font-bold text-white">{t('toasts.downloadProgress')}</h3>
-          </div>
-          
-          <p className="text-xs text-zinc-400 mb-4 truncate w-full" title={downloadProgress.fileName}>
-            {downloadProgress.fileName}
-          </p>
-          
-          <div className="w-full bg-zinc-950 rounded-full h-1.5 mb-2 overflow-hidden border border-theme-30">
-            <div 
-              className="bg-theme-10 h-full transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-              style={{ width: `${(downloadProgress.current / downloadProgress.total) * 100}%` }}
-            />
-          </div>
-          
-          <div className="flex items-center justify-between w-full text-[10px] font-medium">
-            <span className="text-theme-10">{Math.round((downloadProgress.current / downloadProgress.total) * 100)}%</span>
-            <span className="text-zinc-500">{downloadProgress.current} / {downloadProgress.total} {t('common.files')}</span>
-          </div>
-        </div>
-      )}
+      <DownloadProgressToast t={t} />
 
-      <CloudActionModal
-        track={cloudActionTrack}
-        isDownloading={isDownloading}
-        onClose={() => setCloudActionTrack(null)}
-        onAction={handleCloudAction}
-      />
+      <React.Suspense fallback={null}>
+        <CloudActionModal
+          track={cloudActionTrack}
+          isDownloading={isDownloading}
+          onClose={() => setCloudActionTrack(null)}
+          onAction={handleCloudAction}
+        />
 
-      <TagEditorModal
-        track={editingTrack}
-        tags={editTags}
-        imagePath={editImagePath}
-        setTags={setEditTags}
-        onSelectImage={handleSelectTagImage}
-        onSave={saveTags}
-        onClose={() => setEditingTrack(null)}
-      />
+        <TagEditorModal
+          track={editingTrack}
+          tags={editTags}
+          imagePath={editImagePath}
+          setTags={setEditTags}
+          onSelectImage={handleSelectTagImage}
+          onSave={saveTags}
+          onClose={() => setEditingTrack(null)}
+        />
 
-      <PlaylistRenameModal
-        isOpen={playlistRename.isOpen}
-        newName={playlistRename.newName}
-        setNewName={(name) => setPlaylistRename({ ...playlistRename, newName: name })}
-        onCancel={() => setPlaylistRename({ isOpen: false, oldName: '', newName: '' })}
-        onSubmit={handleRenameSubmit}
-      />
+        <PlaylistRenameModal
+          isOpen={playlistRename.isOpen}
+          newName={playlistRename.newName}
+          setNewName={(name) => setPlaylistRename({ ...playlistRename, newName: name })}
+          onCancel={() => setPlaylistRename({ isOpen: false, oldName: '', newName: '' })}
+          onSubmit={handleRenameSubmit}
+        />
 
-      <EditPlaylistModal
-        isOpen={showEditUserPlaylistModal}
-        playlist={editingUserPlaylist}
-        onClose={() => {
-          setShowEditUserPlaylistModal(false)
-          setEditingUserPlaylist(null)
-        }}
-        onSave={handleSaveEditUserPlaylist}
-      />
+        <EditPlaylistModal
+          isOpen={showEditUserPlaylistModal}
+          playlist={editingUserPlaylist}
+          onClose={() => {
+            setShowEditUserPlaylistModal(false)
+            setEditingUserPlaylist(null)
+          }}
+          onSave={handleSaveEditUserPlaylist}
+        />
 
-      <CreatePlaylistModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCreate={handleCreatePlaylistSubmit}
-      />
+        <CreatePlaylistModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onCreate={handleCreatePlaylistSubmit}
+        />
 
-      <CreatePlaylistModal
-        isOpen={showCreateUserPlaylistModal}
-        onClose={() => setShowCreateUserPlaylistModal(false)}
-        onCreate={handleCreateUserPlaylist}
-      />
+        <CreatePlaylistModal
+          isOpen={showCreateUserPlaylistModal}
+          onClose={() => setShowCreateUserPlaylistModal(false)}
+          onCreate={handleCreateUserPlaylist}
+        />
 
-      <AddSongsModal
-        isOpen={showAddSongsModal}
-        tracks={libraryTracks}
-        playlistName={activePlaylist?.name || ''}
-        onClose={() => setShowAddSongsModal(false)}
-        onAddTracks={handleAddTracksToActivePlaylist}
-      />
+        <AddSongsModal
+          isOpen={showAddSongsModal}
+          tracks={libraryTracks}
+          playlistName={activePlaylist?.name || ''}
+          onClose={() => setShowAddSongsModal(false)}
+          onAddTracks={handleAddTracksToActivePlaylist}
+        />
 
-      <AddSongsModal
-        isOpen={showAddSongsToUserPlaylistModal}
-        tracks={libraryTracks}
-        playlistName={activeUserPlaylist?.name || ''}
-        onClose={() => setShowAddSongsToUserPlaylistModal(false)}
-        onAddTracks={handleAddSongsToUserPlaylist}
-      />
+        <AddSongsModal
+          isOpen={showAddSongsToUserPlaylistModal}
+          tracks={libraryTracks}
+          playlistName={activeUserPlaylist?.name || ''}
+          onClose={() => setShowAddSongsToUserPlaylistModal(false)}
+          onAddTracks={handleAddSongsToUserPlaylist}
+        />
 
-      <EQPanel 
-        showEQ={showEQ} 
-        setShowEQ={setShowEQ} 
-        isEqEnabled={isEqEnabled} 
-        setIsEqEnabled={setIsEqEnabled}
-        eqBands={eqBands} 
-        setEqBands={setEqBands} 
-        filterNodesRef={filterNodesRef}
-        preampGain={preampGain}
-        setPreampGain={setPreampGain}
-      />
+        <EQPanel 
+          showEQ={showEQ} 
+          setShowEQ={setShowEQ} 
+          isEqEnabled={isEqEnabled} 
+          setIsEqEnabled={setIsEqEnabled}
+          eqBands={eqBands} 
+          setEqBands={setEqBands} 
+          filterNodesRef={filterNodesRef}
+          preampGain={preampGain}
+          setPreampGain={setPreampGain}
+        />
 
-      <SpectrogramModal 
-        isOpen={showSpectrogramModal} 
-        onClose={() => setShowSpectrogramModal(false)} 
-        analyserNodeRef={analyserNodeRef} 
-        isPlaying={isPlaying} 
-        isLite={isLite} 
-        currentTrack={currentTrack} 
-        audioRef={audioRef}
-      />
+        <SpectrogramModal 
+          isOpen={showSpectrogramModal} 
+          onClose={() => setShowSpectrogramModal(false)} 
+          analyserNodeRef={analyserNodeRef} 
+          isPlaying={isPlaying} 
+          isLite={isLite} 
+          currentTrack={currentTrack} 
+          audioRef={audioRef}
+        />
 
-      <CustomDialogModal 
-        dialog={customDialog} 
-        onClose={() => setCustomDialog(null)} 
-      />
+        <CustomDialogModal 
+          dialog={customDialog} 
+          onClose={() => setCustomDialog(null)} 
+        />
 
-      <CommandPaletteModal 
-        onPlayTrack={handlePlayTrack} 
-        onStartRadio={() => handleStartRadio()} 
-      />
-      <MusicInsightsModal />
-      <BackupModal />
+        <CommandPaletteModal 
+          onPlayTrack={handlePlayTrack} 
+          onStartRadio={() => handleStartRadio()} 
+        />
+        <MusicInsightsModal />
+        <BackupModal />
+      </React.Suspense>
       <DragDropOverlay isDragging={isDraggingFile} />
 
       {contextMenu && (
@@ -5048,7 +5217,7 @@ export default function App() {
                         <Mic2 size={22} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-2xl font-black text-white group-hover:text-purple-400 transition">{artistsData.artistsList.length}</p>
+                        <p className="text-2xl font-black text-white group-hover:text-purple-400 transition">{uniqueArtistsCount}</p>
                         <p className="text-xs text-zinc-400 truncate">{t('home.statsArtists')}</p>
                       </div>
                     </div>
@@ -5841,7 +6010,9 @@ export default function App() {
 
               {/* VIEW: TẢI XUỐNG (SOULSEEK ENGINE) */}
               {activeView === 'downloads' && (
-                <DownloadsView onPlayTrack={handlePlayTrack} />
+                <React.Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500">Loading...</div>}>
+                  <DownloadsView onPlayTrack={handlePlayTrack} />
+                </React.Suspense>
               )}
 
               {/* VIEW: CÀI ĐẶT */}
@@ -6997,11 +7168,7 @@ export default function App() {
                           <span 
                             key={art} 
                             onClick={() => {
-                              const found = artistsData.artistsList.find(a => a.name.toLowerCase() === art.toLowerCase())
-                              if (found) {
-                                setActiveArtist(found)
-                                setActiveView('artists')
-                              }
+                              navigateToArtist(art)
                             }}
                             className="px-3 py-1 bg-theme-60/60 hover:bg-theme-10/20 hover:text-theme-10 rounded-full text-xs text-zinc-300 font-medium transition border border-theme-30/50 cursor-pointer shrink-0"
                           >
@@ -7584,10 +7751,11 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
-                  {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-10">{t('lyrics.noLyrics')}</p> : lyrics.map((line, index) => {
-                    const isActive = index === currentLyricIndex
-                    return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(!line.unsynced && audioRef.current){audioRef.current.currentTime = line.time}}} className={`transition-all duration-300 font-bold ${line.unsynced ? 'text-zinc-300 text-sm min-h-[1.25rem]' : `cursor-pointer ${isActive ? 'text-theme-10 text-xl' : 'text-zinc-500 text-sm hover:text-zinc-300'}`}`}>{line.text}</p>
-                  })}
+                  <SyncedLyricsList
+                    lyrics={lyrics}
+                    audioRef={audioRef}
+                    noLyricsText={t('lyrics.noLyrics')}
+                  />
                 </div>
                 <div className="p-3 border-t border-theme-30/50 bg-zinc-950/40 h-16 shrink-0 w-full overflow-hidden flex items-center justify-center">
                   {(bitPerfectEnabled || isDsdTrack(currentTrack)) ? (
@@ -7647,24 +7815,42 @@ export default function App() {
                         }
                       }}
                     >
-                      <SortableContext items={playQueue.map((_, i) => `queue-${i}`)} strategy={verticalListSortingStrategy}>
-                        {playQueue.map((track, index) => {
-                          const isActive = currentTrack?.id === track.id
-                          return (
-                            <SortableQueueItem 
-                              key={`queue-${index}`} 
-                              id={`queue-${index}`}
-                              track={track} 
-                              isActive={isActive} 
-                              isPlaying={isPlaying} 
-                              isLite={isLite} 
-                              onPlay={handlePlayTrack} 
-                              onContextMenu={handleTrackContextMenu}
-                              onArtistClick={navigateToArtist}
-                            />
-                          )
-                        })}
-                      </SortableContext>
+                      {(() => {
+                        const visibleQueue = playQueue.slice(0, queueRenderLimit)
+                        return (
+                          <>
+                            <SortableContext items={visibleQueue.map((_, i) => `queue-${i}`)} strategy={verticalListSortingStrategy}>
+                              {visibleQueue.map((track, index) => {
+                                const isActive = currentTrack?.id === track.id
+                                return (
+                                  <SortableQueueItem 
+                                    key={`queue-${index}`} 
+                                    id={`queue-${index}`}
+                                    track={track} 
+                                    isActive={isActive} 
+                                    isPlaying={isPlaying} 
+                                    isLite={isLite} 
+                                    onPlay={handlePlayTrack} 
+                                    onContextMenu={handleTrackContextMenu}
+                                    onArtistClick={navigateToArtist}
+                                  />
+                                )
+                              })}
+                            </SortableContext>
+                            {visibleQueue.length < playQueue.length && (
+                              <button 
+                                type="button"
+                                onClick={() => setQueueRenderLimit(prev => Math.min(prev + 60, playQueue.length))}
+                                className="w-full py-2.5 text-center text-xs text-zinc-400 hover:text-white cursor-pointer bg-theme-30/40 hover:bg-theme-30/80 rounded-lg transition"
+                              >
+                                {language === 'vi' 
+                                  ? `Hiển thị ${visibleQueue.length} / ${playQueue.length} bài (Bấm để tải thêm)` 
+                                  : `Showing ${visibleQueue.length} / ${playQueue.length} tracks (Click to load more)`}
+                              </button>
+                            )}
+                          </>
+                        )
+                      })()}
                     </DndContext>
                   )}
                 </div>
@@ -7751,10 +7937,12 @@ export default function App() {
                 </div>
               </div>
               <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">
-                 {lyrics.length === 0 ? <p className="text-zinc-500 italic mt-32 text-xl">{t('lyrics.noLyrics')}</p> : lyrics.map((line, index) => {
-                  const isActive = index === currentLyricIndex
-                  return <p key={index} ref={isActive ? activeLyricRef : null} onClick={() => {if(!line.unsynced && audioRef.current){audioRef.current.currentTime = line.time}}} className={`transition-all duration-300 font-bold ${line.unsynced ? 'text-zinc-300 text-xl min-h-[1.75rem]' : `cursor-pointer ${isActive ? 'text-theme-10 text-3xl scale-105' : 'text-zinc-500 text-xl hover:text-zinc-300 opacity-50'}`}`}>{line.text}</p>
-                })}
+                <SyncedLyricsList
+                  lyrics={lyrics}
+                  audioRef={audioRef}
+                  isVinyl={true}
+                  noLyricsText={t('lyrics.noLyrics')}
+                />
               </div>
             </div>
           </div>
@@ -7905,50 +8093,11 @@ export default function App() {
               <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.equalizer')}><Sliders size={18} /></button>
 
               {/* Nút Hẹn Giờ Tắt Nhạc (Sleep Timer) */}
-              <div className="relative">
-                <button 
-                  onClick={() => setShowSleepTimerMenu(prev => !prev)} 
-                  className={`transition flex items-center gap-1 cursor-pointer ${sleepTimerMode !== 'off' ? 'text-theme-10' : 'hover:text-white'}`} 
-                  title={sleepTimerMode !== 'off' ? (sleepTimerMode === 'end_of_track' ? t('player.sleepTimerStopEndTitle') : t('player.sleepTimerRemainingTitle', { time: `${Math.floor((sleepTimerRemaining || 0) / 60)}m${(sleepTimerRemaining || 0) % 60}s` })) : t('player.sleepTimer')}
-                >
-                  <Timer size={18} />
-                  {sleepTimerMode !== 'off' && (
-                    <span className="text-[10px] font-mono font-bold leading-none bg-theme-10/20 text-theme-10 px-1 py-0.5 rounded">
-                      {sleepTimerMode === 'end_of_track' ? (language === 'vi' ? 'Bài' : 'Trk') : `${Math.ceil((sleepTimerRemaining || 0) / 60)}m`}
-                    </span>
-                  )}
-                </button>
-
-                {showSleepTimerMenu && (
-                  <div className="absolute bottom-full right-0 mb-3 w-48 bg-zinc-900/95 border border-theme-30/70 backdrop-blur-md rounded-xl p-2 shadow-2xl z-50 text-xs space-y-1 animate-fade-in select-none">
-                    <div className="px-2 py-1 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5"><Clock size={12}/> {t('player.sleepTimer')}</span>
-                      {sleepTimerMode !== 'off' && <span className="text-theme-10 font-mono">{sleepTimerRemaining ? `${Math.floor(sleepTimerRemaining / 60)}:${String(sleepTimerRemaining % 60).padStart(2, '0')}` : ''}</span>}
-                    </div>
-                    {[
-                      { mode: 'off', label: t('player.sleepTimerOff') },
-                      { mode: '15', label: t('player.sleepTimer15') },
-                      { mode: '30', label: t('player.sleepTimer30') },
-                      { mode: '45', label: t('player.sleepTimer45') },
-                      { mode: '60', label: t('player.sleepTimer60') },
-                      { mode: 'end_of_track', label: t('player.sleepTimerEndTrack') }
-                    ].map(opt => (
-                      <button
-                        key={opt.mode}
-                        onClick={() => handleSetSleepTimer(opt.mode as any)}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition cursor-pointer ${
-                          sleepTimerMode === opt.mode 
-                            ? 'bg-theme-10/20 text-theme-10 font-bold' 
-                            : 'text-zinc-300 hover:text-white hover:bg-white/10'
-                        }`}
-                      >
-                        <span>{opt.label}</span>
-                        {sleepTimerMode === opt.mode && <span className="w-1.5 h-1.5 rounded-full bg-theme-10"/>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <SleepTimerButton 
+                onSetTimer={handleSetSleepTimer} 
+                t={t} 
+                language={language} 
+              />
             </>
           )}
 

@@ -78,10 +78,11 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
     }
 
     const draw = (now: number) => {
-      reqAnimRef.current = requestAnimationFrame(draw)
-
       const elapsed = now - lastDrawTime
-      if (elapsed < fpsInterval) return
+      if (elapsed < fpsInterval) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+        return
+      }
       lastDrawTime = now - (elapsed % fpsInterval)
 
       const width = cachedWidth
