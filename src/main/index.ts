@@ -2127,6 +2127,115 @@ app.whenReady().then(async () => {
     }
   })
 
+  // Đọc toàn bộ thông tin chi tiết của bài hát (Kỹ thuật âm thanh, Metadata mở rộng, Thông tin tệp tin)
+  ipcMain.handle('music:getTrackDetails', async (_event, trackPath: string) => {
+    try {
+      if (!trackPath) return { success: false, error: 'Đường dẫn rỗng' }
+      let rawPath = trackPath
+      if (rawPath.includes('/local-audio?path=') || rawPath.includes('/local-file?path=') || rawPath.includes('/cover?path=')) {
+        try {
+          const parsed = new URL(rawPath)
+          const p = parsed.searchParams.get('path')
+          if (p) rawPath = p
+        } catch (_) {}
+      }
+      if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+        return { success: true, isOnline: true }
+      }
+      rawPath = rawPath.replace(/^file:\/\/\/?/, '')
+      if (process.platform === 'win32') {
+        try { rawPath = decodeURIComponent(rawPath) } catch (e) {}
+        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+        rawPath = rawPath.replace(/\//g, '\\')
+      }
+
+      if (!fs.existsSync(rawPath)) {
+        return { success: false, error: `Không tìm thấy tệp: ${rawPath}` }
+      }
+
+      const stat = fs.statSync(rawPath)
+      const ext = path.extname(rawPath).toLowerCase()
+      const isDsd = ext === '.dsf' || ext === '.dff' || ext === '.dsd'
+
+      let meta: any = null
+      try {
+        meta = await mm.parseFile(rawPath, { skipCovers: true })
+      } catch (err) {
+        // Fallback nếu parser gặp lỗi cục bộ
+      }
+
+      // Đọc file .lrc cùng thư mục nếu có
+      let lrcContent: string | null = null
+      const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
+      if (fs.existsSync(lrcPath)) {
+        try {
+          lrcContent = fs.readFileSync(lrcPath, 'utf-8')
+        } catch (_) {}
+      }
+
+      if (!lrcContent && meta) {
+        try {
+          lrcContent = extractEmbeddedLyrics(meta)
+        } catch (_) {}
+      }
+
+      const fmt = meta?.format || {}
+      const common = meta?.common || {}
+
+      let rawFormat = fmt.container || ext.replace('.', '').toUpperCase() || 'AUDIO'
+      if (isDsd) {
+        rawFormat = ext === '.dsf' ? 'DSF' : (ext === '.dff' ? 'DFF' : 'DSD')
+      } else if (fmt.codec === 'DSD' || (fmt.container && /dsd/i.test(fmt.container))) {
+        rawFormat = 'DSD'
+      }
+
+      const isLossless = isDsd || Boolean(fmt.lossless || ['.flac', '.wav', '.alac', '.aiff', '.ape'].includes(ext))
+      const effectiveBitDepth = isDsd ? 1 : (fmt.bitsPerSample || (isLossless && fmt.sampleRate ? 16 : undefined))
+      const effectiveSampleRate = fmt.sampleRate || (isDsd ? 2822400 : undefined)
+
+      return {
+        success: true,
+        isOnline: false,
+        rawPath,
+        fileName: path.basename(rawPath),
+        directory: path.dirname(rawPath),
+        fileSizeBytes: stat.size,
+        createdTime: stat.birthtimeMs,
+        modifiedTime: stat.mtimeMs,
+        format: rawFormat,
+        container: fmt.container,
+        codec: fmt.codec,
+        codecProfile: fmt.codecProfile,
+        lossless: isLossless,
+        sampleRate: effectiveSampleRate,
+        bitDepth: effectiveBitDepth,
+        bitrate: fmt.bitrate,
+        numberOfChannels: fmt.numberOfChannels,
+        duration: fmt.duration,
+        tagTypes: fmt.tagTypes,
+        title: common.title,
+        artist: common.artist,
+        artists: common.artists || (common.artist ? splitArtistString(common.artist) : []),
+        album: common.album,
+        albumArtist: common.albumartist,
+        genre: Array.isArray(common.genre) ? common.genre.join(', ') : common.genre,
+        year: common.year || (common.date ? parseInt(common.date) : undefined),
+        trackNo: common.track?.no,
+        trackOf: common.track?.of,
+        diskNo: common.disk?.no,
+        diskOf: common.disk?.of,
+        composer: Array.isArray(common.composer) ? common.composer.join(', ') : common.composer,
+        lyricist: Array.isArray(common.lyricist) ? common.lyricist.join(', ') : common.lyricist,
+        copyright: common.copyright,
+        comment: Array.isArray(common.comment) ? common.comment.map((c: any) => c.text || c).join('\n') : common.comment,
+        lyrics: lrcContent || undefined,
+        isDsd
+      }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
   // 7. Cập nhật Metadata (Hỗ trợ MP3 ID3 và FLAC Vorbis Comments + Picture)
   ipcMain.handle('music:updateTags', async (_, filePath: string, newTags: any, newImagePath: string | null) => {
     try {

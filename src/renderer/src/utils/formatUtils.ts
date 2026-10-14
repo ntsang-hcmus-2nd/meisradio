@@ -111,3 +111,52 @@ export function getTrackFormatDisplay(track: any): TrackFormatDisplayInfo {
     isHiRes
   }
 }
+
+/**
+ * Định dạng thời lượng giây sang mm:ss (hoặc hh:mm:ss nếu > 1 giờ)
+ */
+export function formatDuration(seconds?: number): string {
+  if (!seconds || isNaN(seconds) || seconds <= 0) return '0:00'
+  const hours = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+  if (hours > 0) {
+    return `${hours}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
+  }
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`
+}
+
+/**
+ * Định dạng kích thước tệp byte sang B, KB, MB, GB
+ */
+export function formatFileSize(bytes?: number): string {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 2)} ${units[i]}`
+}
+
+/**
+ * Định dạng bitrate sang kbps hoặc Mbps
+ */
+export function formatBitrate(bitrate?: number): string {
+  if (!bitrate || isNaN(bitrate) || bitrate <= 0) return ''
+  if (bitrate >= 1000000) {
+    return `${(bitrate / 1000000).toFixed(2)} Mbps`
+  }
+  return `${Math.round(bitrate / 1000)} kbps`
+}
+
+/**
+ * Định dạng ngày giờ chuẩn
+ */
+export function formatDate(val?: number | string | Date): string {
+  if (!val) return ''
+  try {
+    const d = new Date(val)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleString()
+  } catch {
+    return ''
+  }
+}

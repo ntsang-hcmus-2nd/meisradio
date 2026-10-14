@@ -64,6 +64,7 @@ export interface TranslationDictionary {
     format: string
     duration: string
     actions: string
+    viewInfo: string
     sortIndex: string
     sortTitle: string
     sortAlbum: string
@@ -359,6 +360,7 @@ export interface TranslationDictionary {
     play: string
     addQueue: string
     addToPlaylist: string
+    viewInfo: string
     editTags: string
     showInFolder: string
     removeFromPlaylist: string
@@ -434,6 +436,66 @@ export interface TranslationDictionary {
       lyricsFormatInfo: string
       lyricsPlaceholder: string
       saveDirect: string
+    }
+    trackInfo: {
+      title: string
+      tabOverview: string
+      tabAudioSpecs: string
+      tabLyrics: string
+      quickInfo: string
+      technicalDetails: string
+      fileDetails: string
+      generalDetails: string
+      additionalDetails: string
+      lyricsTitle: string
+      noLyrics: string
+      copySuccess: string
+      copyPathSuccess: string
+      copyLyricsSuccess: string
+      format: string
+      container: string
+      codec: string
+      sampleRate: string
+      bitDepth: string
+      bitrate: string
+      channels: string
+      channelsStereo: string
+      channelsMono: string
+      channelsSurround: string
+      duration: string
+      fileSize: string
+      filePath: string
+      source: string
+      sourceLocal: string
+      sourceOnline: string
+      sourceCloud: string
+      createdDate: string
+      modifiedDate: string
+      trackNumber: string
+      diskNumber: string
+      year: string
+      genre: string
+      album: string
+      albumArtist: string
+      artist: string
+      titleLabel: string
+      composer: string
+      lyricist: string
+      copyright: string
+      encoder: string
+      quality: string
+      losslessYes: string
+      lossy: string
+      dsdNative: string
+      hiResAudio: string
+      standardAudio: string
+      editTags: string
+      playTrack: string
+      showInFolder: string
+      copyInfo: string
+      copyPath: string
+      copyLyrics: string
+      close: string
     }
     spectrogram: {
       title: string

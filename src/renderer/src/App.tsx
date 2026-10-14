@@ -8,7 +8,7 @@ import {
   Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw, PictureInPicture2,
   Home, ArrowLeft, Radio, BarChart2, LayoutGrid, Rows3, Disc, Tag, Music,
   Folder, FolderOpen, MoreVertical, ChevronRight, ChevronDown, ChevronUp, Layers, ListPlus,
-  Leaf, Cpu, Zap, BatteryCharging, History, Compass, Timer, Clock
+  Leaf, Cpu, Zap, BatteryCharging, History, Compass, Timer, Clock, Info
 } from 'lucide-react'
 import { TableVirtuoso, Virtuoso, VirtuosoGrid } from 'react-virtuoso'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -31,6 +31,7 @@ const PlaylistRenameModal = React.lazy(() => import('./components/modals/Playlis
 const EditPlaylistModal = React.lazy(() => import('./components/modals/EditPlaylistModal').then(m => ({ default: m.EditPlaylistModal })))
 const CloudActionModal = React.lazy(() => import('./components/modals/CloudActionModal').then(m => ({ default: m.CloudActionModal })))
 const TagEditorModal = React.lazy(() => import('./components/modals/TagEditorModal').then(m => ({ default: m.TagEditorModal })))
+const TrackInfoModal = React.lazy(() => import('./components/modals/TrackInfoModal').then(m => ({ default: m.TrackInfoModal })))
 const CreatePlaylistModal = React.lazy(() => import('./components/modals/CreatePlaylistModal').then(m => ({ default: m.CreatePlaylistModal })))
 const AddSongsModal = React.lazy(() => import('./components/modals/AddSongsModal').then(m => ({ default: m.AddSongsModal })))
 const SpectrogramModal = React.lazy(() => import('./components/SpectrogramModal').then(m => ({ default: m.SpectrogramModal })))
@@ -301,7 +302,8 @@ export const ArtistLinks = React.memo(({
 });
 
 // TỐI ƯU HÓA: Ghi nhớ từng dòng bài hát, ngăn React vẽ lại toàn bộ bảng khi thao tác
-const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, openTagEditor, onContextMenu, onArtistClick }: any) => {
+const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, openTrackInfo, onContextMenu, onArtistClick }: any) => {
+  const { t } = useTranslation()
   return (
     <>
       <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-center text-zinc-500 group-hover:text-white">
@@ -350,7 +352,15 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
         })()}
       </td>
       <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
-      <td onContextMenu={(e) => onContextMenu?.(track, e)} className="py-4 text-center">{!track.isCloud && <button onClick={(e) => openTagEditor(track, e)} className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1"><Edit2 size={16}/></button>}</td>
+      <td onContextMenu={(e) => onContextMenu?.(track, e)} className="py-4 text-center">
+        <button 
+          onClick={(e) => { e.stopPropagation(); openTrackInfo?.(track, e); }} 
+          title={t('trackTable.viewInfo')}
+          className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1 cursor-pointer"
+        >
+          <Info size={16}/>
+        </button>
+      </td>
     </>
   )
 });
@@ -437,7 +447,8 @@ const TrackGrid = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleR
 });
 
 // Hàng bài hát dạng Thu gọn (Compact Row Item)
-const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, onContextMenu, openTagEditor, onArtistClick }: any) => {
+const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLite, handleRowClick, tracks, onContextMenu, openTrackInfo, onArtistClick }: any) => {
+  const { t } = useTranslation()
   return (
     <div 
       onClick={() => handleRowClick(track, tracks)}
@@ -484,20 +495,19 @@ const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlayi
       <span className="w-12 text-right text-zinc-400 font-mono text-[11px]">
         {formatDuration(track.duration)}
       </span>
-      {!track.isCloud && (
-        <button 
-          onClick={(e) => { e.stopPropagation(); openTagEditor(track, e); }}
-          className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-theme-10 p-1 transition cursor-pointer"
-        >
-          <Edit2 size={13} />
-        </button>
-      )}
+      <button 
+        onClick={(e) => { e.stopPropagation(); openTrackInfo?.(track, e); }}
+        title={t('trackTable.viewInfo')}
+        className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-theme-10 p-1 transition cursor-pointer"
+      >
+        <Info size={13} />
+      </button>
     </div>
   )
 });
 
 // Chế độ xem Danh sách thu gọn (Compact View - Ảo hóa với Virtuoso)
-const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTagEditor, onArtistClick }: any) => {
+const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, handleRowClick, onContextMenu, openTrackInfo, onArtistClick }: any) => {
   return (
     <div className="flex-1 min-h-[300px] h-full w-full bg-theme-60/20 rounded-lg border border-theme-30/50 overflow-hidden">
       <Virtuoso
@@ -514,7 +524,7 @@ const TrackCompactList = React.memo(({ tracks, currentTrack, isPlaying, isLite, 
             handleRowClick={handleRowClick}
             tracks={tracks}
             onContextMenu={onContextMenu}
-            openTagEditor={openTagEditor}
+            openTrackInfo={openTrackInfo}
             onArtistClick={onArtistClick}
           />
         )}
@@ -1049,8 +1059,9 @@ export default function App() {
     setAudioRemountCount((c) => c + 1)
   }, [])
 
-  // Tag Editor Local States
+  // Tag Editor & Track Info States
   const [editingTrack, setEditingTrack] = useState<any | null>(null)
+  const [infoTrack, setInfoTrack] = useState<any | null>(null)
   const [editTags, setEditTags] = useState({ title: '', artist: '', album: '', genre: '', lyrics: '' })
   const [editImagePath, setEditImagePath] = useState<string | null>(null)
 
@@ -2661,9 +2672,15 @@ export default function App() {
   }, [selectedDeviceId])
 
   // --- Chức năng cài đặt ---
+  // --- Track Info Modal ---
+  const openTrackInfo = useCallback((track: any, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setInfoTrack(track)
+  }, [])
+
   // --- Tag Editor ---
-  const openTagEditor = useCallback((track: any, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const openTagEditor = useCallback((track: any, e?: React.MouseEvent) => {
+    e?.stopPropagation()
     setEditingTrack(track)
 
     let rawLyrics = ''
@@ -2824,6 +2841,12 @@ export default function App() {
         subItems: playlistSubItems
       },
       { id: 'div-1', label: '', divider: true },
+      {
+        id: 'view-info',
+        label: t('contextMenu.viewInfo'),
+        icon: <Info size={14} />,
+        onClick: () => openTrackInfo(track, e)
+      },
       {
         id: 'edit-tags',
         label: t('contextMenu.editTags'),
@@ -4502,7 +4525,7 @@ export default function App() {
           isLite={isLite}
           handleRowClick={handleRowClick}
           onContextMenu={handleTrackContextMenu}
-          openTagEditor={openTagEditor}
+          openTrackInfo={openTrackInfo}
           onArtistClick={navigateToArtist}
         />
       );
@@ -4559,7 +4582,7 @@ export default function App() {
               isLite={isLite}
               handleRowClick={handleRowClick}
               tracks={tracks}
-              openTagEditor={openTagEditor}
+              openTrackInfo={openTrackInfo}
               onContextMenu={handleTrackContextMenu}
               onArtistClick={navigateToArtist}
             />
@@ -4883,6 +4906,15 @@ export default function App() {
           onClose={() => setCloudActionTrack(null)}
           onAction={handleCloudAction}
         />
+
+        {infoTrack && (
+          <TrackInfoModal
+            track={infoTrack}
+            onClose={() => setInfoTrack(null)}
+            onEditTags={(tr) => openTagEditor(tr)}
+            onPlayTrack={(tr) => handleRowClick(tr, libraryTracks)}
+          />
+        )}
 
         <TagEditorModal
           track={editingTrack}

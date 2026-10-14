@@ -4,6 +4,7 @@ export interface MeisRadioApi {
   getConfig: () => Promise<any>
   saveConfig: (data: any) => Promise<any>
   updateTags: (filePath: string, tags: any, imagePath: string | null) => Promise<any>
+  getTrackDetails: (filePath: string) => Promise<any>
   selectImageFile: () => Promise<string | null>
   openMusicFolder: () => Promise<any>
   downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => Promise<any>

@@ -6,6 +6,7 @@ const api = {
   saveConfig: (data: any) => ipcRenderer.invoke('music:saveConfig', data),
   
   updateTags: (filePath: string, tags: any, imagePath: string | null) => ipcRenderer.invoke('music:updateTags', filePath, tags, imagePath),
+  getTrackDetails: (filePath: string) => ipcRenderer.invoke('music:getTrackDetails', filePath),
   selectImageFile: () => ipcRenderer.invoke('music:selectImageFile'),
 
   openMusicFolder: () => ipcRenderer.invoke('music:openFolder'),
