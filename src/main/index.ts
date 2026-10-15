@@ -403,6 +403,155 @@ export function extractArtists(metadata: any, fallbackTitle: string = ''): { art
   }
 }
 
+/**
+ * Tính toán sẵn (Pre-aggregate) dữ liệu Nghệ sĩ và Thể loại từ danh sách bài hát.
+ * Được lưu trực tiếp vào library-cache.json để Renderer mở trang Nghệ sĩ & Thể loại tức thì (0ms).
+ */
+export function buildPreAggregatedData(tracks: any[]) {
+  if (!Array.isArray(tracks) || tracks.length === 0) {
+    return { artistsList: [], alphabetGroups: [], genresList: [] }
+  }
+
+  const artistMap = new Map<string, {
+    name: string
+    trackIds: string[]
+    albumMap: Map<string, { title: string; trackIds: string[]; coverArt: string | null; year: number | null }>
+    coverArt: string | null
+  }>()
+
+  const genreMap = new Map<string, {
+    name: string
+    trackIds: string[]
+    artists: Set<string>
+    albumSet: Set<string>
+    coverArts: string[]
+  }>()
+
+  for (const track of tracks) {
+    const trackKey = track.id || track.filePath
+    const trackArtists = (Array.isArray(track.artists) && track.artists.length > 0)
+      ? track.artists
+      : splitArtistString(track.artist || '')
+    const effectiveArtists = trackArtists.length > 0 ? trackArtists : ['Unknown Artist']
+
+    for (const rawArtist of effectiveArtists) {
+      const artistName = (rawArtist && rawArtist.trim() && rawArtist.toLowerCase() !== 'unknown')
+        ? rawArtist.trim()
+        : 'Unknown Artist'
+
+      let a = artistMap.get(artistName)
+      if (!a) {
+        a = { name: artistName, trackIds: [], albumMap: new Map(), coverArt: null }
+        artistMap.set(artistName, a)
+      }
+      a.trackIds.push(trackKey)
+      if (!a.coverArt && track.coverArt) {
+        a.coverArt = track.coverArt
+      }
+
+      const albumName = (track.album && track.album.trim() && track.album.toLowerCase() !== 'unknown')
+        ? track.album.trim()
+        : null
+      if (albumName) {
+        let alb = a.albumMap.get(albumName)
+        if (!alb) {
+          alb = { title: albumName, trackIds: [], coverArt: track.coverArt || null, year: track.year || null }
+          a.albumMap.set(albumName, alb)
+        }
+        alb.trackIds.push(trackKey)
+        if (!alb.coverArt && track.coverArt) alb.coverArt = track.coverArt
+        if (!alb.year && track.year) alb.year = track.year
+      }
+    }
+
+    const rawGenre = track.genre || 'Unknown'
+    const splitGenres = String(rawGenre).split(/[,;/|]+/).map((g: string) => g.trim()).filter(Boolean)
+    const genreList = splitGenres.length > 0 ? splitGenres : ['Unknown']
+
+    for (const g of genreList) {
+      const normalizedGenre = g.toLowerCase() === 'unknown' ? 'Unknown' : g
+      let gm = genreMap.get(normalizedGenre)
+      if (!gm) {
+        gm = { name: normalizedGenre, trackIds: [], artists: new Set(), albumSet: new Set(), coverArts: [] }
+        genreMap.set(normalizedGenre, gm)
+      }
+      gm.trackIds.push(trackKey)
+      for (const art of effectiveArtists) {
+        if (art && art.toLowerCase() !== 'unknown' && art.toLowerCase() !== 'unknown artist') {
+          gm.artists.add(art.trim())
+        }
+      }
+      if (track.album && track.album !== 'Unknown') gm.albumSet.add(track.album)
+      if (track.coverArt && gm.coverArts.length < 4 && !gm.coverArts.includes(track.coverArt)) {
+        gm.coverArts.push(track.coverArt)
+      }
+    }
+  }
+
+  // Chuyển artistMap sang artistsList
+  const artistsList = Array.from(artistMap.values()).map(a => ({
+    name: a.name,
+    trackIds: a.trackIds,
+    albums: Array.from(a.albumMap.values()),
+    albumCount: a.albumMap.size,
+    trackCount: a.trackIds.length,
+    coverArt: a.coverArt,
+    _sortKey: a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  }))
+
+  // Sắp xếp nhanh không gọi Intl collation nặng
+  artistsList.sort((a, b) => (a._sortKey < b._sortKey ? -1 : a._sortKey > b._sortKey ? 1 : 0))
+
+  // Gom nhóm theo chữ cái đầu
+  const letterMap = new Map<string, typeof artistsList>()
+  for (const artist of artistsList) {
+    const firstChar = artist.name.charAt(0).toUpperCase()
+    const norm = firstChar.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const groupKey = /[A-Z]/.test(norm) ? norm : (/[0-9]/.test(firstChar) ? '0-9' : '#')
+    let list = letterMap.get(groupKey)
+    if (!list) {
+      list = []
+      letterMap.set(groupKey, list)
+    }
+    list.push(artist)
+  }
+
+  const alphabetGroups = Array.from(letterMap.entries()).map(([letter, list]) => ({
+    letter,
+    count: list.length,
+    artists: list
+  }))
+
+  alphabetGroups.sort((a, b) => {
+    if (a.letter === '#') return 1
+    if (b.letter === '#') return -1
+    if (a.letter === '0-9') return 1
+    if (b.letter === '0-9') return -1
+    return a.letter.localeCompare(b.letter)
+  })
+
+  // Chuyển genreMap sang genresList
+  const genresList = Array.from(genreMap.values()).map(g => ({
+    name: g.name,
+    trackIds: g.trackIds,
+    artistCount: g.artists.size,
+    albumCount: g.albumSet.size,
+    trackCount: g.trackIds.length,
+    coverArts: g.coverArts,
+    artists: Array.from(g.artists)
+  }))
+
+  genresList.sort((a, b) => {
+    const isAUnknown = a.name === 'Unknown' || a.name === 'Chưa phân loại'
+    const isBUnknown = b.name === 'Unknown' || b.name === 'Chưa phân loại'
+    if (isAUnknown && !isBUnknown) return 1
+    if (!isAUnknown && isBUnknown) return -1
+    return b.trackCount - a.trackCount
+  })
+
+  return { artistsList, alphabetGroups, genresList }
+}
+
 let bassManager: BassManager | null = null
 let discordRpcManager: DiscordRpcManager | null = null
 
@@ -1023,7 +1172,9 @@ app.whenReady().then(async () => {
   // ==========================================
   bassManager = new BassManager()
   const bitPerfectType = (currentConfig.bitPerfectType as 'wasapi' | 'asio') || 'asio'
-  bassManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false, currentConfig.volume ?? 1.0, bitPerfectType).catch(console.error)
+  const rawVol = currentConfig.volume ?? 1.0
+  const initialGain = typeof rawVol === 'number' ? Math.pow(Math.max(0, Math.min(1, rawVol)), 2) : 1.0
+  bassManager.init(currentConfig.audioDevice, currentConfig.bitPerfectEnabled ?? false, initialGain, bitPerfectType).catch(console.error)
 
   bassManager.on('time', (val) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1088,19 +1239,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('bass:seek', (_, pos, mode = 'absolute') => bassManager?.seek(pos, mode))
   ipcMain.handle('mpv:seek', (_, pos, mode = 'absolute') => bassManager?.seek(pos, mode))
   ipcMain.handle('bass:setVolume', (_, vol) => {
-    if (typeof vol === 'number') {
-      const config = getConfig()
-      config.volume = vol
-      saveConfig(config)
-    }
     bassManager?.setVolume(vol)
   })
   ipcMain.handle('mpv:setVolume', (_, vol) => {
-    if (typeof vol === 'number') {
-      const config = getConfig()
-      config.volume = vol
-      saveConfig(config)
-    }
     bassManager?.setVolume(vol)
   })
   ipcMain.handle('bass:setEqualizer', (_, bands, preamp = 0) => bassManager?.setEqualizer(bands, preamp))
@@ -1116,7 +1257,9 @@ app.whenReady().then(async () => {
       config.volume = currentVol
     }
     saveConfig(config)
-    await bassManager?.init(config.audioDevice, val, typeof currentVol === 'number' ? currentVol : config.volume, (config.bitPerfectType as 'wasapi' | 'asio') || 'asio')
+    const effectiveVol = typeof currentVol === 'number' ? currentVol : config.volume
+    const effectiveGain = typeof effectiveVol === 'number' ? Math.pow(Math.max(0, Math.min(1, effectiveVol)), 2) : 1.0
+    await bassManager?.init(config.audioDevice, val, effectiveGain, (config.bitPerfectType as 'wasapi' | 'asio') || 'asio')
     return { success: true }
   })
   ipcMain.handle('bass:setBitPerfect', async (_, val, currentVol?: number, outputType?: 'wasapi' | 'asio') => {
@@ -1129,7 +1272,9 @@ app.whenReady().then(async () => {
       config.volume = currentVol
     }
     saveConfig(config)
-    await bassManager?.init(config.audioDevice, val, typeof currentVol === 'number' ? currentVol : config.volume, (config.bitPerfectType as 'wasapi' | 'asio') || 'asio')
+    const effectiveVol = typeof currentVol === 'number' ? currentVol : config.volume
+    const effectiveGain = typeof effectiveVol === 'number' ? Math.pow(Math.max(0, Math.min(1, effectiveVol)), 2) : 1.0
+    await bassManager?.init(config.audioDevice, val, effectiveGain, (config.bitPerfectType as 'wasapi' | 'asio') || 'asio')
     return { success: true }
   })
 
@@ -1272,6 +1417,14 @@ app.whenReady().then(async () => {
                 : (artists.length > 0 ? artists.join(', ') : (t.artist || 'Unknown'))
             }
           })
+          let preAggregated = cached.preAggregated
+          if (!preAggregated || !preAggregated.artistsList) {
+            preAggregated = buildPreAggregatedData(enrichedTracks)
+            try {
+              cached.preAggregated = preAggregated
+              fs.writeFileSync(LIBRARY_CACHE_PATH, JSON.stringify(cached), 'utf-8')
+            } catch (e) {}
+          }
           return { 
             success: true, 
             fromCache: true, 
@@ -1279,7 +1432,8 @@ app.whenReady().then(async () => {
             libraryPaths: validPaths, 
             tracks: enrichedTracks, 
             playlists: cached.playlists || [],
-            userPlaylists: getUserPlaylists()
+            userPlaylists: getUserPlaylists(),
+            preAggregated
           }
         }
       } catch (e) {}
@@ -1739,6 +1893,7 @@ app.whenReady().then(async () => {
     }
 
     const userPlaylists = getUserPlaylists()
+    const preAggregated = buildPreAggregatedData(tracks)
 
     try {
       fs.writeFileSync(LIBRARY_CACHE_PATH, JSON.stringify({ 
@@ -1747,7 +1902,8 @@ app.whenReady().then(async () => {
         tracks, 
         playlists,
         multiArtistVersion: 2,
-        dsdVersion: 1
+        dsdVersion: 1,
+        preAggregated
       }))
     } catch (e) {}
 
@@ -1757,7 +1913,8 @@ app.whenReady().then(async () => {
       libraryPaths: validPaths, 
       tracks, 
       playlists, 
-      userPlaylists 
+      userPlaylists,
+      preAggregated
     }
   })
 
@@ -2385,6 +2542,7 @@ app.whenReady().then(async () => {
                 }
               }
             }
+            libData.preAggregated = buildPreAggregatedData(libData.tracks)
             fs.writeFileSync(LIBRARY_CACHE_PATH, JSON.stringify(libData), 'utf-8')
           }
         } catch (err) {}

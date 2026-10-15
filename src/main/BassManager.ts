@@ -31,7 +31,7 @@ const BASS_ASIO_RESET_PAUSE = 4
 const BASS_WASAPI_EXCLUSIVE = 1
 const BASS_WASAPI_AUTOFORMAT = 2
 const BASS_WASAPI_BUFFER = 4
-const BASS_WASAPI_CURVE_WINDOWS = 2
+const BASS_WASAPI_CURVE_LINEAR = 0
 
 // Locate BASS DLLs directory
 export function getBassDllPath(dllName: string): string {
@@ -845,7 +845,7 @@ export class BassManager extends EventEmitter {
       } catch {}
     } else if (this.BASS_WASAPI_SetVolume) {
       try {
-        this.BASS_WASAPI_SetVolume(BASS_WASAPI_CURVE_WINDOWS, safeVol)
+        this.BASS_WASAPI_SetVolume(BASS_WASAPI_CURVE_LINEAR, safeVol)
       } catch {}
     }
   }

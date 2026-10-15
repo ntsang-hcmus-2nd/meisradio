@@ -18,6 +18,11 @@ export interface LibraryState {
   searchQuery: string
   searchInput: string
   recentlyPlayed: any[]
+  preAggregatedData: {
+    artistsList: any[]
+    alphabetGroups: any[]
+    genresList: any[]
+  } | null
 
   // Dashboard & SoundCloud States
   dashboardData: any[]
@@ -46,6 +51,7 @@ export interface LibraryState {
   setSearchQuery: (query: string | ((prev: string) => string)) => void
   setSearchInput: (input: string | ((prev: string) => string)) => void
   setRecentlyPlayed: (tracks: any[] | ((prev: any[]) => any[])) => void
+  setPreAggregatedData: (data: { artistsList: any[]; alphabetGroups: any[]; genresList: any[] } | null | ((prev: any) => any)) => void
 
   setDashboardData: (data: any[] | ((prev: any[]) => any[])) => void
   setIsAlbumLoading: (loading: boolean | ((prev: boolean) => boolean)) => void
@@ -87,6 +93,7 @@ export const useLibraryStore = create<LibraryState>((set) => ({
   searchQuery: '',
   searchInput: '',
   recentlyPlayed: getInitialRecentlyPlayed(),
+  preAggregatedData: null,
 
   dashboardData: [],
   isAlbumLoading: false,
@@ -117,6 +124,7 @@ export const useLibraryStore = create<LibraryState>((set) => ({
     try { localStorage.setItem('meis_recent_played', JSON.stringify(next.slice(0, 50))) } catch {}
     return { recentlyPlayed: next }
   }),
+  setPreAggregatedData: (valOrFn) => set((s) => ({ preAggregatedData: resolveVal(valOrFn, s.preAggregatedData) })),
 
   setDashboardData: (valOrFn) => set((s) => ({ dashboardData: resolveVal(valOrFn, s.dashboardData) })),
   setIsAlbumLoading: (valOrFn) => set((s) => ({ isAlbumLoading: resolveVal(valOrFn, s.isAlbumLoading) })),

@@ -11,7 +11,7 @@ import {
   Leaf, Cpu, Zap, BatteryCharging, History, Compass, Timer, Clock, Info,
   Palette, Check, Languages, AppWindow, Database, Upload, SlidersHorizontal, LayoutTemplate, Flame
 } from 'lucide-react'
-import { TableVirtuoso, Virtuoso, VirtuosoGrid } from 'react-virtuoso'
+import { TableVirtuoso, Virtuoso, VirtuosoGrid, GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -47,6 +47,7 @@ import { removeAccents, matchesQuery, matchesTrackQuery } from './utils/textUtil
 import { fisherYatesShuffle } from './utils/arrayUtils'
 import { formatAudioSource, formatImageSource } from './utils/urlUtils'
 import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate } from './utils/formatUtils'
+import { sliderToGain } from './utils/audioUtils'
 import { 
   usePlayerStore, 
   useUIStore, 
@@ -965,7 +966,8 @@ export default function App() {
     isScLoading, setIsScLoading,
     scUser, setScUser,
     selectedScGenre, setSelectedScGenre,
-    isYtmLoggedIn, setIsYtmLoggedIn
+    isYtmLoggedIn, setIsYtmLoggedIn,
+    preAggregatedData, setPreAggregatedData
   } = useLibraryStore()
 
   // Settings Store
@@ -1553,6 +1555,9 @@ export default function App() {
       setLibraryTracks(res.tracks || [])
       setPlaylists(res.playlists || [])
       setUserPlaylists(res.userPlaylists || [])
+      if (res.preAggregated) {
+        setPreAggregatedData(res.preAggregated)
+      }
     }
   }
 
@@ -1844,7 +1849,7 @@ export default function App() {
       try {
         const fadeAudio = new Audio(audioRef.current.src)
         fadeAudio.currentTime = audioRef.current.currentTime
-        const curVol = Math.max(0, Math.min(1, volume))
+        const curVol = Math.max(0, Math.min(1, sliderToGain(volume)))
         fadeAudio.volume = curVol
         fadeAudio.play().catch(() => {})
         
@@ -1895,7 +1900,7 @@ export default function App() {
     }
     prevTrackModeRef.current = nextMode
     if (audioRef.current && nextMode === 'webaudio') {
-      audioRef.current.volume = Math.max(0, Math.min(1, volume))
+      audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
     }
 
     setCurrentTrack(trackToPlay);
@@ -2197,15 +2202,17 @@ export default function App() {
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value)
     setVolume(val)
-    if (audioRef.current) audioRef.current.volume = val
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(val)
+    const gain = sliderToGain(val)
+    if (audioRef.current) audioRef.current.volume = gain
+    if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(gain)
   }
 
   const handleVolumeUp = () => {
     setVolume(prev => {
       const newVol = Math.min(1, Math.round((prev + 0.05) * 100) / 100)
-      if (audioRef.current) audioRef.current.volume = newVol
-      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(newVol)
+      const gain = sliderToGain(newVol)
+      if (audioRef.current) audioRef.current.volume = gain
+      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(gain)
       return newVol
     })
   }
@@ -2213,8 +2220,9 @@ export default function App() {
   const handleVolumeDown = () => {
     setVolume(prev => {
       const newVol = Math.max(0, Math.round((prev - 0.05) * 100) / 100)
-      if (audioRef.current) audioRef.current.volume = newVol
-      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(newVol)
+      const gain = sliderToGain(newVol)
+      if (audioRef.current) audioRef.current.volume = gain
+      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(gain)
       return newVol
     })
   }
@@ -2229,8 +2237,9 @@ export default function App() {
     } else {
       const newVol = prevVolume > 0 ? prevVolume : 1
       setVolume(newVol)
-      if (audioRef.current) audioRef.current.volume = newVol
-      if (isBass) window.api.bassSetVolume(newVol)
+      const gain = sliderToGain(newVol)
+      if (audioRef.current) audioRef.current.volume = gain
+      if (isBass) window.api.bassSetVolume(gain)
     }
   }
 
@@ -3167,9 +3176,43 @@ export default function App() {
   }, [libraryTracks])
 
   const artistsData = useMemo(() => {
-    if (activeView !== 'artists') {
-      return { artistsList: [] as any[], alphabetGroups: [] as any[] }
+    const unknownArtistLabel = language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist'
+
+    // 1. Tận dụng preAggregatedData từ Main Process (0ms calculation): Map tracks O(1) qua libraryTrackMap
+    if (preAggregatedData?.artistsList && preAggregatedData.artistsList.length > 0) {
+      const artistsList = preAggregatedData.artistsList.map((a: any) => {
+        const displayName = (a.name === 'Unknown Artist' || a.name === 'Unknown') ? unknownArtistLabel : a.name
+        const tracks = Array.isArray(a.trackIds)
+          ? a.trackIds.map((id: string) => libraryTrackMap.get(id)).filter(Boolean)
+          : (a.tracks || [])
+        const albums = (a.albums || []).map((alb: any) => ({
+          title: alb.title,
+          tracks: Array.isArray(alb.trackIds)
+            ? alb.trackIds.map((id: string) => libraryTrackMap.get(id)).filter(Boolean)
+            : (alb.tracks || []),
+          coverArt: alb.coverArt || (alb.trackIds?.[0] ? libraryTrackMap.get(alb.trackIds[0])?.coverArt : null) || a.coverArt,
+          year: alb.year
+        }))
+        return {
+          ...a,
+          name: displayName,
+          tracks,
+          albums
+        }
+      })
+
+      const alphabetGroups = (preAggregatedData.alphabetGroups || []).map((grp: any) => ({
+        ...grp,
+        artists: (grp.artists || []).map((a: any) => {
+          const found = artistsList.find((x: any) => x.name === a.name || (a.name === 'Unknown Artist' && x.name === unknownArtistLabel))
+          return found || a
+        })
+      }))
+
+      return { artistsList, alphabetGroups }
     }
+
+    // 2. Dự phòng: Tính toán tại chỗ nếu preAggregatedData chưa sẵn sàng (với sort key tối ưu O(1))
     const artistMap = new Map<string, {
       name: string
       tracks: any[]
@@ -3183,14 +3226,11 @@ export default function App() {
         ? track.artists
         : splitArtistString(track.artist || '')
 
-      const effectiveArtists = trackArtists.length > 0
-        ? trackArtists
-        : [(language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')]
-
+      const effectiveArtists = trackArtists.length > 0 ? trackArtists : [unknownArtistLabel]
       const trackKey = track.id || track.filePath
 
       for (const rawArtist of effectiveArtists) {
-        const artistName = (rawArtist && rawArtist.trim() && rawArtist.toLowerCase() !== 'unknown') ? rawArtist.trim() : (language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')
+        const artistName = (rawArtist && rawArtist.trim() && rawArtist.toLowerCase() !== 'unknown') ? rawArtist.trim() : unknownArtistLabel
         if (!artistMap.has(artistName)) {
           artistMap.set(artistName, {
             name: artistName,
@@ -3234,11 +3274,12 @@ export default function App() {
       })),
       albumCount: a.albums.size,
       trackCount: a.tracks.length,
-      coverArt: a.coverArt
+      coverArt: a.coverArt,
+      _sortKey: a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     }))
 
-    // Sắp xếp theo thứ tự bảng chữ cái
-    artistsList.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    // Sắp xếp nhanh toán tử < > thay cho localeCompare
+    artistsList.sort((a, b) => (a._sortKey < b._sortKey ? -1 : a._sortKey > b._sortKey ? 1 : 0))
 
     // Gom nhóm theo chữ cái đầu (A-Z, 0-9, #)
     const letterMap = new Map<string, typeof artistsList>()
@@ -3267,10 +3308,23 @@ export default function App() {
     })
 
     return { artistsList, alphabetGroups }
-  }, [libraryTracks, language, activeView])
+  }, [preAggregatedData, libraryTracks, libraryTrackMap, language])
 
   const genresData = useMemo(() => {
-    if (activeView !== 'genres') return []
+    const unknownGenreLabel = language === 'vi' ? 'Chưa phân loại' : 'Unknown'
+
+    // 1. Tận dụng preAggregatedData từ Main Process (0ms):
+    if (preAggregatedData?.genresList && preAggregatedData.genresList.length > 0) {
+      return preAggregatedData.genresList.map((g: any) => ({
+        ...g,
+        name: (g.name === 'Unknown' || g.name === 'Chưa phân loại') ? unknownGenreLabel : g.name,
+        tracks: Array.isArray(g.trackIds)
+          ? g.trackIds.map((id: string) => libraryTrackMap.get(id)).filter(Boolean)
+          : (g.tracks || [])
+      }))
+    }
+
+    // 2. Dự phòng: Tính toán tại chỗ nếu preAggregatedData chưa sẵn sàng
     const genreMap = new Map<string, {
       name: string
       tracks: any[]
@@ -3285,7 +3339,7 @@ export default function App() {
       const list = splitGenres.length > 0 ? splitGenres : ['Unknown']
 
       for (const g of list) {
-        const normalized = g.toLowerCase() === 'unknown' ? (language === 'vi' ? 'Chưa phân loại' : 'Unknown') : g
+        const normalized = g.toLowerCase() === 'unknown' ? unknownGenreLabel : g
         if (!genreMap.has(normalized)) {
           genreMap.set(normalized, {
             name: normalized,
@@ -3332,7 +3386,34 @@ export default function App() {
     })
 
     return genresList
-  }, [libraryTracks, language, activeView])
+  }, [preAggregatedData, libraryTracks, libraryTrackMap, language])
+
+  const artistVirtuosoRef = useRef<GroupedVirtuosoHandle>(null)
+
+  const chunkedAlphabetGroups = useMemo(() => {
+    let globalRowIndex = 0
+    return artistsData.alphabetGroups.map((grp, grpIdx) => {
+      const isCollapsed = Boolean(collapsedArtistLetters[grp.letter])
+      const artists = isCollapsed ? [] : (grp.artists || [])
+      const rows: any[][] = []
+      for (let i = 0; i < artists.length; i += 3) {
+        rows.push(artists.slice(i, i + 3))
+      }
+      const startRowIndex = globalRowIndex
+      globalRowIndex += rows.length
+      return {
+        ...grp,
+        rows,
+        startRowIndex,
+        groupIndex: grpIdx,
+        isCollapsed
+      }
+    })
+  }, [artistsData.alphabetGroups, collapsedArtistLetters])
+
+  const alphabetGroupCounts = useMemo(() => {
+    return chunkedAlphabetGroups.map(g => g.rows.length)
+  }, [chunkedAlphabetGroups])
 
   const processedLibraryTracks = useMemo(() => {
     const filtered = getFilteredTracks(libraryTracks)
@@ -3921,7 +4002,7 @@ export default function App() {
         })
         if (crossfadeEnabled) {
           audioRef.current.volume = 0
-          const curVol = Math.max(0, Math.min(1, volume))
+          const curVol = Math.max(0, Math.min(1, sliderToGain(volume)))
           const steps = Math.max(1, crossfadeDuration * 20)
           const step = curVol / steps
           let cur = 0
@@ -3935,7 +4016,7 @@ export default function App() {
             }
           }, 50)
         } else {
-          audioRef.current.volume = Math.max(0, Math.min(1, volume))
+          audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
         }
       } else {
         audioRef.current.pause()
@@ -4410,8 +4491,9 @@ export default function App() {
       setSleepTimerRemaining(null)
       if (sleepTimerOriginalVolRef.current !== null) {
         setVolume(sleepTimerOriginalVolRef.current)
-        if (audioRef.current) audioRef.current.volume = sleepTimerOriginalVolRef.current
-        if (bitPerfectEnabled) window.api.bassSetVolume(sleepTimerOriginalVolRef.current)
+        const restoredGain = sliderToGain(sleepTimerOriginalVolRef.current)
+        if (audioRef.current) audioRef.current.volume = restoredGain
+        if (bitPerfectEnabled) window.api.bassSetVolume(restoredGain)
         sleepTimerOriginalVolRef.current = null
       }
       showToast(t('player.sleepTimerOffToast'), 'info')
@@ -4453,7 +4535,8 @@ export default function App() {
           sleepTimerOriginalVolRef.current = volume
         }
         const fadeRatio = remainingSeconds / 30
-        const fadedVolume = (sleepTimerOriginalVolRef.current || 1) * fadeRatio
+        const baseGain = sliderToGain(sleepTimerOriginalVolRef.current || 1)
+        const fadedVolume = baseGain * fadeRatio
         if (audioRef.current) audioRef.current.volume = fadedVolume
         if (bitPerfectEnabled) window.api.bassSetVolume(fadedVolume)
       }
@@ -4467,8 +4550,9 @@ export default function App() {
         setIsPlaying(false)
         if (sleepTimerOriginalVolRef.current !== null) {
           setVolume(sleepTimerOriginalVolRef.current)
-          if (audioRef.current) audioRef.current.volume = sleepTimerOriginalVolRef.current
-          if (bitPerfectEnabled) window.api.bassSetVolume(sleepTimerOriginalVolRef.current)
+          const restoredGain = sliderToGain(sleepTimerOriginalVolRef.current)
+          if (audioRef.current) audioRef.current.volume = restoredGain
+          if (bitPerfectEnabled) window.api.bassSetVolume(restoredGain)
           sleepTimerOriginalVolRef.current = null
         }
         setSleepTimerMode('off')
@@ -4730,10 +4814,11 @@ export default function App() {
 
   // Watch Volume
   useEffect(() => {
+    const effectiveGain = sliderToGain(volume)
     if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-      window.api.bassSetVolume(volume)
+      window.api.bassSetVolume(effectiveGain)
     } else if (audioRef.current) {
-      audioRef.current.volume = Math.max(0, Math.min(1, volume))
+      audioRef.current.volume = Math.max(0, Math.min(1, effectiveGain))
     }
   }, [volume, bitPerfectEnabled, currentTrack, audioRemountCount])
 
@@ -4763,7 +4848,7 @@ export default function App() {
         ref={(el) => {
           (audioRef as any).current = el
           if (el) {
-            el.volume = Math.max(0, Math.min(1, volume))
+            el.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
           }
         }}
         crossOrigin="anonymous" // QUAN TRỌNG: Ổn định luồng CORS cho Web Audio API
@@ -4772,7 +4857,7 @@ export default function App() {
         src={currentTrack && !isDsdTrack(currentTrack) ? formatAudioSource(currentTrack.filePath, streamPort) : undefined}
         onPlay={() => {
           if (audioRef.current && !bitPerfectEnabled && !isDsdTrack(currentTrack)) {
-            audioRef.current.volume = Math.max(0, Math.min(1, volume))
+            audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
           }
         }}
         onEnded={() => { 
@@ -6442,7 +6527,7 @@ export default function App() {
                                   await resetWebAudioPipeline()
                                   setTimeout(() => {
                                     if (audioRef.current) {
-                                      audioRef.current.volume = Math.max(0, Math.min(1, volume))
+                                      audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
                                       audioRef.current.currentTime = currentPlaybackTime
                                       if (wasPlaying) {
                                         if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
@@ -6878,8 +6963,20 @@ export default function App() {
                       <button
                         key={grp.letter}
                         onClick={() => {
-                          const el = document.getElementById(`artist-group-${grp.letter}`)
-                          if (el) el.scrollIntoView({ behavior: 'smooth' })
+                          const grpIdx = artistsData.alphabetGroups.findIndex(g => g.letter === grp.letter)
+                          if (grpIdx !== -1) {
+                            const target = chunkedAlphabetGroups[grpIdx]
+                            if (target?.isCollapsed) {
+                              setCollapsedArtistLetters(prev => ({ ...prev, [grp.letter]: false }))
+                            }
+                            setTimeout(() => {
+                              artistVirtuosoRef.current?.scrollToIndex({
+                                index: target?.startRowIndex || 0,
+                                align: 'start',
+                                behavior: 'smooth'
+                              })
+                            }, target?.isCollapsed ? 50 : 0)
+                          }
                         }}
                         className="px-2.5 py-1 text-xs font-bold rounded-lg bg-theme-60/40 hover:bg-theme-10 hover:text-white text-zinc-400 transition shrink-0"
                       >
@@ -6888,8 +6985,8 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* Danh sách nhóm theo Alphabet A-Z */}
-                  <div className="flex-1 overflow-y-auto space-y-8 pr-2">
+                  {/* Danh sách nhóm theo Alphabet A-Z (Ảo hóa với GroupedVirtuoso / VirtuosoGrid) */}
+                  <div className="flex-1 min-h-[300px] h-full w-full overflow-hidden">
                     {(() => {
                       const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
                       const normQuery = removeAccents(rawQuery)
@@ -6902,8 +6999,12 @@ export default function App() {
                           return <p className="text-zinc-500 text-center mt-10">{t('artistsView.noArtists')}</p>
                         }
                         return (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {filteredArtists.map(artist => (
+                          <VirtuosoGrid
+                            style={{ height: '100%', width: '100%' }}
+                            data={filteredArtists}
+                            listClassName="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-1"
+                            itemClassName="h-full"
+                            itemContent={(_idx, artist) => (
                               <div 
                                 key={artist.name} 
                                 onClick={() => setActiveArtist(artist)}
@@ -6936,8 +7037,8 @@ export default function App() {
                                   <MoreVertical size={16} />
                                 </button>
                               </div>
-                            ))}
-                          </div>
+                            )}
+                          />
                         )
                       }
 
@@ -6945,22 +7046,33 @@ export default function App() {
                         return <p className="text-zinc-500 text-center mt-10">{t('artistsView.noArtists')}</p>
                       }
 
-                      return artistsData.alphabetGroups.map(grp => {
-                        const isCollapsed = collapsedArtistLetters[grp.letter]
-                        return (
-                          <div key={grp.letter} id={`artist-group-${grp.letter}`} className="space-y-3">
-                            <div 
-                              onClick={() => setCollapsedArtistLetters(prev => ({ ...prev, [grp.letter]: !prev[grp.letter] }))}
-                              className="flex items-center gap-3 cursor-pointer py-1 select-none border-b border-theme-30/30 group w-fit"
-                            >
-                              <span className="text-2xl font-black text-theme-10">{grp.letter}</span>
-                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-10/10 text-theme-10">{grp.count}</span>
-                              {isCollapsed ? <ChevronRight size={16} className="text-zinc-500 group-hover:text-white" /> : <ChevronDown size={16} className="text-zinc-500 group-hover:text-white" />}
-                            </div>
-
-                            {!isCollapsed && (
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
-                                {grp.artists.map(artist => (
+                      return (
+                        <GroupedVirtuoso
+                          ref={artistVirtuosoRef}
+                          style={{ height: '100%', width: '100%' }}
+                          groupCounts={alphabetGroupCounts}
+                          groupContent={(index) => {
+                            const grp = chunkedAlphabetGroups[index]
+                            if (!grp) return null
+                            return (
+                              <div 
+                                onClick={() => setCollapsedArtistLetters(prev => ({ ...prev, [grp.letter]: !prev[grp.letter] }))}
+                                className="flex items-center gap-3 cursor-pointer py-2 px-1 select-none border-b border-theme-30/30 group w-fit bg-theme-60/90 backdrop-blur-md sticky top-0 z-10"
+                              >
+                                <span className="text-2xl font-black text-theme-10">{grp.letter}</span>
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-10/10 text-theme-10">{grp.count}</span>
+                                {grp.isCollapsed ? <ChevronRight size={16} className="text-zinc-500 group-hover:text-white" /> : <ChevronDown size={16} className="text-zinc-500 group-hover:text-white" />}
+                              </div>
+                            )
+                          }}
+                          itemContent={(index, groupIndex) => {
+                            const grp = chunkedAlphabetGroups[groupIndex]
+                            if (!grp || grp.isCollapsed) return null
+                            const rowIndexInGroup = index - grp.startRowIndex
+                            const rowArtists = grp.rows[rowIndexInGroup] || []
+                            return (
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-2">
+                                {rowArtists.map(artist => (
                                   <div 
                                     key={artist.name} 
                                     onClick={() => setActiveArtist(artist)}
@@ -6995,10 +7107,10 @@ export default function App() {
                                   </div>
                                 ))}
                               </div>
-                            )}
-                          </div>
-                        )
-                      })
+                            )
+                          }}
+                        />
+                      )
                     })()}
                   </div>
                 </div>
@@ -7130,7 +7242,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto pr-2">
+                  <div className="flex-1 min-h-[300px] h-full w-full overflow-hidden">
                     {(() => {
                       const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
                       const normQuery = removeAccents(rawQuery)
@@ -7144,20 +7256,24 @@ export default function App() {
 
                       if (viewMode === 'table') {
                         return (
-                          <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
-                            <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                              <div className="col-span-1 text-center">#</div>
-                              <div className="col-span-5">{t('genresView.title')}</div>
-                              <div className="col-span-4">{t('genresView.topArtists')}</div>
-                              <div className="col-span-1 text-center">{t('common.songs')}</div>
-                              <div className="col-span-1 text-right">{t('player.play')}</div>
-                            </div>
-                            <div className="divide-y divide-theme-30/20">
-                              {filteredGenres.map((genre, idx) => (
+                          <div className="w-full h-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl flex flex-col">
+                            <Virtuoso
+                              style={{ height: '100%', width: '100%' }}
+                              data={filteredGenres}
+                              fixedHeaderContent={() => (
+                                <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-60/95 backdrop-blur-md border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider select-none">
+                                  <div className="col-span-1 text-center">#</div>
+                                  <div className="col-span-5">{t('genresView.title')}</div>
+                                  <div className="col-span-4">{t('genresView.topArtists')}</div>
+                                  <div className="col-span-1 text-center">{t('common.songs')}</div>
+                                  <div className="col-span-1 text-right">{t('player.play')}</div>
+                                </div>
+                              )}
+                              itemContent={(idx, genre) => (
                                 <div
                                   key={genre.name}
                                   onClick={() => setActiveGenre(genre)}
-                                  className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+                                  className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized border-b border-theme-30/20"
                                 >
                                   <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
                                     {idx + 1}
@@ -7199,52 +7315,60 @@ export default function App() {
                                     </button>
                                   </div>
                                 </div>
-                              ))}
-                            </div>
+                              )}
+                            />
                           </div>
                         )
                       }
 
                       if (viewMode === 'compact') {
                         return (
-                          <div className="w-full space-y-1.5">
-                            {filteredGenres.map((genre, idx) => (
-                              <div
-                                key={genre.name}
-                                onClick={() => setActiveGenre(genre)}
-                                className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
-                              >
-                                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                  <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
-                                  <div className="w-8 h-8 rounded-lg bg-theme-10/20 border border-theme-10/30 flex items-center justify-center shrink-0">
-                                    <Tag size={15} className="text-theme-10" />
+                          <Virtuoso
+                            style={{ height: '100%', width: '100%' }}
+                            data={filteredGenres}
+                            itemContent={(idx, genre) => (
+                              <div className="pb-1.5">
+                                <div
+                                  key={genre.name}
+                                  onClick={() => setActiveGenre(genre)}
+                                  className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
+                                >
+                                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                    <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">{idx + 1}</span>
+                                    <div className="w-8 h-8 rounded-lg bg-theme-10/20 border border-theme-10/30 flex items-center justify-center shrink-0">
+                                      <Tag size={15} className="text-theme-10" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{genre.name}</h4>
+                                    </div>
                                   </div>
-                                  <div className="min-w-0 flex-1">
-                                    <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">{genre.name}</h4>
+                                  <div className="flex items-center gap-4 shrink-0">
+                                    <span className="text-xs text-zinc-400 font-mono">{genre.trackCount} {t('common.songs')} • {genre.artistCount} {t('artistsView.artistCount')}</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
+                                      }}
+                                      className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
+                                      title={t('artistsView.playAll')}
+                                    >
+                                      <Play size={13} className="ml-0.5 fill-current" />
+                                    </button>
                                   </div>
-                                </div>
-                                <div className="flex items-center gap-4 shrink-0">
-                                  <span className="text-xs text-zinc-400 font-mono">{genre.trackCount} {t('common.songs')} • {genre.artistCount} {t('artistsView.artistCount')}</span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks);
-                                    }}
-                                    className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
-                                    title={t('artistsView.playAll')}
-                                  >
-                                    <Play size={13} className="ml-0.5 fill-current" />
-                                  </button>
                                 </div>
                               </div>
-                            ))}
-                          </div>
+                            )}
+                          />
                         )
                       }
 
                       return (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
-                          {filteredGenres.map(genre => (
+                        <VirtuosoGrid
+                          style={{ height: '100%', width: '100%' }}
+                          data={filteredGenres}
+                          listClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5 p-1"
+                          itemClassName="h-full"
+                          itemContent={(_idx, genre) => (
                             <div 
                               key={genre.name}
                               onClick={() => setActiveGenre(genre)}
@@ -7285,8 +7409,8 @@ export default function App() {
                                 </p>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                          )}
+                        />
                       )
                     })()}
                   </div>
