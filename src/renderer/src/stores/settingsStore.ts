@@ -5,6 +5,8 @@ export interface SettingsState {
   uiStyle: 'classic' | 'sleek'
   customBgImage: string | null
   useTrackCoverAsBg: boolean
+  accentColorMode: 'track' | 'background' | 'custom'
+  customAccentColor: string
   bgImageInput: string
   customBgOpacity: number
   customBgBlur: number
@@ -41,6 +43,8 @@ export interface SettingsState {
   setUiStyle: (style: 'classic' | 'sleek' | ((prev: 'classic' | 'sleek') => 'classic' | 'sleek')) => void
   setCustomBgImage: (img: string | null | ((prev: string | null) => string | null)) => void
   setUseTrackCoverAsBg: (use: boolean | ((prev: boolean) => boolean)) => void
+  setAccentColorMode: (mode: 'track' | 'background' | 'custom' | ((prev: 'track' | 'background' | 'custom') => 'track' | 'background' | 'custom')) => void
+  setCustomAccentColor: (color: string | ((prev: string) => string)) => void
   setBgImageInput: (input: string | ((prev: string) => string)) => void
   setCustomBgOpacity: (opacity: number | ((prev: number) => number)) => void
   setCustomBgBlur: (blur: number | ((prev: number) => number)) => void
@@ -88,7 +92,9 @@ const getInitialStreamPort = (): number => {
     if (typeof window !== 'undefined' && (window as any).api?.getStreamPortSync) {
       return (window as any).api.getStreamPortSync() || 0
     }
-  } catch {}
+  } catch {
+    /* ignore */
+  }
   return 0
 }
 
@@ -96,22 +102,53 @@ const getInitialUiStyle = (): 'classic' | 'sleek' => {
   try {
     const saved = localStorage.getItem('meis_ui_style')
     if (saved === 'classic' || saved === 'sleek') return saved
-  } catch {}
+  } catch {
+    /* ignore */
+  }
   return 'classic'
 }
 
-// Thiết lập ngay thuộc tính data-ui-style lên thẻ html để tránh nhấp nháy giao diện
+const getInitialAccentColorMode = (): 'track' | 'background' | 'custom' => {
+  try {
+    const saved = localStorage.getItem('meis_accent_color_mode')
+    if (saved === 'track' || saved === 'background' || saved === 'custom') return saved
+  } catch {
+    /* ignore */
+  }
+  return 'track'
+}
+
+const getInitialCustomAccentColor = (): string => {
+  try {
+    const saved = localStorage.getItem('meis_custom_accent_color')
+    if (saved && /^#[0-9a-fA-F]{3,6}$/.test(saved)) return saved
+  } catch {
+    /* ignore */
+  }
+  return '#10b981'
+}
+
+// Thiết lập ngay thuộc tính data-ui-style và màu accent lên thẻ html để tránh nhấp nháy giao diện
 try {
   if (typeof document !== 'undefined') {
     document.documentElement.setAttribute('data-ui-style', getInitialUiStyle())
+    const savedMode = localStorage.getItem('meis_accent_color_mode')
+    const savedColor = localStorage.getItem('meis_custom_accent_color')
+    if (savedMode === 'custom' && savedColor) {
+      document.documentElement.style.setProperty('--theme-10', savedColor)
+    }
   }
-} catch {}
+} catch {
+  /* ignore */
+}
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   appMode: 'default',
   uiStyle: getInitialUiStyle(),
   customBgImage: null,
   useTrackCoverAsBg: false,
+  accentColorMode: getInitialAccentColorMode(),
+  customAccentColor: getInitialCustomAccentColor(),
   bgImageInput: '',
   customBgOpacity: 1,
   customBgBlur: 0,
@@ -143,7 +180,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   setAppMode: (valOrFn) => set((s) => {
     const next = resolveVal(valOrFn, s.appMode)
-    try { document.documentElement.setAttribute('data-mode', next) } catch {}
+    try { document.documentElement.setAttribute('data-mode', next) } catch { /* ignore */ }
     return { appMode: next }
   }),
   setUiStyle: (valOrFn) => set((s) => {
@@ -151,11 +188,23 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     try {
       document.documentElement.setAttribute('data-ui-style', next)
       localStorage.setItem('meis_ui_style', next)
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     return { uiStyle: next }
   }),
   setCustomBgImage: (valOrFn) => set((s) => ({ customBgImage: resolveVal(valOrFn, s.customBgImage) })),
   setUseTrackCoverAsBg: (valOrFn) => set((s) => ({ useTrackCoverAsBg: resolveVal(valOrFn, s.useTrackCoverAsBg) })),
+  setAccentColorMode: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.accentColorMode)
+    try { localStorage.setItem('meis_accent_color_mode', next) } catch { /* ignore */ }
+    return { accentColorMode: next }
+  }),
+  setCustomAccentColor: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.customAccentColor)
+    try { localStorage.setItem('meis_custom_accent_color', next) } catch { /* ignore */ }
+    return { customAccentColor: next }
+  }),
   setBgImageInput: (valOrFn) => set((s) => ({ bgImageInput: resolveVal(valOrFn, s.bgImageInput) })),
   setCustomBgOpacity: (valOrFn) => set((s) => ({ customBgOpacity: resolveVal(valOrFn, s.customBgOpacity) })),
   setCustomBgBlur: (valOrFn) => set((s) => ({ customBgBlur: resolveVal(valOrFn, s.customBgBlur) })),
@@ -185,7 +234,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setDownloadProgress: (valOrFn) => set((s) => ({ downloadProgress: resolveVal(valOrFn, s.downloadProgress) })),
   setLoudnessNormalization: (valOrFn) => set((s) => {
     const next = resolveVal(valOrFn, s.loudnessNormalization)
-    try { localStorage.setItem('meis_loudness_norm', String(next)) } catch {}
+    try { localStorage.setItem('meis_loudness_norm', String(next)) } catch { /* ignore */ }
     return { loudnessNormalization: next }
   })
 }))

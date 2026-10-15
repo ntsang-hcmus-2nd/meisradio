@@ -88,7 +88,8 @@ export const en: TranslationDictionary = {
     statsArtists: 'Artists',
     statsRecent: 'Recently Played',
     noRecentTitle: 'Start listening to get smart recommendations',
-    noRecentDesc: 'As you play songs from your library, Mei\'s Radio will automatically suggest tracks tailored to your music taste.',
+    noRecentDesc:
+      "As you play songs from your library, Mei's Radio will automatically suggest tracks tailored to your music taste.",
     ytmTitle: 'YouTube Music',
     ytmSubtitle: 'Discover and personalized recommendations',
     refreshYtm: 'Refresh YouTube Music',
@@ -168,7 +169,8 @@ export const en: TranslationDictionary = {
     addSongs: 'Add Songs',
     chooseCover: 'Change Cover',
     deletePlaylist: 'Delete Playlist',
-    confirmDelete: 'Are you sure you want to delete playlist "{name}"? (Original audio files will not be deleted)',
+    confirmDelete:
+      'Are you sure you want to delete playlist "{name}"? (Original audio files will not be deleted)',
     rename: 'Rename',
     playAll: 'Play All',
     shuffle: 'Shuffle',
@@ -178,7 +180,8 @@ export const en: TranslationDictionary = {
   driveView: {
     title: 'Google Drive Sync',
     enterFolderLink: 'Enter Google Drive Folder Link',
-    folderLinkDesc: 'Ensure the folder sharing permission is set to "Anyone with the link can view"',
+    folderLinkDesc:
+      'Ensure the folder sharing permission is set to "Anyone with the link can view"',
     folderLinkPlaceholder: 'https://drive.google.com/drive/folders/...',
     scanning: 'Scanning Drive folder...',
     scanData: 'Scan Folder',
@@ -220,14 +223,21 @@ export const en: TranslationDictionary = {
       classicMode: 'Classic Mode',
       classicModeDesc: 'System buttons and controls display full text labels and icons',
       sleekMode: 'Sleek Mode',
-      sleekModeDesc: 'System buttons and controls hide text labels, using icons only. Track information remains unaffected',
+      sleekModeDesc:
+        'System buttons and controls hide text labels, using icons only. Track information remains unaffected',
       useTrackCover: 'Use current track cover as dynamic background',
       placeholder: 'Enter image URL (https://...) or local file path...',
       applyLink: 'Apply Link',
       chooseImage: 'Choose Image',
       removeBg: 'Remove Background',
       opacity: 'Background Opacity',
-      blur: 'Background Blur'
+      blur: 'Background Blur',
+      accentTitle: 'Accent Color & Theme',
+      accentTrack: 'Match Track',
+      accentBg: 'Match Wallpaper',
+      accentCustom: 'Custom Color',
+      customColorPicker: 'Pick a custom color',
+      wallpaperTitle: 'Application Wallpaper'
     },
     library: {
       title: 'Music Folders (Library)',
@@ -252,8 +262,10 @@ export const en: TranslationDictionary = {
       asioOption: 'ASIO (Supports Native DSD)',
       deviceLabel: 'Audio Output Device / DAC',
       deviceAuto: 'Automatic (System Default)',
-      asioDesc: 'Dedicated audiophile ASIO protocol supporting 1-bit Native DSD bitstream transmission directly to DAC chip.',
-      wasapiDesc: 'Windows WASAPI Exclusive mode taking exclusive hardware lock to preserve exact PCM bit depth and sample rate.'
+      asioDesc:
+        'Dedicated audiophile ASIO protocol supporting 1-bit Native DSD bitstream transmission directly to DAC chip.',
+      wasapiDesc:
+        'Windows WASAPI Exclusive mode taking exclusive hardware lock to preserve exact PCM bit depth and sample rate.'
     },
     googleDrive: {
       title: 'Google Drive API Key',
@@ -276,9 +288,11 @@ export const en: TranslationDictionary = {
       title: 'Performance Mode',
       desc: 'Adjust the application resource consumption to match your device hardware.',
       standard: 'Standard',
-      standardDesc: 'Full visual effects, dynamic visualizer, adaptive ambient colors, and online streaming features.',
+      standardDesc:
+        'Full visual effects, dynamic visualizer, adaptive ambient colors, and online streaming features.',
       lite: 'Power Saving (Lite)',
-      liteDesc: 'Battery saver mode: disables backdrop blur and visualizers, optimized for laptops and iGPUs.',
+      liteDesc:
+        'Battery saver mode: disables backdrop blur and visualizers, optimized for laptops and iGPUs.',
       core: 'Minimal Core',
       coreDesc: 'Maximum performance, zero album art decoding, offline only.'
     },
@@ -286,9 +300,11 @@ export const en: TranslationDictionary = {
       title: 'Discord Rich Presence Activity Status',
       desc: 'Display current playing song, artist, live progress time, and album artwork on your Discord profile.',
       enable: 'Enable Discord Rich Presence',
-      enableDesc: 'Allow Mei\'s Radio to connect to the Discord Desktop client running on your computer',
+      enableDesc:
+        "Allow Mei's Radio to connect to the Discord Desktop client running on your computer",
       clientIdTitle: 'Discord Application ID (Client ID)',
-      clientIdDesc: 'Enter Client ID from Discord Developer Portal if you want a custom app name on Discord (Defaults to built-in ID).',
+      clientIdDesc:
+        'Enter Client ID from Discord Developer Portal if you want a custom app name on Discord (Defaults to built-in ID).',
       clientIdPlaceholder: '1539993441851670589',
       resetDefault: 'Reset to Default',
       showDetails: 'Show Song Title & Artist',
@@ -296,11 +312,13 @@ export const en: TranslationDictionary = {
       showTime: 'Show App Elapsed Time',
       showTimeDesc: 'Display time elapsed since the application was opened',
       showCover: 'Show Album Artwork',
-      showCoverDesc: 'Display online album artwork (YouTube, SoundCloud, Drive) or Mei\'s Radio logo',
+      showCoverDesc:
+        "Display online album artwork (YouTube, SoundCloud, Drive) or Mei's Radio logo",
       showQuality: 'Show Audio Quality & Format',
       showQualityDesc: 'Display audio format details (FLAC 24-bit/96kHz, MP3 320kbps, etc.)',
       showButtons: 'Show Action Buttons',
-      showButtonsDesc: 'Display buttons to listen on YouTube Music / SoundCloud and explore Mei\'s Radio',
+      showButtonsDesc:
+        "Display buttons to listen on YouTube Music / SoundCloud and explore Mei's Radio",
       showIdle: 'Show Idle Status',
       showIdleDesc: 'Display browsing status when the app is open but no song is currently playing',
       connectedStatus: 'Connected to Discord',
@@ -310,11 +328,12 @@ export const en: TranslationDictionary = {
   player: {
     noTrack: 'No track playing',
     unknownArtist: 'Unknown Artist',
-    spectrogram: 'Open Spectrogram Analyzer',
+    spectrogram: 'Spectrogram',
     lyrics: 'Lyrics',
     miniPlayer: 'Mini Player',
     queue: 'Play Queue',
     equalizer: 'Equalizer',
+    toolsMenu: 'Quick Menu',
     volume: 'Volume',
     shuffle: 'Shuffle',
     repeatOff: 'Repeat Off',
@@ -371,7 +390,8 @@ export const en: TranslationDictionary = {
     showInFolder: 'Show in File Explorer',
     removeFromPlaylist: 'Remove from playlist "{name}"',
     deleteFile: 'Delete File Permanently',
-    confirmDeleteFile: 'Are you sure you want to permanently delete "{title}" from your disk? This action cannot be undone!',
+    confirmDeleteFile:
+      'Are you sure you want to permanently delete "{title}" from your disk? This action cannot be undone!',
     confirmRemoveFromPlaylist: 'Are you sure you want to remove "{title}" from playlist "{name}"?',
     playAll: 'Play all tracks',
     addSongs: 'Add songs to playlist',
@@ -380,7 +400,8 @@ export const en: TranslationDictionary = {
     extractCover: 'Extract Cover from first song',
     openPlaylistFolder: 'Open Playlist Folder in Explorer',
     deletePlaylist: 'Delete playlist "{name}"',
-    confirmDeletePlaylist: 'Are you sure you want to permanently delete Playlist "{name}" and all files inside? This action cannot be undone!',
+    confirmDeletePlaylist:
+      'Are you sure you want to permanently delete Playlist "{name}" and all files inside? This action cannot be undone!',
     downloadToLib: 'Download to library'
   },
   modals: {
@@ -511,7 +532,8 @@ export const en: TranslationDictionary = {
       errorPrefix: 'Could not generate spectrogram: ',
       ensureLocalFile: 'Please ensure audio file is accessible on local disk.',
       seekInstruction: 'Click anywhere on spectrogram to seek track to that position.',
-      intensityLegend: '*Color brightness shows sound intensity: White (loudest) > Red/Yellow > Green > Blue > Black (silence).',
+      intensityLegend:
+        '*Color brightness shows sound intensity: White (loudest) > Red/Yellow > Green > Blue > Black (silence).',
       signalPathTitle: 'Audio Signal Path',
       signalPathSub: 'Processing chain from source file to output device',
       sourceStage: 'Source',
@@ -588,7 +610,8 @@ export const en: TranslationDictionary = {
     deletePlaylistError: 'Error deleting playlist: ',
     downloadProgress: 'Downloading...',
     librarySavedSuccess: 'Library folder saved successfully!',
-    autoCategorizeConfirm: 'This action will automatically create folders and move songs with matching Album tags into them. Are you sure you want to proceed?',
+    autoCategorizeConfirm:
+      'This action will automatically create folders and move songs with matching Album tags into them. Are you sure you want to proceed?',
     autoCategorizeSuccess: 'Successfully moved {count} songs into Album Playlists!',
     coverUpdatedSuccess: 'Updated cover from first track successfully!',
     coverChangeSuccess: 'Cover image changed successfully! Reloading library...',
@@ -635,7 +658,8 @@ export const en: TranslationDictionary = {
     resultsCount: 'Found {count} results',
     noResults: 'No matching files found on Soulseek network',
     noDownloads: 'No items in download queue',
-    registerTip: 'Soulseek is the premier P2P music community for audiophiles. If you do not have an account yet, simply enter any username and password to create one.',
+    registerTip:
+      'Soulseek is the premier P2P music community for audiophiles. If you do not have an account yet, simply enter any username and password to create one.',
     speed: 'Speed',
     size: 'Size',
     format: 'Format',

@@ -228,6 +228,12 @@ export interface TranslationDictionary {
       removeBg: string
       opacity: string
       blur: string
+      accentTitle: string
+      accentTrack: string
+      accentBg: string
+      accentCustom: string
+      customColorPicker: string
+      wallpaperTitle: string
     }
     library: {
       title: string
@@ -315,6 +321,7 @@ export interface TranslationDictionary {
     miniPlayer: string
     queue: string
     equalizer: string
+    toolsMenu: string
     volume: string
     shuffle: string
     repeatOff: string

@@ -21,8 +21,8 @@ interface PlayerProgressBarProps {
 }
 
 export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
-  audioRef, 
-  currentTrack: propTrack, 
+  audioRef,
+  currentTrack: propTrack,
   bitPerfectEnabled: propBitPerfect
 }) => {
   const storeTrack = usePlayerStore((s) => s.currentTrack)
@@ -125,22 +125,32 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
   return (
     <div className="w-full flex items-center gap-2.5 text-[11px] text-zinc-400 font-medium">
-      <span className="w-9 sm:w-10 text-left shrink-0 tabular-nums font-mono">{formatDuration(currentTime)}</span>
-      <input 
-        type="range" 
-        min={0} max={Math.floor(duration || 0)} 
-        value={Math.floor(currentTime)} 
+      <span className="w-9 sm:w-10 text-left shrink-0 tabular-nums font-sans">
+        {formatDuration(currentTime)}
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={Math.floor(duration || 0)}
+        value={Math.floor(currentTime)}
         onChange={handleSeekChange}
-        onWheel={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        onWheel={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
         onMouseDown={() => setIsDragging(true)}
         onMouseUp={handleSeekCommit}
         onTouchStart={() => setIsDragging(true)}
         onTouchEnd={handleSeekCommit}
-        disabled={!currentTrack} 
-        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10 transition-all" 
-        style={{ background: `linear-gradient(to right, var(--theme-10) ${timePercent}%, var(--theme-30) ${timePercent}%)` }} 
+        disabled={!currentTrack}
+        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10 transition-all"
+        style={{
+          background: `linear-gradient(to right, var(--theme-10) ${timePercent}%, var(--theme-30) ${timePercent}%)`
+        }}
       />
-      <span className="w-9 sm:w-10 text-right shrink-0 tabular-nums font-mono">{currentTrack ? formatDuration(duration) : '0:00'}</span>
+      <span className="w-9 sm:w-10 text-right shrink-0 tabular-nums font-sans">
+        {currentTrack ? formatDuration(duration) : '0:00'}
+      </span>
     </div>
   )
 }

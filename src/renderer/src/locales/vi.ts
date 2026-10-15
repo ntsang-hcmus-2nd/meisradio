@@ -88,7 +88,8 @@ export const vi: TranslationDictionary = {
     statsArtists: 'Nghệ sĩ',
     statsRecent: 'Đã nghe',
     noRecentTitle: 'Bắt đầu nghe nhạc để nhận gợi ý thông minh',
-    noRecentDesc: 'Khi bạn nghe các bài hát trong thư mục, Mei\'s Radio sẽ tự động phân tích và gợi ý những bản nhạc phù hợp nhất với gu âm nhạc của bạn.',
+    noRecentDesc:
+      "Khi bạn nghe các bài hát trong thư mục, Mei's Radio sẽ tự động phân tích và gợi ý những bản nhạc phù hợp nhất với gu âm nhạc của bạn.",
     ytmTitle: 'YouTube Music',
     ytmSubtitle: 'Khám phá và đề xuất cá nhân hóa',
     refreshYtm: 'Làm mới YouTube Music',
@@ -96,7 +97,8 @@ export const vi: TranslationDictionary = {
     ytmLogout: 'Đăng xuất / Đổi tài khoản',
     ytmLogin: 'Đăng nhập YouTube Music',
     noRecommendationsTitle: 'Chưa có dữ liệu đề xuất',
-    noRecommendationsDesc: 'Vui lòng nhấn nút đăng nhập ở góc trên để nạp danh sách nhạc từ YouTube Music.',
+    noRecommendationsDesc:
+      'Vui lòng nhấn nút đăng nhập ở góc trên để nạp danh sách nhạc từ YouTube Music.',
     playNow: 'Phát ngay',
     downloadToLib: 'Tải xuống thư viện',
     extractingYtm: 'Đang trích xuất bài hát từ YouTube Music...',
@@ -109,7 +111,8 @@ export const vi: TranslationDictionary = {
     refreshSc: 'Làm mới SoundCloud',
     loadingSc: 'Đang tải nhạc SoundCloud...',
     noScTracksTitle: 'Không có bài hát',
-    noScTracksDesc: 'Không thể tải dữ liệu SoundCloud hoặc không có bài hát nào trong thể loại này.',
+    noScTracksDesc:
+      'Không thể tải dữ liệu SoundCloud hoặc không có bài hát nào trong thể loại này.',
     backToDashboard: 'Quay lại trang chủ',
     genres: {
       all: 'Tất cả',
@@ -129,7 +132,8 @@ export const vi: TranslationDictionary = {
     randomPlay: 'Phát ngẫu nhiên',
     noSongsMatched: 'Không tìm thấy bài hát nào phù hợp với từ khóa',
     libraryNotConfigured: 'Chưa chọn thư mục nhạc',
-    libraryNotConfiguredDesc: 'Vui lòng bấm vào nút bên dưới để chọn thư mục chứa nhạc trên máy tính của bạn.'
+    libraryNotConfiguredDesc:
+      'Vui lòng bấm vào nút bên dưới để chọn thư mục chứa nhạc trên máy tính của bạn.'
   },
   artistsView: {
     title: 'Nghệ sĩ',
@@ -168,7 +172,8 @@ export const vi: TranslationDictionary = {
     addSongs: 'Thêm bài hát',
     chooseCover: 'Đổi ảnh bìa',
     deletePlaylist: 'Xóa danh sách phát',
-    confirmDelete: 'Bạn có chắc chắn muốn xóa vĩnh viễn danh sách phát "{name}" không? (Các tệp bài hát gốc sẽ không bị xóa)',
+    confirmDelete:
+      'Bạn có chắc chắn muốn xóa vĩnh viễn danh sách phát "{name}" không? (Các tệp bài hát gốc sẽ không bị xóa)',
     rename: 'Đổi tên',
     playAll: 'Phát tất cả',
     shuffle: 'Trộn bài',
@@ -183,7 +188,8 @@ export const vi: TranslationDictionary = {
     scanning: 'Đang quét thư mục Drive...',
     scanData: 'Quét dữ liệu',
     emptyTitle: 'Chưa có dữ liệu thư mục Google Drive',
-    emptyDesc: 'Dán đường dẫn thư mục công khai ở ô phía trên và bấm "Quét dữ liệu" để khám phá danh sách nhạc.',
+    emptyDesc:
+      'Dán đường dẫn thư mục công khai ở ô phía trên và bấm "Quét dữ liệu" để khám phá danh sách nhạc.',
     foundResults: 'Đã tìm thấy',
     foundAudioFiles: 'tệp âm thanh hợp lệ trong thư mục Google Drive.',
     streamAll: 'Phát toàn bộ danh sách trực tuyến',
@@ -220,14 +226,21 @@ export const vi: TranslationDictionary = {
       classicMode: 'Cổ điển',
       classicModeDesc: 'Các ô và các nút của hệ thống hiển thị đầy đủ văn bản và biểu tượng',
       sleekMode: 'Tinh gọn',
-      sleekModeDesc: 'Các ô và các nút ẩn hết văn bản, chỉ sử dụng biểu tượng. Không ảnh hưởng đến thông tin bài hát',
+      sleekModeDesc:
+        'Các ô và các nút ẩn hết văn bản, chỉ sử dụng biểu tượng. Không ảnh hưởng đến thông tin bài hát',
       useTrackCover: 'Tự động dùng ảnh bìa bài hát đang phát làm hình nền',
       placeholder: 'Dán liên kết hình ảnh (https://...) hoặc đường dẫn tệp trên máy...',
       applyLink: 'Áp dụng liên kết',
       chooseImage: 'Chọn ảnh từ máy',
       removeBg: 'Xóa ảnh nền',
       opacity: 'Độ trong suốt nền',
-      blur: 'Độ mờ nền'
+      blur: 'Độ mờ nền',
+      accentTitle: 'Màu sắc giao diện & Điểm nhấn',
+      accentTrack: 'Theo bài hát',
+      accentBg: 'Theo hình nền',
+      accentCustom: 'Tùy chỉnh',
+      customColorPicker: 'Chọn mã màu tùy ý',
+      wallpaperTitle: 'Hình nền ứng dụng'
     },
     library: {
       title: 'Thư mục nhạc',
@@ -252,8 +265,10 @@ export const vi: TranslationDictionary = {
       asioOption: 'ASIO (Hỗ trợ DSD Native)',
       deviceLabel: 'Thiết bị đầu ra / DAC',
       deviceAuto: 'Tự động (Mặc định hệ thống)',
-      asioDesc: 'Giao thức ASIO chuyên dụng cho Audiophile, hỗ trợ truyền luồng DSD Native 1-bit trực tiếp đến chip giải mã DAC.',
-      wasapiDesc: 'Giao thức WASAPI Độc quyền của Windows, độc chiếm phần cứng âm thanh và bảo toàn nguyên vẹn độ sâu bit PCM.'
+      asioDesc:
+        'Giao thức ASIO chuyên dụng cho Audiophile, hỗ trợ truyền luồng DSD Native 1-bit trực tiếp đến chip giải mã DAC.',
+      wasapiDesc:
+        'Giao thức WASAPI Độc quyền của Windows, độc chiếm phần cứng âm thanh và bảo toàn nguyên vẹn độ sâu bit PCM.'
     },
     googleDrive: {
       title: 'Khóa API Google Drive',
@@ -276,9 +291,11 @@ export const vi: TranslationDictionary = {
       title: 'Chế độ hiệu suất',
       desc: 'Điều chỉnh mức độ tiêu thụ tài nguyên của ứng dụng để phù hợp với cấu hình thiết bị của bạn.',
       standard: 'Tiêu chuẩn',
-      standardDesc: 'Đầy đủ hiệu ứng hình ảnh, sóng nhạc trực quan, chuyển màu nền thích ứng và tất cả các tính năng trực tuyến.',
+      standardDesc:
+        'Đầy đủ hiệu ứng hình ảnh, sóng nhạc trực quan, chuyển màu nền thích ứng và tất cả các tính năng trực tuyến.',
       lite: 'Tiết kiệm pin',
-      liteDesc: 'Chế độ tiết kiệm pin: tắt hiệu ứng làm mờ và sóng nhạc, tối ưu hóa cho máy tính xách tay và đồ họa tích hợp.',
+      liteDesc:
+        'Chế độ tiết kiệm pin: tắt hiệu ứng làm mờ và sóng nhạc, tối ưu hóa cho máy tính xách tay và đồ họa tích hợp.',
       core: 'Tối giản',
       coreDesc: 'Hiệu năng tối đa: tắt giải mã ảnh bìa và chỉ phát nhạc ngoại tuyến.'
     },
@@ -286,9 +303,10 @@ export const vi: TranslationDictionary = {
       title: 'Trạng thái hoạt động trên Discord',
       desc: 'Hiển thị bài hát đang nghe, nghệ sĩ, thời gian và ảnh bìa lên trạng thái tài khoản Discord của bạn.',
       enable: 'Bật hiển thị trạng thái trên Discord',
-      enableDesc: 'Cho phép Mei\'s Radio kết nối với ứng dụng Discord đang chạy trên máy tính',
+      enableDesc: "Cho phép Mei's Radio kết nối với ứng dụng Discord đang chạy trên máy tính",
       clientIdTitle: 'Mã định danh ứng dụng Discord',
-      clientIdDesc: 'Nhập mã định danh ứng dụng từ cổng nhà phát triển Discord nếu muốn tùy biến tên ứng dụng (Mặc định sử dụng mã tích hợp sẵn).',
+      clientIdDesc:
+        'Nhập mã định danh ứng dụng từ cổng nhà phát triển Discord nếu muốn tùy biến tên ứng dụng (Mặc định sử dụng mã tích hợp sẵn).',
       clientIdPlaceholder: '1539993441851670589',
       resetDefault: 'Đặt lại mặc định',
       showDetails: 'Hiển thị tên bài hát & Nghệ sĩ',
@@ -296,11 +314,14 @@ export const vi: TranslationDictionary = {
       showTime: 'Hiển thị thời gian mở ứng dụng',
       showTimeDesc: 'Hiển thị thời gian đã trôi qua kể từ khi mở ứng dụng',
       showCover: 'Hiển thị ảnh bìa bài hát',
-      showCoverDesc: 'Hiển thị ảnh bìa từ nguồn trực tuyến (YouTube, SoundCloud, Drive) hoặc biểu trưng Mei\'s Radio',
+      showCoverDesc:
+        "Hiển thị ảnh bìa từ nguồn trực tuyến (YouTube, SoundCloud, Drive) hoặc biểu trưng Mei's Radio",
       showQuality: 'Hiển thị chất lượng âm thanh',
-      showQualityDesc: 'Hiển thị thông số định dạng âm thanh (FLAC 24-bit/96kHz, MP3 320kbps, v.v.)',
+      showQualityDesc:
+        'Hiển thị thông số định dạng âm thanh (FLAC 24-bit/96kHz, MP3 320kbps, v.v.)',
       showButtons: 'Hiển thị các nút thao tác',
-      showButtonsDesc: 'Hiển thị các nút để nghe bài hát trên YouTube Music / SoundCloud và khám phá Mei\'s Radio',
+      showButtonsDesc:
+        "Hiển thị các nút để nghe bài hát trên YouTube Music / SoundCloud và khám phá Mei's Radio",
       showIdle: 'Hiển thị trạng thái chờ',
       showIdleDesc: 'Hiển thị trạng thái đang duyệt nhạc khi mở ứng dụng nhưng chưa phát bài nào',
       connectedStatus: 'Đã kết nối với Discord',
@@ -310,11 +331,12 @@ export const vi: TranslationDictionary = {
   player: {
     noTrack: 'Chưa có bài hát đang phát',
     unknownArtist: 'Nghệ sĩ chưa rõ',
-    spectrogram: 'Mở trình phân tích phổ âm thanh',
+    spectrogram: 'Phổ âm thanh',
     lyrics: 'Lời bài hát',
     miniPlayer: 'Trình phát thu nhỏ',
     queue: 'Danh sách đang phát',
     equalizer: 'Bộ cân bằng âm thanh',
+    toolsMenu: 'Bảng chức năng',
     volume: 'Âm lượng',
     shuffle: 'Phát ngẫu nhiên',
     repeatOff: 'Không lặp lại',
@@ -325,7 +347,8 @@ export const vi: TranslationDictionary = {
     next: 'Bài tiếp theo',
     prev: 'Bài trước đó',
     smartAutoplay: 'Tự động phát gợi ý thông minh',
-    smartAutoplayDesc: 'Tự động phát các bài hát gợi ý theo nghệ sĩ hoặc thể loại khi hết danh sách chờ',
+    smartAutoplayDesc:
+      'Tự động phát các bài hát gợi ý theo nghệ sĩ hoặc thể loại khi hết danh sách chờ',
     smartAutoplayPlaying: 'Đang phát gợi ý: {title} - {artist}',
     clearQueue: 'Xóa hết',
     clearQueueTitle: 'Xóa tất cả bài hát khỏi hàng đợi',
@@ -371,8 +394,10 @@ export const vi: TranslationDictionary = {
     showInFolder: 'Mở vị trí tệp',
     removeFromPlaylist: 'Xóa khỏi danh sách phát "{name}"',
     deleteFile: 'Xóa tệp vĩnh viễn',
-    confirmDeleteFile: 'Bạn có chắc chắn muốn xóa vĩnh viễn tệp "{title}" khỏi ổ đĩa không? Thao tác này không thể hoàn tác!',
-    confirmRemoveFromPlaylist: 'Bạn có chắc chắn muốn xóa bài hát "{title}" khỏi danh sách phát "{name}"?',
+    confirmDeleteFile:
+      'Bạn có chắc chắn muốn xóa vĩnh viễn tệp "{title}" khỏi ổ đĩa không? Thao tác này không thể hoàn tác!',
+    confirmRemoveFromPlaylist:
+      'Bạn có chắc chắn muốn xóa bài hát "{title}" khỏi danh sách phát "{name}"?',
     playAll: 'Phát toàn bộ danh sách',
     addSongs: 'Thêm bài hát vào danh sách phát',
     renamePlaylist: 'Đổi tên danh sách phát',
@@ -380,7 +405,8 @@ export const vi: TranslationDictionary = {
     extractCover: 'Lấy ảnh bìa từ bài hát đầu tiên',
     openPlaylistFolder: 'Mở thư mục danh sách phát',
     deletePlaylist: 'Xóa danh sách phát "{name}"',
-    confirmDeletePlaylist: 'Bạn có chắc chắn muốn xóa vĩnh viễn danh sách phát "{name}" và toàn bộ tệp bên trong không? Thao tác này không thể hoàn tác!',
+    confirmDeletePlaylist:
+      'Bạn có chắc chắn muốn xóa vĩnh viễn danh sách phát "{name}" và toàn bộ tệp bên trong không? Thao tác này không thể hoàn tác!',
     downloadToLib: 'Tải về thư viện'
   },
   modals: {
@@ -510,8 +536,10 @@ export const vi: TranslationDictionary = {
       generating: 'Đang dựng biểu đồ phổ toàn bản nhạc...',
       errorPrefix: 'Không thể dựng phổ tần số: ',
       ensureLocalFile: 'Vui lòng đảm bảo tệp bài hát có sẵn trên ổ đĩa nội bộ.',
-      seekInstruction: 'Nhấp chuột vào bất kỳ điểm nào trên biểu đồ để chuyển bài hát đến vị trí đó.',
-      intensityLegend: '*Độ sáng màu sắc thể hiện cường độ âm thanh: Trắng (mạnh nhất) > Đỏ/Vàng > Xanh lục > Xanh lam > Đen (im lặng).',
+      seekInstruction:
+        'Nhấp chuột vào bất kỳ điểm nào trên biểu đồ để chuyển bài hát đến vị trí đó.',
+      intensityLegend:
+        '*Độ sáng màu sắc thể hiện cường độ âm thanh: Trắng (mạnh nhất) > Đỏ/Vàng > Xanh lục > Xanh lam > Đen (im lặng).',
       signalPathTitle: 'Đường truyền tín hiệu âm thanh',
       signalPathSub: 'Thứ tự xử lý và thiết bị từ nguồn phát đến đầu ra',
       sourceStage: 'Nguồn phát',
@@ -588,7 +616,8 @@ export const vi: TranslationDictionary = {
     deletePlaylistError: 'Lỗi khi xóa danh sách phát: ',
     downloadProgress: 'Đang tải xuống...',
     librarySavedSuccess: 'Đã lưu thư mục thư viện!',
-    autoCategorizeConfirm: 'Hành động này sẽ tự động tạo thư mục và di chuyển các bài hát có chung Album vào đó. Bạn có chắc chắn muốn thực hiện?',
+    autoCategorizeConfirm:
+      'Hành động này sẽ tự động tạo thư mục và di chuyển các bài hát có chung Album vào đó. Bạn có chắc chắn muốn thực hiện?',
     autoCategorizeSuccess: 'Đã di chuyển thành công {count} bài hát vào các Danh sách phát Album!',
     coverUpdatedSuccess: 'Đã cập nhật ảnh bìa từ bài hát đầu tiên thành công!',
     coverChangeSuccess: 'Đã thay đổi ảnh bìa thành công! Đang tải lại thư viện...',
@@ -601,7 +630,8 @@ export const vi: TranslationDictionary = {
     connecting: 'Đang kết nối đến máy chủ...',
     disconnected: 'Chưa kết nối',
     loginOrRegister: 'Đăng nhập hoặc Đăng ký Soulseek',
-    loginSubtitle: 'Nếu tên đăng nhập chưa tồn tại, hệ thống sẽ tự động tạo tài khoản mới ngay lập tức.',
+    loginSubtitle:
+      'Nếu tên đăng nhập chưa tồn tại, hệ thống sẽ tự động tạo tài khoản mới ngay lập tức.',
     username: 'Tên đăng nhập',
     password: 'Mật khẩu',
     autoLogin: 'Tự động đăng nhập khi mở ứng dụng',
@@ -635,7 +665,8 @@ export const vi: TranslationDictionary = {
     resultsCount: 'Tìm thấy {count} kết quả',
     noResults: 'Không tìm thấy kết quả phù hợp trên mạng Soulseek',
     noDownloads: 'Chưa có tệp nào trong danh sách tải xuống',
-    registerTip: 'Soulseek là mạng chia sẻ tệp ngang hàng lớn nhất dành cho người yêu âm nhạc. Nếu bạn chưa có tài khoản, chỉ cần nhập tên người dùng và mật khẩu bất kỳ để tạo tài khoản mới.',
+    registerTip:
+      'Soulseek là mạng chia sẻ tệp ngang hàng lớn nhất dành cho người yêu âm nhạc. Nếu bạn chưa có tài khoản, chỉ cần nhập tên người dùng và mật khẩu bất kỳ để tạo tài khoản mới.',
     speed: 'Tốc độ',
     size: 'Dung lượng',
     format: 'Định dạng',

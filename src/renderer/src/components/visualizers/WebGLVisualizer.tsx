@@ -54,24 +54,7 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
     }
     updateThemeColor()
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect) {
-          cachedWidth = Math.floor(entry.contentRect.width)
-          cachedHeight = Math.floor(entry.contentRect.height)
-          cachedDpr = window.devicePixelRatio || 1
-          if (cachedWidth > 0 && cachedHeight > 0) {
-            canvas.width = Math.floor(cachedWidth * cachedDpr)
-            canvas.height = Math.floor(cachedHeight * cachedDpr)
-          }
-        }
-      }
-      updateThemeColor()
-    })
-
-    resizeObserver.observe(canvas)
-
-    // Initial setup of canvas dimensions
+    // Initial setup of canvas dimensions if already visible
     if (cachedWidth > 0 && cachedHeight > 0) {
       canvas.width = Math.floor(cachedWidth * cachedDpr)
       canvas.height = Math.floor(cachedHeight * cachedDpr)
@@ -89,7 +72,10 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
       const height = cachedHeight
       const dpr = cachedDpr
 
-      if (width === 0 || height === 0) return
+      if (width === 0 || height === 0) {
+        reqAnimRef.current = undefined
+        return
+      }
 
       ctx.save()
       ctx.scale(dpr, dpr)
@@ -203,6 +189,35 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
         reqAnimRef.current = requestAnimationFrame(draw)
       }
     }
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      let becameVisible = false
+      for (const entry of entries) {
+        if (entry.contentRect) {
+          const w = Math.floor(entry.contentRect.width)
+          const h = Math.floor(entry.contentRect.height)
+          cachedDpr = window.devicePixelRatio || 1
+          if (w > 0 && h > 0) {
+            if (cachedWidth === 0 || cachedHeight === 0 || !reqAnimRef.current) {
+              becameVisible = true
+            }
+            cachedWidth = w
+            cachedHeight = h
+            canvas.width = Math.floor(cachedWidth * cachedDpr)
+            canvas.height = Math.floor(cachedHeight * cachedDpr)
+          } else {
+            cachedWidth = w
+            cachedHeight = h
+          }
+        }
+      }
+      updateThemeColor()
+      if (becameVisible) {
+        startDrawLoop()
+      }
+    })
+
+    resizeObserver.observe(canvas)
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
