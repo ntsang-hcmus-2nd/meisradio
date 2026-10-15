@@ -406,7 +406,7 @@ export function extractArtists(metadata: any, fallbackTitle: string = ''): { art
 let bassManager: BassManager | null = null
 let discordRpcManager: DiscordRpcManager | null = null
 
-// Hàm tìm thư mục chứa binary (ffmpeg, ffprobe, mpv) đa môi trường (Dev, Packaged, Portable)
+// Hàm tìm thư mục chứa binary (ffmpeg, ffprobe) đa môi trường (Dev, Packaged, Portable)
 export function getBinaryDir(): string {
   const candidateDirs = [
     // 1. extraResources trong bản build: <resourcesPath>/bin
@@ -1027,32 +1027,32 @@ app.whenReady().then(async () => {
 
   bassManager.on('time', (val) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('mpv:time', val)
+      mainWindow.webContents.send('bass:time', val)
     }
   })
   bassManager.on('duration', (val) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('mpv:duration', val)
+      mainWindow.webContents.send('bass:duration', val)
     }
   })
   bassManager.on('paused', (val) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('mpv:paused', val)
+      mainWindow.webContents.send('bass:paused', val)
     }
   })
   bassManager.on('ended', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('mpv:ended')
+      mainWindow.webContents.send('bass:ended')
     }
   })
   bassManager.on('error', (err) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('mpv:error', err)
+      mainWindow.webContents.send('bass:error', err)
     }
   })
   bassManager.on('audio-out-params', (params) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('mpv:audio-out-params', params)
+      mainWindow.webContents.send('bass:audio-out-params', params)
     }
   })
 
@@ -1077,24 +1077,16 @@ app.whenReady().then(async () => {
     bassManager?.playTrack(rawPath, crossfade || 0)
   }
 
-  ipcMain.handle('mpv:play', handlePlayAudio)
   ipcMain.handle('bass:play', handlePlayAudio)
-  ipcMain.handle('mpv:resume', () => bassManager?.play())
+  ipcMain.handle('mpv:play', handlePlayAudio)
   ipcMain.handle('bass:resume', () => bassManager?.play())
-  ipcMain.handle('mpv:pause', () => bassManager?.pause())
+  ipcMain.handle('mpv:resume', () => bassManager?.play())
   ipcMain.handle('bass:pause', () => bassManager?.pause())
-  ipcMain.handle('mpv:stop', () => bassManager?.stop())
+  ipcMain.handle('mpv:pause', () => bassManager?.pause())
   ipcMain.handle('bass:stop', () => bassManager?.stop())
-  ipcMain.handle('mpv:seek', (_, pos, mode = 'absolute') => bassManager?.seek(pos, mode))
+  ipcMain.handle('mpv:stop', () => bassManager?.stop())
   ipcMain.handle('bass:seek', (_, pos, mode = 'absolute') => bassManager?.seek(pos, mode))
-  ipcMain.handle('mpv:setVolume', (_, vol) => {
-    if (typeof vol === 'number') {
-      const config = getConfig()
-      config.volume = vol
-      saveConfig(config)
-    }
-    bassManager?.setVolume(vol)
-  })
+  ipcMain.handle('mpv:seek', (_, pos, mode = 'absolute') => bassManager?.seek(pos, mode))
   ipcMain.handle('bass:setVolume', (_, vol) => {
     if (typeof vol === 'number') {
       const config = getConfig()
@@ -1103,6 +1095,15 @@ app.whenReady().then(async () => {
     }
     bassManager?.setVolume(vol)
   })
+  ipcMain.handle('mpv:setVolume', (_, vol) => {
+    if (typeof vol === 'number') {
+      const config = getConfig()
+      config.volume = vol
+      saveConfig(config)
+    }
+    bassManager?.setVolume(vol)
+  })
+  ipcMain.handle('bass:setEqualizer', (_, bands, preamp = 0) => bassManager?.setEqualizer(bands, preamp))
   ipcMain.handle('mpv:setEqualizer', (_, bands, preamp = 0) => bassManager?.setEqualizer(bands, preamp))
 
   ipcMain.handle('mpv:setBitPerfect', async (_, val, currentVol?: number, outputType?: 'wasapi' | 'asio') => {

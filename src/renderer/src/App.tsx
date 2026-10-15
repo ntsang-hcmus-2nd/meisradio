@@ -903,7 +903,7 @@ export default function App() {
     bitPerfectEnabled, setBitPerfectEnabled,
     crossfadeEnabled, setCrossfadeEnabled,
     crossfadeDuration, setCrossfadeDuration,
-    mpvOutParams, setMpvOutParams,
+    bassOutParams, setBassOutParams,
     smartAutoplay, setSmartAutoplay,
     lyricOffset, setLyricOffset,
     sleepTimerMode, setSleepTimerMode,
@@ -1883,10 +1883,10 @@ export default function App() {
 
     const nextMode = (bitPerfectEnabled || isDsdTrack(trackToPlay)) ? 'bass' : 'webaudio'
     if (prevTrackModeRef.current === 'bass' && nextMode === 'webaudio') {
-      await window.api.mpvStop().catch(() => {})
+      await window.api.bassStop().catch(() => {})
       await resetWebAudioPipeline()
     } else if (nextMode === 'webaudio') {
-      window.api.mpvStop().catch(() => {})
+      window.api.bassStop().catch(() => {})
       if (!audioCtxRef.current || audioCtxRef.current.state === 'closed' || (audioCtxRef.current.state as string) === 'interrupted') {
         await resetWebAudioPipeline()
       }
@@ -2120,12 +2120,12 @@ export default function App() {
           return
         } else {
           setIsPlaying(false)
-          if ((bitPerfectEnabled || isDsdTrack(currentTrack)) && (window.api as any)?.mpvStop) (window.api as any).mpvStop()
+          if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassStop().catch(() => {})
           return
         }
       } else {
         setIsPlaying(false)
-        if ((bitPerfectEnabled || isDsdTrack(currentTrack)) && (window.api as any)?.mpvStop) (window.api as any).mpvStop()
+        if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassStop().catch(() => {})
         return
       }
     }
@@ -2135,14 +2135,14 @@ export default function App() {
   const handlePrev = () => {
     if (!currentTrack) return
     const isDsd = isDsdTrack(currentTrack)
-    const useMpv = bitPerfectEnabled || isDsd
-    const curTime = useMpv
+    const useBass = bitPerfectEnabled || isDsd
+    const curTime = useBass
       ? ((audioRef.current as any)?._currentTime || 0)
       : (audioRef.current?.currentTime || 0)
 
     if (curTime > 3) {
-      if (useMpv) {
-        window.api.mpvSeek(0, 'absolute')
+      if (useBass) {
+        window.api.bassSeek(0, 'absolute')
       } else if (audioRef.current) {
         audioRef.current.currentTime = 0
       }
@@ -2169,13 +2169,13 @@ export default function App() {
     }
     
     const isDsd = isDsdTrack(currentTrack)
-    const useMpv = bitPerfectEnabled || isDsd
-    if (useMpv) {
+    const useBass = bitPerfectEnabled || isDsd
+    if (useBass) {
       if (isPlaying) {
-        window.api.mpvPause()
+        window.api.bassPause()
         setIsPlaying(false)
       } else {
-        window.api.mpvResume()
+        window.api.bassResume()
         setIsPlaying(true)
       }
     } else if (audioRef.current) {
@@ -2196,14 +2196,14 @@ export default function App() {
     const val = parseFloat(e.target.value)
     setVolume(val)
     if (audioRef.current) audioRef.current.volume = val
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.mpvSetVolume(val)
+    if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(val)
   }
 
   const handleVolumeUp = () => {
     setVolume(prev => {
       const newVol = Math.min(1, Math.round((prev + 0.05) * 100) / 100)
       if (audioRef.current) audioRef.current.volume = newVol
-      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.mpvSetVolume(newVol)
+      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(newVol)
       return newVol
     })
   }
@@ -2212,23 +2212,23 @@ export default function App() {
     setVolume(prev => {
       const newVol = Math.max(0, Math.round((prev - 0.05) * 100) / 100)
       if (audioRef.current) audioRef.current.volume = newVol
-      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.mpvSetVolume(newVol)
+      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(newVol)
       return newVol
     })
   }
 
   const toggleMute = () => {
-    const isMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
+    const isBass = bitPerfectEnabled || isDsdTrack(currentTrack)
     if (volume > 0) {
       setPrevVolume(volume)
       setVolume(0)
       if (audioRef.current) audioRef.current.volume = 0
-      if (isMpv) window.api.mpvSetVolume(0)
+      if (isBass) window.api.bassSetVolume(0)
     } else {
       const newVol = prevVolume > 0 ? prevVolume : 1
       setVolume(newVol)
       if (audioRef.current) audioRef.current.volume = newVol
-      if (isMpv) window.api.mpvSetVolume(newVol)
+      if (isBass) window.api.bassSetVolume(newVol)
     }
   }
 
@@ -3712,15 +3712,15 @@ export default function App() {
     }
 
     const isDsd = isDsdTrack(currentTrack)
-    const useMpvTime = bitPerfectEnabled || isDsd
+    const useBassTime = bitPerfectEnabled || isDsd
 
     const curPos = override?.position !== undefined 
       ? override.position 
-      : (useMpvTime ? ((audioRef.current as any)?._currentTime || 0) : (audioRef.current?.currentTime || 0))
+      : (useBassTime ? ((audioRef.current as any)?._currentTime || 0) : (audioRef.current?.currentTime || 0))
     
     const curPlaying = override?.isPlaying !== undefined ? override.isPlaying : isPlaying
 
-    const curDur = useMpvTime 
+    const curDur = useBassTime 
       ? ((audioRef.current as any)?._duration || currentTrack.duration || 0) 
       : (audioRef.current?.duration || currentTrack.duration || 0)
 
@@ -4109,7 +4109,7 @@ export default function App() {
       if (e.code === 'ArrowRight' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         e.preventDefault()
         if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-          window.api.mpvSeek(5, 'relative')
+          window.api.bassSeek(5, 'relative')
         } else if (audioRef.current && currentTrack) {
           audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
         }
@@ -4120,7 +4120,7 @@ export default function App() {
       if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         e.preventDefault()
         if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-          window.api.mpvSeek(-5, 'relative')
+          window.api.bassSeek(-5, 'relative')
         } else if (audioRef.current && currentTrack) {
           audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
         }
@@ -4214,14 +4214,14 @@ export default function App() {
             break
           case 'seek-forward':
             if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-              window.api.mpvSeek(5, 'relative')
+              window.api.bassSeek(5, 'relative')
             } else if (audioRef.current && currentTrack) {
               audioRef.current.currentTime = Math.min(audioRef.current.duration || 9999, audioRef.current.currentTime + 5)
             }
             break
           case 'seek-backward':
             if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-              window.api.mpvSeek(-5, 'relative')
+              window.api.bassSeek(-5, 'relative')
             } else if (audioRef.current && currentTrack) {
               audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
             }
@@ -4365,7 +4365,7 @@ export default function App() {
       ['seekto', (details) => {
         if (details.seekTime !== undefined && details.seekTime !== null) {
           if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-            window.api?.mpvSeek?.(details.seekTime, 'absolute')
+            window.api.bassSeek(details.seekTime, 'absolute')
           } else if (audioRef.current) {
             audioRef.current.currentTime = details.seekTime
           }
@@ -4374,7 +4374,7 @@ export default function App() {
       ['seekbackward', (details) => {
         const offset = details.seekOffset || 5
         if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-          window.api?.mpvSeek?.(-offset, 'relative')
+          window.api.bassSeek(-offset, 'relative')
         } else if (audioRef.current) {
           audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - offset)
         }
@@ -4382,7 +4382,7 @@ export default function App() {
       ['seekforward', (details) => {
         const offset = details.seekOffset || 5
         if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-          window.api?.mpvSeek?.(offset, 'relative')
+          window.api.bassSeek(offset, 'relative')
         } else if (audioRef.current && audioRef.current.duration) {
           audioRef.current.currentTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + offset)
         }
@@ -4408,7 +4408,7 @@ export default function App() {
       if (sleepTimerOriginalVolRef.current !== null) {
         setVolume(sleepTimerOriginalVolRef.current)
         if (audioRef.current) audioRef.current.volume = sleepTimerOriginalVolRef.current
-        if (bitPerfectEnabled) window.api?.mpvSetVolume?.(sleepTimerOriginalVolRef.current)
+        if (bitPerfectEnabled) window.api.bassSetVolume(sleepTimerOriginalVolRef.current)
         sleepTimerOriginalVolRef.current = null
       }
       showToast(t('player.sleepTimerOffToast'), 'info')
@@ -4452,7 +4452,7 @@ export default function App() {
         const fadeRatio = remainingSeconds / 30
         const fadedVolume = (sleepTimerOriginalVolRef.current || 1) * fadeRatio
         if (audioRef.current) audioRef.current.volume = fadedVolume
-        if (bitPerfectEnabled) window.api?.mpvSetVolume?.(fadedVolume)
+        if (bitPerfectEnabled) window.api.bassSetVolume(fadedVolume)
       }
 
       // Khi hết thời gian: Tắt nhạc
@@ -4460,12 +4460,12 @@ export default function App() {
         clearInterval(interval)
         sleepTimerTargetTimeRef.current = null
         if (audioRef.current) audioRef.current.pause()
-        if (bitPerfectEnabled) window.api?.mpvPause?.()
+        if (bitPerfectEnabled) window.api.bassPause()
         setIsPlaying(false)
         if (sleepTimerOriginalVolRef.current !== null) {
           setVolume(sleepTimerOriginalVolRef.current)
           if (audioRef.current) audioRef.current.volume = sleepTimerOriginalVolRef.current
-          if (bitPerfectEnabled) window.api?.mpvSetVolume?.(sleepTimerOriginalVolRef.current)
+          if (bitPerfectEnabled) window.api.bassSetVolume(sleepTimerOriginalVolRef.current)
           sleepTimerOriginalVolRef.current = null
         }
         setSleepTimerMode('off')
@@ -4596,11 +4596,12 @@ export default function App() {
   // 7. MAIN RENDER
   // ==========================================
 
-  // MPV Listeners
+  // BASS Audio Listeners (WASAPI / ASIO / DSD)
+  // BASS Audio Listeners (WASAPI / ASIO / DSD)
   useEffect(() => {
-    const unTime = window.api.onMpvTime((val) => {
-      const useMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
-      if (useMpv && audioRef.current) {
+    const unTime = window.api.onBassTime ? window.api.onBassTime((val) => {
+      const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
+      if (useBass && audioRef.current) {
         (audioRef.current as any)._currentTime = val
         const dur = (audioRef.current as any)._duration || currentTrack?.duration || 0
         if (
@@ -4628,44 +4629,50 @@ export default function App() {
           if (index !== useLyricsStore.getState().currentLyricIndex) setCurrentLyricIndex(index)
         }
       }
-    })
-    const unDuration = window.api.onMpvDuration((val) => {
-      const useMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
-      if (useMpv && audioRef.current) {
+    }) : undefined
+
+    const unDuration = window.api.onBassDuration ? window.api.onBassDuration((val) => {
+      const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
+      if (useBass && audioRef.current) {
         (audioRef.current as any)._duration = val
       }
-    })
-    const unPaused = window.api.onMpvPaused((val) => {
-      const useMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
-      if (useMpv) {
+    }) : undefined
+
+    const unPaused = window.api.onBassPaused ? window.api.onBassPaused((val) => {
+      const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
+      if (useBass) {
         setIsPlaying(!val)
       }
-    })
-    const unEnded = window.api.onMpvEnded(() => {
+    }) : undefined
+
+    const unEnded = window.api.onBassEnded ? window.api.onBassEnded(() => {
       if (sleepTimerMode === 'end_of_track') {
         setSleepTimerMode('off')
         setSleepTimerRemaining(null)
         setIsPlaying(false)
-        window.api?.mpvPause?.()
+        window.api.bassPause()
         showToast(t('player.sleepTimerStoppedToast'), 'info')
         return
       }
-      const useMpv = bitPerfectEnabled || isDsdTrack(currentTrack)
-      if (useMpv) {
+      const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
+      if (useBass) {
         if (!hasTriggeredCrossfadeRef.current) {
           handleNext()
         }
         hasTriggeredCrossfadeRef.current = false
       }
-    })
-    const unError = (window.api as any)?.onMpvError?.((err: string) => {
-      showToast(`${language === 'vi' ? 'Lỗi âm thanh WASAPI' : 'WASAPI Audio error'}: ${err}`, 'error')
-    })
-    const unAudioParams = (window.api as any)?.onMpvAudioParams?.((params: any) => {
+    }) : undefined
+
+    const unError = window.api.onBassError ? window.api.onBassError((err: string) => {
+      showToast(`${language === 'vi' ? 'Lỗi âm thanh WASAPI/ASIO' : 'WASAPI/ASIO Audio error'}: ${err}`, 'error')
+    }) : undefined
+
+    const unAudioParams = window.api.onBassAudioParams ? window.api.onBassAudioParams((params: any) => {
       if (params && params.samplerate) {
-        setMpvOutParams(params)
+        setBassOutParams(params)
       }
-    })
+    }) : undefined
+
     return () => {
       if (typeof unTime === 'function') unTime()
       if (typeof unDuration === 'function') unDuration()
@@ -4678,7 +4685,7 @@ export default function App() {
 
   useEffect(() => {
     if (!bitPerfectEnabled && !isDsdTrack(currentTrack)) {
-      setMpvOutParams(null)
+      setBassOutParams(null)
     }
   }, [bitPerfectEnabled, currentTrack])
 
@@ -4686,18 +4693,18 @@ export default function App() {
   useEffect(() => {
     if (currentTrack && currentTrack.filePath) {
       if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-        window.api.mpvPlay(currentTrack.filePath, crossfadeEnabled ? crossfadeDuration : 0)
+        window.api.bassPlay(currentTrack.filePath, crossfadeEnabled ? crossfadeDuration : 0)
         if (audioRef.current) audioRef.current.pause()
         if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
           const seekTo = pendingSeekTimeRef.current
           pendingSeekTimeRef.current = null
           setTimeout(() => {
-            window.api.mpvSeek(seekTo, 'absolute')
+            window.api.bassSeek(seekTo, 'absolute')
           }, 150)
         }
       } else {
         // Dừng BASS/WASAPI khi phát bằng HTML Audio để giải phóng thiết bị
-        window.api.mpvStop().catch(() => {})
+        window.api.bassStop().catch(() => {})
       }
     }
   }, [currentTrack, bitPerfectEnabled, bitPerfectType, crossfadeEnabled, crossfadeDuration])
@@ -4706,20 +4713,20 @@ export default function App() {
   useEffect(() => {
     // Trong chế độ Bit-Perfect hoặc DSD, bypass toàn bộ EQ filter để bảo toàn 100% bit dữ liệu truyền tới DAC
     if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-      window.api.mpvSetEqualizer([], 0)
+      window.api.bassSetEqualizer([], 0)
       return
     }
     if (isEqEnabled) {
-      window.api.mpvSetEqualizer(eqBands, preampGain)
+      window.api.bassSetEqualizer(eqBands, preampGain)
     } else {
-      window.api.mpvSetEqualizer([], 0)
+      window.api.bassSetEqualizer([], 0)
     }
   }, [eqBands, isEqEnabled, preampGain, bitPerfectEnabled, currentTrack])
 
   // Watch Volume
   useEffect(() => {
     if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-      window.api.mpvSetVolume(volume)
+      window.api.bassSetVolume(volume)
     } else if (audioRef.current) {
       audioRef.current.volume = Math.max(0, Math.min(1, volume))
     }
@@ -6286,10 +6293,10 @@ export default function App() {
                               } else {
                                 if (isDsdTrack(prevTrack)) {
                                   // DSD không thể giải mã qua Web Audio HTML5, tiếp tục phát bằng BASS
-                                  window.api.mpvPlay(prevTrack.filePath, 0)
+                                  window.api.bassPlay(prevTrack.filePath, 0)
                                 } else {
                                   // Nhạc PCM: Dừng BASS và giải phóng thiết bị độc quyền ngay lập tức
-                                  await window.api.mpvStop().catch(() => {})
+                                  await window.api.bassStop().catch(() => {})
                                   await resetWebAudioPipeline()
                                   setTimeout(() => {
                                     if (audioRef.current) {
@@ -7806,7 +7813,7 @@ export default function App() {
                   {(bitPerfectEnabled || isDsdTrack(currentTrack)) ? (
                     <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border ${isDsdTrack(currentTrack) ? 'text-amber-400/90 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400/90 bg-emerald-500/10 border-emerald-500/20'}`}>
                       <span className={`w-2 h-2 rounded-full animate-pulse ${isDsdTrack(currentTrack) ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                      <span>{isDsdTrack(currentTrack) ? `${getDsdRateLabel(currentTrack?.sampleRate) || 'DSD'} Direct Stream` : 'Bit-perfect Direct Stream'} {mpvOutParams?.samplerate ? `(${isDsdTrack(currentTrack) ? formatAudioSampleRate(mpvOutParams.samplerate) : (mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`)})` : '(Bypass DSP)'}</span>
+                      <span>{isDsdTrack(currentTrack) ? `${getDsdRateLabel(currentTrack?.sampleRate) || 'DSD'} Direct Stream` : 'Bit-perfect Direct Stream'} {bassOutParams?.samplerate ? `(${isDsdTrack(currentTrack) ? formatAudioSampleRate(bassOutParams.samplerate!) : (bassOutParams.samplerate! >= 1000 ? `${bassOutParams.samplerate! / 1000}kHz` : `${bassOutParams.samplerate!}Hz`)})` : '(Bypass DSP)'}</span>
                     </div>
                   ) : (
                     <WebGLVisualizer 
@@ -7959,7 +7966,7 @@ export default function App() {
                   {(bitPerfectEnabled || isDsdTrack(currentTrack)) ? (
                     <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border ${isDsdTrack(currentTrack) ? 'text-amber-400/90 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400/90 bg-emerald-500/10 border-emerald-500/20'}`}>
                       <span className={`w-2 h-2 rounded-full animate-pulse ${isDsdTrack(currentTrack) ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                      <span>{isDsdTrack(currentTrack) ? `${getDsdRateLabel(currentTrack?.sampleRate) || 'DSD'} Direct Stream` : 'Bit-perfect Direct Stream'} {mpvOutParams?.samplerate ? `(${isDsdTrack(currentTrack) ? formatAudioSampleRate(mpvOutParams.samplerate) : (mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`)})` : '(Bypass DSP)'}</span>
+                      <span>{isDsdTrack(currentTrack) ? `${getDsdRateLabel(currentTrack?.sampleRate) || 'DSD'} Direct Stream` : 'Bit-perfect Direct Stream'} {bassOutParams?.samplerate ? `(${isDsdTrack(currentTrack) ? formatAudioSampleRate(bassOutParams.samplerate!) : (bassOutParams.samplerate! >= 1000 ? `${bassOutParams.samplerate! / 1000}kHz` : `${bassOutParams.samplerate!}Hz`)})` : '(Bypass DSP)'}</span>
                     </div>
                   ) : (
                     <WebGLVisualizer 
@@ -8040,30 +8047,33 @@ export default function App() {
                       {currentTrack.bitDepth}-BIT
                     </span>
                   )}
-                  {(bitPerfectEnabled || isDsdTrack(currentTrack)) && (
-                    <span
-                      className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                        mpvOutParams?.isDsd 
-                          ? 'text-amber-400 bg-amber-500/10' 
+                  {(bitPerfectEnabled || isDsdTrack(currentTrack)) && (() => {
+                    const activeAudioParams = bassOutParams
+                    return (
+                      <span
+                        className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                          activeAudioParams?.isDsd 
+                            ? 'text-amber-400 bg-amber-500/10' 
+                            : isDsdTrack(currentTrack)
+                              ? 'text-amber-400/90 bg-amber-500/10'
+                              : bitPerfectType === 'asio'
+                                ? 'text-purple-400 bg-purple-500/10'
+                                : 'text-emerald-400 bg-emerald-500/10'
+                        }`}
+                        title={activeAudioParams?.samplerate ? `${bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Exclusive'}: ${activeAudioParams.samplerate}Hz • ${activeAudioParams.format || 'Direct'} (Bit-perfect)` : (isDsdTrack(currentTrack) ? "BASS DSD Engine" : "Direct bit-perfect stream to hardware DAC")}
+                      >
+                        {activeAudioParams?.isDsd 
+                          ? (bitPerfectType === 'asio' ? 'DSD Native' : 'DSD (DoP)') 
                           : isDsdTrack(currentTrack)
-                            ? 'text-amber-400/90 bg-amber-500/10'
-                            : bitPerfectType === 'asio'
-                              ? 'text-purple-400 bg-purple-500/10'
-                              : 'text-emerald-400 bg-emerald-500/10'
-                      }`}
-                      title={mpvOutParams?.samplerate ? `${bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Exclusive'}: ${mpvOutParams.samplerate}Hz • ${mpvOutParams.format || 'Direct'} (Bit-perfect)` : (isDsdTrack(currentTrack) ? "BASS DSD Engine" : "Direct bit-perfect stream to hardware DAC")}
-                    >
-                      {mpvOutParams?.isDsd 
-                        ? (bitPerfectType === 'asio' ? 'DSD Native' : 'DSD (DoP)') 
-                        : isDsdTrack(currentTrack)
-                          ? (mpvOutParams?.format || 'DSD Engine')
-                          : (bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Direct')}
-                    </span>
-                  )}
+                            ? (activeAudioParams?.format || 'DSD Engine')
+                            : (bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Direct')}
+                      </span>
+                    )
+                  })()}
                 </div>
                 <span className="text-[10px] text-zinc-500">
-                  {bitPerfectEnabled && mpvOutParams?.samplerate
-                    ? (isDsdTrack(currentTrack) ? formatAudioSampleRate(mpvOutParams.samplerate) : (mpvOutParams.samplerate >= 1000 ? `${mpvOutParams.samplerate / 1000}kHz` : `${mpvOutParams.samplerate}Hz`))
+                  {bitPerfectEnabled && bassOutParams?.samplerate
+                    ? (isDsdTrack(currentTrack) ? formatAudioSampleRate(bassOutParams.samplerate) : (bassOutParams.samplerate >= 1000 ? `${bassOutParams.samplerate / 1000}kHz` : `${bassOutParams.samplerate}Hz`))
                     : (currentTrack.sampleRate ? (isDsdTrack(currentTrack) ? formatAudioSampleRate(currentTrack.sampleRate) : (currentTrack.sampleRate >= 1000 ? `${currentTrack.sampleRate / 1000}kHz` : `${currentTrack.sampleRate}Hz`)) : '')}
                   {currentTrack.bitrate ? ` | ${Math.round(currentTrack.bitrate / 1000)} kbps` : ''}
                 </span>

@@ -48,7 +48,8 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
 }) => {
   const { t } = useTranslation()
   const { isEqEnabled, eqBands, preampGain, selectedDeviceId, availableAudioDevices, bitPerfectType } = useAudioStore()
-  const { bitPerfectEnabled, mpvOutParams } = usePlayerStore()
+  const { bitPerfectEnabled, bassOutParams } = usePlayerStore()
+  const audioOutParams = bassOutParams
 
   // Format Helper
   const formatSampleRate = (sr: number): string => {
@@ -82,7 +83,7 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
 
   // Is using BASS Audio engine (Audiophile pipeline: Bit-Perfect or DSD Native)
   const isBASS = Boolean(bitPerfectEnabled || isDsd)
-  const actualDriverMode: 'wasapi' | 'asio' = (mpvOutParams?.mode?.toLowerCase() === 'asio' || (!mpvOutParams?.mode && bitPerfectType === 'asio')) ? 'asio' : 'wasapi'
+  const actualDriverMode: 'wasapi' | 'asio' = (audioOutParams?.mode?.toLowerCase() === 'asio' || (!audioOutParams?.mode && bitPerfectType === 'asio')) ? 'asio' : 'wasapi'
 
   // Output Device friendly name
   const getDeviceDisplayName = (): string => {
@@ -109,14 +110,14 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
   }
 
   // Output sample rate
-  const outputSampleRate = (isBASS && mpvOutParams?.samplerate)
-    ? mpvOutParams.samplerate
+  const outputSampleRate = (isBASS && audioOutParams?.samplerate)
+    ? audioOutParams.samplerate
     : activeSampleRate
 
   // Output format string
   const outputFormatString = isBASS
-    ? (mpvOutParams?.format
-        ? mpvOutParams.format.toUpperCase()
+    ? (audioOutParams?.format
+        ? audioOutParams.format.toUpperCase()
         : (isDsd
             ? (actualDriverMode === 'asio' ? 'DSD NATIVE 1-BIT' : 'DSD-TO-PCM (176.4kHz)')
             : (actualDriverMode === 'asio' ? 'ASIO DIRECT' : 'EXCLUSIVE PCM')))

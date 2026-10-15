@@ -81,60 +81,87 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   preloadStream: (targetId: string) => ipcRenderer.invoke('music:preloadStream', targetId),
 
   // BASS & Bit-Perfect Audio API (WASAPI & ASIO + DSD Native)
-  mpvPlay: (url: string, crossfade: number) => ipcRenderer.invoke('mpv:play', url, crossfade),
-  mpvResume: () => ipcRenderer.invoke('mpv:resume'),
-  mpvPause: () => ipcRenderer.invoke('mpv:pause'),
-  mpvStop: () => ipcRenderer.invoke('mpv:stop'),
-  mpvSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') => ipcRenderer.invoke('mpv:seek', pos, mode),
-  mpvSetVolume: (vol: number) => ipcRenderer.invoke('mpv:setVolume', vol),
-  mpvSetEqualizer: (bands: any[], preamp?: number) => ipcRenderer.invoke('mpv:setEqualizer', bands, preamp),
-  setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => ipcRenderer.invoke('mpv:setBitPerfect', val, currentVol, outputType),
-  setBitPerfectOutputType: (type: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setOutputType', type),
-  setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
-  getAudioDevices: (type?: 'wasapi' | 'asio') => ipcRenderer.invoke('music:getAudioDevices', type),
-
   bassPlay: (url: string, crossfade?: number) => ipcRenderer.invoke('bass:play', url, crossfade),
   bassResume: () => ipcRenderer.invoke('bass:resume'),
   bassPause: () => ipcRenderer.invoke('bass:pause'),
   bassStop: () => ipcRenderer.invoke('bass:stop'),
   bassSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') => ipcRenderer.invoke('bass:seek', pos, mode),
   bassSetVolume: (vol: number) => ipcRenderer.invoke('bass:setVolume', vol),
+  bassSetEqualizer: (bands: any[], preamp?: number) => ipcRenderer.invoke('bass:setEqualizer', bands, preamp),
+  setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setBitPerfect', val, currentVol, outputType),
   setBassBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setBitPerfect', val, currentVol, outputType),
+  setBitPerfectOutputType: (type: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setOutputType', type),
+  setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
+  getAudioDevices: (type?: 'wasapi' | 'asio') => ipcRenderer.invoke('music:getAudioDevices', type),
 
-  onMpvTime: (callback: (val: number) => void) => {
+  onBassTime: (callback: (val: number) => void) => {
     const handler = (_e: any, val: number) => callback(val)
-    ipcRenderer.on('mpv:time', handler)
-    return () => ipcRenderer.removeListener('mpv:time', handler)
+    ipcRenderer.on('bass:time', handler)
+    return () => ipcRenderer.removeListener('bass:time', handler)
   },
-  onMpvDuration: (callback: (val: number) => void) => {
+  onBassDuration: (callback: (val: number) => void) => {
     const handler = (_e: any, val: number) => callback(val)
-    ipcRenderer.on('mpv:duration', handler)
-    return () => ipcRenderer.removeListener('mpv:duration', handler)
+    ipcRenderer.on('bass:duration', handler)
+    return () => ipcRenderer.removeListener('bass:duration', handler)
   },
-  onMpvPaused: (callback: (val: boolean) => void) => {
+  onBassPaused: (callback: (val: boolean) => void) => {
     const handler = (_e: any, val: boolean) => callback(val)
-    ipcRenderer.on('mpv:paused', handler)
-    return () => ipcRenderer.removeListener('mpv:paused', handler)
+    ipcRenderer.on('bass:paused', handler)
+    return () => ipcRenderer.removeListener('bass:paused', handler)
   },
-  onMpvEnded: (callback: () => void) => {
+  onBassEnded: (callback: () => void) => {
     const handler = () => callback()
-    ipcRenderer.on('mpv:ended', handler)
-    return () => ipcRenderer.removeListener('mpv:ended', handler)
+    ipcRenderer.on('bass:ended', handler)
+    return () => ipcRenderer.removeListener('bass:ended', handler)
   },
-  onMpvError: (callback: (err: string) => void) => {
+  onBassError: (callback: (err: string) => void) => {
     const handler = (_e: any, err: string) => callback(err)
-    ipcRenderer.on('mpv:error', handler)
-    return () => ipcRenderer.removeListener('mpv:error', handler)
-  },
-  onMpvAudioParams: (callback: (params: any) => void) => {
-    const handler = (_e: any, params: any) => callback(params)
-    ipcRenderer.on('mpv:audio-out-params', handler)
-    return () => ipcRenderer.removeListener('mpv:audio-out-params', handler)
+    ipcRenderer.on('bass:error', handler)
+    return () => ipcRenderer.removeListener('bass:error', handler)
   },
   onBassAudioParams: (callback: (params: any) => void) => {
     const handler = (_e: any, params: any) => callback(params)
-    ipcRenderer.on('mpv:audio-out-params', handler)
-    return () => ipcRenderer.removeListener('mpv:audio-out-params', handler)
+    ipcRenderer.on('bass:audio-out-params', handler)
+    return () => ipcRenderer.removeListener('bass:audio-out-params', handler)
+  },
+
+  // Legacy aliases
+  mpvPlay: (url: string, crossfade?: number) => ipcRenderer.invoke('bass:play', url, crossfade),
+  mpvResume: () => ipcRenderer.invoke('bass:resume'),
+  mpvPause: () => ipcRenderer.invoke('bass:pause'),
+  mpvStop: () => ipcRenderer.invoke('bass:stop'),
+  mpvSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') => ipcRenderer.invoke('bass:seek', pos, mode),
+  mpvSetVolume: (vol: number) => ipcRenderer.invoke('bass:setVolume', vol),
+  mpvSetEqualizer: (bands: any[], preamp?: number) => ipcRenderer.invoke('bass:setEqualizer', bands, preamp),
+  onMpvTime: (callback: (val: number) => void) => {
+    const handler = (_e: any, val: number) => callback(val)
+    ipcRenderer.on('bass:time', handler)
+    return () => ipcRenderer.removeListener('bass:time', handler)
+  },
+  onMpvDuration: (callback: (val: number) => void) => {
+    const handler = (_e: any, val: number) => callback(val)
+    ipcRenderer.on('bass:duration', handler)
+    return () => ipcRenderer.removeListener('bass:duration', handler)
+  },
+  onMpvPaused: (callback: (val: boolean) => void) => {
+    const handler = (_e: any, val: boolean) => callback(val)
+    ipcRenderer.on('bass:paused', handler)
+    return () => ipcRenderer.removeListener('bass:paused', handler)
+  },
+  onMpvEnded: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('bass:ended', handler)
+    return () => ipcRenderer.removeListener('bass:ended', handler)
+  },
+  onMpvError: (callback: (err: string) => void) => {
+    const handler = (_e: any, err: string) => callback(err)
+    ipcRenderer.on('bass:error', handler)
+    return () => ipcRenderer.removeListener('bass:error', handler)
+  },
+  onMpvAudioParams: (callback: (params: any) => void) => {
+    const handler = (_e: any, params: any) => callback(params)
+    ipcRenderer.on('bass:audio-out-params', handler)
+    return () => ipcRenderer.removeListener('bass:audio-out-params', handler)
   },
   getThemeColorsCache: () => ipcRenderer.invoke('music:getThemeColorsCache'),
   cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),

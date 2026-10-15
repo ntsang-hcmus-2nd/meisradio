@@ -12,7 +12,7 @@ export interface PlayerState {
   bitPerfectEnabled: boolean
   crossfadeEnabled: boolean
   crossfadeDuration: number
-  mpvOutParams: { samplerate?: number; format?: string; channels?: string; mode?: 'WASAPI' | 'ASIO'; isDsd?: boolean } | null
+  bassOutParams: { samplerate?: number; format?: string; channels?: string; mode?: 'WASAPI' | 'ASIO'; isDsd?: boolean } | null
   smartAutoplay: boolean
   lyricOffset: number
   sleepTimerMode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track'
@@ -31,7 +31,7 @@ export interface PlayerState {
   setBitPerfectEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setCrossfadeEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setCrossfadeDuration: (duration: number | ((prev: number) => number)) => void
-  setMpvOutParams: (params: { samplerate?: number; format?: string; channels?: string } | null | ((prev: any) => any)) => void
+  setBassOutParams: (params: { samplerate?: number; format?: string; channels?: string; mode?: 'WASAPI' | 'ASIO'; isDsd?: boolean } | null | ((prev: any) => any)) => void
   setSmartAutoplay: (autoplay: boolean | ((prev: boolean) => boolean)) => void
   setLyricOffset: (offset: number | ((prev: number) => number)) => void
   setSleepTimerMode: (mode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track') => void
@@ -72,7 +72,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   bitPerfectEnabled: false,
   crossfadeEnabled: false,
   crossfadeDuration: 3,
-  mpvOutParams: null,
+  bassOutParams: null,
   smartAutoplay: getInitialSmartAutoplay(),
   lyricOffset: getInitialLyricOffset(),
   sleepTimerMode: 'off',
@@ -90,7 +90,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setBitPerfectEnabled: (valOrFn) => set((s) => ({ bitPerfectEnabled: resolveVal(valOrFn, s.bitPerfectEnabled) })),
   setCrossfadeEnabled: (valOrFn) => set((s) => ({ crossfadeEnabled: resolveVal(valOrFn, s.crossfadeEnabled) })),
   setCrossfadeDuration: (valOrFn) => set((s) => ({ crossfadeDuration: resolveVal(valOrFn, s.crossfadeDuration) })),
-  setMpvOutParams: (valOrFn) => set((s) => ({ mpvOutParams: resolveVal(valOrFn, s.mpvOutParams) })),
+  setBassOutParams: (valOrFn) => set((s) => ({ bassOutParams: resolveVal(valOrFn, s.bassOutParams) })),
   setSmartAutoplay: (valOrFn) => set((s) => {
     const next = resolveVal(valOrFn, s.smartAutoplay)
     try { localStorage.setItem('meis_smart_autoplay', String(next)) } catch {}

@@ -176,9 +176,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
       setDuration(currentTrack?.duration || audioRef?.current?.duration || 0)
     }
 
-    let cleanupMpv: (() => void) | undefined
-    if (typeof (window as any).api?.onMpvTime === 'function') {
-      cleanupMpv = (window as any).api.onMpvTime((val: number) => {
+    let cleanupBass: (() => void) | undefined
+    const onTimeListener = (window as any).api?.onBassTime
+    if (typeof onTimeListener === 'function') {
+      cleanupBass = onTimeListener((val: number) => {
         updatePlayhead(val)
       })
     }
@@ -187,7 +188,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
     updatePlayhead()
     return () => {
       clearInterval(interval)
-      if (typeof cleanupMpv === 'function') cleanupMpv()
+      if (typeof cleanupBass === 'function') cleanupBass()
     }
   }, [isOpen, audioRef, currentTrack])
 
@@ -387,8 +388,8 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
     if (audioRef?.current) {
       audioRef.current.currentTime = targetSeconds
     }
-    if ((window as any).api?.mpvSeek) {
-      (window as any).api.mpvSeek(targetSeconds)
+    if ((window as any).api?.bassSeek) {
+      (window as any).api.bassSeek(targetSeconds)
     }
     setCurrentTime(targetSeconds)
   }

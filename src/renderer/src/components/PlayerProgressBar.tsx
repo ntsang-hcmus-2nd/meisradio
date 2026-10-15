@@ -31,7 +31,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
   const currentTrack = propTrack !== undefined ? propTrack : storeTrack
   const bitPerfectEnabled = propBitPerfect !== undefined ? propBitPerfect : storeBitPerfect
   const isDsd = isDsdTrack(currentTrack)
-  const useMpvTime = bitPerfectEnabled || isDsd
+  const useBassTime = bitPerfectEnabled || isDsd
   const [currentTime, setCurrentTime] = useState(0)
   const [isDragging, setIsDragging] = useState(false) // Trạng thái kéo chuột
 
@@ -43,11 +43,10 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
   }, [currentTrack?.id, currentTrack?.filePath])
 
   useEffect(() => {
-    if (useMpvTime) {
-      // @ts-ignore
-      if (window.api?.onMpvTime) {
-        // @ts-ignore
-        const cleanup = window.api.onMpvTime((val: number) => {
+    if (useBassTime) {
+      const onTimeListener = window.api?.onBassTime
+      if (onTimeListener) {
+        const cleanup = onTimeListener((val: number) => {
           if (isDragging) return
           setCurrentTime(val)
         })
@@ -102,7 +101,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       if (cleanupListeners) cleanupListeners()
       if (intervalId) clearInterval(intervalId)
     }
-  }, [audioRef, isDragging, useMpvTime, isPlaying, currentTrack?.id, currentTrack?.filePath])
+  }, [audioRef, isDragging, useBassTime, isPlaying, currentTrack?.id, currentTrack?.filePath])
 
   // Chỉ cập nhật giao diện thanh trượt (Không gọi API / Tua nhạc)
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,11 +110,9 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
   // Áp dụng lệnh Tua nhạc thực tế khi THẢ CHUỘT ra
   const handleSeekCommit = () => {
-    if (useMpvTime) {
-      // @ts-ignore
-      if (window.api?.mpvSeek) {
-        // @ts-ignore
-        window.api.mpvSeek(currentTime)
+    if (useBassTime) {
+      if (window.api?.bassSeek) {
+        window.api.bassSeek(currentTime)
       }
     } else if (audioRef.current) {
       audioRef.current.currentTime = currentTime

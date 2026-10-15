@@ -72,33 +72,40 @@ export interface MeisRadioApi {
   preloadStream: (targetId: string) => Promise<any>
 
   // BASS & Bit-Perfect Audio API (WASAPI & ASIO + DSD Native)
-  mpvPlay: (url: string, crossfade: number) => Promise<any>
-  mpvResume: () => Promise<any>
-  mpvPause: () => Promise<any>
-  mpvStop: () => Promise<any>
-  mpvSeek: (pos: number, mode?: 'relative' | 'absolute') => Promise<any>
-  mpvSetVolume: (vol: number) => Promise<any>
-  mpvSetEqualizer: (bands: any[], preamp?: number) => Promise<any>
-  setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => Promise<any>
-  setBitPerfectOutputType: (type: 'wasapi' | 'asio') => Promise<any>
-  setAudioDevice: (deviceId: string) => Promise<any>
-  getAudioDevices: (type?: 'wasapi' | 'asio') => Promise<{ name: string; description: string; type?: 'wasapi' | 'asio' }[]>
-
   bassPlay: (url: string, crossfade?: number) => Promise<any>
   bassResume: () => Promise<any>
   bassPause: () => Promise<any>
   bassStop: () => Promise<any>
   bassSeek: (pos: number, mode?: 'relative' | 'absolute') => Promise<any>
   bassSetVolume: (vol: number) => Promise<any>
+  bassSetEqualizer: (bands: any[], preamp?: number) => Promise<any>
+  setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => Promise<any>
   setBassBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => Promise<any>
+  setBitPerfectOutputType: (type: 'wasapi' | 'asio') => Promise<any>
+  setAudioDevice: (deviceId: string) => Promise<any>
+  getAudioDevices: (type?: 'wasapi' | 'asio') => Promise<{ name: string; description: string; type?: 'wasapi' | 'asio' }[]>
 
-  onMpvTime: (callback: (val: number) => void) => () => void
-  onMpvDuration: (callback: (val: number) => void) => () => void
-  onMpvPaused: (callback: (val: boolean) => void) => () => void
-  onMpvEnded: (callback: () => void) => () => void
-  onMpvError: (callback: (err: string) => void) => () => void
-  onMpvAudioParams: (callback: (params: any) => void) => () => void
+  onBassTime: (callback: (val: number) => void) => () => void
+  onBassDuration: (callback: (val: number) => void) => () => void
+  onBassPaused: (callback: (val: boolean) => void) => () => void
+  onBassEnded: (callback: () => void) => () => void
+  onBassError: (callback: (err: string) => void) => () => void
   onBassAudioParams: (callback: (params: any) => void) => () => void
+
+  // Legacy aliases
+  mpvPlay?: (url: string, crossfade: number) => Promise<any>
+  mpvResume?: () => Promise<any>
+  mpvPause?: () => Promise<any>
+  mpvStop?: () => Promise<any>
+  mpvSeek?: (pos: number, mode?: 'relative' | 'absolute') => Promise<any>
+  mpvSetVolume?: (vol: number) => Promise<any>
+  mpvSetEqualizer?: (bands: any[], preamp?: number) => Promise<any>
+  onMpvTime?: (callback: (val: number) => void) => () => void
+  onMpvDuration?: (callback: (val: number) => void) => () => void
+  onMpvPaused?: (callback: (val: boolean) => void) => () => void
+  onMpvEnded?: (callback: () => void) => () => void
+  onMpvError?: (callback: (err: string) => void) => () => void
+  onMpvAudioParams?: (callback: (params: any) => void) => () => void
 
   getThemeColorsCache: () => Promise<any>
   cacheThemeColors: (trackPath: string, colors: any) => Promise<any>
