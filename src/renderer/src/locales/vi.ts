@@ -214,7 +214,13 @@ export const vi: TranslationDictionary = {
       vietnamese: 'Tiếng Việt'
     },
     customBg: {
-      title: 'Tùy chỉnh hình nền & Giao diện thích ứng',
+      title: 'Cá nhân hóa',
+      uiStyleTitle: 'Chế độ hiển thị hệ thống',
+      uiStyleDesc: 'Chọn phong cách hiển thị cho các ô và các nút điều khiển trong ứng dụng',
+      classicMode: 'Cổ điển',
+      classicModeDesc: 'Các ô và các nút của hệ thống hiển thị đầy đủ văn bản và biểu tượng',
+      sleekMode: 'Tinh gọn',
+      sleekModeDesc: 'Các ô và các nút ẩn hết văn bản, chỉ sử dụng biểu tượng. Không ảnh hưởng đến thông tin bài hát',
       useTrackCover: 'Tự động dùng ảnh bìa bài hát đang phát làm hình nền',
       placeholder: 'Dán liên kết hình ảnh (https://...) hoặc đường dẫn tệp trên máy...',
       applyLink: 'Áp dụng liên kết',
@@ -298,7 +304,7 @@ export const vi: TranslationDictionary = {
       showIdle: 'Hiển thị trạng thái chờ',
       showIdleDesc: 'Hiển thị trạng thái đang duyệt nhạc khi mở ứng dụng nhưng chưa phát bài nào',
       connectedStatus: 'Đã kết nối với Discord',
-      disconnectedStatus: 'Chưa kết nối với Discord (Vui lòng khởi chạy ứng dụng Discord)'
+      disconnectedStatus: 'Chưa kết nối với Discord'
     }
   },
   player: {
@@ -589,13 +595,13 @@ export const vi: TranslationDictionary = {
     coverChangedSuccess: 'Đã cập nhật ảnh bìa danh sách phát!'
   },
   downloads: {
-    title: 'Tải xuống âm thanh chất lượng cao',
-    subtitle: 'Tìm kiếm và tải các bản nhạc chất lượng cao, định dạng không nén và nguyên bản qua mạng chia sẻ ngang hàng Soulseek',
+    title: 'Tải xuống với Soulseek',
+    subtitle: 'Tìm kiếm và tải các bản nhạc chất lượng cao',
     connectedAs: 'Đã kết nối tài khoản: {username}',
     connecting: 'Đang kết nối đến máy chủ...',
     disconnected: 'Chưa kết nối',
     loginOrRegister: 'Đăng nhập hoặc Đăng ký Soulseek',
-    loginSubtitle: 'Mạng Soulseek hỗ trợ đăng ký tài khoản tự do mà không cần số điện thoại hay email. Nếu tên đăng nhập chưa tồn tại, hệ thống sẽ tự động tạo tài khoản mới ngay lập tức.',
+    loginSubtitle: 'Nếu tên đăng nhập chưa tồn tại, hệ thống sẽ tự động tạo tài khoản mới ngay lập tức.',
     username: 'Tên đăng nhập',
     password: 'Mật khẩu',
     autoLogin: 'Tự động đăng nhập khi mở ứng dụng',

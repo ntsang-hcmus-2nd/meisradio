@@ -8,7 +8,8 @@ import {
   Mic2, Maximize2, Minimize2, List, X, Activity, RefreshCw, PictureInPicture2,
   Home, ArrowLeft, Radio, BarChart2, LayoutGrid, Rows3, Disc, Tag, Music,
   Folder, FolderOpen, MoreVertical, ChevronRight, ChevronDown, ChevronUp, Layers, ListPlus,
-  Leaf, Cpu, Zap, BatteryCharging, History, Compass, Timer, Clock, Info
+  Leaf, Cpu, Zap, BatteryCharging, History, Compass, Timer, Clock, Info,
+  Palette, Check, Languages, AppWindow, Database, Upload, SlidersHorizontal, LayoutTemplate, Flame
 } from 'lucide-react'
 import { TableVirtuoso, Virtuoso, VirtuosoGrid } from 'react-virtuoso'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -236,7 +237,7 @@ const getDominantColor = (imageSrc: string, callback: (color: string) => void) =
 }
 
 const VirtuosoComponents = {
-  Table: ({ style, ...props }: any) => <table {...props} className="w-full text-left text-sm" style={{ ...style, borderCollapse: 'collapse' }} />,
+  Table: ({ style, ...props }: any) => <table {...props} className="w-full text-left text-sm table-fixed" style={{ ...style, borderCollapse: 'collapse' }} />,
   TableHead: React.forwardRef((props: any, ref: any) => <thead {...props} ref={ref} />),
   TableRow: (props: any) => <tr {...props} className="group border-b border-theme-30/20 transition-colors cursor-pointer hover:bg-white/5" />
 };
@@ -306,12 +307,12 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
   const { t } = useTranslation()
   return (
     <>
-      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-center text-zinc-500 group-hover:text-white">
-        {isThisTrackPlaying && isPlaying ? <div className="w-3 h-3 bg-theme-10 rounded-full animate-pulse mx-auto" /> : index + 1}
+      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-3 text-center text-zinc-500 group-hover:text-white w-10 sm:w-12 text-xs font-mono">
+        {isThisTrackPlaying && isPlaying ? <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" /> : index + 1}
       </td>
-      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-theme-30 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-3 pr-4 min-w-0">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-10 h-10 bg-theme-30 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center shadow-sm">
             {/* TỐI ƯU HÓA: Xóa bỏ loading="lazy" vì Virtuoso đã tự động Lazy Load, kết hợp cả 2 sẽ gây spike CPU */}
             <DynamicCoverArt
               track={track}
@@ -322,21 +323,21 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
             />
             {track.isCloud && <div className="absolute top-0 right-0 bg-theme-10/80 p-0.5 rounded-bl-md z-10"><Cloud size={10} className="text-white" /></div>}
           </div>
-          <div className="truncate w-48 lg:w-64">
-            <p className={`font-semibold transition-colors truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>{track.title}</p>
+          <div className="min-w-0 flex-1">
+            <p className={`font-semibold text-sm transition-colors truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}>{track.title}</p>
             <ArtistLinks artists={track.artists} fallbackArtist={track.artist} onArtistClick={onArtistClick} className="text-xs text-zinc-400 block truncate" />
           </div>
         </div>
       </td>
-      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-zinc-400 truncate max-w-[150px]">{track.album || 'Unknown'}</td>
-      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4">
+      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-3 pr-4 text-zinc-400 truncate text-xs hidden md:table-cell" title={track.album || 'Unknown'}>{track.album || 'Unknown'}</td>
+      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-3 w-28 sm:w-32 text-center whitespace-nowrap">
         {(() => {
           const isDsd = isDsdTrack(track)
           if (isDsd) {
             const dsdRate = getDsdRateLabel(track.sampleRate)
             return (
               <span 
-                className="px-2 py-1 bg-amber-500/15 border border-amber-500/30 rounded text-xs text-amber-300 font-semibold tracking-wide inline-flex items-center gap-1 shadow-sm"
+                className="px-2.5 py-0.5 bg-amber-500/15 border border-amber-500/30 rounded text-xs text-amber-300 font-semibold tracking-wide whitespace-nowrap inline-flex items-center gap-1 shadow-sm"
                 title={`Direct Stream Digital 1-bit • ${formatAudioSampleRate(track.sampleRate) || '2.82 MHz'}`}
               >
                 <span>{dsdRate}</span>
@@ -345,20 +346,20 @@ const TrackRow = React.memo(({ track, index, isThisTrackPlaying, isPlaying, isLi
             )
           }
           return (
-            <span className="px-2 py-1 bg-theme-30 rounded text-xs text-zinc-300 font-medium uppercase">
+            <span className="px-2.5 py-0.5 bg-theme-30 rounded text-xs text-zinc-300 font-medium uppercase tracking-wide whitespace-nowrap inline-flex items-center justify-center">
               {track.format || 'MP3'}{track.bitDepth ? ` • ${track.bitDepth}-BIT` : ''}
             </span>
           )
         })()}
       </td>
-      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-4 text-right pr-4 text-zinc-400">{formatDuration(track.duration)}</td>
-      <td onContextMenu={(e) => onContextMenu?.(track, e)} className="py-4 text-center">
+      <td onContextMenu={(e) => onContextMenu?.(track, e)} onClick={() => handleRowClick(track, tracks)} className="py-3 text-right pr-4 text-zinc-400 font-mono text-xs w-16 sm:w-20 whitespace-nowrap">{formatDuration(track.duration)}</td>
+      <td onContextMenu={(e) => onContextMenu?.(track, e)} className="py-3 text-center w-10 sm:w-11">
         <button 
           onClick={(e) => { e.stopPropagation(); openTrackInfo?.(track, e); }} 
           title={t('trackTable.viewInfo')}
-          className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1 cursor-pointer"
+          className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1 cursor-pointer mx-auto flex items-center justify-center"
         >
-          <Info size={16}/>
+          <Info size={15}/>
         </button>
       </td>
     </>
@@ -474,20 +475,20 @@ const TrackCompactItem = React.memo(({ track, index, isThisTrackPlaying, isPlayi
         <span className="text-zinc-500 text-[11px] shrink-0">•</span>
         <ArtistLinks artists={track.artists} fallbackArtist={track.artist} onArtistClick={onArtistClick} className="text-zinc-400 truncate text-[11px]" />
       </div>
-      <span className="text-zinc-500 truncate max-w-[140px] hidden md:block">
+      <span className="text-zinc-500 truncate max-w-[160px] lg:max-w-[220px] hidden md:block">
         {track.album || ''}
       </span>
       {(() => {
         const isDsd = isDsdTrack(track)
         if (isDsd) {
           return (
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase font-mono font-bold">
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase font-bold whitespace-nowrap">
               {getDsdRateLabel(track.sampleRate)}
             </span>
           )
         }
         return (
-          <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-30/80 text-zinc-300 uppercase font-mono">
+          <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-30/80 text-zinc-300 uppercase whitespace-nowrap">
             {track.format || 'MP3'}
           </span>
         )
@@ -970,6 +971,7 @@ export default function App() {
   // Settings Store
   const {
     appMode, setAppMode,
+    uiStyle, setUiStyle,
     customBgImage, setCustomBgImage,
     useTrackCoverAsBg, setUseTrackCoverAsBg,
     bgImageInput, setBgImageInput,
@@ -3527,6 +3529,7 @@ export default function App() {
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
       if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
       else if (cfg.liteMode !== undefined) setAppMode(cfg.liteMode ? 'lite' : 'default') // Fallback cấu hình cũ
+      if (cfg.uiStyle !== undefined) setUiStyle(cfg.uiStyle)
       if (cfg.customBgImage !== undefined) {
         setCustomBgImage(cfg.customBgImage);
         setBgImageInput(cfg.customBgImage || '');
@@ -3563,12 +3566,12 @@ export default function App() {
     // @ts-ignore
     window.api.saveConfig({ 
       volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey,
-      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode,
+      driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode, uiStyle,
       customBgImage, customBgOpacity, customBgBlur, useTrackCoverAsBg
     }) 
     // @ts-ignore
     window.api.updateTrayConfig({ minimizeToTray, closeToTray })
-  }, [volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode, customBgImage, customBgOpacity, customBgBlur, useTrackCoverAsBg, isConfigLoaded])
+  }, [volume, crossfadeEnabled, crossfadeDuration, bitPerfectEnabled, eqBands, isEqEnabled, googleDriveApiKey, driveLink, selectedDeviceId, showVisualizer, minimizeToTray, closeToTray, appMode, uiStyle, customBgImage, customBgOpacity, customBgBlur, useTrackCoverAsBg, isConfigLoaded])
 
   // Dominant Color (Bỏ qua hoàn toàn trong Core Mode và Lite Mode)
   useEffect(() => {
@@ -4539,38 +4542,40 @@ export default function App() {
           components={VirtuosoComponents}
           increaseViewportBy={{ top: 200, bottom: 200 }}
           fixedHeaderContent={() => (
-            <tr className="text-zinc-500 border-b border-theme-30/50 select-none bg-theme-60 shadow-sm">
-              <th onClick={() => handleSort('id')} className="pb-3 pt-4 font-medium w-12 text-center cursor-pointer group hover:text-white transition" title={t('trackTable.sortIndex')}>
+            <tr className="text-zinc-500 border-b border-theme-30/50 select-none bg-theme-60 shadow-sm text-xs">
+              <th onClick={() => handleSort('id')} className="pb-3 pt-3.5 font-medium w-10 sm:w-12 text-center cursor-pointer group hover:text-white transition whitespace-nowrap" title={t('trackTable.sortIndex')}>
                 <div className="inline-flex items-center gap-1 justify-center">
                   <span>{t('trackTable.index')}</span>
-                  {sortField === 'id' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'id' ? (sortOrder === 'asc' ? <ArrowUp size={11} className="text-theme-10" /> : <ArrowDown size={11} className="text-theme-10" />) : <ArrowUpDown size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th onClick={() => handleSort('title')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title={t('trackTable.sortTitle')}>
+              <th onClick={() => handleSort('title')} className="pb-3 pt-3.5 font-medium cursor-pointer group hover:text-white transition min-w-0 pr-4" title={t('trackTable.sortTitle')}>
                 <div className="inline-flex items-center gap-1">
                   <span>{t('trackTable.title')}</span>
-                  {sortField === 'title' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'title' ? (sortOrder === 'asc' ? <ArrowUp size={11} className="text-theme-10" /> : <ArrowDown size={11} className="text-theme-10" />) : <ArrowUpDown size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th onClick={() => handleSort('album')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title={t('trackTable.sortAlbum')}>
+              <th onClick={() => handleSort('album')} className="pb-3 pt-3.5 font-medium cursor-pointer group hover:text-white transition hidden md:table-cell md:w-[28%] lg:w-[32%] pr-4" title={t('trackTable.sortAlbum')}>
                 <div className="inline-flex items-center gap-1">
                   <span>{t('trackTable.album')}</span>
-                  {sortField === 'album' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'album' ? (sortOrder === 'asc' ? <ArrowUp size={11} className="text-theme-10" /> : <ArrowDown size={11} className="text-theme-10" />) : <ArrowUpDown size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th onClick={() => handleSort('isCloud')} className="pb-3 pt-4 font-medium cursor-pointer group hover:text-white transition" title={t('trackTable.sortFormat')}>
-                <div className="inline-flex items-center gap-1">
+              <th onClick={() => handleSort('isCloud')} className="pb-3 pt-3.5 font-medium cursor-pointer group hover:text-white transition w-28 sm:w-32 text-center whitespace-nowrap" title={t('trackTable.sortFormat')}>
+                <div className="inline-flex items-center gap-1 justify-center">
                   <span>{t('trackTable.format')}</span>
-                  {sortField === 'isCloud' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'isCloud' ? (sortOrder === 'asc' ? <ArrowUp size={11} className="text-theme-10" /> : <ArrowDown size={11} className="text-theme-10" />) : <ArrowUpDown size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th onClick={() => handleSort('duration')} className="pb-3 pt-4 font-medium text-right pr-4 cursor-pointer group hover:text-white transition" title={t('trackTable.sortDuration')}>
+              <th onClick={() => handleSort('duration')} className="pb-3 pt-3.5 font-medium text-right pr-4 cursor-pointer group hover:text-white transition w-16 sm:w-20 whitespace-nowrap" title={t('trackTable.sortDuration')}>
                 <div className="inline-flex items-center gap-1 justify-end">
                   <span>{t('trackTable.duration')}</span>
-                  {sortField === 'duration' ? (sortOrder === 'asc' ? <ArrowUp size={12} className="text-theme-10" /> : <ArrowDown size={12} className="text-theme-10" />) : <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  {sortField === 'duration' ? (sortOrder === 'asc' ? <ArrowUp size={11} className="text-theme-10" /> : <ArrowDown size={11} className="text-theme-10" />) : <ArrowUpDown size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                 </div>
               </th>
-              <th className="pb-3 pt-4 font-medium text-center">{t('trackTable.actions')}</th>
+              <th className="pb-3 pt-3.5 font-medium text-center w-10 sm:w-11" title={t('trackTable.actions')}>
+                <Info size={13} className="mx-auto text-zinc-500" />
+              </th>
             </tr>
           )}
           itemContent={(index, track) => (
@@ -5144,34 +5149,38 @@ export default function App() {
                 <div className="flex items-center bg-theme-60/50 p-1 rounded-full border border-zinc-700/50">
                   <button 
                     onClick={() => { setViewMode('table'); localStorage.setItem('meis_view_mode', 'table'); }} 
-                    className={`p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'table' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
+                    className={`sys-btn p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'table' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
                     title={t('viewOptions.table')}
                   >
                     <List size={14} />
-                    <span className="hidden xl:inline">{t('viewOptions.table')}</span>
+                    <span className="btn-text">{t('viewOptions.table')}</span>
                   </button>
                   <button 
                     onClick={() => { setViewMode('grid'); localStorage.setItem('meis_view_mode', 'grid'); }} 
-                    className={`p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'grid' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
+                    className={`sys-btn p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'grid' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
                     title={t('viewOptions.grid')}
                   >
                     <LayoutGrid size={14} />
-                    <span className="hidden xl:inline">{t('viewOptions.grid')}</span>
+                    <span className="btn-text">{t('viewOptions.grid')}</span>
                   </button>
                   <button 
                     onClick={() => { setViewMode('compact'); localStorage.setItem('meis_view_mode', 'compact'); }} 
-                    className={`p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'compact' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
+                    className={`sys-btn p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'compact' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
                     title={t('viewOptions.compact')}
                   >
                     <Rows3 size={14} />
-                    <span className="hidden xl:inline">{t('viewOptions.compact')}</span>
+                    <span className="btn-text">{t('viewOptions.compact')}</span>
                   </button>
                 </div>
               )}
 
-              <button onClick={() => handleReloadLibrary(false)} disabled={isReloading} className={`flex items-center gap-2 px-4 py-2 bg-theme-60/50 border border-zinc-700/50 rounded-full text-sm font-medium transition-colors ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} title={t('header.refreshLibrary')}>
-                <RefreshCw size={16} className={isReloading ? 'animate-spin' : ''} />
-                {isReloading ? t('header.refreshing') : t('header.refresh')}
+              <button 
+                onClick={() => handleReloadLibrary(false)} 
+                disabled={isReloading} 
+                className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 bg-theme-60/50 border border-zinc-700/50 rounded-full transition-colors shrink-0 cursor-pointer ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`} 
+                title={t('header.refreshLibrary')}
+              >
+                <RefreshCw size={15} className={isReloading ? 'animate-spin' : ''} />
               </button>
             </div>
           </header>
@@ -5181,27 +5190,27 @@ export default function App() {
             {/* CỘT TRÁI: DATA VIEW */}
             <div 
               key={`${activeView}-${activeAlbum ? (activeAlbum.browseId || activeAlbum.title || 'album') : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.name || ''}-${activeUserPlaylist?.id || ''}`}
-              className={`${isLite || isCore ? '' : 'animate-fade-in'} flex-1 flex flex-col p-8 relative ${activeView === 'settings' || activeView === 'drive' || activeView === 'home' || (activeView === 'playlists' && !activePlaylist) || activeView === 'artists' || (activeView === 'genres' && !activeGenre) || (activeView === 'user-playlists' && !activeUserPlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}
+              className={`${isLite || isCore ? '' : 'animate-fade-in'} flex-1 flex flex-col p-4 sm:p-6 lg:p-8 relative ${activeView === 'settings' || activeView === 'drive' || activeView === 'home' || (activeView === 'playlists' && !activePlaylist) || activeView === 'artists' || (activeView === 'genres' && !activeGenre) || (activeView === 'user-playlists' && !activeUserPlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}
             >
               
               {/* VIEW: TRANG CHỦ TỔNG QUAN (DASHBOARD) */}
               {activeView === 'home' && (
                 <div className="flex flex-col space-y-8 pb-16">
                   {/* HERO HEADER */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-theme-10/15 border border-theme-10/30 text-theme-10 flex items-center justify-center shadow-lg shadow-theme-10/10">
+                  <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-12 h-12 rounded-2xl bg-theme-10/15 border border-theme-10/30 text-theme-10 flex items-center justify-center shadow-lg shadow-theme-10/10 shrink-0">
                         <Sparkles size={24} className="fill-current" />
                       </div>
-                      <div>
-                        <h2 className="text-2xl lg:text-3xl font-extrabold text-white">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-2xl lg:text-3xl font-extrabold text-white truncate">
                           {t('home.dashboardTitle')}
                         </h2>
-                        <p className="text-xs text-zinc-400">{t('home.dashboardSubtitle')}</p>
+                        <p className="text-xs text-zinc-400 truncate">{t('home.dashboardSubtitle')}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                       <button 
                         onClick={() => {
                           if (dashboardRecommendations.length > 0) {
@@ -5211,10 +5220,11 @@ export default function App() {
                           }
                         }}
                         disabled={libraryTracks.length === 0}
-                        className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10/90 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                        className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10/90 disabled:opacity-50 text-white px-3.5 py-2 sm:px-4 sm:py-2.5 xl:px-5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                        title={t('home.playAllRecommendations')}
                       >
-                        <Play size={16} className="fill-current" />
-                        <span>{t('home.playAllRecommendations')}</span>
+                        <Play size={16} className="fill-current shrink-0" />
+                        <span className="btn-text">{t('home.playAllRecommendations')}</span>
                       </button>
 
                       <button 
@@ -5225,10 +5235,11 @@ export default function App() {
                           }
                         }}
                         disabled={libraryTracks.length === 0}
-                        className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        title={t('home.shuffleAllLibrary')}
                       >
-                        <Shuffle size={16} />
-                        <span>{t('home.shuffleAllLibrary')}</span>
+                        <Shuffle size={16} className="shrink-0" />
+                        <span className="btn-text">{t('home.shuffleAllLibrary')}</span>
                       </button>
                     </div>
                   </div>
@@ -5287,18 +5298,18 @@ export default function App() {
 
                   {/* KHỐI 1: GỢI Ý BÀI HÁT TỪ THƯ MỤC NHẠC (DỰA TRÊN LỊCH SỬ NGHE VÀ THƯ VIỆN) */}
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                          <Sparkles size={18} className="text-theme-10" />
-                          {t('home.forYouTitle')}
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2 truncate">
+                          <Sparkles size={18} className="text-theme-10 shrink-0" />
+                          <span className="truncate">{t('home.forYouTitle')}</span>
                         </h3>
-                        <p className="text-xs text-zinc-400 mt-0.5">{t('home.forYouSubtitle')}</p>
+                        <p className="text-xs text-zinc-400 mt-0.5 truncate">{t('home.forYouSubtitle')}</p>
                       </div>
                       {dashboardRecommendations.length > 0 && (
                         <button 
                           onClick={() => handleRowClick(dashboardRecommendations[0], dashboardRecommendations)}
-                          className="text-xs font-medium text-theme-10 hover:underline flex items-center gap-1 transition"
+                          className="text-xs font-medium text-theme-10 hover:underline flex items-center gap-1 transition shrink-0 cursor-pointer"
                         >
                           <Play size={12} className="fill-current" /> {t('userPlaylistsView.playAll')}
                         </button>
@@ -5362,13 +5373,13 @@ export default function App() {
 
                   {/* KHỐI 2: ĐÃ NGHE GẦN ĐÂY (RECENTLY PLAYED) */}
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                          <History size={18} className="text-amber-400" />
-                          {t('home.recentlyPlayedTitle')}
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2 truncate">
+                          <History size={18} className="text-amber-400 shrink-0" />
+                          <span className="truncate">{t('home.recentlyPlayedTitle')}</span>
                         </h3>
-                        <p className="text-xs text-zinc-400 mt-0.5">{t('home.recentlyPlayedSubtitle')}</p>
+                        <p className="text-xs text-zinc-400 mt-0.5 truncate">{t('home.recentlyPlayedSubtitle')}</p>
                       </div>
                     </div>
 
@@ -5420,13 +5431,13 @@ export default function App() {
                   {/* KHỐI 3: KHÁM PHÁ TỪ THƯ MỤC NHẠC */}
                   {randomDiscoverTracks.length > 0 && (
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                            <Compass size={18} className="text-blue-400" />
-                            {t('home.discoverFolderTitle')}
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-xl font-bold text-white flex items-center gap-2 truncate">
+                            <Compass size={18} className="text-blue-400 shrink-0" />
+                            <span className="truncate">{t('home.discoverFolderTitle')}</span>
                           </h3>
-                          <p className="text-xs text-zinc-400 mt-0.5">{t('home.discoverFolderSubtitle')}</p>
+                          <p className="text-xs text-zinc-400 mt-0.5 truncate">{t('home.discoverFolderSubtitle')}</p>
                         </div>
                       </div>
 
@@ -5942,12 +5953,12 @@ export default function App() {
               {/* VIEW: BÀI HÁT */}
               {activeView === 'songs' && (
                 <>
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-end gap-4">
-                      <h2 className="text-3xl font-bold text-white">{searchQuery ? t('songsView.searchResults') : t('songsView.songList')}</h2>
-                      <span className="text-zinc-500 text-sm mb-1">{processedLibraryTracks.length} {t('common.songs')}</span>
+                  <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3 flex-wrap">
+                    <div className="flex items-end gap-3 min-w-0 flex-1">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">{searchQuery ? t('songsView.searchResults') : t('songsView.songList')}</h2>
+                      <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">{processedLibraryTracks.length} {t('common.songs')}</span>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                       <button 
                         onClick={() => {
                           if (processedLibraryTracks.length > 0) {
@@ -5957,13 +5968,17 @@ export default function App() {
                           }
                         }}
                         disabled={processedLibraryTracks.length === 0}
-                        className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-white px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer"
                         title={t('songsView.randomPlay')}
                       >
-                        <Shuffle size={16} /> {t('songsView.randomPlay')}
+                        <Shuffle size={15} /> <span className="btn-text">{t('songsView.randomPlay')}</span>
                       </button>
-                      <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer">
-                        <Plus size={18} /> {t('songsView.addMusic')}
+                      <button 
+                        onClick={handleImportFiles} 
+                        className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-10 hover:bg-theme-10 text-white px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                        title={t('songsView.addMusic')}
+                      >
+                        <Plus size={16} /> <span className="btn-text">{t('songsView.addMusic')}</span>
                       </button>
                     </div>
                   </div>
@@ -5996,8 +6011,8 @@ export default function App() {
                         <Link size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
                         <input type="text" value={driveLink} onChange={(e) => setDriveLink(e.target.value)} placeholder={t('driveView.folderLinkPlaceholder')} className="w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors" />
                       </div>
-                      <button onClick={handleDriveSubmit} disabled={!driveLink || isFetchingDrive} className="bg-theme-10 hover:bg-theme-10 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2">
-                        {isFetchingDrive ? <span className="animate-pulse">{t('driveView.scanning')}</span> : t('driveView.scanData')}
+                      <button onClick={handleDriveSubmit} disabled={!driveLink || isFetchingDrive} title={t('driveView.scanData')} className="sys-btn bg-theme-10 hover:bg-theme-10 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2 cursor-pointer">
+                        {isFetchingDrive ? <span className="animate-pulse">{t('driveView.scanning')}</span> : <><Search size={15} /><span className="btn-text">{t('driveView.scanData')}</span></>}
                       </button>
                     </div>
                   </div>
@@ -6027,11 +6042,11 @@ export default function App() {
                                   : t('driveView.foundAudioFiles', { count: driveFiles.length })}
                               </h3>
                               <div className="flex gap-3">
-                                <button onClick={handleDriveStream} className="flex items-center gap-2 bg-theme-10/10 text-theme-10 hover:bg-theme-10/20 px-4 py-2 rounded-lg text-sm font-medium transition">
-                                  <Wifi size={16} /> {t('driveView.streamAll')}
+                                <button onClick={handleDriveStream} title={t('driveView.streamAll')} className="sys-btn flex items-center gap-2 bg-theme-10/10 text-theme-10 hover:bg-theme-10/20 px-4 py-2 rounded-lg text-sm font-medium transition cursor-pointer">
+                                  <Wifi size={16} /> <span className="btn-text">{t('driveView.streamAll')}</span>
                                 </button>
-                                <button onClick={handleDriveDownload} disabled={isDownloading} className="flex items-center gap-2 bg-theme-30 text-white hover:bg-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
-                                  {isDownloading ? <span className="animate-pulse">{t('common.loading')}</span> : <><Download size={16} /> {t('driveView.downloadLossless')}</>}
+                                <button onClick={handleDriveDownload} disabled={isDownloading} title={t('driveView.downloadLossless')} className="sys-btn flex items-center gap-2 bg-theme-30 text-white hover:bg-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 cursor-pointer">
+                                  {isDownloading ? <span className="animate-pulse">{t('common.loading')}</span> : <><Download size={16} /> <span className="btn-text">{t('driveView.downloadLossless')}</span></>}
                                 </button>
                               </div>
                             </div>
@@ -6067,30 +6082,114 @@ export default function App() {
                 </React.Suspense>
               )}
 
-              {/* VIEW: CÀI ĐẶT */}
+              {/* VIEW: CÀI ĐẶT (CHIA THÀNH CÁC ISLAND RIÊNG BIỆT) */}
               {activeView === 'settings' && (
-                <div className="w-full max-w-5xl">
-                  <h2 className="text-3xl font-bold text-white mb-6">{t('settings.title')}</h2>
-                  <div className="bg-theme-60/50 border border-theme-30 p-6 rounded-xl space-y-6">
-                    {/* NGÔN NGỮ / LANGUAGE */}
-                    <div>
-                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.language.title')}</h3>
-                      <p className="text-sm text-zinc-400 mb-4">{t('settings.language.desc')}</p>
-                      <div className="w-72">
-                        <CustomSelect 
-                          value={language} 
-                          onChange={(val) => setLanguage(val as any)} 
-                          options={[
-                            { value: 'en', label: t('settings.language.english') },
-                            { value: 'vi', label: t('settings.language.vietnamese') }
-                          ]} 
-                        />
+                <div className="w-full max-w-5xl space-y-6 pb-20">
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-2xl sm:text-3xl font-extrabold text-white truncate flex items-center gap-3">
+                        <Settings className="text-theme-10 w-7 h-7 sm:w-8 sm:h-8 shrink-0" />
+                        <span>{t('settings.title')}</span>
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* ISLAND 1: CÁ NHÂN HÓA (PERSONALIZATION) */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-5">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                          <Palette size={20} />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-bold text-white truncate">{t('settings.customBg.title')}</h3>
                       </div>
                     </div>
 
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-3">{t('settings.customBg.title')}</h3>
+                    {/* BẢNG CHỌN CHẾ ĐỘ HIỂN THỊ HỆ THỐNG: CLASSIC VS SLEEK */}
+                    <div className="pt-1">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-theme-10 mb-2.5">
+                        {t('settings.customBg.uiStyleTitle')}
+                      </label>
                       
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {/* 1. Chế độ Classic (Cổ điển) */}
+                        <div
+                          onClick={() => setUiStyle('classic')}
+                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            uiStyle === 'classic'
+                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
+                              : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-bold text-white flex items-center gap-2 text-sm">
+                                <LayoutTemplate size={16} className={uiStyle === 'classic' ? 'text-theme-10' : 'text-zinc-400'} />
+                                {t('settings.customBg.classicMode')}
+                              </span>
+                              <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${uiStyle === 'classic' ? 'border-theme-10 bg-theme-10/20' : 'border-zinc-700'}`}>
+                                {uiStyle === 'classic' && <div className="w-2 h-2 rounded-full bg-theme-10" />}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Minh họa trực quan Chế độ Classic */}
+                          <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">{language === 'vi' ? 'Xem trước:' : 'Preview:'}</span>
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-200 text-xs border border-zinc-700/60">
+                              <Shuffle size={12} className="text-theme-10" />
+                              <span>{t('songsView.randomPlay')}</span>
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-theme-10/20 text-theme-10 text-xs border border-theme-10/30">
+                              <Plus size={12} />
+                              <span>{t('songsView.addMusic')}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. Chế độ Sleek (Tinh gọn) */}
+                        <div
+                          onClick={() => setUiStyle('sleek')}
+                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            uiStyle === 'sleek'
+                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
+                              : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-bold text-white flex items-center gap-2 text-sm">
+                                <Sparkles size={16} className={uiStyle === 'sleek' ? 'text-theme-10' : 'text-zinc-400'} />
+                                {t('settings.customBg.sleekMode')}
+                              </span>
+                              <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${uiStyle === 'sleek' ? 'border-theme-10 bg-theme-10/20' : 'border-zinc-700'}`}>
+                                {uiStyle === 'sleek' && <div className="w-2 h-2 rounded-full bg-theme-10" />}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Minh họa trực quan Chế độ Sleek */}
+                          <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">{language === 'vi' ? 'Xem trước:' : 'Preview:'}</span>
+                            <div className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-zinc-800 text-zinc-200 text-xs border border-zinc-700/60" title={t('songsView.randomPlay')}>
+                              <Shuffle size={13} className="text-theme-10" />
+                            </div>
+                            <div className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-theme-10/20 text-theme-10 text-xs border border-theme-10/30" title={t('songsView.addMusic')}>
+                              <Plus size={13} />
+                            </div>
+                            <span className="text-[11px] text-emerald-400 font-medium ml-1">
+                              {language === 'vi' ? '✓ Giữ nguyên tên bài hát' : '✓ Preserves song text'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* TÙY CHỈNH HÌNH NỀN & MÀU SẮC */}
+                    <div className="pt-4 border-t border-theme-30/40">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-theme-10 mb-2">
+                        {language === 'vi' ? 'Hình nền ứng dụng' : 'Application Wallpaper'}
+                      </label>
                       {isCore ? (
                         <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
                           {language === 'vi' ? 'Tính năng hình nền & giao diện màu sắc bị tắt hoàn toàn ở Chế độ tối giản để tối ưu hiệu năng.' : 'Background and dynamic theme are completely disabled in Core Mode for maximum performance.'}
@@ -6112,13 +6211,13 @@ export default function App() {
 
                           {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
                           {!useTrackCoverAsBg && (
-                            <div className="flex gap-3 items-center mb-4">
+                            <div className="flex gap-2.5 sm:gap-3 items-center mb-4 flex-wrap">
                               <input 
                                 type="text" 
                                 value={bgImageInput} 
                                 onChange={(e) => setBgImageInput(e.target.value)} 
                                 placeholder={t('settings.customBg.placeholder')} 
-                                className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
+                                className="flex-1 min-w-[200px] bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-sm text-zinc-300 focus:border-theme-10 outline-none" 
                               />
                               <button 
                                 onClick={() => {
@@ -6128,9 +6227,11 @@ export default function App() {
                                     setCustomBgImage(normalized)
                                   }
                                 }}
-                                className="bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                                className="sys-btn flex items-center gap-1.5 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                                title={t('settings.customBg.applyLink')}
                               >
-                                {t('settings.customBg.applyLink')}
+                                <Check size={15} />
+                                <span className="btn-text">{t('settings.customBg.applyLink')}</span>
                               </button>
                               <button 
                                 onClick={async () => {
@@ -6141,15 +6242,19 @@ export default function App() {
                                     setCustomBgImage(normalized)
                                   }
                                 }}
-                                className="bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                                className="sys-btn flex items-center gap-1.5 bg-theme-10 hover:bg-theme-10/90 text-white px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer shadow-lg shadow-theme-10/20"
+                                title={t('settings.customBg.chooseImage')}
                               >
-                                {t('settings.customBg.chooseImage')}
+                                <ImageIcon size={15} />
+                                <span className="btn-text">{t('settings.customBg.chooseImage')}</span>
                               </button>
                               <button 
                                 onClick={() => { setCustomBgImage(null); setBgImageInput(''); }}
-                                className="bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                                className="sys-btn flex items-center gap-1.5 bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                                title={t('settings.customBg.removeBg')}
                               >
-                                {t('settings.customBg.removeBg')}
+                                <Trash2 size={15} />
+                                <span className="btn-text">{t('settings.customBg.removeBg')}</span>
                               </button>
                             </div>
                           )}
@@ -6193,79 +6298,116 @@ export default function App() {
                         </>
                       )}
                     </div>
+                  </div>
 
-                    {/* QUẢN LÝ ĐA THƯ MỤC NHẠC */}
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-theme-10 font-semibold">{t('settings.library.title')}</h3>
-                        <span className="text-xs text-zinc-400">
-                          {libraryPaths.length} {t('settings.library.folderCount')} • {libraryTracks.length} {t('common.songs')}
-                        </span>
+                  {/* ISLAND 2: NGÔN NGỮ (LANGUAGE) */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                        <Languages size={20} />
                       </div>
-                      <p className="text-sm text-zinc-400 mb-4">{t('settings.library.desc')}</p>
-                      
-                      <div className="space-y-2.5 mb-4">
-                        {libraryPaths.length === 0 ? (
-                          <p className="text-zinc-500 italic text-sm p-3 bg-zinc-950/60 rounded-lg border border-zinc-800">{t('settings.library.notSet')}</p>
-                        ) : (
-                          libraryPaths.map((fPath, idx) => (
-                            <div key={idx} className="flex items-center justify-between gap-3 bg-zinc-950/80 p-3 rounded-xl border border-zinc-800/80 hover:border-zinc-700 transition">
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <Folder size={18} className="text-theme-10 shrink-0" />
-                                <span className="text-sm text-zinc-200 truncate font-mono">{fPath}</span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <button 
-                                  onClick={() => handleUpdateLibraryFolder(fPath)}
-                                  className="px-3 py-1.5 bg-theme-30/60 hover:bg-theme-30 text-xs font-medium text-zinc-300 hover:text-white rounded-lg transition"
-                                  title={t('settings.library.updateFolder')}
-                                >
-                                  {t('settings.library.change')}
-                                </button>
-                                <button 
-                                  onClick={async () => {
-                                    // @ts-ignore
-                                    await window.api.showInFolder(fPath)
-                                  }}
-                                  className="p-1.5 bg-theme-30/60 hover:bg-theme-30 text-zinc-400 hover:text-white rounded-lg transition"
-                                  title={t('settings.library.openFolder')}
-                                >
-                                  <FolderOpen size={15} />
-                                </button>
-                                <button 
-                                  onClick={() => handleRemoveLibraryFolder(fPath)}
-                                  className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition"
-                                  title={t('settings.library.removeFolder')}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-white truncate">{t('settings.language.title')}</h3>
+                    </div>
+                    <div className="w-72 pt-1">
+                      <CustomSelect 
+                        value={language} 
+                        onChange={(val) => setLanguage(val as any)} 
+                        options={[
+                          { value: 'en', label: t('settings.language.english') },
+                          { value: 'vi', label: t('settings.language.vietnamese') }
+                        ]} 
+                      />
+                    </div>
+                  </div>
 
-                      <div className="flex items-center gap-3">
-                        <button 
-                          onClick={handleAddLibraryFolder} 
-                          className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20"
-                        >
-                          <Plus size={16} /> {t('settings.library.addFolder')}
-                        </button>
-                        <button 
-                          onClick={() => handleReloadLibrary(false)} 
-                          disabled={isReloading}
-                          className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                        >
-                          <RefreshCw size={15} className={isReloading ? 'animate-spin' : ''} /> {t('settings.library.rescan')}
-                        </button>
+                  {/* ISLAND 3: THƯ VIỆN NHẠC (MUSIC LIBRARY) */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                          <Folder size={20} />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-bold text-white truncate">{t('settings.library.title')}</h3>
                       </div>
+                      <span className="text-xs text-zinc-400 px-3 py-1 rounded-full bg-zinc-900/80 border border-zinc-800">
+                        {libraryPaths.length} {t('settings.library.folderCount')} • {libraryTracks.length} {t('common.songs')}
+                      </span>
                     </div>
 
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.bitPerfect.title')}</h3>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-300 text-sm">{t('settings.bitPerfect.label')}</span>
+                    <div className="space-y-2.5">
+                      {libraryPaths.length === 0 ? (
+                        <p className="text-zinc-500 italic text-sm p-3 bg-zinc-950/60 rounded-xl border border-zinc-800">{t('settings.library.notSet')}</p>
+                      ) : (
+                        libraryPaths.map((fPath, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-3 bg-zinc-950/80 p-3 rounded-xl border border-zinc-800/80 hover:border-zinc-700 transition">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <Folder size={18} className="text-theme-10 shrink-0" />
+                              <span className="text-sm text-zinc-200 truncate font-mono">{fPath}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button 
+                                onClick={() => handleUpdateLibraryFolder(fPath)}
+                                className="sys-btn flex items-center gap-1 px-3 py-1.5 bg-theme-30/60 hover:bg-theme-30 text-xs font-medium text-zinc-300 hover:text-white rounded-xl transition cursor-pointer"
+                                title={t('settings.library.updateFolder')}
+                              >
+                                <Edit2 size={13} />
+                                <span className="btn-text">{t('settings.library.change')}</span>
+                              </button>
+                              <button 
+                                onClick={async () => {
+                                  // @ts-ignore
+                                  await window.api.showInFolder(fPath)
+                                }}
+                                className="p-1.5 bg-theme-30/60 hover:bg-theme-30 text-zinc-400 hover:text-white rounded-xl transition cursor-pointer"
+                                title={t('settings.library.openFolder')}
+                              >
+                                <FolderOpen size={15} />
+                              </button>
+                              <button 
+                                onClick={() => handleRemoveLibraryFolder(fPath)}
+                                className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition cursor-pointer"
+                                title={t('settings.library.removeFolder')}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap pt-2">
+                      <button 
+                        onClick={handleAddLibraryFolder} 
+                        className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10/90 text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                        title={t('settings.library.addFolder')}
+                      >
+                        <Plus size={16} /> 
+                        <span className="btn-text">{t('settings.library.addFolder')}</span>
+                      </button>
+                      <button 
+                        onClick={() => handleReloadLibrary(false)} 
+                        disabled={isReloading}
+                        className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 hover:text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        title={t('settings.library.rescan')}
+                      >
+                        <RefreshCw size={15} className={isReloading ? 'animate-spin' : ''} /> 
+                        <span className="btn-text">{t('settings.library.rescan')}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ISLAND 4: ĐỘNG CƠ ÂM THANH & BIT-PERFECT */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                          <Volume2 size={20} />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-bold text-white truncate">{t('settings.bitPerfect.title')}</h3>
+                      </div>
+                      <label className="flex items-center gap-3 cursor-pointer select-none">
+                        <span className="text-zinc-300 text-sm font-medium">{t('settings.bitPerfect.label')}</span>
                         <input 
                           type="checkbox" 
                           checked={bitPerfectEnabled} 
@@ -6316,119 +6458,83 @@ export default function App() {
                           }} 
                           className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
                         />
-                      </div>
-                      <p className="text-xs text-zinc-500 mt-2">{t('settings.bitPerfect.note')}</p>
+                      </label>
+                    </div>
 
-                      {/* Khi bật Bit-Perfect: Cung cấp 2 lựa chọn WASAPI và ASIO */}
-                      {bitPerfectEnabled && (
-                        <div className="mt-4 p-4 rounded-xl bg-zinc-900/70 border border-theme-30/60 space-y-4">
-                          <div>
-                            <label className="block text-zinc-300 text-xs font-semibold uppercase tracking-wider mb-2">
-                              {t('settings.bitPerfect.outputType')}
-                            </label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {/* Option WASAPI */}
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (bitPerfectType === 'wasapi') return
-                                  const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
-                                  if (currentPlaybackTime > 0) pendingSeekTimeRef.current = currentPlaybackTime
-                                  setBitPerfectType('wasapi')
-                                  await window.api.setBitPerfectOutputType('wasapi')
-                                  const res = await window.api.getAudioDevices('wasapi')
-                                  if (res?.success && Array.isArray(res.devices)) {
-                                    setAvailableAudioDevices(res.devices)
-                                    setSelectedDeviceId('auto')
-                                    window.api.setAudioDevice('auto')
-                                  }
-                                }}
-                                className={`flex flex-col items-start p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
-                                  bitPerfectType === 'wasapi'
-                                    ? 'bg-theme-10/10 border-theme-10 text-white shadow-sm ring-1 ring-theme-10/30'
-                                    : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between w-full mb-1">
-                                  <span className="text-xs font-bold text-zinc-100">{t('settings.bitPerfect.wasapiOption')}</span>
-                                  {bitPerfectType === 'wasapi' && (
-                                    <span className="w-2 h-2 rounded-full bg-theme-10" />
-                                  )}
-                                </div>
-                                <span className="text-[11px] text-zinc-400 leading-relaxed">
-                                  {t('settings.bitPerfect.wasapiDesc')}
-                                </span>
-                              </button>
-
-                              {/* Option ASIO */}
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (bitPerfectType === 'asio') return
-                                  const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
-                                  if (currentPlaybackTime > 0) pendingSeekTimeRef.current = currentPlaybackTime
-                                  setBitPerfectType('asio')
-                                  await window.api.setBitPerfectOutputType('asio')
-                                  const res = await window.api.getAudioDevices('asio')
-                                  if (res?.success && Array.isArray(res.devices)) {
-                                    setAvailableAudioDevices(res.devices)
-                                    setSelectedDeviceId('auto')
-                                    window.api.setAudioDevice('auto')
-                                  }
-                                }}
-                                className={`flex flex-col items-start p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
-                                  bitPerfectType === 'asio'
-                                    ? 'bg-theme-10/10 border-theme-10 text-white shadow-sm ring-1 ring-theme-10/30'
-                                    : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between w-full mb-1">
-                                  <span className="text-xs font-bold text-zinc-100">{t('settings.bitPerfect.asioOption')}</span>
-                                  {bitPerfectType === 'asio' && (
-                                    <span className="w-2 h-2 rounded-full bg-theme-10" />
-                                  )}
-                                </div>
-                                <span className="text-[11px] text-zinc-400 leading-relaxed">
-                                  {t('settings.bitPerfect.asioDesc')}
-                                </span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Lựa chọn thiết bị đầu ra âm thanh / DAC */}
-                          <div>
-                            <label className="block text-zinc-300 text-xs font-medium mb-1.5">
-                              {t('settings.bitPerfect.deviceLabel')} ({bitPerfectType === 'asio' ? 'ASIO Driver' : 'WASAPI Endpoint'})
-                            </label>
-                            <select
-                              value={selectedDeviceId}
-                              onChange={(e) => {
-                                const newDev = e.target.value
-                                setSelectedDeviceId(newDev)
-                                if (window.api && (window.api as any).setAudioDevice) {
-                                  (window.api as any).setAudioDevice(newDev)
+                    {/* Khi bật Bit-Perfect: Cung cấp 2 lựa chọn WASAPI và ASIO */}
+                    {bitPerfectEnabled && (
+                      <div className="p-4 rounded-xl bg-zinc-900/70 border border-theme-30/60 space-y-4">
+                        <div>
+                          <label className="block text-zinc-300 text-xs font-semibold uppercase tracking-wider mb-2">
+                            {t('settings.bitPerfect.outputType')}
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Option WASAPI */}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (bitPerfectType === 'wasapi') return
+                                const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
+                                if (currentPlaybackTime > 0) pendingSeekTimeRef.current = currentPlaybackTime
+                                setBitPerfectType('wasapi')
+                                await window.api.setBitPerfectOutputType('wasapi')
+                                const res = await window.api.getAudioDevices('wasapi')
+                                if (res?.success && Array.isArray(res.devices)) {
+                                  setAvailableAudioDevices(res.devices)
+                                  setSelectedDeviceId('auto')
+                                  window.api.setAudioDevice('auto')
                                 }
                               }}
-                              className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-theme-10 transition-colors"
+                              className={`flex flex-col items-start p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                bitPerfectType === 'wasapi'
+                                  ? 'bg-theme-10/10 border-theme-10 text-white shadow-sm ring-1 ring-theme-10/30'
+                                  : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                              }`}
                             >
-                              <option value="auto">{t('settings.bitPerfect.deviceAuto')}</option>
-                              {availableAudioDevices
-                                .filter(d => d.name !== 'auto')
-                                .map((dev) => (
-                                  <option key={dev.name} value={dev.name}>
-                                    {dev.description || dev.name}
-                                  </option>
-                                ))}
-                            </select>
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-xs font-bold text-zinc-100">{t('settings.bitPerfect.wasapiOption')}</span>
+                                {bitPerfectType === 'wasapi' && (
+                                  <span className="w-2 h-2 rounded-full bg-theme-10" />
+                                )}
+                              </div>
+                            </button>
+
+                            {/* Option ASIO */}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (bitPerfectType === 'asio') return
+                                const currentPlaybackTime = (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
+                                if (currentPlaybackTime > 0) pendingSeekTimeRef.current = currentPlaybackTime
+                                setBitPerfectType('asio')
+                                await window.api.setBitPerfectOutputType('asio')
+                                const res = await window.api.getAudioDevices('asio')
+                                if (res?.success && Array.isArray(res.devices)) {
+                                  setAvailableAudioDevices(res.devices)
+                                  setSelectedDeviceId('auto')
+                                  window.api.setAudioDevice('auto')
+                                }
+                              }}
+                              className={`flex flex-col items-start p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
+                                bitPerfectType === 'asio'
+                                  ? 'bg-theme-10/10 border-theme-10 text-white shadow-sm ring-1 ring-theme-10/30'
+                                  : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-xs font-bold text-zinc-100">{t('settings.bitPerfect.asioOption')}</span>
+                                {bitPerfectType === 'asio' && (
+                                  <span className="w-2 h-2 rounded-full bg-theme-10" />
+                                )}
+                              </div>
+                            </button>
                           </div>
                         </div>
-                      )}
 
-                      {/* Lựa chọn thiết bị khi không bật Bit-Perfect */}
-                      {!bitPerfectEnabled && (
-                        <div className="mt-4">
+                        {/* Lựa chọn thiết bị đầu ra âm thanh / DAC */}
+                        <div>
                           <label className="block text-zinc-300 text-xs font-medium mb-1.5">
-                            {t('settings.bitPerfect.deviceLabel')}
+                            {t('settings.bitPerfect.deviceLabel')} ({bitPerfectType === 'asio' ? 'ASIO Driver' : 'WASAPI Endpoint'})
                           </label>
                           <select
                             value={selectedDeviceId}
@@ -6451,157 +6557,172 @@ export default function App() {
                               ))}
                           </select>
                         </div>
-                      )}
-
-                      {/* Cân bằng âm lượng (Loudness Normalization) */}
-                      <div className="flex items-center justify-between mt-5 pt-4 border-t border-theme-30/40">
-                        <div>
-                          <span className="text-zinc-300 text-sm font-medium">{language === 'vi' ? 'Cân bằng âm lượng (Loudness Normalization)' : 'Loudness Normalization'}</span>
-                          <p className="text-xs text-zinc-500 mt-0.5">{language === 'vi' ? 'Tự động cân bằng mức âm lượng giữa các bài hát khác nhau theo chuẩn ReplayGain / EBU R128.' : 'Automatically normalize track loudness to prevent volume jumps across different recordings.'}</p>
-                        </div>
-                        <input 
-                          type="checkbox" 
-                          checked={loudnessNormalization} 
-                          onChange={(e) => setLoudnessNormalization(e.target.checked)} 
-                          className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
-                        />
                       </div>
-                    </div>
+                    )}
 
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.googleDrive.title')}</h3>
-                      <p className="text-sm text-zinc-400 mb-4">{t('settings.googleDrive.desc')}</p>
-                      <div className="flex gap-3 items-center">
-                        <input type="text" value={googleDriveApiKey} onChange={e => setGoogleDriveApiKey(e.target.value)} placeholder="AIzaSy..." className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-sm text-zinc-300 focus:outline-none focus:border-theme-10 transition-colors" />
-                      </div>
-                      <p className="text-xs text-zinc-500 mt-2 italic">{t('settings.googleDrive.note')}</p>
-                    </div>
-
-
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.windowBehavior.title')}</h3>
-                      <div className="flex flex-col gap-4 mt-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-zinc-200 text-sm">{t('settings.windowBehavior.onMinimize')}</p>
-                            <p className="text-xs text-zinc-500">{t('settings.windowBehavior.onMinimizeDesc')}</p>
-                          </div>
-                          <div className="w-72">
-                            <CustomSelect value={minimizeToTray ? 'tray' : 'taskbar'} onChange={(val) => setMinimizeToTray(val === 'tray')} options={[{ value: 'taskbar', label: t('settings.windowBehavior.minimizeTaskbar') }, { value: 'tray', label: t('settings.windowBehavior.minimizeTray') }]} />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-zinc-200 text-sm">{t('settings.windowBehavior.onClose')}</p>
-                            <p className="text-xs text-zinc-500">{t('settings.windowBehavior.onCloseDesc')}</p>
-                          </div>
-                          <div className="w-72">
-                            <CustomSelect value={closeToTray ? 'tray' : 'quit'} onChange={(val) => setCloseToTray(val === 'tray')} options={[{ value: 'quit', label: t('settings.windowBehavior.closeQuit') }, { value: 'tray', label: t('settings.windowBehavior.closeTray') }]} />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">{t('settings.appMode.title')}</h3>
-                      <p className="text-sm text-zinc-400 mb-4">{t('settings.appMode.desc')}</p>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {/* 1. Tiêu chuẩn (Standard) */}
-                        <div 
-                          onClick={() => {
-                            setAppMode('default')
-                          }}
-                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                            appMode === 'default'
-                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
-                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-bold text-white flex items-center gap-2">
-                                <Sparkles size={16} className={appMode === 'default' ? 'text-theme-10' : 'text-zinc-400'} />
-                                {t('settings.appMode.standard')}
-                              </span>
-                            </div>
-                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
-                              {t('settings.appMode.standardDesc')}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* 2. Tiết kiệm (Lite) */}
-                        <div 
-                          onClick={() => {
-                            setAppMode('lite')
-                            setShowVisualizer(false)
-                            setShowLyricsPanel(false)
-                            setIsLyricsMaximized(false)
-                            // @ts-ignore
-                            if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
-                          }}
-                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                            appMode === 'lite'
-                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
-                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-bold text-white flex items-center gap-2">
-                                <Leaf size={16} className={appMode === 'lite' ? 'text-theme-10' : 'text-zinc-400'} />
-                                {t('settings.appMode.lite')}
-                              </span>
-                            </div>
-                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
-                              {t('settings.appMode.liteDesc')}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* 3. Cốt lõi (Core) */}
-                        <div 
-                          onClick={() => {
-                            setAppMode('core')
-                            setShowVisualizer(false)
-                            setShowLyricsPanel(false)
-                            setIsLyricsMaximized(false)
-                            setShowEQ(false)
-                            if (activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud' || activeView === 'online' || activeView === 'drive') {
-                              setActiveView('songs')
+                    {/* Lựa chọn thiết bị khi không bật Bit-Perfect */}
+                    {!bitPerfectEnabled && (
+                      <div className="pt-2">
+                        <label className="block text-zinc-300 text-xs font-medium mb-1.5">
+                          {t('settings.bitPerfect.deviceLabel')}
+                        </label>
+                        <select
+                          value={selectedDeviceId}
+                          onChange={(e) => {
+                            const newDev = e.target.value
+                            setSelectedDeviceId(newDev)
+                            if (window.api && (window.api as any).setAudioDevice) {
+                              (window.api as any).setAudioDevice(newDev)
                             }
-                            // @ts-ignore
-                            if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
                           }}
-                          className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                            appMode === 'core'
-                              ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10'
-                              : 'bg-theme-60/40 border-theme-30/60 hover:bg-theme-30/40 hover:border-zinc-600'
-                          }`}
+                          className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-theme-10 transition-colors"
                         >
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-bold text-white flex items-center gap-2">
-                                <Cpu size={16} className={appMode === 'core' ? 'text-theme-10' : 'text-zinc-400'} />
-                                {t('settings.appMode.core')}
-                              </span>
-                            </div>
-                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
-                              {t('settings.appMode.coreDesc')}
-                            </p>
-                          </div>
+                          <option value="auto">{t('settings.bitPerfect.deviceAuto')}</option>
+                          {availableAudioDevices
+                            .filter(d => d.name !== 'auto')
+                            .map((dev) => (
+                              <option key={dev.name} value={dev.name}>
+                                {dev.description || dev.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Cân bằng âm lượng (Loudness Normalization) */}
+                    <div className="flex items-center justify-between pt-4 border-t border-theme-30/40">
+                      <span className="text-zinc-300 text-sm font-medium">{language === 'vi' ? 'Cân bằng âm lượng (Loudness Normalization)' : 'Loudness Normalization'}</span>
+                      <input 
+                        type="checkbox" 
+                        checked={loudnessNormalization} 
+                        onChange={(e) => setLoudnessNormalization(e.target.checked)} 
+                        className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ISLAND 5: HIỆU NĂNG & CHẾ ĐỘ HOẠT ĐỘNG (APP MODE) */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                        <Cpu size={20} />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-white truncate">{t('settings.appMode.title')}</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
+                      {/* 1. Tiêu chuẩn (Standard) */}
+                      <div 
+                        onClick={() => {
+                          setAppMode('default')
+                        }}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                          appMode === 'default'
+                            ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
+                            : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
+                        }`}
+                      >
+                        <span className="font-bold text-white flex items-center gap-2">
+                          <Sparkles size={16} className={appMode === 'default' ? 'text-theme-10' : 'text-zinc-400'} />
+                          {t('settings.appMode.standard')}
+                        </span>
+                        {appMode === 'default' && (
+                          <span className="w-2 h-2 rounded-full bg-theme-10" />
+                        )}
+                      </div>
+
+                      {/* 2. Tiết kiệm (Lite) */}
+                      <div 
+                        onClick={() => {
+                          setAppMode('lite')
+                          setShowVisualizer(false)
+                          setShowLyricsPanel(false)
+                          setIsLyricsMaximized(false)
+                          // @ts-ignore
+                          if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
+                        }}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                          appMode === 'lite'
+                            ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
+                            : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
+                        }`}
+                      >
+                        <span className="font-bold text-white flex items-center gap-2">
+                          <Leaf size={16} className={appMode === 'lite' ? 'text-theme-10' : 'text-zinc-400'} />
+                          {t('settings.appMode.lite')}
+                        </span>
+                        {appMode === 'lite' && (
+                          <span className="w-2 h-2 rounded-full bg-theme-10" />
+                        )}
+                      </div>
+
+                      {/* 3. Cốt lõi (Core) */}
+                      <div 
+                        onClick={() => {
+                          setAppMode('core')
+                          setShowVisualizer(false)
+                          setShowLyricsPanel(false)
+                          setIsLyricsMaximized(false)
+                          setShowEQ(false)
+                          if (activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud' || activeView === 'online' || activeView === 'drive') {
+                            setActiveView('songs')
+                          }
+                          // @ts-ignore
+                          if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
+                        }}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                          appMode === 'core'
+                            ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
+                            : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
+                        }`}
+                      >
+                        <span className="font-bold text-white flex items-center gap-2">
+                          <Cpu size={16} className={appMode === 'core' ? 'text-theme-10' : 'text-zinc-400'} />
+                          {t('settings.appMode.core')}
+                        </span>
+                        {appMode === 'core' && (
+                          <span className="w-2 h-2 rounded-full bg-theme-10" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ISLAND 6: HÀNH VI CỬA SỔ (WINDOW BEHAVIOR) */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                        <AppWindow size={20} />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-white truncate">{t('settings.windowBehavior.title')}</h3>
+                    </div>
+
+                    <div className="flex flex-col gap-4 pt-1">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <p className="text-zinc-200 text-sm font-medium">{t('settings.windowBehavior.onMinimize')}</p>
+                        <div className="w-72">
+                          <CustomSelect value={minimizeToTray ? 'tray' : 'taskbar'} onChange={(val) => setMinimizeToTray(val === 'tray')} options={[{ value: 'taskbar', label: t('settings.windowBehavior.minimizeTaskbar') }, { value: 'tray', label: t('settings.windowBehavior.minimizeTray') }]} />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between flex-wrap gap-2 pt-3 border-t border-theme-30/30">
+                        <p className="text-zinc-200 text-sm font-medium">{t('settings.windowBehavior.onClose')}</p>
+                        <div className="w-72">
+                          <CustomSelect value={closeToTray ? 'tray' : 'quit'} onChange={(val) => setCloseToTray(val === 'tray')} options={[{ value: 'quit', label: t('settings.windowBehavior.closeQuit') }, { value: 'tray', label: t('settings.windowBehavior.closeTray') }]} />
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* DISCORD RICH PRESENCE SETTINGS */}
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <h3 className="text-theme-10 font-semibold">{t('settings.discordRpc.title')}</h3>
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  {/* ISLAND 7: DISCORD RICH PRESENCE */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                          <Flame size={20} />
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <h3 className="text-base sm:text-lg font-bold text-white truncate">{t('settings.discordRpc.title')}</h3>
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${
                             discordConnected 
                               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                               : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/50'
@@ -6610,127 +6731,130 @@ export default function App() {
                             {discordConnected ? t('settings.discordRpc.connectedStatus') : t('settings.discordRpc.disconnectedStatus')}
                           </span>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={discordRpcEnabled}
-                          onChange={(e) => updateDiscordSettings({ enabled: e.target.checked })}
-                          className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
-                        />
                       </div>
-                      <p className="text-sm text-zinc-400 mb-4">{t('settings.discordRpc.desc')}</p>
-
-                      {discordRpcEnabled && (
-                        <div className="space-y-4 pl-1">
-                          {/* Toggles Grid */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {/* 1. Show Details */}
-                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                              <div className="pr-2">
-                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showDetails')}</p>
-                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showDetailsDesc')}</p>
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={discordShowDetails}
-                                onChange={(e) => updateDiscordSettings({ showDetails: e.target.checked })}
-                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                              />
-                            </label>
-
-                            {/* 2. Show Live Progress Time */}
-                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                              <div className="pr-2">
-                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showTime')}</p>
-                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showTimeDesc')}</p>
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={discordShowTime}
-                                onChange={(e) => updateDiscordSettings({ showTime: e.target.checked })}
-                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                              />
-                            </label>
-
-                            {/* 3. Show Cover Art */}
-                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                              <div className="pr-2">
-                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showCover')}</p>
-                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showCoverDesc')}</p>
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={discordShowCover}
-                                onChange={(e) => updateDiscordSettings({ showCover: e.target.checked })}
-                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                              />
-                            </label>
-
-                            {/* 4. Show Quality */}
-                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                              <div className="pr-2">
-                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showQuality')}</p>
-                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showQualityDesc')}</p>
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={discordShowQuality}
-                                onChange={(e) => updateDiscordSettings({ showQuality: e.target.checked })}
-                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                              />
-                            </label>
-
-                            {/* 5. Show Buttons */}
-                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                              <div className="pr-2">
-                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showButtons')}</p>
-                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showButtonsDesc')}</p>
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={discordShowButtons}
-                                onChange={(e) => updateDiscordSettings({ showButtons: e.target.checked })}
-                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                              />
-                            </label>
-
-                            {/* 6. Show Idle */}
-                            <label className="flex items-center justify-between p-3 rounded-lg bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                              <div className="pr-2">
-                                <p className="text-zinc-200 text-sm">{t('settings.discordRpc.showIdle')}</p>
-                                <p className="text-xs text-zinc-500">{t('settings.discordRpc.showIdleDesc')}</p>
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={discordShowIdle}
-                                onChange={(e) => updateDiscordSettings({ showIdle: e.target.checked })}
-                                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                              />
-                            </label>
-                          </div>
-                        </div>
-                      )}
+                      <input
+                        type="checkbox"
+                        checked={discordRpcEnabled}
+                        onChange={(e) => updateDiscordSettings({ enabled: e.target.checked })}
+                        className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
+                      />
                     </div>
 
-                    {/* DỮ LIỆU, THỐNG KÊ & SAO LƯU */}
-                    <div className="border-t border-theme-30 pt-6 mt-6">
-                      <h3 className="text-theme-10 font-semibold mb-2">{language === 'vi' ? 'Dữ liệu, Thống kê & Sao lưu' : 'Data, Insights & Backup'}</h3>
-                      <p className="text-sm text-zinc-400 mb-4">{language === 'vi' ? 'Quản lý sao lưu cấu hình, xuất/nhập danh sách phát M3U8 và theo dõi thống kê thói quen nghe nhạc.' : 'Manage backups, export/import M3U8 playlists, and analyze listening habits.'}</p>
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setShowBackupModal(true)}
-                          className="flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                        >
-                          <Download size={16} /> <span>{language === 'vi' ? 'Sao lưu & Khôi phục (M3U8 / Config)' : 'Backup & Restore (M3U8 / Config)'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowInsightsModal(true)}
-                          className="flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                        >
-                          <BarChart2 size={16} /> <span>{language === 'vi' ? 'Xem thống kê nghe nhạc (Insights)' : 'View Music Insights'}</span>
-                        </button>
+                    {discordRpcEnabled && (
+                      <div className="space-y-4 pt-1">
+                        {/* Toggles Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* 1. Show Details */}
+                          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                            <p className="text-zinc-200 text-sm font-medium pr-2">{t('settings.discordRpc.showDetails')}</p>
+                            <input
+                              type="checkbox"
+                              checked={discordShowDetails}
+                              onChange={(e) => updateDiscordSettings({ showDetails: e.target.checked })}
+                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                            />
+                          </label>
+
+                          {/* 2. Show Live Progress Time */}
+                          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                            <p className="text-zinc-200 text-sm font-medium pr-2">{t('settings.discordRpc.showTime')}</p>
+                            <input
+                              type="checkbox"
+                              checked={discordShowTime}
+                              onChange={(e) => updateDiscordSettings({ showTime: e.target.checked })}
+                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                            />
+                          </label>
+
+                          {/* 3. Show Cover Art */}
+                          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                            <p className="text-zinc-200 text-sm font-medium pr-2">{t('settings.discordRpc.showCover')}</p>
+                            <input
+                              type="checkbox"
+                              checked={discordShowCover}
+                              onChange={(e) => updateDiscordSettings({ showCover: e.target.checked })}
+                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                            />
+                          </label>
+
+                          {/* 4. Show Quality */}
+                          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                            <p className="text-zinc-200 text-sm font-medium pr-2">{t('settings.discordRpc.showQuality')}</p>
+                            <input
+                              type="checkbox"
+                              checked={discordShowQuality}
+                              onChange={(e) => updateDiscordSettings({ showQuality: e.target.checked })}
+                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                            />
+                          </label>
+
+                          {/* 5. Show Buttons */}
+                          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                            <p className="text-zinc-200 text-sm font-medium pr-2">{t('settings.discordRpc.showButtons')}</p>
+                            <input
+                              type="checkbox"
+                              checked={discordShowButtons}
+                              onChange={(e) => updateDiscordSettings({ showButtons: e.target.checked })}
+                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                            />
+                          </label>
+
+                          {/* 6. Show Idle */}
+                          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
+                            <p className="text-zinc-200 text-sm font-medium pr-2">{t('settings.discordRpc.showIdle')}</p>
+                            <input
+                              type="checkbox"
+                              checked={discordShowIdle}
+                              onChange={(e) => updateDiscordSettings({ showIdle: e.target.checked })}
+                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                            />
+                          </label>
+                        </div>
                       </div>
+                    )}
+                  </div>
+
+                  {/* ISLAND 8: GOOGLE DRIVE */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                        <Cloud size={20} />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-white truncate">{t('settings.googleDrive.title')}</h3>
+                    </div>
+                    <div className="pt-1">
+                      <input type="text" value={googleDriveApiKey} onChange={e => setGoogleDriveApiKey(e.target.value)} placeholder="AIzaSy..." className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-sm text-zinc-300 focus:outline-none focus:border-theme-10 transition-colors" />
+                    </div>
+                  </div>
+
+                  {/* ISLAND 9: DỮ LIỆU, THỐNG KÊ & SAO LƯU */}
+                  <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
+                        <Database size={20} />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-white truncate">{language === 'vi' ? 'Dữ liệu, Thống kê & Sao lưu' : 'Data, Insights & Backup'}</h3>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2.5 sm:gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowBackupModal(true)}
+                        className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        title={language === 'vi' ? 'Sao lưu & Khôi phục (M3U8 / Config)' : 'Backup & Restore (M3U8 / Config)'}
+                      >
+                        <Download size={16} className="shrink-0" /> 
+                        <span className="btn-text">{language === 'vi' ? 'Sao lưu & Khôi phục (M3U8 / Config)' : 'Backup & Restore (M3U8 / Config)'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowInsightsModal(true)}
+                        className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                        title={language === 'vi' ? 'Xem thống kê nghe nhạc (Insights)' : 'View Music Insights'}
+                      >
+                        <BarChart2 size={16} className="shrink-0" /> 
+                        <span className="btn-text">{language === 'vi' ? 'Xem thống kê nghe nhạc (Insights)' : 'View Music Insights'}</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -6739,17 +6863,17 @@ export default function App() {
               {/* VIEW: NGHỆ SĨ (ARTISTS LIST) */}
               {activeView === 'artists' && !activeArtist && (
                 <div className="flex flex-col h-full space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-3xl font-bold text-white">{searchQuery ? t('artistsView.searchResults') : t('artistsView.title')}</h2>
-                      <p className="text-xs text-zinc-400 mt-1">
+                  <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                    <div className="flex items-end gap-3 min-w-0 flex-1">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">{searchQuery ? t('artistsView.searchResults') : t('artistsView.title')}</h2>
+                      <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
                         {artistsData.artistsList.length} {t('artistsView.artistCount')} • {libraryTracks.length} {t('common.songs')}
-                      </p>
+                      </span>
                     </div>
                   </div>
 
-                  {/* Alphabet fast jump bar */}
-                  <div className="flex items-center gap-1.5 flex-wrap pb-2 border-b border-theme-30/40">
+                  {/* Alphabet fast jump bar (tối đa 2 dòng, tự động ẩn dòng thừa) */}
+                  <div className="flex items-center content-start gap-1.5 flex-wrap max-h-[62px] overflow-hidden pb-1 border-b border-theme-30/40">
                     {artistsData.alphabetGroups.map(grp => (
                       <button
                         key={grp.letter}
@@ -6757,7 +6881,7 @@ export default function App() {
                           const el = document.getElementById(`artist-group-${grp.letter}`)
                           if (el) el.scrollIntoView({ behavior: 'smooth' })
                         }}
-                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-theme-60/40 hover:bg-theme-10 hover:text-white text-zinc-400 transition"
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-theme-60/40 hover:bg-theme-10 hover:text-white text-zinc-400 transition shrink-0"
                       >
                         {grp.letter} <span className="text-[10px] opacity-60">({grp.count})</span>
                       </button>
@@ -6915,9 +7039,10 @@ export default function App() {
                                 handleRowClick(activeArtist.tracks[0], activeArtist.tracks)
                               }
                             }}
-                            className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20"
+                            className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                            title={t('artistsView.playAll')}
                           >
-                            <Play size={16} className="fill-current" /> {t('artistsView.playAll')}
+                            <Play size={16} className="fill-current" /> <span className="btn-text">{t('artistsView.playAll')}</span>
                           </button>
                           <button 
                             onClick={() => {
@@ -6926,9 +7051,10 @@ export default function App() {
                                 handleRowClick(shuffled[0], shuffled)
                               }
                             }}
-                            className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
+                            className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                            title={t('artistsView.shuffle')}
                           >
-                            <Shuffle size={16} /> {t('artistsView.shuffle')}
+                            <Shuffle size={16} /> <span className="btn-text">{t('artistsView.shuffle')}</span>
                           </button>
                         </div>
                       </div>
@@ -6995,11 +7121,13 @@ export default function App() {
               {/* VIEW: THỂ LOẠI (GENRES LIST) */}
               {activeView === 'genres' && !activeGenre && (
                 <div className="flex flex-col h-full space-y-6">
-                  <div>
-                    <h2 className="text-3xl font-bold text-white">{searchQuery ? t('genresView.searchResults') : t('genresView.title')}</h2>
-                    <p className="text-xs text-zinc-400 mt-1">
-                      {genresData.length} {t('genresView.genreCount')} • {libraryTracks.length} {t('common.songs')}
-                    </p>
+                  <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                    <div className="flex items-end gap-3 min-w-0 flex-1">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">{searchQuery ? t('genresView.searchResults') : t('genresView.title')}</h2>
+                      <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
+                        {genresData.length} {t('genresView.genreCount')} • {libraryTracks.length} {t('common.songs')}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex-1 overflow-y-auto pr-2">
@@ -7193,9 +7321,10 @@ export default function App() {
                                 handleRowClick(activeGenre.tracks[0], activeGenre.tracks)
                               }
                             }}
-                            className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20"
+                            className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                            title={t('artistsView.playAll')}
                           >
-                            <Play size={16} className="fill-current" /> {t('artistsView.playAll')}
+                            <Play size={16} className="fill-current" /> <span className="btn-text">{t('artistsView.playAll')}</span>
                           </button>
                           <button 
                             onClick={() => {
@@ -7204,9 +7333,10 @@ export default function App() {
                                 handleRowClick(shuffled[0], shuffled)
                               }
                             }}
-                            className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
+                            className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                            title={t('artistsView.shuffle')}
                           >
-                            <Shuffle size={16} /> {t('artistsView.shuffle')}
+                            <Shuffle size={16} /> <span className="btn-text">{t('artistsView.shuffle')}</span>
                           </button>
                         </div>
                       </div>
@@ -7240,18 +7370,19 @@ export default function App() {
               {/* VIEW: PLAYLIST CỦA NGƯỜI DÙNG (USER PLAYLISTS LIST) */}
               {activeView === 'user-playlists' && !activeUserPlaylist && (
                 <div className="flex flex-col h-full space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-3xl font-bold text-white">{searchQuery ? t('userPlaylistsView.searchResults') : t('userPlaylistsView.title')}</h2>
-                      <p className="text-xs text-zinc-400 mt-1">
+                  <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+                    <div className="flex items-end gap-3 min-w-0 flex-1">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">{searchQuery ? t('userPlaylistsView.searchResults') : t('userPlaylistsView.title')}</h2>
+                      <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
                         {userPlaylists.length} {t('userPlaylistsView.playlistCount')}
-                      </p>
+                      </span>
                     </div>
                     <button 
                       onClick={() => setShowCreateUserPlaylistModal(true)} 
-                      className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20"
+                      className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-10 hover:bg-theme-10 text-white px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition shadow-lg shadow-theme-10/20 shrink-0 cursor-pointer"
+                      title={t('userPlaylistsView.createPlaylist')}
                     >
-                      <Plus size={16} /> {t('userPlaylistsView.createPlaylist')}
+                      <Plus size={16} /> <span className="btn-text">{t('userPlaylistsView.createPlaylist')}</span>
                     </button>
                   </div>
 
@@ -7585,15 +7716,28 @@ export default function App() {
               {/* VIEW: PLAYLISTS THƯ MỤC / ALBUMS */}
               {activeView === 'playlists' && !activePlaylist && (
                 <>
-                  <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-3xl font-bold text-white">{searchQuery ? t('playlistsView.searchResults') : t('playlistsView.title')}</h2>
+                  <div className="flex items-center justify-between mb-6 sm:mb-8 gap-3 flex-wrap">
+                    <div className="flex items-end gap-3 min-w-0 flex-1">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">{searchQuery ? t('playlistsView.searchResults') : t('playlistsView.title')}</h2>
+                      <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
+                        {playlists.length} {t('userPlaylistsView.playlistCount')}
+                      </span>
+                    </div>
                     {!searchQuery && (
-                      <div className="flex gap-3">
-                        <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-theme-10/20">
-                          <Plus size={16} /> {t('playlistsView.createPlaylist')}
+                      <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
+                        <button 
+                          onClick={() => setShowCreateModal(true)} 
+                          className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-10 hover:bg-theme-10 text-white px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
+                          title={t('playlistsView.createPlaylist')}
+                        >
+                          <Plus size={16} /> <span className="btn-text">{t('playlistsView.createPlaylist')}</span>
                         </button>
-                        <button onClick={handleAutoGeneratePlaylists} className="flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-4 py-2 rounded-lg text-sm font-medium transition">
-                          <Sparkles size={16} /> {t('playlistsView.autoCategorize')}
+                        <button 
+                          onClick={handleAutoGeneratePlaylists} 
+                          className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-30 hover:bg-theme-10/20 hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer"
+                          title={t('playlistsView.autoCategorize')}
+                        >
+                          <Sparkles size={16} /> <span className="btn-text">{t('playlistsView.autoCategorize')}</span>
                         </button>
                       </div>
                     )}
@@ -7754,11 +7898,11 @@ export default function App() {
 
                       {/* Nút thêm nhạc riêng cho Playlist */}
                       <div className="flex gap-3 shrink-0">
-                        <button onClick={() => setShowAddSongsModal(true)} className="flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer">
-                          <Plus size={16} /> {t('playlistsView.addExistingSongs')}
+                        <button onClick={() => setShowAddSongsModal(true)} title={t('playlistsView.addExistingSongs')} className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer">
+                          <Plus size={16} /> <span className="btn-text">{t('playlistsView.addExistingSongs')}</span>
                         </button>
-                        <button onClick={handleImportFiles} className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer">
-                          <Plus size={16} /> {t('playlistsView.importFromComputer')}
+                        <button onClick={handleImportFiles} title={t('playlistsView.importFromComputer')} className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer">
+                          <Upload size={16} /> <span className="btn-text">{t('playlistsView.importFromComputer')}</span>
                         </button>
                       </div>
                     </div>
@@ -8002,10 +8146,10 @@ export default function App() {
       </div>
       
       {/* PLAYER BAR */}
-      <footer className="h-24 bg-theme-60 border-t border-theme-30 flex items-center justify-between px-6 z-20 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+      <footer className="h-24 bg-theme-60 border-t border-theme-30 flex items-center justify-between px-3.5 sm:px-6 z-20 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
         
-        <div className="flex items-center gap-4 w-1/3 min-w-0">
-          <div className="w-14 h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
+        <div className="flex items-center gap-3 sm:gap-4 w-[28%] max-w-[260px] lg:max-w-[320px] min-w-0 z-10">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
             <DynamicCoverArt
               track={currentTrack}
               streamPort={streamPort}
@@ -8016,7 +8160,7 @@ export default function App() {
               className="w-full h-full"
             />
           </div>
-          <div className="truncate">
+          <div className="truncate min-w-0 flex-1">
             <h4 className="text-sm font-bold text-white leading-tight truncate">{currentTrack ? currentTrack.title : t('player.noTrack')}</h4>
             <div className="text-xs text-zinc-400 mt-1 truncate">
               {currentTrack ? (
@@ -8031,8 +8175,8 @@ export default function App() {
               )}
             </div>
             {currentTrack && (
-              <div className="flex items-center gap-2 mt-1">
-                <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md">
+              <div className="flex items-center gap-2 mt-1 truncate">
+                <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md shrink-0">
                   {isDsdTrack(currentTrack) ? (
                     <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
                       {getDsdRateLabel(currentTrack.sampleRate) || currentTrack.format || 'DSD'}
@@ -8071,7 +8215,7 @@ export default function App() {
                     )
                   })()}
                 </div>
-                <span className="text-[10px] text-zinc-500">
+                <span className="text-[10px] text-zinc-500 hidden md:inline truncate">
                   {bitPerfectEnabled && bassOutParams?.samplerate
                     ? (isDsdTrack(currentTrack) ? formatAudioSampleRate(bassOutParams.samplerate) : (bassOutParams.samplerate >= 1000 ? `${bassOutParams.samplerate / 1000}kHz` : `${bassOutParams.samplerate}Hz`))
                     : (currentTrack.sampleRate ? (isDsdTrack(currentTrack) ? formatAudioSampleRate(currentTrack.sampleRate) : (currentTrack.sampleRate >= 1000 ? `${currentTrack.sampleRate / 1000}kHz` : `${currentTrack.sampleRate}Hz`)) : '')}
@@ -8082,63 +8226,66 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center w-1/3 max-w-md relative">
-          <div className="relative w-full flex items-center justify-center mb-2">
-            {/* Nút điều khiển đối xứng qua nút Play ở giữa */}
-            <div className="flex items-center gap-5 justify-center">
-              <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={18} /></button>
-              <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={20} /></button>
-              <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
-                {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="fill-current translate-x-[2px]" />}
-              </button>
-              <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={20} /></button>
-              <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
-            </div>
+        {/* Cụm điều khiển & Thanh tiến trình luôn nằm ở vị trí trung tâm tuyệt đối */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[44%] max-w-xl min-w-[260px] sm:min-w-[320px] px-2 flex flex-col items-center justify-center pointer-events-none z-10">
+          <div className="w-full flex flex-col items-center pointer-events-auto">
+            <div className="relative w-full flex items-center justify-center mb-1.5">
+              {/* Nút điều khiển đối xứng qua nút Play ở giữa */}
+              <div className="flex items-center gap-3 sm:gap-5 justify-center">
+                <button onClick={toggleShuffle} className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}><Shuffle size={17} /></button>
+                <button onClick={handlePrev} className="text-zinc-400 hover:text-white transition"><SkipBack size={19} /></button>
+                <button onClick={handlePlayPause} className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}>
+                  {isPlaying ? <Pause size={19} className="fill-current" /> : <Play size={19} className="fill-current translate-x-[2px]" />}
+                </button>
+                <button onClick={handleNext} className="text-zinc-400 hover:text-white transition"><SkipForward size={19} /></button>
+                <button onClick={toggleRepeat} className={`transition ${repeatMode > 0 ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}>{repeatMode === 2 ? <Repeat1 size={17} /> : <Repeat size={17} />}</button>
+              </div>
 
-            {/* YouTube-style Smart Autoplay Switch đặt absolute ở lề phải để không làm lệch tâm nút Play */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1.5" title={smartAutoplay ? t('player.smartAutoplay') : t('player.smartAutoplayDesc')}>
-              <button
-                type="button"
-                onClick={() => setSmartAutoplay(prev => !prev)}
-                className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  smartAutoplay ? 'bg-theme-10' : 'bg-zinc-700'
-                }`}
-                role="switch"
-                aria-checked={smartAutoplay}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
-                    smartAutoplay ? 'translate-x-3 text-zinc-950' : 'translate-x-0 text-zinc-500'
+              {/* YouTube-style Smart Autoplay Switch đặt absolute ở lề phải để không làm lệch tâm nút Play */}
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1.5" title={smartAutoplay ? t('player.smartAutoplay') : t('player.smartAutoplayDesc')}>
+                <button
+                  type="button"
+                  onClick={() => setSmartAutoplay(prev => !prev)}
+                  className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    smartAutoplay ? 'bg-theme-10' : 'bg-zinc-700'
                   }`}
+                  role="switch"
+                  aria-checked={smartAutoplay}
                 >
-                  {smartAutoplay ? <Sparkles size={7} className="text-zinc-950 fill-current" /> : <div className="w-1 h-1 rounded-full bg-zinc-400" />}
-                </span>
-              </button>
+                  <span
+                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
+                      smartAutoplay ? 'translate-x-3 text-zinc-950' : 'translate-x-0 text-zinc-500'
+                    }`}
+                  >
+                    {smartAutoplay ? <Sparkles size={7} className="text-zinc-950 fill-current" /> : <div className="w-1 h-1 rounded-full bg-zinc-400" />}
+                  </span>
+                </button>
+              </div>
             </div>
+            <PlayerProgressBar 
+              audioRef={audioRef} 
+              currentTrack={currentTrack} 
+              crossfadeEnabled={crossfadeEnabled} 
+              crossfadeDuration={crossfadeDuration} 
+              repeatMode={repeatMode} 
+              onNext={handleNext}
+              bitPerfectEnabled={bitPerfectEnabled}
+            />
           </div>
-          <PlayerProgressBar 
-            audioRef={audioRef} 
-            currentTrack={currentTrack} 
-            crossfadeEnabled={crossfadeEnabled} 
-            crossfadeDuration={crossfadeDuration} 
-            repeatMode={repeatMode} 
-            onNext={handleNext}
-            bitPerfectEnabled={bitPerfectEnabled}
-          />
         </div>
         
-        <div className="flex items-center justify-end gap-4 w-1/3 text-zinc-400">
+        <div className="flex items-center justify-end gap-2 sm:gap-3.5 w-[28%] max-w-[260px] lg:max-w-[320px] min-w-0 text-zinc-400 z-10">
           {!isCore && (
             <>
               {!isLite && (
                 <>
-                  <button onClick={() => setShowSpectrogramModal(true)} className={`transition ${showSpectrogramModal ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.spectrogram')}><Radio size={18} /></button>
-                  <button onClick={handleToggleLyrics} className={`transition ${showLyricsPanel ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.lyrics')}><Mic2 size={18} /></button>
+                  <button onClick={() => setShowSpectrogramModal(true)} className={`hidden lg:block transition ${showSpectrogramModal ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.spectrogram')}><Radio size={18} /></button>
+                  <button onClick={handleToggleLyrics} className={`hidden sm:block transition ${showLyricsPanel ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.lyrics')}><Mic2 size={18} /></button>
                 </>
               )}
-              <button onClick={handleToggleMiniPlayer} className="transition hover:text-white text-zinc-400" title={t('player.miniPlayer')}><PictureInPicture2 size={18} /></button>
+              <button onClick={handleToggleMiniPlayer} className="hidden md:block transition hover:text-white text-zinc-400" title={t('player.miniPlayer')}><PictureInPicture2 size={18} /></button>
               <button onClick={handleToggleQueue} className={`transition ${showQueuePanel ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.queue')}><List size={18} /></button>
-              <button onClick={() => setShowEQ(!showEQ)} className={`transition ${showEQ ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.equalizer')}><Sliders size={18} /></button>
+              <button onClick={() => setShowEQ(!showEQ)} className={`hidden sm:block transition ${showEQ ? 'text-theme-10' : 'hover:text-white'}`} title={t('player.equalizer')}><Sliders size={18} /></button>
 
               {/* Nút Hẹn Giờ Tắt Nhạc (Sleep Timer) */}
               <SleepTimerButton 

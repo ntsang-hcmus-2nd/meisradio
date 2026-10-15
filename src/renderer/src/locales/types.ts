@@ -215,6 +215,12 @@ export interface TranslationDictionary {
     }
     customBg: {
       title: string
+      uiStyleTitle: string
+      uiStyleDesc: string
+      classicMode: string
+      classicModeDesc: string
+      sleekMode: string
+      sleekModeDesc: string
       useTrackCover: string
       placeholder: string
       applyLink: string

@@ -55,6 +55,15 @@
   background: var(--theme-10);
 }
 
+/* --- ẨN THANH CUỘN (NO SCROLLBAR UTILITY) --- */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* --- HIỆU ỨNG CHUYỂN TAB --- */
 @keyframes fadeInSlideUp {
   from {
@@ -178,4 +187,27 @@ body {
   content-visibility: auto;
   contain-intrinsic-size: 0 48px;
   contain: layout style paint;
+}
+
+/* ==========================================================================
+   UI STYLE: CLASSIC VS SLEEK MODE
+   ========================================================================== */
+
+/* Chế độ Cổ điển (Classic): Hiển thị đầy đủ nhãn văn bản của hệ thống */
+[data-ui-style="classic"] .btn-text,
+[data-ui-style="classic"] .sys-btn-text {
+  display: inline !important;
+}
+
+/* Chế độ Tinh gọn (Sleek): Ẩn toàn bộ nhãn văn bản của các ô và nút hệ thống, chỉ dùng icon */
+[data-ui-style="sleek"] .btn-text,
+[data-ui-style="sleek"] .sys-btn-text {
+  display: none !important;
+}
+
+/* Tinh chỉnh padding và gap cho nút hệ thống khi ở chế độ Sleek để icon cân đối */
+[data-ui-style="sleek"] .sys-btn {
+  padding-left: 0.65rem !important;
+  padding-right: 0.65rem !important;
+  gap: 0 !important;
 }

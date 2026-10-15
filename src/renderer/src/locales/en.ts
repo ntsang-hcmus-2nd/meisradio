@@ -214,7 +214,13 @@ export const en: TranslationDictionary = {
       vietnamese: 'Vietnamese'
     },
     customBg: {
-      title: 'Custom Background & Adaptive Theme',
+      title: 'Personalization',
+      uiStyleTitle: 'System Display Style',
+      uiStyleDesc: 'Choose how system buttons and control boxes are displayed in the app',
+      classicMode: 'Classic Mode',
+      classicModeDesc: 'System buttons and controls display full text labels and icons',
+      sleekMode: 'Sleek Mode',
+      sleekModeDesc: 'System buttons and controls hide text labels, using icons only. Track information remains unaffected',
       useTrackCover: 'Use current track cover as dynamic background',
       placeholder: 'Enter image URL (https://...) or local file path...',
       applyLink: 'Apply Link',
@@ -298,7 +304,7 @@ export const en: TranslationDictionary = {
       showIdle: 'Show Idle Status',
       showIdleDesc: 'Display browsing status when the app is open but no song is currently playing',
       connectedStatus: 'Connected to Discord',
-      disconnectedStatus: 'Not connected to Discord (Please launch Discord Desktop)'
+      disconnectedStatus: 'Not connected to Discord'
     }
   },
   player: {
@@ -589,13 +595,13 @@ export const en: TranslationDictionary = {
     coverChangedSuccess: 'Playlist cover updated successfully!'
   },
   downloads: {
-    title: 'High-Fidelity Music Downloads',
-    subtitle: 'Search and download lossless, bit-perfect, and high-resolution tracks via the Soulseek peer-to-peer network',
+    title: 'Music Downloads',
+    subtitle: 'Search and download tracks',
     connectedAs: 'Connected as: {username}',
     connecting: 'Connecting to server...',
     disconnected: 'Disconnected',
     loginOrRegister: 'Sign In or Register Soulseek',
-    loginSubtitle: 'The Soulseek network supports free account registration without email or phone number. If the username does not exist, a new account will be created immediately.',
+    loginSubtitle: 'If the username does not exist, a new account will be created immediately.',
     username: 'Username',
     password: 'Password',
     autoLogin: 'Automatically sign in on startup',

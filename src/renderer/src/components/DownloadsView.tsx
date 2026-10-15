@@ -19,7 +19,8 @@ import {
   ListFilter,
   Check,
   Music,
-  Trash2
+  Trash2,
+  LogOut
 } from 'lucide-react'
 import { useTranslation } from '../locales'
 import { useSoulseekStore, SoulseekSearchResult, SoulseekDownload } from '../stores/soulseekStore'
@@ -483,67 +484,60 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
   return (
     <div
       className={`flex flex-col h-full space-y-4 select-none animate-fade-in text-zinc-100 ${
-        !connected ? 'overflow-y-auto pr-1' : 'overflow-hidden'
+        !connected ? 'overflow-y-auto pr-1 no-scrollbar' : 'overflow-hidden'
       }`}
     >
       {/* 1. HEADER SECTION */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-theme-30/40 pb-4 shrink-0">
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3.5 min-w-0 flex-1">
           <div className="w-12 h-12 rounded-2xl bg-theme-10/15 border border-theme-10/30 text-theme-10 flex items-center justify-center shadow-lg shadow-theme-10/10 shrink-0">
             <FolderDown size={24} className="text-theme-10" />
           </div>
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-extrabold text-white flex items-center gap-2">
-              <span>{t('downloads.title')}</span>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-theme-10/20 text-theme-10 border border-theme-10/30 tracking-wider uppercase">
-                Soulseek P2P
-              </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white flex items-center gap-2 min-w-0">
+              <span className="truncate">{t('downloads.title')}</span>
             </h1>
-            <p className="text-xs text-zinc-400 mt-1 max-w-2xl">{t('downloads.subtitle')}</p>
+            <p className="text-xs text-zinc-400 mt-1 max-w-2xl truncate">{t('downloads.subtitle')}</p>
           </div>
         </div>
 
         {/* CONNECTION STATUS & ACCOUNT BUTTON */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {connected ? (
-            <div className="flex items-center gap-3 bg-zinc-900/70 border border-emerald-500/30 px-3.5 py-2 rounded-xl backdrop-blur-md">
+            <div className="flex items-center gap-2.5 bg-zinc-900/70 border border-emerald-500/30 px-3 py-2 rounded-xl backdrop-blur-md" title={t('downloads.connectedAs').replace('{username}', username || 'User')}>
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
               </span>
-              <span className="text-xs font-medium text-emerald-400">
-                {t('downloads.connectedAs').replace('{username}', username || 'User')}
-              </span>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="text-xs px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700/60 transition cursor-pointer"
+                className="p-1 rounded-md bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700/60 transition cursor-pointer"
+                title={t('downloads.logout')}
               >
-                {t('downloads.logout')}
+                <LogOut size={13} />
               </button>
             </div>
           ) : isConnecting ? (
-            <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-3.5 py-2 rounded-xl text-amber-400 text-xs font-medium">
-              <Loader2 size={14} className="animate-spin" />
-              <span>{t('downloads.connecting')}</span>
+            <div className="flex items-center justify-center p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400" title={t('downloads.connecting')}>
+              <Loader2 size={16} className="animate-spin" />
             </div>
           ) : (
-            <div className="flex items-center gap-2 bg-zinc-800/80 border border-zinc-700/60 px-3.5 py-2 rounded-xl text-zinc-400 text-xs font-medium">
-              <User size={14} />
-              <span>{t('downloads.disconnected')}</span>
+            <div className="flex items-center justify-center p-2 rounded-xl bg-zinc-800/80 border border-zinc-700/60 text-zinc-400" title={t('downloads.disconnected')}>
+              <User size={16} />
             </div>
           )}
         </div>
       </div>
 
       {/* 2. DOWNLOAD FOLDER SELECTION BAR */}
-      <div className="bg-zinc-900/60 border border-theme-30/40 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md shrink-0">
+      <div className="bg-zinc-900/60 border border-theme-30/40 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
             <FolderOpen size={18} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
+            <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider truncate">
               {t('downloads.downloadFolder')}
             </div>
             <div className="text-xs font-mono text-zinc-200 truncate mt-0.5" title={downloadFolder}>
@@ -552,31 +546,31 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <button
             type="button"
             onClick={handleSelectFolder}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/60 transition cursor-pointer"
+            className="sys-btn flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/60 transition cursor-pointer"
             title={t('downloads.changeFolder')}
           >
             <FolderSearch size={14} />
-            <span>{t('downloads.changeFolder')}</span>
+            <span className="btn-text">{t('downloads.changeFolder')}</span>
           </button>
           <button
             type="button"
             onClick={handleOpenFolder}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/60 transition cursor-pointer"
+            className="sys-btn flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/60 transition cursor-pointer"
             title={t('downloads.openFolder')}
           >
             <ExternalLink size={14} />
-            <span>{t('downloads.openFolder')}</span>
+            <span className="btn-text">{t('downloads.openFolder')}</span>
           </button>
         </div>
       </div>
 
       {/* 3. NOT CONNECTED CALLOUT / LOGIN HERO (IF NOT LOGGED IN) */}
       {!connected && (
-        <div className="bg-gradient-to-br from-theme-10/10 via-zinc-900/80 to-zinc-950 border border-theme-10/30 rounded-3xl p-6 lg:p-8 backdrop-blur-xl relative overflow-hidden">
+        <div className="bg-gradient-to-br from-theme-10/10 via-zinc-900/80 to-zinc-950 border border-theme-10/30 rounded-3xl p-6 lg:p-8 backdrop-blur-xl relative overflow-hidden shrink-0">
           <div className="max-w-2xl space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-theme-10/20 text-theme-10 text-xs font-semibold border border-theme-10/30">
               <Sparkles size={14} />
@@ -700,10 +694,11 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
               <button
                 type="button"
                 onClick={clearCompletedDownloads}
-                className="text-xs text-zinc-400 hover:text-red-400 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white/5 transition cursor-pointer"
+                className="sys-btn text-xs text-zinc-400 hover:text-red-400 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white/5 transition cursor-pointer"
+                title={t('downloads.clearFinished')}
               >
                 <Trash2 size={13} />
-                <span>{t('downloads.clearFinished')}</span>
+                <span className="btn-text">{t('downloads.clearFinished')}</span>
               </button>
             )}
           </div>
@@ -737,10 +732,11 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
                 <button
                   type="submit"
                   disabled={isSearching || !searchQuery.trim()}
-                  className="px-6 py-2.5 rounded-2xl bg-theme-10 hover:bg-theme-10/90 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-theme-10/20 transition cursor-pointer disabled:opacity-50"
+                  title={t('downloads.searchButton')}
+                  className="sys-btn px-6 py-2.5 rounded-2xl bg-theme-10 hover:bg-theme-10/90 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-theme-10/20 transition cursor-pointer disabled:opacity-50"
                 >
                   {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                  <span>{isSearching ? t('downloads.searching') : t('downloads.searchButton')}</span>
+                  <span className="btn-text">{isSearching ? t('downloads.searching') : t('downloads.searchButton')}</span>
                 </button>
               </form>
 

@@ -685,68 +685,90 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-zinc-800 bg-zinc-900/90 text-xs">
+        {/* Footer Actions: Đơn giản hóa thành các nút icon, hiển thị text khi hover */}
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-zinc-800 bg-zinc-900/90 text-xs shrink-0">
           {/* Left: Copy all details */}
-          <button
-            onClick={handleCopyAllInfo}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition font-medium cursor-pointer w-full sm:w-auto justify-center"
-            title={t('modals.trackInfo.copyInfo')}
-          >
-            {copiedInfo ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-            <span>{copiedInfo ? t('common.copied') : t('modals.trackInfo.copyInfo')}</span>
-          </button>
+          <div className="relative group/btn">
+            <button
+              onClick={handleCopyAllInfo}
+              className="w-9 h-9 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition flex items-center justify-center cursor-pointer shadow-sm"
+              title={copiedInfo ? t('common.copied') : t('modals.trackInfo.copyInfo')}
+            >
+              {copiedInfo ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+            </button>
+            <div className="absolute bottom-full mb-2 left-0 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
+              {copiedInfo ? t('common.copied') : t('modals.trackInfo.copyInfo')}
+            </div>
+          </div>
 
           {/* Right: Functional actions */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2">
             {isLocalTrack && (
-              <button
-                onClick={() => {
-                  const rawTrackPath = details?.rawPath || track?.id || track?.filePath
-                  window.api.showInFolder(rawTrackPath)
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition font-medium cursor-pointer"
-                title={t('modals.trackInfo.showInFolder')}
-              >
-                <FolderOpen size={14} />
-                <span className="hidden md:inline">{t('modals.trackInfo.showInFolder')}</span>
-              </button>
+              <div className="relative group/btn">
+                <button
+                  onClick={() => {
+                    const rawTrackPath = details?.rawPath || track?.id || track?.filePath
+                    window.api.showInFolder(rawTrackPath)
+                  }}
+                  className="w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition flex items-center justify-center cursor-pointer"
+                  title={t('modals.trackInfo.showInFolder')}
+                >
+                  <FolderOpen size={16} />
+                </button>
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
+                  {t('modals.trackInfo.showInFolder')}
+                </div>
+              </div>
             )}
 
             {isLocalTrack && onEditTags && (
-              <button
-                onClick={() => {
-                  onClose()
-                  onEditTags(track)
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-theme-10/15 hover:bg-theme-10/25 border border-theme-10/30 text-theme-10 hover:text-white transition font-medium cursor-pointer"
-                title={t('modals.trackInfo.editTags')}
-              >
-                <Edit3 size={14} />
-                <span>{t('modals.trackInfo.editTags')}</span>
-              </button>
+              <div className="relative group/btn">
+                <button
+                  onClick={() => {
+                    onClose()
+                    onEditTags(track)
+                  }}
+                  className="w-9 h-9 rounded-xl bg-theme-10/15 hover:bg-theme-10/25 border border-theme-10/30 text-theme-10 hover:text-white transition flex items-center justify-center cursor-pointer"
+                  title={t('modals.trackInfo.editTags')}
+                >
+                  <Edit3 size={16} />
+                </button>
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
+                  {t('modals.trackInfo.editTags')}
+                </div>
+              </div>
             )}
 
             {onPlayTrack && (
-              <button
-                onClick={() => {
-                  onPlayTrack(track)
-                  onClose()
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-theme-10 hover:bg-theme-10/90 text-white font-semibold transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                title={t('modals.trackInfo.playTrack')}
-              >
-                <Play size={14} />
-                <span>{t('modals.trackInfo.playTrack')}</span>
-              </button>
+              <div className="relative group/btn">
+                <button
+                  onClick={() => {
+                    onPlayTrack(track)
+                    onClose()
+                  }}
+                  className="w-9 h-9 rounded-xl bg-theme-10 hover:bg-theme-10/90 text-white font-semibold transition shadow-lg shadow-theme-10/20 flex items-center justify-center cursor-pointer"
+                  title={t('modals.trackInfo.playTrack')}
+                >
+                  <Play size={16} className="ml-0.5" />
+                </button>
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
+                  {t('modals.trackInfo.playTrack')}
+                </div>
+              </div>
             )}
 
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition font-medium cursor-pointer"
-            >
-              {t('modals.trackInfo.close')}
-            </button>
+            <div className="relative group/btn">
+              <button
+                onClick={onClose}
+                className="w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition flex items-center justify-center cursor-pointer"
+                title={t('modals.trackInfo.close')}
+              >
+                <X size={16} />
+              </button>
+              <div className="absolute bottom-full mb-2 right-0 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
+                {t('modals.trackInfo.close')}
+              </div>
+            </div>
           </div>
         </div>
 

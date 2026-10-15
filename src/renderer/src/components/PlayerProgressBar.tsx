@@ -124,8 +124,8 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
   const timePercent = duration ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className="w-full flex items-center gap-3 text-[11px] text-zinc-400 font-medium">
-      <span>{formatDuration(currentTime)}</span>
+    <div className="w-full flex items-center gap-2.5 text-[11px] text-zinc-400 font-medium">
+      <span className="w-9 sm:w-10 text-left shrink-0 tabular-nums font-mono">{formatDuration(currentTime)}</span>
       <input 
         type="range" 
         min={0} max={Math.floor(duration || 0)} 
@@ -140,7 +140,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
         className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10 transition-all" 
         style={{ background: `linear-gradient(to right, var(--theme-10) ${timePercent}%, var(--theme-30) ${timePercent}%)` }} 
       />
-      <span>{currentTrack ? formatDuration(duration) : '0:00'}</span>
+      <span className="w-9 sm:w-10 text-right shrink-0 tabular-nums font-mono">{currentTrack ? formatDuration(duration) : '0:00'}</span>
     </div>
   )
 }

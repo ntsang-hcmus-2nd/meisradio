@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 export interface SettingsState {
   appMode: 'default' | 'lite' | 'core'
+  uiStyle: 'classic' | 'sleek'
   customBgImage: string | null
   useTrackCoverAsBg: boolean
   bgImageInput: string
@@ -37,6 +38,7 @@ export interface SettingsState {
 
   // Actions
   setAppMode: (mode: 'default' | 'lite' | 'core' | ((prev: 'default' | 'lite' | 'core') => 'default' | 'lite' | 'core')) => void
+  setUiStyle: (style: 'classic' | 'sleek' | ((prev: 'classic' | 'sleek') => 'classic' | 'sleek')) => void
   setCustomBgImage: (img: string | null | ((prev: string | null) => string | null)) => void
   setUseTrackCoverAsBg: (use: boolean | ((prev: boolean) => boolean)) => void
   setBgImageInput: (input: string | ((prev: string) => string)) => void
@@ -90,8 +92,24 @@ const getInitialStreamPort = (): number => {
   return 0
 }
 
+const getInitialUiStyle = (): 'classic' | 'sleek' => {
+  try {
+    const saved = localStorage.getItem('meis_ui_style')
+    if (saved === 'classic' || saved === 'sleek') return saved
+  } catch {}
+  return 'classic'
+}
+
+// Thiết lập ngay thuộc tính data-ui-style lên thẻ html để tránh nhấp nháy giao diện
+try {
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-ui-style', getInitialUiStyle())
+  }
+} catch {}
+
 export const useSettingsStore = create<SettingsState>((set) => ({
   appMode: 'default',
+  uiStyle: getInitialUiStyle(),
   customBgImage: null,
   useTrackCoverAsBg: false,
   bgImageInput: '',
@@ -127,6 +145,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     const next = resolveVal(valOrFn, s.appMode)
     try { document.documentElement.setAttribute('data-mode', next) } catch {}
     return { appMode: next }
+  }),
+  setUiStyle: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.uiStyle)
+    try {
+      document.documentElement.setAttribute('data-ui-style', next)
+      localStorage.setItem('meis_ui_style', next)
+    } catch {}
+    return { uiStyle: next }
   }),
   setCustomBgImage: (valOrFn) => set((s) => ({ customBgImage: resolveVal(valOrFn, s.customBgImage) })),
   setUseTrackCoverAsBg: (valOrFn) => set((s) => ({ useTrackCoverAsBg: resolveVal(valOrFn, s.useTrackCoverAsBg) })),

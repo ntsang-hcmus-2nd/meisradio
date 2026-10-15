@@ -6,7 +6,7 @@ import {
   Sliders, 
   Zap, 
   Speaker, 
-  ChevronRight, 
+  ArrowRight,
   ShieldCheck, 
   Sparkles,
   Layers
@@ -124,11 +124,11 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
     : 'WASAPI SHARED (PCM)'
 
   return (
-    <div className="border-t border-zinc-800/80 bg-zinc-950/80 px-5 py-3 shrink-0 flex flex-col gap-2.5">
+    <div className="border-t border-zinc-800/80 bg-zinc-950/90 px-4 py-2.5 shrink-0 flex flex-col gap-2 select-none overflow-hidden">
       {/* SECTION HEADER & QUALITY BADGE */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Layers size={15} className="text-theme-10" />
+          <Layers size={14} className="text-theme-10" />
           <h3 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
             {t('modals.spectrogram.signalPathTitle')}
           </h3>
@@ -140,26 +140,26 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
         <div className="flex items-center gap-2">
           {isBASS ? (
             isDsd ? (
-              <div className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-amber-400">
+              <div className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-medium text-amber-400">
                 <span className={`w-1.5 h-1.5 rounded-full bg-amber-400 ${isPlaying ? 'animate-ping' : ''}`} />
-                <ShieldCheck size={12} className="text-amber-400" />
+                <ShieldCheck size={11} className="text-amber-400" />
                 <span>{t('modals.spectrogram.dsdNativeBadge')}</span>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-emerald-400">
+              <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[10px] font-medium text-emerald-400">
                 <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${isPlaying ? 'animate-ping' : ''}`} />
-                <ShieldCheck size={12} className="text-emerald-400" />
+                <ShieldCheck size={11} className="text-emerald-400" />
                 <span>{t('modals.spectrogram.bitPerfectBadge')}</span>
               </div>
             )
           ) : isEqEnabled ? (
-            <div className="inline-flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-sky-400">
+            <div className="inline-flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 rounded-full text-[10px] font-medium text-sky-400">
               <span className={`w-1.5 h-1.5 rounded-full bg-sky-400 ${isPlaying ? 'animate-pulse' : ''}`} />
-              <Sparkles size={12} className="text-sky-400" />
+              <Sparkles size={11} className="text-sky-400" />
               <span>{t('modals.spectrogram.dspActiveBadge')}</span>
             </div>
           ) : (
-            <div className="inline-flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-zinc-400">
+            <div className="inline-flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full text-[10px] font-medium text-zinc-400">
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
               <span>{t('modals.spectrogram.directBadge')}</span>
             </div>
@@ -167,137 +167,101 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
         </div>
       </div>
 
-      {/* 5-STAGE SIGNAL PATH PIPELINE */}
-      <div className="flex items-stretch gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+      {/* 5-STAGE POWERAMP-STYLE HORIZONTAL SIGNAL FLOW */}
+      <div className="flex items-start justify-between gap-1.5 w-full overflow-hidden no-scrollbar">
         
         {/* STAGE 1: NGUỒN PHÁT (SOURCE) */}
-        <div className="bg-zinc-900/90 border border-zinc-800/90 hover:border-zinc-700/80 rounded-xl p-2.5 flex-1 min-w-[170px] max-w-[210px] flex flex-col justify-between transition-all group shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-md bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                <FileAudio size={13} />
-              </div>
-              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
-                1. {t('modals.spectrogram.sourceStage')}
-              </span>
+        <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
+          <div className="flex items-center gap-2 mb-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
+              isDsd ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : isLossless ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+            }`}>
+              <FileAudio size={12} />
             </div>
-            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400">
-              {isDsd ? 'DSD' : isLossless ? 'LOSSLESS' : 'LOSSY'}
+            <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
+              {t('modals.spectrogram.sourceStage')}
             </span>
           </div>
 
-          <div className="my-0.5">
+          <div className="mt-1">
             <div className="text-xs font-bold text-white truncate" title={currentTrack?.title || 'Unknown'}>
               {isDsd ? getDsdLabel(activeSampleRate) : (currentTrack?.format?.toUpperCase() || 'AUDIO')}
             </div>
-            <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
+            <div className="text-[10px] font-mono text-zinc-400 mt-0.5 truncate">
               {isDsd ? (
                 <span>1-bit • {formatSampleRate(activeSampleRate)}</span>
               ) : (
-                <span>
-                  {effectiveBitDepth}-bit • {formatSampleRate(activeSampleRate)}
-                </span>
+                <span>{effectiveBitDepth}-bit • {formatSampleRate(activeSampleRate)}</span>
               )}
             </div>
           </div>
 
-          <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span className="truncate max-w-[100px]">
-              {currentTrack?.bitrate ? `${Math.round(currentTrack.bitrate / 1000)} kbps` : (isHiRes ? 'Hi-Res Master' : 'CD Quality')}
-            </span>
-            <span className="font-mono text-zinc-400">2.0 Ch</span>
+          <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
+            <span className="truncate">{currentTrack?.bitrate ? `${Math.round(currentTrack.bitrate / 1000)} kbps` : (isHiRes ? 'Hi-Res' : 'CD Quality')}</span>
+            <span className="text-zinc-400">2.0 Ch</span>
           </div>
         </div>
 
         {/* CONNECTOR 1 -> 2 */}
-        <div className="flex items-center justify-center text-zinc-600 shrink-0 px-0.5">
-          <ChevronRight size={16} className={isPlaying ? "text-theme-10 animate-pulse" : "text-zinc-600"} />
+        <div className="flex items-center justify-center text-zinc-600 shrink-0 pt-4 px-0.5">
+          <ArrowRight size={13} className={isPlaying ? "text-theme-10 animate-pulse" : "text-zinc-600"} />
         </div>
 
-        {/* STAGE 2: GIẢI MÃ TÍN HIỆU (PCM / DSD DECODER) */}
-        <div className="bg-zinc-900/90 border border-zinc-800/90 hover:border-zinc-700/80 rounded-xl p-2.5 flex-1 min-w-[170px] max-w-[210px] flex flex-col justify-between transition-all group shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-md bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
-                <Cpu size={13} />
-              </div>
-              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
-                2. {t('modals.spectrogram.decodeStage')}
-              </span>
+        {/* STAGE 2: GIẢI MÃ TÍN HIỆU (DECODER) */}
+        <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-6 h-6 rounded-full bg-indigo-500/10 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0">
+              <Cpu size={12} />
             </div>
-            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-400">
-              {isDsd ? 'DSD' : 'PCM'}
+            <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
+              {t('modals.spectrogram.decodeStage')}
             </span>
           </div>
 
-          <div className="my-0.5">
+          <div className="mt-1">
             <div className="text-xs font-bold text-white truncate">
               {isDsd 
-                ? (actualDriverMode === 'asio' ? t('modals.spectrogram.dsdStream') : 'DSD ➔ PCM (176.4kHz)')
+                ? (actualDriverMode === 'asio' ? t('modals.spectrogram.dsdStream') : 'DSD ➔ PCM')
                 : (isBASS ? `Linear PCM (${effectiveBitDepth}-bit)` : 'Linear PCM (Float32)')
               }
             </div>
-            <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
+            <div className="text-[10px] font-mono text-zinc-400 mt-0.5 truncate">
               {isBASS 
-                ? (isDsd 
-                    ? (actualDriverMode === 'asio' ? 'BASS_DSD 1-Bit Raw Engine' : 'BASS_DSD PCM Engine')
-                    : 'BASS Audio Core (Native C-FFI)')
+                ? (isDsd ? (actualDriverMode === 'asio' ? 'BASS_DSD 1-Bit Raw' : 'BASS_DSD PCM Engine') : 'BASS Audio Core C-FFI')
                 : 'WebAudio Native Decoder'
               }
             </div>
           </div>
 
-          <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span>
-              {isBASS 
-                ? (isDsd && actualDriverMode === 'asio' ? 'Bit-for-bit raw bitstream' : 'Bit-for-bit lossless') 
-                : 'IEEE 32-bit Float'
-              }
-            </span>
-            <span className="font-mono text-zinc-400">Stereo</span>
+          <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
+            <span className="truncate">{isBASS ? (isDsd ? 'Raw bitstream' : 'Bit-for-bit') : 'IEEE Float32'}</span>
+            <span className="text-zinc-400">Stereo</span>
           </div>
         </div>
 
         {/* CONNECTOR 2 -> 3 */}
-        <div className="flex items-center justify-center text-zinc-600 shrink-0 px-0.5">
-          <ChevronRight size={16} className={isPlaying ? "text-theme-10 animate-pulse" : "text-zinc-600"} />
+        <div className="flex items-center justify-center text-zinc-600 shrink-0 pt-4 px-0.5">
+          <ArrowRight size={13} className={isPlaying ? "text-theme-10 animate-pulse" : "text-zinc-600"} />
         </div>
 
-        {/* STAGE 3: XỬ LÝ DSP (DSP ENGINE / EQ) */}
-        <div className={`rounded-xl p-2.5 flex-1 min-w-[170px] max-w-[210px] flex flex-col justify-between transition-all group shadow-sm border ${
-          isBASS 
-            ? 'bg-emerald-950/20 border-emerald-500/30' 
-            : isEqEnabled 
-              ? 'bg-sky-950/20 border-sky-500/30' 
-              : 'bg-zinc-900/90 border-zinc-800/90 hover:border-zinc-700/80'
-        }`}>
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                isBASS 
-                  ? 'bg-emerald-500/10 text-emerald-400' 
-                  : isEqEnabled 
-                    ? 'bg-sky-500/10 text-sky-400' 
-                    : 'bg-zinc-800 text-zinc-400'
-              }`}>
-                <Sliders size={13} />
-              </div>
-              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
-                3. {t('modals.spectrogram.dspStage')}
-              </span>
-            </div>
-            <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
+        {/* STAGE 3: XỬ LÝ DSP (DSP / EQ) */}
+        <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
+          <div className="flex items-center gap-2 mb-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
               isBASS 
-                ? 'bg-emerald-500/10 text-emerald-400' 
+                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' 
                 : isEqEnabled 
-                  ? 'bg-sky-500/10 text-sky-400' 
-                  : 'bg-zinc-800 text-zinc-400'
+                  ? 'bg-sky-500/10 border-sky-500/40 text-sky-400' 
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-400'
             }`}>
-              {isBASS ? 'BYPASS' : isEqEnabled ? 'ACTIVE' : 'FLAT'}
+              <Sliders size={12} />
+            </div>
+            <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
+              {t('modals.spectrogram.dspStage')}
             </span>
           </div>
 
-          <div className="my-0.5">
+          <div className="mt-1">
             <div className="text-xs font-bold text-white truncate">
               {isBASS 
                 ? t('modals.spectrogram.bypassDsp')
@@ -306,7 +270,7 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
                   : t('modals.spectrogram.eqBypassed')
               }
             </div>
-            <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
+            <div className="text-[10px] font-mono text-zinc-400 mt-0.5 truncate">
               {isBASS ? (
                 <span className="text-emerald-400/90">{t('modals.spectrogram.dspNoFilter')}</span>
               ) : isEqEnabled ? (
@@ -317,101 +281,81 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
             </div>
           </div>
 
-          <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span>{isBASS ? t('modals.spectrogram.dspBitAccurate') : (isEqEnabled ? 'Compressor On' : 'Unity Gain')}</span>
-            <span className="font-mono text-zinc-400">
-              {isBASS ? 'Pure' : (isEqEnabled ? `${eqBands.length} Filters` : 'Direct')}
-            </span>
+          <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
+            <span className="truncate">{isBASS ? 'Unity Gain' : (isEqEnabled ? 'Compressor' : 'Flat')}</span>
+            <span className="text-zinc-400">{isBASS ? '0 dB' : (isEqEnabled ? `${eqBands.length}B` : 'Direct')}</span>
           </div>
         </div>
 
         {/* CONNECTOR 3 -> 4 */}
-        <div className="flex items-center justify-center text-zinc-600 shrink-0 px-0.5">
-          <ChevronRight size={16} className={isPlaying ? "text-theme-10 animate-pulse" : "text-zinc-600"} />
+        <div className="flex items-center justify-center text-zinc-600 shrink-0 pt-4 px-0.5">
+          <ArrowRight size={13} className={isPlaying ? "text-theme-10 animate-pulse" : "text-zinc-600"} />
         </div>
 
-        {/* STAGE 4: GIAO THỨC DRIVER (OUTPUT DRIVER / ENGINE) */}
-        <div className={`rounded-xl p-2.5 flex-1 min-w-[170px] max-w-[210px] flex flex-col justify-between transition-all group shadow-sm border ${
-          isBASS 
-            ? 'bg-emerald-950/20 border-emerald-500/30' 
-            : 'bg-zinc-900/90 border-zinc-800/90 hover:border-zinc-700/80'
-        }`}>
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                isBASS 
-                  ? 'bg-emerald-500/10 text-emerald-400' 
-                  : 'bg-zinc-800 text-zinc-400'
-              }`}>
-                <Zap size={13} />
-              </div>
-              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
-                4. {t('modals.spectrogram.driverStage')}
-              </span>
-            </div>
-            <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
+        {/* STAGE 4: GIAO THỨC XUẤT (DRIVER / OUTPUT) */}
+        <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
+          <div className="flex items-center gap-2 mb-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
               isBASS 
-                ? (actualDriverMode === 'asio' ? 'bg-purple-500/10 text-purple-400 font-bold' : 'bg-emerald-500/10 text-emerald-400 font-bold') 
-                : 'bg-zinc-800 text-zinc-400'
+                ? (actualDriverMode === 'asio' ? 'bg-purple-500/10 border-purple-500/40 text-purple-400' : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400') 
+                : 'bg-zinc-800 border-zinc-700 text-zinc-400'
             }`}>
-              {isBASS ? (actualDriverMode === 'asio' ? 'ASIO DIRECT' : 'EXCLUSIVE') : 'SHARED'}
+              <Zap size={12} />
+            </div>
+            <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
+              {t('modals.spectrogram.driverStage')}
             </span>
           </div>
 
-          <div className="my-0.5">
+          <div className="mt-1">
             <div className="text-xs font-bold text-white truncate">
               {isBASS 
                 ? (actualDriverMode === 'asio' ? t('modals.spectrogram.asioDriver') : t('modals.spectrogram.wasapiExclusive')) 
                 : t('modals.spectrogram.wasapiShared')}
             </div>
-            <div className="text-[11px] font-mono text-zinc-400 mt-0.5 truncate">
+            <div className="text-[10px] font-mono text-zinc-400 mt-0.5 truncate">
               {isBASS 
-                ? (actualDriverMode === 'asio' ? t('modals.spectrogram.asioDriverDesc') : t('modals.spectrogram.exclusiveDesc')) 
-                : t('modals.spectrogram.sharedDesc')}
+                ? (actualDriverMode === 'asio' ? 'Direct ASIO Hardware' : 'Bypass Windows Mixer') 
+                : 'Windows Audio Session'}
             </div>
           </div>
 
-          <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span>{isBASS ? (actualDriverMode === 'asio' ? 'Dedicated ASIO Driver' : 'Bypass Windows Mixer') : 'OS Audio Session'}</span>
-            <span className="font-mono text-zinc-400">{isBASS ? (actualDriverMode === 'asio' ? 'ASIO' : 'Direct') : 'Mixer'}</span>
+          <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
+            <span className="truncate">{isBASS ? 'Lock Exclusive' : 'Shared Session'}</span>
+            <span className="text-zinc-400">{isBASS ? (actualDriverMode === 'asio' ? 'ASIO' : 'WASAPI') : 'Mixer'}</span>
           </div>
         </div>
 
         {/* CONNECTOR 4 -> 5 */}
-        <div className="flex items-center justify-center text-zinc-600 shrink-0 px-0.5">
-          <ChevronRight size={16} className={isPlaying ? "text-theme-10 animate-pulse" : "text-zinc-600"} />
+        <div className="flex items-center justify-center text-zinc-600 shrink-0 pt-4 px-0.5">
+          <ArrowRight size={13} className={isPlaying ? "text-theme-10 animate-pulse" : "text-zinc-600"} />
         </div>
 
         {/* STAGE 5: THIẾT BỊ ĐẦU RA (OUTPUT DEVICE / DAC) */}
-        <div className="bg-zinc-900/90 border border-zinc-800/90 hover:border-zinc-700/80 rounded-xl p-2.5 flex-1 min-w-[170px] max-w-[210px] flex flex-col justify-between transition-all group shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                <Speaker size={13} />
-              </div>
-              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
-                5. {t('modals.spectrogram.outputStage')}
-              </span>
+        <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-6 h-6 rounded-full bg-teal-500/10 border border-teal-500/40 text-teal-400 flex items-center justify-center shrink-0">
+              <Speaker size={12} />
             </div>
-            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400">
-              DAC / OUTPUT
+            <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
+              {t('modals.spectrogram.outputStage')}
             </span>
           </div>
 
-          <div className="my-0.5">
+          <div className="mt-1">
             <div className="text-xs font-bold text-white truncate" title={getDeviceDisplayName()}>
               {getDeviceDisplayName()}
             </div>
-            <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
+            <div className="text-[10px] font-mono text-zinc-400 mt-0.5 truncate">
               <span>{formatSampleRate(outputSampleRate)}</span>
-              <span className="text-zinc-500 mx-1">•</span>
-              <span className="text-emerald-400 font-mono">{outputFormatString}</span>
+              <span className="text-zinc-600 mx-1">•</span>
+              <span className="text-emerald-400 font-bold">{outputFormatString}</span>
             </div>
           </div>
 
-          <div className="mt-1.5 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[10px] text-zinc-500">
-            <span className="truncate max-w-[100px]">{isBASS ? (actualDriverMode === 'asio' ? 'ASIO Hardware DAC' : 'Hardware DAC (Exclusive)') : t('modals.spectrogram.defaultDevice')}</span>
-            <span className="font-mono text-zinc-400">L / R</span>
+          <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
+            <span className="truncate">{isBASS ? 'DAC Hardware' : 'Default Endpoint'}</span>
+            <span className="text-zinc-400">L / R</span>
           </div>
         </div>
 
