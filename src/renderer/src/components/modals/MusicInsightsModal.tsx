@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { X, BarChart3, Clock, Disc3, Mic2, Music2, Sparkles, Headphones } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 import { useLibraryStore } from '../../stores/libraryStore'
-import { splitArtistString } from '../../App'
+import { splitArtistString } from '../../utils/textUtils'
 import { isDsdTrack } from '../../utils/formatUtils'
 
 export const MusicInsightsModal: React.FC = () => {

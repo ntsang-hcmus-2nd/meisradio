@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath, pathToFileURL } from 'url'
 import koffi from 'koffi'
 
 export interface TrackMetadata {
@@ -22,6 +23,54 @@ export interface LibraryCacheData {
   tracks: any[]
   playlists: any[]
   preAggregated: any
+}
+
+/**
+ * Normalizes any file path or file:// URL into a standardized lower-case, forward-slash key
+ * for reliable cross-platform comparisons.
+ */
+export function normalizePathKey(p: string): string {
+  if (!p) return ''
+  let normalized = p.trim()
+  if (normalized.startsWith('file://')) {
+    try {
+      const url = new URL(normalized)
+      let pathname = decodeURIComponent(url.pathname)
+      if (pathname.length >= 3 && pathname[0] === '/' && pathname[2] === ':') {
+        pathname = pathname.slice(1)
+      }
+      normalized = pathname
+    } catch {
+      normalized = decodeURIComponent(normalized.replace(/^file:\/\/\/?/, ''))
+    }
+  }
+  return normalized.replace(/\\/g, '/').toLowerCase()
+}
+
+/**
+ * Helper to generate candidate lookup keys for a given path (raw, forward-slash, backslash, file URL)
+ */
+function getCandidatePathKeys(filePath: string): Set<string> {
+  const keys = new Set<string>()
+  if (!filePath) return keys
+  keys.add(filePath)
+  keys.add(filePath.replace(/\\/g, '/'))
+  keys.add(filePath.replace(/\//g, '\\'))
+
+  if (filePath.startsWith('file://')) {
+    try {
+      const raw = fileURLToPath(filePath)
+      keys.add(raw)
+      keys.add(raw.replace(/\\/g, '/'))
+      keys.add(raw.replace(/\//g, '\\'))
+    } catch { /* ignore */ }
+  } else {
+    try {
+      const url = pathToFileURL(filePath).href
+      keys.add(url)
+    } catch { /* ignore */ }
+  }
+  return keys
 }
 
 /**
@@ -272,6 +321,13 @@ class KoffiPreparedStatement {
   }
 }
 
+/** Global singleton reference for convenience functions */
+let activeSqliteStorage: SqliteStorage | null = null
+
+export function getActiveSqliteStorage(): SqliteStorage | null {
+  return activeSqliteStorage
+}
+
 /**
  * High-level SQLite Storage Manager for Mei's Radio
  * Replaces metadata-cache.json, theme-colors-cache.json, and library-cache.json
@@ -291,8 +347,33 @@ export class SqliteStorage {
 
   private stmtGetLibraryCache: KoffiPreparedStatement | null = null
   private stmtSetLibraryCache: KoffiPreparedStatement | null = null
+  private stmtUpdateLibraryCacheTracks: KoffiPreparedStatement | null = null
 
   private stmtUpsertTrack: KoffiPreparedStatement | null = null
+  private stmtFindTrackByIdOrPath: KoffiPreparedStatement | null = null
+  private stmtUpdateSingleTrack: KoffiPreparedStatement | null = null
+
+  // New QoL Prepared Statements
+  private stmtGetWaveform: KoffiPreparedStatement | null = null
+  private stmtSetWaveform: KoffiPreparedStatement | null = null
+
+  private stmtGetFavorites: KoffiPreparedStatement | null = null
+  private stmtIsFavorite: KoffiPreparedStatement | null = null
+  private stmtAddFavorite: KoffiPreparedStatement | null = null
+  private stmtRemoveFavorite: KoffiPreparedStatement | null = null
+  private stmtClearFavorites: KoffiPreparedStatement | null = null
+
+  private stmtGetLyricOffset: KoffiPreparedStatement | null = null
+  private stmtSetLyricOffset: KoffiPreparedStatement | null = null
+  private stmtGetAllLyricOffsets: KoffiPreparedStatement | null = null
+
+  private stmtGetSmartPlaylists: KoffiPreparedStatement | null = null
+  private stmtSaveSmartPlaylist: KoffiPreparedStatement | null = null
+  private stmtDeleteSmartPlaylist: KoffiPreparedStatement | null = null
+
+  private stmtGetUserPlaylists: KoffiPreparedStatement | null = null
+  private stmtSaveUserPlaylist: KoffiPreparedStatement | null = null
+  private stmtDeleteUserPlaylist: KoffiPreparedStatement | null = null
 
   constructor(dataFolder: string) {
     this.dataFolder = dataFolder
@@ -300,6 +381,8 @@ export class SqliteStorage {
     const dllPath = this.resolveSqliteDll()
 
     this.db = new KoffiSqlite3(dllPath, dbPath)
+    activeSqliteStorage = this
+
     this.initDatabase()
     this.prepareStatements()
     this.migrateExistingJsonFiles()
@@ -330,7 +413,7 @@ export class SqliteStorage {
   private initDatabase(): void {
     if (!this.db) return
 
-    // Tối ưu hóa hiệu năng và độ an toàn
+    // 1. Tối ưu hóa hiệu năng và tạo tất cả các bảng (nếu chưa tồn tại)
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
@@ -344,7 +427,6 @@ export class SqliteStorage {
         data_json TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_metadata_mtime ON metadata_cache(mtime);
 
       -- 2. Theme colors: bảng màu 60-30-10 của bài hát/thư mục (thay thế theme-colors-cache.json)
       CREATE TABLE IF NOT EXISTS theme_colors (
@@ -383,6 +465,8 @@ export class SqliteStorage {
         sample_rate INTEGER,
         bit_depth INTEGER,
         is_dsd INTEGER DEFAULT 0,
+        has_lyrics INTEGER DEFAULT 0,
+        is_hi_res INTEGER DEFAULT 0,
         cover_art TEXT,
         theme_primary TEXT,
         theme_secondary TEXT,
@@ -390,11 +474,145 @@ export class SqliteStorage {
         track_json TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_lib_tracks_artist ON library_tracks(artist);
-      CREATE INDEX IF NOT EXISTS idx_lib_tracks_album ON library_tracks(album);
-      CREATE INDEX IF NOT EXISTS idx_lib_tracks_genre ON library_tracks(genre);
-      CREATE INDEX IF NOT EXISTS idx_lib_tracks_file ON library_tracks(file_path);
+
+      -- 5. Waveform Peaks Cache
+      CREATE TABLE IF NOT EXISTS waveform_cache (
+        file_path TEXT PRIMARY KEY,
+        mtime REAL,
+        peaks_json TEXT,
+        updated_at INTEGER
+      );
+
+      -- 6. Favorites
+      CREATE TABLE IF NOT EXISTS favorite_tracks (
+        file_path TEXT PRIMARY KEY,
+        added_at INTEGER
+      );
+
+      -- 7. Per-Track Lyric Offsets
+      CREATE TABLE IF NOT EXISTS track_lyric_offsets (
+        file_path TEXT PRIMARY KEY,
+        offset_sec REAL NOT NULL,
+        updated_at INTEGER
+      );
+
+      -- 8. Smart Playlists
+      CREATE TABLE IF NOT EXISTS smart_playlists (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        rules_json TEXT NOT NULL,
+        created_at INTEGER,
+        updated_at INTEGER
+      );
+
+      -- 9. User Virtual Playlists
+      CREATE TABLE IF NOT EXISTS user_playlists (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        tracks_json TEXT NOT NULL DEFAULT '[]',
+        cover_art TEXT,
+        created_at INTEGER,
+        updated_at INTEGER
+      );
     `)
+
+    // 2. Migration an toàn cho các cột mới nếu DB đã tồn tại từ các phiên bản cũ
+    const alterColumns = [
+      'ALTER TABLE library_tracks ADD COLUMN genre TEXT;',
+      'ALTER TABLE library_tracks ADD COLUMN year INTEGER;',
+      'ALTER TABLE library_tracks ADD COLUMN format TEXT;',
+      'ALTER TABLE library_tracks ADD COLUMN bitrate INTEGER;',
+      'ALTER TABLE library_tracks ADD COLUMN sample_rate INTEGER;',
+      'ALTER TABLE library_tracks ADD COLUMN bit_depth INTEGER;',
+      'ALTER TABLE library_tracks ADD COLUMN is_dsd INTEGER DEFAULT 0;',
+      'ALTER TABLE library_tracks ADD COLUMN has_lyrics INTEGER DEFAULT 0;',
+      'ALTER TABLE library_tracks ADD COLUMN is_hi_res INTEGER DEFAULT 0;',
+      'ALTER TABLE library_tracks ADD COLUMN cover_art TEXT;',
+      'ALTER TABLE library_tracks ADD COLUMN theme_primary TEXT;',
+      'ALTER TABLE library_tracks ADD COLUMN theme_secondary TEXT;',
+      'ALTER TABLE library_tracks ADD COLUMN theme_accent TEXT;',
+      'ALTER TABLE library_cache ADD COLUMN library_paths_json TEXT;',
+      'ALTER TABLE library_cache ADD COLUMN multi_artist_version INTEGER DEFAULT 2;',
+      'ALTER TABLE library_cache ADD COLUMN dsd_version INTEGER DEFAULT 1;',
+      'ALTER TABLE library_cache ADD COLUMN pre_aggregated_json TEXT;',
+      'ALTER TABLE user_playlists ADD COLUMN tracks_json TEXT DEFAULT \'[]\';',
+      'ALTER TABLE user_playlists ADD COLUMN description TEXT;',
+      'ALTER TABLE user_playlists ADD COLUMN cover_art TEXT;',
+      'ALTER TABLE user_playlists ADD COLUMN thumbnail TEXT;',
+      'ALTER TABLE user_playlists ADD COLUMN created_at INTEGER;',
+      'ALTER TABLE user_playlists ADD COLUMN updated_at INTEGER;',
+      'ALTER TABLE smart_playlists ADD COLUMN created_at INTEGER;',
+      'ALTER TABLE smart_playlists ADD COLUMN updated_at INTEGER;',
+      'ALTER TABLE waveform_cache ADD COLUMN updated_at INTEGER;',
+      'ALTER TABLE favorite_tracks ADD COLUMN added_at INTEGER;',
+      'ALTER TABLE track_lyric_offsets ADD COLUMN updated_at INTEGER;'
+    ]
+
+    for (const sql of alterColumns) {
+      try {
+        this.db.exec(sql)
+      } catch {
+        /* Bỏ qua nếu cột đã tồn tại hoặc bảng mới tạo */
+      }
+    }
+
+    // Tự động di chuyển dữ liệu từ bảng cũ user_playlist_tracks (nếu có) sang tracks_json
+    try {
+      const hasOldPlaylistTracks = this.db.prepare(
+        "SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name='user_playlist_tracks';"
+      ).get<{ cnt: number }>()
+
+      if (hasOldPlaylistTracks && hasOldPlaylistTracks.cnt > 0) {
+        const emptyPlaylists = this.db.prepare(
+          "SELECT id FROM user_playlists WHERE tracks_json IS NULL OR tracks_json = '' OR tracks_json = '[]';"
+        ).all<{ id: string }>()
+
+        for (const pl of emptyPlaylists) {
+          const trackRows = this.db.prepare(
+            "SELECT track_id FROM user_playlist_tracks WHERE playlist_id = ? ORDER BY position ASC;"
+          ).all<{ track_id: string }>(pl.id)
+
+          if (trackRows && trackRows.length > 0) {
+            const trackIds = trackRows.map((r) => r.track_id)
+            this.db.prepare('UPDATE user_playlists SET tracks_json = ? WHERE id = ?;').run(
+              JSON.stringify(trackIds),
+              pl.id
+            )
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[SqliteStorage] Error migrating user_playlist_tracks:', e)
+    }
+
+    try {
+      this.db.exec("UPDATE user_playlists SET tracks_json = '[]' WHERE tracks_json IS NULL;")
+      this.db.exec(
+        "UPDATE user_playlists SET cover_art = thumbnail WHERE (cover_art IS NULL OR cover_art = '') AND (thumbnail IS NOT NULL AND thumbnail != '');"
+      )
+    } catch { /* ignore */ }
+
+    // 3. Tạo các index an toàn sau khi chắc chắn các cột đã tồn tại
+    const createIndexes = [
+      'CREATE INDEX IF NOT EXISTS idx_metadata_mtime ON metadata_cache(mtime);',
+      'CREATE INDEX IF NOT EXISTS idx_lib_tracks_artist ON library_tracks(artist);',
+      'CREATE INDEX IF NOT EXISTS idx_lib_tracks_album ON library_tracks(album);',
+      'CREATE INDEX IF NOT EXISTS idx_lib_tracks_genre ON library_tracks(genre);',
+      'CREATE INDEX IF NOT EXISTS idx_lib_tracks_file ON library_tracks(file_path);',
+      'CREATE INDEX IF NOT EXISTS idx_lib_tracks_lyrics ON library_tracks(has_lyrics);',
+      'CREATE INDEX IF NOT EXISTS idx_lib_tracks_hires ON library_tracks(is_hi_res);',
+      'CREATE INDEX IF NOT EXISTS idx_waveform_mtime ON waveform_cache(mtime);',
+      'CREATE INDEX IF NOT EXISTS idx_fav_tracks_added ON favorite_tracks(added_at);'
+    ]
+
+    for (const sql of createIndexes) {
+      try {
+        this.db.exec(sql)
+      } catch {
+        /* Bỏ qua nếu index đã tồn tại */
+      }
+    }
   }
 
   private prepareStatements(): void {
@@ -418,12 +636,69 @@ export class SqliteStorage {
     this.stmtSetLibraryCache = this.db.prepare(
       'INSERT OR REPLACE INTO library_cache (id, library_path, library_paths_json, multi_artist_version, dsd_version, tracks_json, playlists_json, pre_aggregated_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);'
     )
+    this.stmtUpdateLibraryCacheTracks = this.db.prepare(
+      'UPDATE library_cache SET tracks_json = ?, pre_aggregated_json = ?, updated_at = ? WHERE id = "current_library";'
+    )
 
     this.stmtUpsertTrack = this.db.prepare(
       `INSERT OR REPLACE INTO library_tracks (
-        id, file_path, title, artist, album, genre, duration, year, format, bitrate, sample_rate, bit_depth, is_dsd, cover_art, theme_primary, theme_secondary, theme_accent, track_json, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+        id, file_path, title, artist, album, genre, duration, year, format, bitrate, sample_rate, bit_depth, is_dsd, has_lyrics, is_hi_res, cover_art, theme_primary, theme_secondary, theme_accent, track_json, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
     )
+
+    this.stmtFindTrackByIdOrPath = this.db.prepare(
+      'SELECT id, file_path, track_json FROM library_tracks WHERE file_path = ? OR id = ? LIMIT 1;'
+    )
+
+    this.stmtUpdateSingleTrack = this.db.prepare(
+      `UPDATE library_tracks SET title = ?, artist = ?, album = ?, duration = ?, format = ?, year = ?, genre = ?, has_lyrics = ?, is_hi_res = ?, sample_rate = ?, bit_depth = ?, track_json = ?, updated_at = ? WHERE id = ?;`
+    )
+
+    // Waveform Cache
+    this.stmtGetWaveform = this.db.prepare('SELECT mtime, peaks_json FROM waveform_cache WHERE file_path = ?;')
+    this.stmtSetWaveform = this.db.prepare(
+      'INSERT OR REPLACE INTO waveform_cache (file_path, mtime, peaks_json, updated_at) VALUES (?, ?, ?, ?);'
+    )
+
+    // Favorites
+    this.stmtGetFavorites = this.db.prepare('SELECT file_path FROM favorite_tracks ORDER BY added_at ASC;')
+    this.stmtIsFavorite = this.db.prepare('SELECT file_path FROM favorite_tracks WHERE file_path = ? LIMIT 1;')
+    this.stmtAddFavorite = this.db.prepare('INSERT OR REPLACE INTO favorite_tracks (file_path, added_at) VALUES (?, ?);')
+    this.stmtRemoveFavorite = this.db.prepare('DELETE FROM favorite_tracks WHERE file_path = ?;')
+    this.stmtClearFavorites = this.db.prepare('DELETE FROM favorite_tracks;')
+
+    // Track Lyric Offsets
+    this.stmtGetLyricOffset = this.db.prepare('SELECT offset_sec FROM track_lyric_offsets WHERE file_path = ?;')
+    this.stmtSetLyricOffset = this.db.prepare(
+      'INSERT OR REPLACE INTO track_lyric_offsets (file_path, offset_sec, updated_at) VALUES (?, ?, ?);'
+    )
+    this.stmtGetAllLyricOffsets = this.db.prepare('SELECT file_path, offset_sec FROM track_lyric_offsets;')
+
+    // Smart Playlists
+    try {
+      this.stmtGetSmartPlaylists = this.db.prepare(
+        'SELECT id, name, rules_json, created_at, updated_at FROM smart_playlists ORDER BY updated_at DESC;'
+      )
+      this.stmtSaveSmartPlaylist = this.db.prepare(
+        'INSERT OR REPLACE INTO smart_playlists (id, name, rules_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?);'
+      )
+      this.stmtDeleteSmartPlaylist = this.db.prepare('DELETE FROM smart_playlists WHERE id = ?;')
+    } catch (e) {
+      console.warn('[SqliteStorage] Lỗi prepare statements cho smart_playlists:', e)
+    }
+
+    // User Virtual Playlists
+    try {
+      this.stmtGetUserPlaylists = this.db.prepare(
+        'SELECT id, name, description, tracks_json, cover_art, created_at, updated_at FROM user_playlists ORDER BY updated_at DESC;'
+      )
+      this.stmtSaveUserPlaylist = this.db.prepare(
+        'INSERT OR REPLACE INTO user_playlists (id, name, description, tracks_json, cover_art, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);'
+      )
+      this.stmtDeleteUserPlaylist = this.db.prepare('DELETE FROM user_playlists WHERE id = ?;')
+    } catch (e) {
+      console.warn('[SqliteStorage] Lỗi prepare statements cho user_playlists:', e)
+    }
   }
 
   /**
@@ -507,6 +782,32 @@ export class SqliteStorage {
           fs.renameSync(libJsonPath, libJsonPath + '.migrated')
         } catch (e) {
           console.warn('[SqliteStorage] Lỗi migrate library-cache.json:', e)
+        }
+      }
+
+      // 4. Migrate user-playlists.json (nếu có bài chưa được lưu vào user_playlists)
+      const userPlaylistsJsonPath = path.join(this.dataFolder, 'user-playlists.json')
+      if (fs.existsSync(userPlaylistsJsonPath)) {
+        try {
+          const raw = fs.readFileSync(userPlaylistsJsonPath, 'utf-8')
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const existingRows = this.getUserPlaylists()
+            const existingIds = new Set(existingRows.map((r) => r.id))
+
+            let migratedCount = 0
+            for (const pl of parsed) {
+              if (pl && pl.id && !existingIds.has(pl.id)) {
+                this.saveUserPlaylist(pl)
+                migratedCount++
+              }
+            }
+            if (migratedCount > 0) {
+              console.log(`[SqliteStorage] Đã di chuyển ${migratedCount} user playlists mới sang SQLite!`)
+            }
+          }
+        } catch (e) {
+          console.warn('[SqliteStorage] Lỗi migrate user-playlists.json:', e)
         }
       }
     } catch (err) {
@@ -759,6 +1060,9 @@ export class SqliteStorage {
           for (const t of data.tracks) {
             const trackId = t.id || t.filePath
             if (!trackId) continue
+            const hasLyrics = (t.lyrics && String(t.lyrics).trim().length > 0) || t.hasLyrics ? 1 : 0
+            const isHiRes = (t.isDsd || (t.sampleRate && t.sampleRate >= 88200) || (t.bitDepth && t.bitDepth >= 24) || t.isHiRes) ? 1 : 0
+
             this.stmtUpsertTrack.run(
               trackId,
               t.filePath || trackId,
@@ -773,6 +1077,8 @@ export class SqliteStorage {
               t.sampleRate || 0,
               t.bitDepth || 0,
               t.isDsd ? 1 : 0,
+              hasLyrics,
+              isHiRes,
               t.coverArt || null,
               t.themeColors?.primary60 || null,
               t.themeColors?.secondary30 || null,
@@ -789,39 +1095,649 @@ export class SqliteStorage {
   }
 
   /**
-   * Cập nhật 1 bài hát trong library_cache và library_tracks mà không cần ghi lại toàn bộ file JSON!
+   * Helper tìm một hàng trong library_tracks theo filePath hoặc id với các dạng URL/Windows path
+   */
+  private findTrackRow(filePath: string): { id: string; file_path: string; track_json: string } | null {
+    if (!this.stmtFindTrackByIdOrPath) return null
+    const candidateKeys = getCandidatePathKeys(filePath)
+    for (const key of candidateKeys) {
+      const row = this.stmtFindTrackByIdOrPath.get<{ id: string; file_path: string; track_json: string }>(key, key)
+      if (row) return row
+    }
+
+    // Fallback: so khớp normalizePathKey nếu không tìm thấy trực tiếp
+    if (this.db) {
+      try {
+        const normTarget = normalizePathKey(filePath)
+        const stmt = this.db.prepare('SELECT id, file_path, track_json FROM library_tracks;')
+        const allRows = stmt.all<{ id: string; file_path: string; track_json: string }>()
+        stmt.finalize()
+        for (const r of allRows) {
+          if (normalizePathKey(r.file_path) === normTarget || normalizePathKey(r.id) === normTarget) {
+            return r
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    return null
+  }
+
+  /**
+   * Cập nhật 1 bài hát trong library_tracks, metadata_cache và library_cache với hiệu năng cao O(1)
    */
   public updateSingleTrack(
-    trackIdOrPath: string,
-    updateFn: (track: any) => any,
+    filePath: string,
+    updates: Record<string, any> | ((track: any) => any),
     rebuildPreAggregatedFn?: (tracks: any[]) => any
   ): boolean {
-    if (!this.db) return false
+    if (!this.db || !filePath) return false
     try {
-      const cached = this.getLibraryCache()
-      if (!cached || !Array.isArray(cached.tracks)) return false
+      const now = Date.now()
+      const candidateKeys = getCandidatePathKeys(filePath)
+      const normTarget = normalizePathKey(filePath)
 
-      let found = false
-      for (let i = 0; i < cached.tracks.length; i++) {
-        const t = cached.tracks[i]
-        if (t.id === trackIdOrPath || t.filePath === trackIdOrPath) {
-          cached.tracks[i] = updateFn(t)
-          found = true
+      return this.db.transaction(() => {
+        // 1. Tìm bản ghi bài hát hiện tại trong library_tracks
+        const matchedRow = this.findTrackRow(filePath)
+        let oldTrack: any = null
+        if (matchedRow && matchedRow.track_json) {
+          try {
+            oldTrack = JSON.parse(matchedRow.track_json)
+          } catch { /* ignore */ }
+        }
+
+        // Nếu không có trong library_tracks, thử tìm trong metadata_cache
+        if (!oldTrack) {
+          for (const k of candidateKeys) {
+            const meta = this.getMetadata(k)
+            if (meta && meta.data) {
+              oldTrack = meta.data
+              break
+            }
+          }
+        }
+
+        if (!oldTrack) {
+          oldTrack = { id: filePath, filePath: filePath }
+        }
+
+        // Merge updates
+        const mergedTrack = typeof updates === 'function' ? updates(oldTrack) : { ...oldTrack, ...updates }
+        const trackId = matchedRow ? matchedRow.id : (mergedTrack.id || filePath)
+
+        // 2. Cập nhật metadata_cache cho file_path
+        let matchedMetaKey: string | null = null
+        let existingMeta: TrackMetadata | null = null
+        for (const k of candidateKeys) {
+          const meta = this.getMetadata(k)
+          if (meta) {
+            matchedMetaKey = k
+            existingMeta = meta
+            break
+          }
+        }
+
+        const metaData = typeof updates === 'function' ? mergedTrack : { ...(existingMeta?.data || {}), ...updates }
+        const metaMtime = existingMeta ? existingMeta.mtime : (mergedTrack.mtime || now)
+        this.stmtSetMetadata?.run(matchedMetaKey || filePath, metaMtime, JSON.stringify(metaData || {}), now)
+
+        // 3. Cập nhật library_tracks
+        const hasLyrics = (mergedTrack.lyrics && String(mergedTrack.lyrics).trim().length > 0) || mergedTrack.hasLyrics ? 1 : 0
+        const isHiRes = (mergedTrack.isDsd || (mergedTrack.sampleRate && mergedTrack.sampleRate >= 88200) || (mergedTrack.bitDepth && mergedTrack.bitDepth >= 24) || mergedTrack.isHiRes) ? 1 : 0
+        const trackJson = JSON.stringify(mergedTrack)
+
+        if (matchedRow && this.stmtUpdateSingleTrack) {
+          this.stmtUpdateSingleTrack.run(
+            mergedTrack.title || '',
+            mergedTrack.artist || '',
+            mergedTrack.album || '',
+            mergedTrack.duration || 0,
+            mergedTrack.format || '',
+            mergedTrack.year || null,
+            mergedTrack.genre || '',
+            hasLyrics,
+            isHiRes,
+            mergedTrack.sampleRate || 0,
+            mergedTrack.bitDepth || 0,
+            trackJson,
+            now,
+            matchedRow.id
+          )
+        } else if (this.stmtUpsertTrack) {
+          this.stmtUpsertTrack.run(
+            trackId,
+            mergedTrack.filePath || trackId,
+            mergedTrack.title || '',
+            mergedTrack.artist || '',
+            mergedTrack.album || '',
+            mergedTrack.genre || '',
+            mergedTrack.duration || 0,
+            mergedTrack.year || null,
+            mergedTrack.format || '',
+            mergedTrack.bitrate || 0,
+            mergedTrack.sampleRate || 0,
+            mergedTrack.bitDepth || 0,
+            mergedTrack.isDsd ? 1 : 0,
+            hasLyrics,
+            isHiRes,
+            mergedTrack.coverArt || null,
+            mergedTrack.themeColors?.primary60 || null,
+            mergedTrack.themeColors?.secondary30 || null,
+            mergedTrack.themeColors?.accent10 || null,
+            trackJson,
+            now
+          )
+        }
+
+        // 4. Cập nhật library_cache nhẹ nhàng mà không xóa & nạp lại toàn bộ library_tracks
+        const cacheRow = this.stmtGetLibraryCache?.get<any>('current_library')
+        if (cacheRow && cacheRow.tracks_json) {
+          let tracks: any[] = []
+          try {
+            tracks = JSON.parse(cacheRow.tracks_json || '[]')
+          } catch { /* ignore */ }
+
+          if (Array.isArray(tracks)) {
+            const idx = tracks.findIndex((t: any) =>
+              candidateKeys.has(t.id) ||
+              candidateKeys.has(t.filePath) ||
+              normalizePathKey(t.id) === normTarget ||
+              normalizePathKey(t.filePath) === normTarget
+            )
+            if (idx !== -1) {
+              tracks[idx] = mergedTrack
+            } else {
+              tracks.push(mergedTrack)
+            }
+
+            let preAggregatedJson = cacheRow.pre_aggregated_json || null
+            if (rebuildPreAggregatedFn) {
+              try {
+                const pre = rebuildPreAggregatedFn(tracks)
+                preAggregatedJson = JSON.stringify(pre)
+              } catch (e) {
+                console.warn('[SqliteStorage.updateSingleTrack] rebuildPreAggregatedFn error:', e)
+              }
+            }
+
+            this.stmtUpdateLibraryCacheTracks?.run(JSON.stringify(tracks), preAggregatedJson, now)
+          }
+        }
+
+        return true
+      })
+    } catch (e) {
+      console.warn('[SqliteStorage.updateSingleTrack] Error:', e)
+      return false
+    }
+  }
+
+  /**
+   * Xóa một danh sách các bài hát khỏi library_tracks, metadata_cache, theme_colors và library_cache trong 1 transaction duy nhất.
+   */
+  public removeLibraryTracks(filePaths: string[]): void {
+    if (!this.db || !Array.isArray(filePaths) || filePaths.length === 0) return
+
+    try {
+      this.db.transaction(() => {
+        const now = Date.now()
+        const keysToRemove = new Set<string>()
+        const normalizedKeysToRemove = new Set<string>()
+
+        for (const fp of filePaths) {
+          if (!fp) continue
+          keysToRemove.add(fp)
+          keysToRemove.add(fp.replace(/\\/g, '/'))
+          keysToRemove.add(fp.replace(/\//g, '\\'))
+          normalizedKeysToRemove.add(normalizePathKey(fp))
+          if (fp.startsWith('file://')) {
+            try {
+              const raw = fileURLToPath(fp)
+              keysToRemove.add(raw)
+              keysToRemove.add(raw.replace(/\\/g, '/'))
+              keysToRemove.add(raw.replace(/\//g, '\\'))
+              normalizedKeysToRemove.add(normalizePathKey(raw))
+            } catch { /* ignore */ }
+          } else {
+            try {
+              const url = pathToFileURL(fp).href
+              keysToRemove.add(url)
+              normalizedKeysToRemove.add(normalizePathKey(url))
+            } catch { /* ignore */ }
+          }
+        }
+
+        // Xóa khỏi các bảng
+        const delTrackStmt = this.db!.prepare('DELETE FROM library_tracks WHERE id = ? OR file_path = ?;')
+        const delMetaStmt = this.db!.prepare('DELETE FROM metadata_cache WHERE file_path = ?;')
+        const delColorStmt = this.db!.prepare('DELETE FROM theme_colors WHERE key = ?;')
+        const delWaveStmt = this.db!.prepare('DELETE FROM waveform_cache WHERE file_path = ?;')
+        const delFavStmt = this.db!.prepare('DELETE FROM favorite_tracks WHERE file_path = ?;')
+        const delLyricStmt = this.db!.prepare('DELETE FROM track_lyric_offsets WHERE file_path = ?;')
+
+        for (const k of keysToRemove) {
+          delTrackStmt.run(k, k)
+          delMetaStmt.run(k)
+          delColorStmt.run(k)
+          delWaveStmt.run(k)
+          delFavStmt.run(k)
+          delLyricStmt.run(k)
+        }
+
+        delTrackStmt.finalize()
+        delMetaStmt.finalize()
+        delColorStmt.finalize()
+        delWaveStmt.finalize()
+        delFavStmt.finalize()
+        delLyricStmt.finalize()
+
+        // Cập nhật library_cache
+        const row = this.stmtGetLibraryCache?.get<any>('current_library')
+        if (row && row.tracks_json) {
+          let tracks: any[] = []
+          try {
+            tracks = JSON.parse(row.tracks_json || '[]')
+          } catch { /* ignore */ }
+
+          const remainingTracks = tracks.filter((t: any) => {
+            if (!t) return false
+            if (keysToRemove.has(t.id) || keysToRemove.has(t.filePath)) return false
+            if (normalizedKeysToRemove.has(normalizePathKey(t.id)) || normalizedKeysToRemove.has(normalizePathKey(t.filePath))) return false
+            return true
+          })
+
+          this.stmtUpdateLibraryCacheTracks?.run(JSON.stringify(remainingTracks), row.pre_aggregated_json, now)
+        }
+      })
+    } catch (e) {
+      console.warn('[SqliteStorage.removeLibraryTracks] Error:', e)
+    }
+  }
+
+  public removeTracksFromLibraryCache(filePaths: string[]): void {
+    this.removeLibraryTracks(filePaths)
+  }
+
+  /**
+   * Xóa tất cả các bài hát thuộc một thư mục tiền tố (tránh lỗi substring ngẫu nhiên của LIKE %pattern%)
+   */
+  public removeTracksByDirectoryPrefix(dirPath: string): void {
+    if (!this.db || !dirPath) return
+
+    try {
+      const cleanDir = dirPath.trim().replace(/[/\\]+$/, '')
+      const prefixSlash = cleanDir.replace(/\\/g, '/') + '/'
+      const prefixBackslash = cleanDir.replace(/\//g, '\\') + '\\'
+      let prefixUrl = ''
+      try {
+        prefixUrl = pathToFileURL(cleanDir).href
+        if (!prefixUrl.endsWith('/')) prefixUrl += '/'
+      } catch { /* ignore */ }
+
+      this.db.transaction(() => {
+        const now = Date.now()
+
+        const delTrack = this.db!.prepare(`
+          DELETE FROM library_tracks WHERE
+            file_path = ? OR id = ? OR
+            file_path LIKE ? OR id LIKE ? OR
+            file_path LIKE ? OR id LIKE ? OR
+            (length(?) > 0 AND (file_path LIKE ? OR id LIKE ?));
+        `)
+        delTrack.run(
+          cleanDir, cleanDir,
+          prefixSlash + '%', prefixSlash + '%',
+          prefixBackslash + '%', prefixBackslash + '%',
+          prefixUrl, prefixUrl + '%', prefixUrl + '%'
+        )
+        delTrack.finalize()
+
+        const delMeta = this.db!.prepare(`
+          DELETE FROM metadata_cache WHERE
+            file_path = ? OR
+            file_path LIKE ? OR
+            file_path LIKE ? OR
+            (length(?) > 0 AND file_path LIKE ?);
+        `)
+        delMeta.run(cleanDir, prefixSlash + '%', prefixBackslash + '%', prefixUrl, prefixUrl + '%')
+        delMeta.finalize()
+
+        const delTheme = this.db!.prepare(`
+          DELETE FROM theme_colors WHERE
+            key = ? OR
+            key LIKE ? OR
+            key LIKE ? OR
+            (length(?) > 0 AND key LIKE ?);
+        `)
+        delTheme.run(cleanDir, prefixSlash + '%', prefixBackslash + '%', prefixUrl, prefixUrl + '%')
+        delTheme.finalize()
+
+        const delWave = this.db!.prepare(`
+          DELETE FROM waveform_cache WHERE
+            file_path = ? OR
+            file_path LIKE ? OR
+            file_path LIKE ? OR
+            (length(?) > 0 AND file_path LIKE ?);
+        `)
+        delWave.run(cleanDir, prefixSlash + '%', prefixBackslash + '%', prefixUrl, prefixUrl + '%')
+        delWave.finalize()
+
+        const delFav = this.db!.prepare(`
+          DELETE FROM favorite_tracks WHERE
+            file_path = ? OR
+            file_path LIKE ? OR
+            file_path LIKE ? OR
+            (length(?) > 0 AND file_path LIKE ?);
+        `)
+        delFav.run(cleanDir, prefixSlash + '%', prefixBackslash + '%', prefixUrl, prefixUrl + '%')
+        delFav.finalize()
+
+        const delLyric = this.db!.prepare(`
+          DELETE FROM track_lyric_offsets WHERE
+            file_path = ? OR
+            file_path LIKE ? OR
+            file_path LIKE ? OR
+            (length(?) > 0 AND file_path LIKE ?);
+        `)
+        delLyric.run(cleanDir, prefixSlash + '%', prefixBackslash + '%', prefixUrl, prefixUrl + '%')
+        delLyric.finalize()
+
+        // Cập nhật library_cache
+        const row = this.stmtGetLibraryCache?.get<any>('current_library')
+        if (row && row.tracks_json) {
+          let tracks: any[] = []
+          try {
+            tracks = JSON.parse(row.tracks_json || '[]')
+          } catch { /* ignore */ }
+
+          const isUnderDir = (p: string) => {
+            if (!p) return false
+            if (p === cleanDir) return true
+            const normP = p.replace(/\\/g, '/')
+            if (normP.startsWith(prefixSlash)) return true
+            if (prefixUrl && p.startsWith(prefixUrl)) return true
+            return false
+          }
+
+          const remainingTracks = tracks.filter((t: any) => {
+            if (!t) return false
+            if (isUnderDir(t.id) || isUnderDir(t.filePath)) return false
+            return true
+          })
+
+          this.stmtUpdateLibraryCacheTracks?.run(JSON.stringify(remainingTracks), row.pre_aggregated_json, now)
+        }
+      })
+    } catch (e) {
+      console.warn('[SqliteStorage.removeTracksByDirectoryPrefix] Error:', e)
+    }
+  }
+
+  // ==========================================
+  // WAVEFORM CACHE APIS
+  // ==========================================
+
+  public getWaveformCache(filePath: string, mtime?: number): number[] | null {
+    if (!this.stmtGetWaveform || !filePath) return null
+    try {
+      const candidateKeys = getCandidatePathKeys(filePath)
+      for (const k of candidateKeys) {
+        const row = this.stmtGetWaveform.get<{ mtime: number; peaks_json: string }>(k)
+        if (row && row.peaks_json) {
+          if (mtime !== undefined && row.mtime !== undefined && row.mtime !== null) {
+            if (Math.abs(row.mtime - mtime) > 0.001) {
+              return null
+            }
+          }
+          return JSON.parse(row.peaks_json)
+        }
+      }
+    } catch (e) {
+      console.warn('[SqliteStorage.getWaveformCache] Error:', e)
+    }
+    return null
+  }
+
+  public setWaveformCache(filePath: string, mtime: number, peaks: number[]): void {
+    if (!this.stmtSetWaveform || !filePath) return
+    try {
+      this.stmtSetWaveform.run(filePath, mtime, JSON.stringify(peaks || []), Date.now())
+    } catch (e) {
+      console.warn('[SqliteStorage.setWaveformCache] Error:', e)
+    }
+  }
+
+  // ==========================================
+  // FAVORITES APIS
+  // ==========================================
+
+  public getFavoriteTracks(): string[] {
+    if (!this.stmtGetFavorites) return []
+    try {
+      const rows = this.stmtGetFavorites.all<{ file_path: string }>()
+      return rows.map((r) => r.file_path)
+    } catch (e) {
+      console.warn('[SqliteStorage.getFavoriteTracks] Error:', e)
+      return []
+    }
+  }
+
+  public toggleFavoriteTrack(filePath: string, isFavorite?: boolean): boolean {
+    if (!this.db || !filePath) return false
+    try {
+      const candidateKeys = getCandidatePathKeys(filePath)
+      let foundKey: string | null = null
+      for (const k of candidateKeys) {
+        const row = this.stmtIsFavorite?.get<{ file_path: string }>(k)
+        if (row) {
+          foundKey = k
           break
         }
       }
 
-      if (found) {
-        if (rebuildPreAggregatedFn) {
-          cached.preAggregated = rebuildPreAggregatedFn(cached.tracks)
+      const currentStatus = foundKey !== null
+      const targetStatus = isFavorite !== undefined ? isFavorite : !currentStatus
+
+      if (targetStatus) {
+        this.stmtAddFavorite?.run(filePath, Date.now())
+      } else {
+        if (foundKey) {
+          this.stmtRemoveFavorite?.run(foundKey)
         }
-        this.setLibraryCache(cached)
-        return true
+        this.stmtRemoveFavorite?.run(filePath)
+      }
+      return targetStatus
+    } catch (e) {
+      console.warn('[SqliteStorage.toggleFavoriteTrack] Error:', e)
+      return false
+    }
+  }
+
+  public setFavoriteTracks(filePaths: string[]): void {
+    if (!this.db || !Array.isArray(filePaths)) return
+    try {
+      this.db.transaction(() => {
+        this.stmtClearFavorites?.run()
+        const now = Date.now()
+        for (const fp of filePaths) {
+          if (fp) {
+            this.stmtAddFavorite?.run(fp, now)
+          }
+        }
+      })
+    } catch (e) {
+      console.warn('[SqliteStorage.setFavoriteTracks] Error:', e)
+    }
+  }
+
+  // ==========================================
+  // TRACK LYRIC OFFSETS APIS
+  // ==========================================
+
+  public getTrackLyricOffset(filePath: string): number {
+    if (!this.stmtGetLyricOffset || !filePath) return 0
+    try {
+      const candidateKeys = getCandidatePathKeys(filePath)
+      for (const k of candidateKeys) {
+        const row = this.stmtGetLyricOffset.get<{ offset_sec: number }>(k)
+        if (row && typeof row.offset_sec === 'number') {
+          return row.offset_sec
+        }
       }
     } catch (e) {
-      console.warn('[SqliteStorage.updateSingleTrack] Error:', e)
+      console.warn('[SqliteStorage.getTrackLyricOffset] Error:', e)
     }
-    return false
+    return 0
+  }
+
+  public setTrackLyricOffset(filePath: string, offsetSec: number): void {
+    if (!this.stmtSetLyricOffset || !filePath) return
+    try {
+      this.stmtSetLyricOffset.run(filePath, offsetSec, Date.now())
+    } catch (e) {
+      console.warn('[SqliteStorage.setTrackLyricOffset] Error:', e)
+    }
+  }
+
+  public getAllTrackLyricOffsets(): Record<string, number> {
+    const result: Record<string, number> = {}
+    if (!this.stmtGetAllLyricOffsets) return result
+    try {
+      const rows = this.stmtGetAllLyricOffsets.all<{ file_path: string; offset_sec: number }>()
+      for (const r of rows) {
+        result[r.file_path] = r.offset_sec
+      }
+    } catch (e) {
+      console.warn('[SqliteStorage.getAllTrackLyricOffsets] Error:', e)
+    }
+    return result
+  }
+
+  // ==========================================
+  // SMART PLAYLISTS APIS
+  // ==========================================
+
+  public getSmartPlaylists(): any[] {
+    if (!this.stmtGetSmartPlaylists) return []
+    try {
+      const rows = this.stmtGetSmartPlaylists.all<{
+        id: string
+        name: string
+        rules_json: string
+        created_at: number
+        updated_at: number
+      }>()
+      return rows.map((r) => {
+        let rules: any[] = []
+        try {
+          rules = JSON.parse(r.rules_json || '[]')
+        } catch { /* ignore */ }
+        return {
+          id: r.id,
+          name: r.name,
+          rules,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at
+        }
+      })
+    } catch (e) {
+      console.warn('[SqliteStorage.getSmartPlaylists] Error:', e)
+      return []
+    }
+  }
+
+  public saveSmartPlaylist(playlist: any): void {
+    if (!this.stmtSaveSmartPlaylist || !playlist) return
+    try {
+      const id = playlist.id || playlist.name || String(Date.now())
+      const name = playlist.name || 'Untitled Playlist'
+      const rules = playlist.rules || playlist.rules_json || []
+      const rulesJson = typeof rules === 'string' ? rules : JSON.stringify(rules)
+      const createdAt = playlist.createdAt || playlist.created_at || Date.now()
+      const updatedAt = Date.now()
+      this.stmtSaveSmartPlaylist.run(id, name, rulesJson, createdAt, updatedAt)
+    } catch (e) {
+      console.warn('[SqliteStorage.saveSmartPlaylist] Error:', e)
+    }
+  }
+
+  public deleteSmartPlaylist(id: string): void {
+    if (!this.stmtDeleteSmartPlaylist || !id) return
+    try {
+      this.stmtDeleteSmartPlaylist.run(id)
+    } catch (e) {
+      console.warn('[SqliteStorage.deleteSmartPlaylist] Error:', e)
+    }
+  }
+
+  // ==========================================
+  // USER VIRTUAL PLAYLISTS APIS
+  // ==========================================
+
+  public getUserPlaylists(): any[] {
+    if (!this.stmtGetUserPlaylists) return []
+    try {
+      const rows = this.stmtGetUserPlaylists.all<{
+        id: string
+        name: string
+        description: string | null
+        tracks_json: string
+        cover_art: string | null
+        created_at: number | null
+        updated_at: number | null
+      }>()
+      return rows.map((r) => {
+        let tracks: any[] = []
+        try {
+          tracks = JSON.parse(r.tracks_json || '[]')
+        } catch { /* ignore */ }
+        return {
+          id: r.id,
+          name: r.name,
+          description: r.description || '',
+          tracks,
+          trackIds: tracks,
+          coverArt: r.cover_art,
+          thumbnail: r.cover_art,
+          createdAt: r.created_at || r.updated_at || Date.now(),
+          updatedAt: r.updated_at || Date.now()
+        }
+      })
+    } catch (e) {
+      console.warn('[SqliteStorage.getUserPlaylists] Error:', e)
+      return []
+    }
+  }
+
+  public saveUserPlaylist(playlist: any): void {
+    if (!this.stmtSaveUserPlaylist || !playlist) return
+    try {
+      const id = playlist.id || playlist.name || String(Date.now())
+      const name = playlist.name || 'Untitled Playlist'
+      const description = playlist.description || ''
+      const rawTracks =
+        playlist.tracks !== undefined
+          ? playlist.tracks
+          : playlist.trackIds !== undefined
+            ? playlist.trackIds
+            : playlist.tracks_json || []
+      const tracksJson = typeof rawTracks === 'string' ? rawTracks : JSON.stringify(rawTracks)
+      const coverArt = playlist.coverArt || playlist.cover_art || playlist.thumbnail || null
+      const createdAt = playlist.createdAt || playlist.created_at || Date.now()
+      const updatedAt = playlist.updatedAt || playlist.updated_at || Date.now()
+      this.stmtSaveUserPlaylist.run(id, name, description, tracksJson, coverArt, createdAt, updatedAt)
+    } catch (e) {
+      console.warn('[SqliteStorage.saveUserPlaylist] Error:', e)
+    }
+  }
+
+  public deleteUserPlaylist(id: string): void {
+    if (!this.stmtDeleteUserPlaylist || !id) return
+    try {
+      this.stmtDeleteUserPlaylist.run(id)
+    } catch (e) {
+      console.warn('[SqliteStorage.deleteUserPlaylist] Error:', e)
+    }
   }
 
   public close(): void {
@@ -830,16 +1746,127 @@ export class SqliteStorage {
         this.stmtGetMetadata?.finalize()
         this.stmtSetMetadata?.finalize()
         this.stmtDeleteMetadata?.finalize()
+
         this.stmtGetThemeColor?.finalize()
         this.stmtSetThemeColor?.finalize()
         this.stmtDeleteThemeColor?.finalize()
+
         this.stmtGetLibraryCache?.finalize()
         this.stmtSetLibraryCache?.finalize()
+        this.stmtUpdateLibraryCacheTracks?.finalize()
+
         this.stmtUpsertTrack?.finalize()
+        this.stmtFindTrackByIdOrPath?.finalize()
+        this.stmtUpdateSingleTrack?.finalize()
+
+        this.stmtGetWaveform?.finalize()
+        this.stmtSetWaveform?.finalize()
+
+        this.stmtGetFavorites?.finalize()
+        this.stmtIsFavorite?.finalize()
+        this.stmtAddFavorite?.finalize()
+        this.stmtRemoveFavorite?.finalize()
+        this.stmtClearFavorites?.finalize()
+
+        this.stmtGetLyricOffset?.finalize()
+        this.stmtSetLyricOffset?.finalize()
+        this.stmtGetAllLyricOffsets?.finalize()
+
+        this.stmtGetSmartPlaylists?.finalize()
+        this.stmtSaveSmartPlaylist?.finalize()
+        this.stmtDeleteSmartPlaylist?.finalize()
+
+        this.stmtGetUserPlaylists?.finalize()
+        this.stmtSaveUserPlaylist?.finalize()
+        this.stmtDeleteUserPlaylist?.finalize()
 
         this.db.close()
       } catch { /* ignore */ }
       this.db = null
     }
+
+    if (activeSqliteStorage === this) {
+      activeSqliteStorage = null
+    }
   }
+}
+
+// ==========================================
+// STANDALONE EXPORT FUNCTIONS (FORWARDING TO ACTIVE INSTANCE)
+// ==========================================
+
+export function getWaveformCache(filePath: string, mtime?: number): number[] | null {
+  return activeSqliteStorage ? activeSqliteStorage.getWaveformCache(filePath, mtime) : null
+}
+
+export function setWaveformCache(filePath: string, mtime: number, peaks: number[]): void {
+  activeSqliteStorage?.setWaveformCache(filePath, mtime, peaks)
+}
+
+export function getFavoriteTracks(): string[] {
+  return activeSqliteStorage ? activeSqliteStorage.getFavoriteTracks() : []
+}
+
+export function toggleFavoriteTrack(filePath: string, isFavorite?: boolean): boolean {
+  return activeSqliteStorage ? activeSqliteStorage.toggleFavoriteTrack(filePath, isFavorite) : false
+}
+
+export function setFavoriteTracks(filePaths: string[]): void {
+  activeSqliteStorage?.setFavoriteTracks(filePaths)
+}
+
+export function getTrackLyricOffset(filePath: string): number {
+  return activeSqliteStorage ? activeSqliteStorage.getTrackLyricOffset(filePath) : 0
+}
+
+export function setTrackLyricOffset(filePath: string, offsetSec: number): void {
+  activeSqliteStorage?.setTrackLyricOffset(filePath, offsetSec)
+}
+
+export function getAllTrackLyricOffsets(): Record<string, number> {
+  return activeSqliteStorage ? activeSqliteStorage.getAllTrackLyricOffsets() : {}
+}
+
+export function getSmartPlaylists(): any[] {
+  return activeSqliteStorage ? activeSqliteStorage.getSmartPlaylists() : []
+}
+
+export function saveSmartPlaylist(playlist: any): void {
+  activeSqliteStorage?.saveSmartPlaylist(playlist)
+}
+
+export function deleteSmartPlaylist(id: string): void {
+  activeSqliteStorage?.deleteSmartPlaylist(id)
+}
+
+export function getUserPlaylists(): any[] {
+  return activeSqliteStorage ? activeSqliteStorage.getUserPlaylists() : []
+}
+
+export function saveUserPlaylist(playlist: any): void {
+  activeSqliteStorage?.saveUserPlaylist(playlist)
+}
+
+export function deleteUserPlaylist(id: string): void {
+  activeSqliteStorage?.deleteUserPlaylist(id)
+}
+
+export function updateSingleTrack(
+  filePath: string,
+  updates: Record<string, any> | ((track: any) => any),
+  rebuildPreAggregatedFn?: (tracks: any[]) => any
+): boolean {
+  return activeSqliteStorage ? activeSqliteStorage.updateSingleTrack(filePath, updates, rebuildPreAggregatedFn) : false
+}
+
+export function removeLibraryTracks(filePaths: string[]): void {
+  activeSqliteStorage?.removeLibraryTracks(filePaths)
+}
+
+export function removeTracksFromLibraryCache(filePaths: string[]): void {
+  activeSqliteStorage?.removeTracksFromLibraryCache(filePaths)
+}
+
+export function removeTracksByDirectoryPrefix(dirPath: string): void {
+  activeSqliteStorage?.removeTracksByDirectoryPrefix(dirPath)
 }

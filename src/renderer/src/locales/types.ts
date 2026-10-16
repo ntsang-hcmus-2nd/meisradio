@@ -234,6 +234,8 @@ export interface TranslationDictionary {
       accentCustom: string
       customColorPicker: string
       wallpaperTitle: string
+      waveformSeekbar: string
+      waveformSeekbarDesc: string
     }
     library: {
       title: string
@@ -312,6 +314,11 @@ export interface TranslationDictionary {
       connectedStatus: string
       disconnectedStatus: string
     }
+    gaplessPlayback: string
+    gaplessPlaybackDesc: string
+    gaplessBitPerfectNotice: string
+    waveformSeekbar: string
+    waveformSeekbarDesc: string
   }
   player: {
     noTrack: string
@@ -356,6 +363,10 @@ export interface TranslationDictionary {
     sleepTimerStoppedToast: string
     sleepTimerRemainingTitle: string
     sleepTimerStopEndTitle: string
+    abLoop: string
+    setPointA: string
+    setPointB: string
+    clearLoop: string
   }
   lyrics: {
     title: string
@@ -449,6 +460,12 @@ export interface TranslationDictionary {
       lyricsFormatInfo: string
       lyricsPlaceholder: string
       saveDirect: string
+      albumArtist: string
+      genre: string
+      releaseYear: string
+      trackNumber: string
+      discNumber: string
+      dsdTagSupportNotice: string
     }
     trackInfo: {
       title: string
@@ -651,4 +668,174 @@ export interface TranslationDictionary {
     noFilterMatches: string
     resetFilter: string
   }
+  spotlight: {
+    title: string
+    placeholder: string
+    noResults: string
+    tabAll: string
+    tabTracks: string
+    tabArtists: string
+    tabAlbums: string
+    tabPlaylists: string
+    tabCommands: string
+    categoryRecent: string
+    categoryTracks: string
+    categoryArtists: string
+    categoryAlbums: string
+    categoryPlaylists: string
+    categoryCommands: string
+    categoryNavigation: string
+    categoryOnline: string
+    actionPlay: string
+    actionAddToQueue: string
+    actionOpen: string
+    addedToQueue: string
+    footerNavigate: string
+    footerSelect: string
+    footerQueue: string
+    footerFilter: string
+    footerClose: string
+    resultsCount: string
+    onlineSearchYtm: string
+    onlineSearchSc: string
+    onlineSearchSoulseek: string
+    tracksCount: string
+    cmdSmartRadio: string
+    cmdSmartRadioDesc: string
+    cmdPlayPause: string
+    cmdPlay: string
+    cmdPause: string
+    cmdNext: string
+    cmdPrev: string
+    cmdShuffleOn: string
+    cmdShuffleOff: string
+    cmdRepeatOff: string
+    cmdRepeatAll: string
+    cmdRepeatOne: string
+    cmdVolumeUp: string
+    cmdVolumeDown: string
+    cmdMute: string
+    cmdUnmute: string
+    cmdSeekForward: string
+    cmdSeekBackward: string
+    cmdClearQueue: string
+    cmdToggleLyrics: string
+    cmdToggleVinyl: string
+    cmdBitPerfectOn: string
+    cmdBitPerfectOff: string
+    cmdBitPerfectDesc: string
+    cmdLoudnessOn: string
+    cmdLoudnessOff: string
+    cmdLoudnessDesc: string
+    cmdEQ: string
+    cmdEQDesc: string
+    cmdSpectrogram: string
+    cmdSpectrogramDesc: string
+    cmdSleepTimer15: string
+    cmdSleepTimer30: string
+    cmdSleepTimer45: string
+    cmdSleepTimer60: string
+    cmdSleepTimerEnd: string
+    cmdSleepTimerCancel: string
+    cmdInsights: string
+    cmdInsightsDesc: string
+    cmdBackup: string
+    cmdBackupDesc: string
+    cmdMiniPlayer: string
+    cmdMiniPlayerDesc: string
+    cmdNavHome: string
+    cmdNavYtm: string
+    cmdNavSc: string
+    cmdNavSongs: string
+    cmdNavPlaylists: string
+    cmdNavUserPlaylists: string
+    cmdNavArtists: string
+    cmdNavGenres: string
+    cmdNavDownloads: string
+    cmdNavDrive: string
+    cmdNavSettings: string
+    cmdUiClassic: string
+    cmdUiSleek: string
+    cmdModeDefault: string
+    cmdModeLite: string
+    cmdModeCore: string
+    cmdViewTable: string
+    cmdViewGrid: string
+    cmdViewCompact: string
+    cmdRescan: string
+    cmdRescanDesc: string
+    cmdAddFolder: string
+    cmdAddFolderDesc: string
+    cmdAccentColor: string
+    cmdAccentTrack: string
+    cmdAccentBg: string
+    cmdAccentColorPreset: string
+  }
+  favorites: {
+    favorites: string
+    likedSongs: string
+    addToFavorites: string
+    removeFromFavorites: string
+    noFavoriteTracks: string
+  }
+  abLoop: {
+    abLoop: string
+    setPointA: string
+    setPointB: string
+    clearLoop: string
+    lyricOffset: string
+    lyricOffsetReset: string
+  }
+  quickFilter: {
+    filterAll: string
+    filterLossless: string
+    filterHiRes: string
+    filterDsd: string
+    filterFavorites: string
+    filterCue: string
+  }
+  filters?: {
+    filterAll: string
+    filterLossless: string
+    filterHiRes: string
+    filterDsd: string
+    filterFavorites: string
+    filterCue: string
+  }
+  batchActions: {
+    selectedCount: string
+    playSelected: string
+    addSelectedToQueue: string
+    editSelectedTags: string
+    deleteSelected: string
+    clearSelection: string
+  }
+  multiSelect?: {
+    selectedCount: string
+    playSelected: string
+    addSelectedToQueue: string
+    editSelectedTags: string
+    deleteSelected: string
+    clearSelection: string
+  }
+  duplicateFinder: {
+    duplicateFinder: string
+    duplicateFinderDesc: string
+    noDuplicatesFound: string
+    keepHighestQuality: string
+    deleteDuplicates: string
+  }
+  smartPlaylists: {
+    smartPlaylists: string
+    createSmartPlaylist: string
+    smartPlaylistName: string
+    matchAllRules: string
+    ruleField: string
+    ruleOperator: string
+    ruleValue: string
+    addRule: string
+  }
 }
+
+export type TranslationSchema = TranslationDictionary
+

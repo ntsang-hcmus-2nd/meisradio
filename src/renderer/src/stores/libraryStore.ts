@@ -1,5 +1,32 @@
 import { create } from 'zustand'
 
+export interface Track {
+  id?: string
+  filePath?: string
+  path?: string
+  title?: string
+  artist?: string
+  album?: string
+  albumArtist?: string
+  genre?: string
+  year?: string | number
+  trackNumber?: string | number
+  discNumber?: string | number
+  duration?: number
+  format?: string
+  sampleRate?: number
+  bitDepth?: number
+  bitrate?: number
+  channels?: number
+  picture?: any
+  coverUrl?: string
+  startTime?: number
+  endTime?: number
+  isCueTrack?: boolean
+  cueFilePath?: string
+  [key: string]: any
+}
+
 export interface LibraryState {
   libraryPath: string | null
   libraryPaths: string[]
@@ -33,6 +60,13 @@ export interface LibraryState {
   selectedScGenre: string
   isYtmLoggedIn: boolean
 
+  // Favorites, Filters & Batch Selection
+  favoriteTrackIds: string[]
+  quickFilter: 'all' | 'lossless' | 'hires' | 'dsd' | 'favorites' | 'cue'
+  selectedTrackIds: string[]
+  smartPlaylists: any[]
+  trackLyricOffsets: Record<string, number>
+
   // Actions
   setLibraryPath: (path: string | null | ((prev: string | null) => string | null)) => void
   setLibraryPaths: (paths: string[] | ((prev: string[]) => string[])) => void
@@ -60,6 +94,16 @@ export interface LibraryState {
   setScUser: (user: any | null | ((prev: any) => any)) => void
   setSelectedScGenre: (genre: string | ((prev: string) => string)) => void
   setIsYtmLoggedIn: (loggedIn: boolean | ((prev: boolean) => boolean)) => void
+
+  setFavoriteTrackIds: (ids: string[] | ((prev: string[]) => string[])) => void
+  toggleFavoriteId: (id: string) => void
+  setQuickFilter: (filter: 'all' | 'lossless' | 'hires' | 'dsd' | 'favorites' | 'cue' | ((prev: 'all' | 'lossless' | 'hires' | 'dsd' | 'favorites' | 'cue') => 'all' | 'lossless' | 'hires' | 'dsd' | 'favorites' | 'cue')) => void
+  setSelectedTrackIds: (ids: string[] | ((prev: string[]) => string[])) => void
+  toggleSelectTrackId: (id: string) => void
+  clearSelectedTracks: () => void
+  setSmartPlaylists: (playlists: any[] | ((prev: any[]) => any[])) => void
+  setTrackLyricOffsets: (offsets: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void
+  updateTrackLyricOffset: (filePath: string, offsetSec: number) => void
 }
 
 const resolveVal = <T>(valOrFn: T | ((prev: T) => T), prev: T): T => {
@@ -72,6 +116,33 @@ const getInitialRecentlyPlayed = (): any[] => {
     return saved ? JSON.parse(saved) : []
   } catch {
     return []
+  }
+}
+
+const getInitialFavoriteTrackIds = (): string[] => {
+  try {
+    const saved = localStorage.getItem('meis_favorite_track_ids')
+    return saved ? JSON.parse(saved) : []
+  } catch {
+    return []
+  }
+}
+
+const getInitialSmartPlaylists = (): any[] => {
+  try {
+    const saved = localStorage.getItem('meis_smart_playlists')
+    return saved ? JSON.parse(saved) : []
+  } catch {
+    return []
+  }
+}
+
+const getInitialTrackLyricOffsets = (): Record<string, number> => {
+  try {
+    const saved = localStorage.getItem('meis_track_lyric_offsets')
+    return saved ? JSON.parse(saved) : {}
+  } catch {
+    return {}
   }
 }
 
@@ -103,6 +174,12 @@ export const useLibraryStore = create<LibraryState>((set) => ({
   selectedScGenre: 'all-music',
   isYtmLoggedIn: false,
 
+  favoriteTrackIds: getInitialFavoriteTrackIds(),
+  quickFilter: 'all',
+  selectedTrackIds: [],
+  smartPlaylists: getInitialSmartPlaylists(),
+  trackLyricOffsets: getInitialTrackLyricOffsets(),
+
   setLibraryPath: (valOrFn) => set((s) => ({ libraryPath: resolveVal(valOrFn, s.libraryPath) })),
   setLibraryPaths: (valOrFn) => set((s) => ({ libraryPaths: resolveVal(valOrFn, s.libraryPaths) })),
   setLibraryTracks: (valOrFn) => set((s) => ({ libraryTracks: resolveVal(valOrFn, s.libraryTracks) })),
@@ -132,5 +209,40 @@ export const useLibraryStore = create<LibraryState>((set) => ({
   setIsScLoading: (valOrFn) => set((s) => ({ isScLoading: resolveVal(valOrFn, s.isScLoading) })),
   setScUser: (valOrFn) => set((s) => ({ scUser: resolveVal(valOrFn, s.scUser) })),
   setSelectedScGenre: (valOrFn) => set((s) => ({ selectedScGenre: resolveVal(valOrFn, s.selectedScGenre) })),
-  setIsYtmLoggedIn: (valOrFn) => set((s) => ({ isYtmLoggedIn: resolveVal(valOrFn, s.isYtmLoggedIn) }))
+  setIsYtmLoggedIn: (valOrFn) => set((s) => ({ isYtmLoggedIn: resolveVal(valOrFn, s.isYtmLoggedIn) })),
+
+  setFavoriteTrackIds: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.favoriteTrackIds)
+    try { localStorage.setItem('meis_favorite_track_ids', JSON.stringify(next)) } catch {}
+    return { favoriteTrackIds: next }
+  }),
+  toggleFavoriteId: (id: string) => set((s) => {
+    const exists = s.favoriteTrackIds.includes(id)
+    const next = exists ? s.favoriteTrackIds.filter((item) => item !== id) : [...s.favoriteTrackIds, id]
+    try { localStorage.setItem('meis_favorite_track_ids', JSON.stringify(next)) } catch {}
+    return { favoriteTrackIds: next }
+  }),
+  setQuickFilter: (valOrFn) => set((s) => ({ quickFilter: resolveVal(valOrFn, s.quickFilter) })),
+  setSelectedTrackIds: (valOrFn) => set((s) => ({ selectedTrackIds: resolveVal(valOrFn, s.selectedTrackIds) })),
+  toggleSelectTrackId: (id: string) => set((s) => {
+    const exists = s.selectedTrackIds.includes(id)
+    const next = exists ? s.selectedTrackIds.filter((item) => item !== id) : [...s.selectedTrackIds, id]
+    return { selectedTrackIds: next }
+  }),
+  clearSelectedTracks: () => set({ selectedTrackIds: [] }),
+  setSmartPlaylists: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.smartPlaylists)
+    try { localStorage.setItem('meis_smart_playlists', JSON.stringify(next)) } catch {}
+    return { smartPlaylists: next }
+  }),
+  setTrackLyricOffsets: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.trackLyricOffsets)
+    try { localStorage.setItem('meis_track_lyric_offsets', JSON.stringify(next)) } catch {}
+    return { trackLyricOffsets: next }
+  }),
+  updateTrackLyricOffset: (filePath: string, offsetSec: number) => set((s) => {
+    const next = { ...s.trackLyricOffsets, [filePath]: offsetSec }
+    try { localStorage.setItem('meis_track_lyric_offsets', JSON.stringify(next)) } catch {}
+    return { trackLyricOffsets: next }
+  })
 }))

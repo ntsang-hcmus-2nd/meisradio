@@ -37,6 +37,8 @@ export interface SettingsState {
   isDownloading: boolean
   downloadProgress: { current: number; total: number; fileName: string } | null
   loudnessNormalization: boolean
+  gaplessEnabled: boolean
+  waveformSeekbarEnabled: boolean
 
   // Actions
   setAppMode: (mode: 'default' | 'lite' | 'core' | ((prev: 'default' | 'lite' | 'core') => 'default' | 'lite' | 'core')) => void
@@ -73,6 +75,8 @@ export interface SettingsState {
   setIsDownloading: (downloading: boolean | ((prev: boolean) => boolean)) => void
   setDownloadProgress: (progress: { current: number; total: number; fileName: string } | null | ((prev: any) => any)) => void
   setLoudnessNormalization: (enabled: boolean | ((prev: boolean) => boolean)) => void
+  setGaplessEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
+  setWaveformSeekbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
 }
 
 const resolveVal = <T>(valOrFn: T | ((prev: T) => T), prev: T): T => {
@@ -85,6 +89,26 @@ const getInitialLoudnessNorm = (): boolean => {
   } catch {
     return false
   }
+}
+
+const getInitialGaplessEnabled = (): boolean => {
+  try {
+    const saved = localStorage.getItem('meis_gapless_enabled')
+    if (saved !== null) return saved === 'true'
+  } catch {
+    /* ignore */
+  }
+  return true
+}
+
+const getInitialWaveformSeekbarEnabled = (): boolean => {
+  try {
+    const saved = localStorage.getItem('meis_waveform_seekbar_enabled')
+    if (saved !== null) return saved === 'true'
+  } catch {
+    /* ignore */
+  }
+  return true
 }
 
 const getInitialStreamPort = (): number => {
@@ -177,6 +201,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   isDownloading: false,
   downloadProgress: null,
   loudnessNormalization: getInitialLoudnessNorm(),
+  gaplessEnabled: getInitialGaplessEnabled(),
+  waveformSeekbarEnabled: getInitialWaveformSeekbarEnabled(),
 
   setAppMode: (valOrFn) => set((s) => {
     const next = resolveVal(valOrFn, s.appMode)
@@ -236,5 +262,15 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     const next = resolveVal(valOrFn, s.loudnessNormalization)
     try { localStorage.setItem('meis_loudness_norm', String(next)) } catch { /* ignore */ }
     return { loudnessNormalization: next }
+  }),
+  setGaplessEnabled: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.gaplessEnabled)
+    try { localStorage.setItem('meis_gapless_enabled', String(next)) } catch { /* ignore */ }
+    return { gaplessEnabled: next }
+  }),
+  setWaveformSeekbarEnabled: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.waveformSeekbarEnabled)
+    try { localStorage.setItem('meis_waveform_seekbar_enabled', String(next)) } catch { /* ignore */ }
+    return { waveformSeekbarEnabled: next }
   })
 }))

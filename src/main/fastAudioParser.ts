@@ -7,6 +7,252 @@ export interface ExtractedCover {
   format: string
 }
 
+export interface FastAudioMetadata {
+  title?: string
+  artist?: string
+  artists?: string[]
+  album?: string
+  albumArtist?: string
+  genre?: string
+  year?: string
+  trackNumber?: string
+  totalTracks?: string
+  discNumber?: string
+  totalDiscs?: string
+  comment?: string
+  composer?: string
+  lyrics?: string
+  duration?: number
+  sampleRate?: number
+  bitsPerSample?: number
+  bitrate?: number
+  numberOfChannels?: number
+  lossless?: boolean
+  format?: string
+  codec?: string
+  container?: string
+  cover?: ExtractedCover | null
+  rawTags?: Record<string, string | string[]>
+}
+
+/**
+ * Standard ID3v1 Genre lookup table
+ */
+export const ID3V1_GENRES = [
+  'Blues', 'Classic Rock', 'Country', 'Dance', 'Disco', 'Funk', 'Grunge', 'Hip-Hop', 'Jazz', 'Metal',
+  'New Age', 'Oldies', 'Other', 'Pop', 'R&B', 'Rap', 'Reggae', 'Rock', 'Techno', 'Industrial',
+  'Alternative', 'Ska', 'Death Metal', 'Pranks', 'Soundtrack', 'Euro-Techno', 'Ambient', 'Trip-Hop',
+  'Vocal', 'Jazz+Funk', 'Fusion', 'Trance', 'Classical', 'Instrumental', 'Acid', 'House', 'Game',
+  'Sound Clip', 'Gospel', 'Noise', 'AlternRock', 'Bass', 'Soul', 'Punk', 'Space', 'Meditative',
+  'Instrumental Pop', 'Instrumental Rock', 'Ethnic', 'Gothic', 'Darkwave', 'Techno-Industrial',
+  'Electronic', 'Pop-Folk', 'Eurodance', 'Dream', 'Southern Rock', 'Comedy', 'Cult', 'Gangsta',
+  'Top 40', 'Christian Rap', 'Pop/Funk', 'Jungle', 'Native American', 'Cabaret', 'New Wave',
+  'Psychadelic', 'Rave', 'Showtunes', 'Trailer', 'Lo-Fi', 'Tribal', 'Acid Punk', 'Acid Jazz',
+  'Polka', 'Retro', 'Musical', 'Rock & Roll', 'Hard Rock', 'Folk', 'Folk-Rock', 'National Folk',
+  'Swing', 'Fast Fusion', 'Bebob', 'Latin', 'Revival', 'Celtic', 'Bluegrass', 'Avantgarde',
+  'Gothic Rock', 'Progressive Rock', 'Psychedelic Rock', 'Symphonic Rock', 'Slow Rock', 'Big Band',
+  'Chorus', 'Easy Listening', 'Acoustic', 'Humour', 'Speech', 'Chanson', 'Opera', 'Chamber Music',
+  'Sonata', 'Symphony', 'Booty Bass', 'Primus', 'Porn Groove', 'Satire', 'Slow Jam', 'Club',
+  'Tango', 'Samba', 'Folklore', 'Ballad', 'Power Ballad', 'Rhythmic Soul', 'Freestyle', 'Duet',
+  'Punk Rock', 'Drum Solo', 'A capella', 'Euro-House', 'Dance Hall', 'Goa', 'Drum & Bass',
+  'Club-House', 'Hardcore', 'Terror', 'Indie', 'BritPop', 'Afro-Punk', 'Polsk Punk', 'Beat',
+  'Christian Gangsta Rap', 'Heavy Metal', 'Black Metal', 'Crossover', 'Contemporary Christian',
+  'Christian Rock', 'Merengue', 'Salsa', 'Thrash Metal', 'Anime', 'JPop', 'Synthpop'
+]
+
+/**
+ * Resolves numeric genre index like `(17)` or `17` to text genre name.
+ */
+export function resolveGenreString(rawGenre: string | undefined): string | undefined {
+  if (!rawGenre) return undefined
+  const trimmed = rawGenre.trim()
+  if (!trimmed) return undefined
+  const match = trimmed.match(/^\(?(\d+)\)?$/)
+  if (match) {
+    const idx = parseInt(match[1], 10)
+    if (ID3V1_GENRES[idx]) return ID3V1_GENRES[idx]
+  }
+  return trimmed
+}
+
+/**
+ * Splits an artist string into an array of distinct artist names.
+ */
+export function splitArtistNames(raw: string): string[] {
+  if (!raw || typeof raw !== 'string') return []
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'unknown artist') {
+    return []
+  }
+  const parts = trimmed
+    .split(/\s*(?:;\s*|\/\s*|\\s*|\s+feat\.?\s+|\s+ft\.?\s+|\s+&\s+|\s*,\s*)\s*/i)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+  return parts.length > 0 ? parts : [trimmed]
+}
+
+/**
+ * Parses raw Vorbis comment block buffer into key-value map.
+ * Used for FLAC and OGG Vorbis Comments.
+ */
+export function parseVorbisCommentBuffer(commentBuffer: Buffer): {
+  tags: Record<string, string[]>
+  vendor: string
+} {
+  const result: Record<string, string[]> = {}
+  if (commentBuffer.length < 8) return { tags: result, vendor: '' }
+
+  try {
+    let ptr = 0
+    const vendorLen = commentBuffer.readUInt32LE(ptr)
+    ptr += 4
+    if (ptr + vendorLen > commentBuffer.length) return { tags: result, vendor: '' }
+    const vendor = commentBuffer.toString('utf-8', ptr, ptr + vendorLen)
+    ptr += vendorLen
+
+    if (ptr + 4 > commentBuffer.length) return { tags: result, vendor }
+    const commentCount = commentBuffer.readUInt32LE(ptr)
+    ptr += 4
+
+    for (let i = 0; i < commentCount && ptr + 4 <= commentBuffer.length; i++) {
+      const commentLen = commentBuffer.readUInt32LE(ptr)
+      ptr += 4
+      if (ptr + commentLen > commentBuffer.length) break
+      const commentStr = commentBuffer.toString('utf-8', ptr, ptr + commentLen)
+      ptr += commentLen
+
+      const eqIdx = commentStr.indexOf('=')
+      if (eqIdx !== -1) {
+        const key = commentStr.substring(0, eqIdx).trim().toUpperCase()
+        const val = commentStr.substring(eqIdx + 1).trim()
+        if (!result[key]) result[key] = []
+        result[key].push(val)
+      }
+    }
+
+    return { tags: result, vendor }
+  } catch {
+    return { tags: result, vendor: '' }
+  }
+}
+
+/**
+ * Parses ID3v2 tag buffer and extracts standard text frames (TCON, TYER, TDRC, TRCK, TPE2, etc.)
+ * and pictures without streaming audio data.
+ */
+export function parseId3v2FrameBuffer(id3Buffer: Buffer): {
+  tags: Record<string, string[]>
+  pictures: Array<{ format: string; data: Buffer; description?: string }>
+} {
+  const tags: Record<string, string[]> = {}
+  const pictures: Array<{ format: string; data: Buffer; description?: string }> = []
+
+  if (id3Buffer.length < 10) return { tags, pictures }
+  if (id3Buffer[0] !== 0x49 || id3Buffer[1] !== 0x44 || id3Buffer[2] !== 0x33) {
+    return { tags, pictures }
+  }
+
+  const version = id3Buffer[3]
+  const flags = id3Buffer[5]
+  let offset = 10
+
+  // Handle extended header
+  if ((flags & 0x40) !== 0 && offset + 4 <= id3Buffer.length) {
+    const extSize =
+      version === 4
+        ? ((id3Buffer[offset] & 0x7f) << 21) |
+          ((id3Buffer[offset + 1] & 0x7f) << 14) |
+          ((id3Buffer[offset + 2] & 0x7f) << 7) |
+          (id3Buffer[offset + 3] & 0x7f)
+        : id3Buffer.readUInt32BE(offset)
+    offset += version === 4 ? extSize : extSize + 4
+  }
+
+  const tagSize =
+    ((id3Buffer[6] & 0x7f) << 21) |
+    ((id3Buffer[7] & 0x7f) << 14) |
+    ((id3Buffer[8] & 0x7f) << 7) |
+    (id3Buffer[9] & 0x7f)
+  const maxOffset = Math.min(id3Buffer.length, 10 + tagSize)
+
+  while (offset + 10 <= maxOffset) {
+    const frameId = id3Buffer.toString('ascii', offset, offset + 4)
+    if (!frameId || frameId[0] === '\x00') break
+
+    let frameSize = 0
+    if (version === 4) {
+      frameSize =
+        ((id3Buffer[offset + 4] & 0x7f) << 21) |
+        ((id3Buffer[offset + 5] & 0x7f) << 14) |
+        ((id3Buffer[offset + 6] & 0x7f) << 7) |
+        (id3Buffer[offset + 7] & 0x7f)
+    } else {
+      frameSize = id3Buffer.readUInt32BE(offset + 4)
+    }
+
+    if (frameSize <= 0 || offset + 10 + frameSize > maxOffset) break
+    const frameData = id3Buffer.subarray(offset + 10, offset + 10 + frameSize)
+    offset += 10 + frameSize
+
+    // Parse Text Frames (Starts with 'T', excluding 'TXXX')
+    if (frameId.startsWith('T') && frameId !== 'TXXX' && frameData.length > 1) {
+      const encoding = frameData[0]
+      let text = ''
+      try {
+        if (encoding === 0) {
+          text = frameData.toString('latin1', 1)
+        } else if (encoding === 1) {
+          text = frameData.toString('utf16le', 1)
+        } else if (encoding === 2) {
+          const swapped = Buffer.alloc(frameData.length - 1)
+          for (let b = 1; b < frameData.length - 1; b += 2) {
+            swapped[b - 1] = frameData[b + 1]
+            swapped[b] = frameData[b]
+          }
+          text = swapped.toString('utf16le')
+        } else if (encoding === 3) {
+          text = frameData.toString('utf-8', 1)
+        }
+      } catch {}
+      text = text.replace(/\0+$/, '').trim()
+      if (text) {
+        if (!tags[frameId]) tags[frameId] = []
+        tags[frameId].push(text)
+      }
+    } else if (frameId === 'APIC' && frameData.length > 10) {
+      try {
+        const encoding = frameData[0]
+        let p = 1
+        let mime = ''
+        while (p < frameData.length && frameData[p] !== 0) {
+          mime += String.fromCharCode(frameData[p])
+          p++
+        }
+        p++ // skip null byte
+        if (p < frameData.length) {
+          p++ // skip picture type byte
+          if (encoding === 1 || encoding === 2) {
+            while (p + 1 < frameData.length && !(frameData[p] === 0 && frameData[p + 1] === 0)) {
+              p += 2
+            }
+            p += 2
+          } else {
+            while (p < frameData.length && frameData[p] !== 0) p++
+            p++
+          }
+          if (p < frameData.length) {
+            const picData = Buffer.from(frameData.subarray(p))
+            if (!mime.includes('/')) mime = `image/${mime || 'jpeg'}`
+            pictures.push({ format: mime, data: picData })
+          }
+        }
+      } catch {}
+    }
+  }
+
+  return { tags, pictures }
+}
+
 /**
  * 1. FLAC PICTURE Block Direct Extractor
  * Walks FLAC metadata block headers (4 bytes each) and extracts block type 6 (PICTURE) directly.
@@ -180,10 +426,8 @@ export async function extractM4aCoverFast(filePath: string): Promise<ExtractedCo
       if (atomSize <= 0) break
 
       if (atomType === 'moov') {
-        // Read moov into memory (usually < 2MB)
         const moovBuf = Buffer.alloc(atomSize)
         await fd.read(moovBuf, 0, atomSize, offset)
-        // Search for 'covr' atom in moovBuf
         const covrIdx = moovBuf.indexOf(Buffer.from('covr', 'ascii'))
         if (covrIdx !== -1) {
           const dataIdx = moovBuf.indexOf(Buffer.from('data', 'ascii'), covrIdx)
@@ -203,7 +447,6 @@ export async function extractM4aCoverFast(filePath: string): Promise<ExtractedCo
         break
       }
 
-      // Skip mdat or other atoms directly by adjusting offset (Seek, no read!)
       offset += atomSize
     }
   } catch {
@@ -221,11 +464,148 @@ export async function extractM4aCoverFast(filePath: string): Promise<ExtractedCo
 }
 
 /**
+ * 5. DSF Header-Only Seeking Tag Reader
+ * Reads the DSF 'DSD ' chunk and directly seeks to `metadataPointer` to read the ID3v2 tag.
+ * Completely skips gigabytes of 1-bit DSD audio data!
+ */
+export async function readDsfId3v2TagBuffer(filePath: string): Promise<Buffer | null> {
+  let fd: fs.promises.FileHandle | null = null
+  try {
+    fd = await fs.promises.open(filePath, 'r')
+    const dsdHeader = Buffer.alloc(28)
+    const { bytesRead } = await fd.read(dsdHeader, 0, 28, 0)
+    if (bytesRead < 28 || dsdHeader.toString('ascii', 0, 4) !== 'DSD ') return null
+
+    const metadataPointer = Number(dsdHeader.readBigUInt64LE(20))
+    if (!metadataPointer || metadataPointer <= 0) return null
+
+    const stat = await fd.stat()
+    if (metadataPointer >= stat.size) return null
+
+    const id3Header = Buffer.alloc(10)
+    const readHeader = await fd.read(id3Header, 0, 10, metadataPointer)
+    if (readHeader.bytesRead < 10) return null
+    if (id3Header[0] !== 0x49 || id3Header[1] !== 0x44 || id3Header[2] !== 0x33) return null
+
+    const flags = id3Header[5]
+    const hasFooter = (flags & 0x10) !== 0
+    const tagSize =
+      ((id3Header[6] & 0x7f) << 21) |
+      ((id3Header[7] & 0x7f) << 14) |
+      ((id3Header[8] & 0x7f) << 7) |
+      (id3Header[9] & 0x7f)
+
+    if (tagSize <= 0 || tagSize > 50 * 1024 * 1024) return null
+
+    const totalReadSize = 10 + tagSize + (hasFooter ? 10 : 0)
+    const tagBuffer = Buffer.alloc(totalReadSize)
+    await fd.read(tagBuffer, 0, totalReadSize, metadataPointer)
+    return tagBuffer
+  } catch {
+    return null
+  } finally {
+    if (fd) {
+      try {
+        await fd.close()
+      } catch {}
+    }
+  }
+}
+
+/**
+ * 6. DSF Cover Extractor using direct metadataPointer seeking
+ */
+export async function extractDsfCoverFast(filePath: string): Promise<ExtractedCover | null> {
+  const tagBuf = await readDsfId3v2TagBuffer(filePath)
+  if (!tagBuf) return null
+  try {
+    const meta = await mm.parseBuffer(tagBuf, 'audio/mpeg', { duration: false })
+    if (meta.common.picture && meta.common.picture.length > 0) {
+      const pic = meta.common.picture[0]
+      let format = pic.format || 'image/jpeg'
+      if (!format.includes('/')) format = `image/${format}`
+      return { data: Buffer.from(pic.data), format }
+    }
+  } catch {}
+  return null
+}
+
+/**
+ * 7. DFF (DSDIFF) Chunk-Seeking Tag Reader
+ * Walks FRM8 chunks and skips the massive 'DSD ' chunk to locate 'ID3 ' or 'ID32' metadata.
+ */
+export async function readDffId3v2TagBuffer(filePath: string): Promise<Buffer | null> {
+  let fd: fs.promises.FileHandle | null = null
+  try {
+    fd = await fs.promises.open(filePath, 'r')
+    const header = Buffer.alloc(16)
+    const { bytesRead } = await fd.read(header, 0, 16, 0)
+    if (bytesRead < 16) return null
+    if (header.toString('ascii', 0, 4) !== 'FRM8') return null
+    if (header.toString('ascii', 12, 16) !== 'DSD ') return null
+
+    const stat = await fd.stat()
+    const fileSize = stat.size
+    let offset = 16
+    const chunkHeader = Buffer.alloc(12)
+
+    while (offset + 12 <= fileSize) {
+      const res = await fd.read(chunkHeader, 0, 12, offset)
+      if (res.bytesRead < 12) break
+
+      const chunkId = chunkHeader.toString('ascii', 0, 4)
+      const chunkSize = Number(chunkHeader.readBigUInt64BE(4))
+      if (chunkSize < 0 || offset + 12 + chunkSize > fileSize + 1) break
+
+      if (chunkId === 'ID3 ' || chunkId === 'ID32') {
+        const id3Buf = Buffer.alloc(chunkSize)
+        await fd.read(id3Buf, 0, chunkSize, offset + 12)
+        return id3Buf
+      }
+
+      // Pad byte if size is odd
+      const pad = chunkSize & 1 ? 1 : 0
+      offset += 12 + chunkSize + pad
+      if (offset > 100 * 1024 * 1024 * 1024) break
+    }
+    return null
+  } catch {
+    return null
+  } finally {
+    if (fd) {
+      try {
+        await fd.close()
+      } catch {}
+    }
+  }
+}
+
+/**
+ * 8. DFF Cover Extractor using chunk-seeking
+ */
+export async function extractDffCoverFast(filePath: string): Promise<ExtractedCover | null> {
+  const tagBuf = await readDffId3v2TagBuffer(filePath)
+  if (!tagBuf) return null
+  try {
+    const meta = await mm.parseBuffer(tagBuf, 'audio/mpeg', { duration: false })
+    if (meta.common.picture && meta.common.picture.length > 0) {
+      const pic = meta.common.picture[0]
+      let format = pic.format || 'image/jpeg'
+      if (!format.includes('/')) format = `image/${format}`
+      return { data: Buffer.from(pic.data), format }
+    }
+  } catch {}
+  return null
+}
+
+/**
  * Universal Fast Cover Extractor:
  * 1. Checks FLAC block-seeking
  * 2. Checks MP3 ID3v2 header-seeking
  * 3. Checks M4A atom-seeking
- * 4. Fallback: Partial stream read (Stream Abort) with 64KB chunks
+ * 4. Checks DSF metadataPointer-seeking
+ * 5. Checks DFF chunk-seeking
+ * 6. Fallback: Partial stream read (Stream Abort) with 64KB chunks
  */
 export async function fastExtractCover(filePath: string): Promise<ExtractedCover | null> {
   const ext = path.extname(filePath).toLowerCase()
@@ -237,6 +617,12 @@ export async function fastExtractCover(filePath: string): Promise<ExtractedCover
     if (res) return res
   } else if (ext === '.m4a' || ext === '.mp4') {
     const res = await extractM4aCoverFast(filePath)
+    if (res) return res
+  } else if (ext === '.dsf') {
+    const res = await extractDsfCoverFast(filePath)
+    if (res) return res
+  } else if (ext === '.dff') {
+    const res = await extractDffCoverFast(filePath)
     if (res) return res
   }
 
@@ -265,11 +651,116 @@ export async function fastExtractCover(filePath: string): Promise<ExtractedCover
 }
 
 /**
+ * Helper to enrich `metadata.common` with `genre`, `year`, `trackNumber`, `albumArtist`
+ * from ID3v2 frames (`TCON`, `TYER`/`TDRC`, `TRCK`, `TPE2`) and Vorbis comments.
+ */
+function enrichCommonMetadata(metadata: mm.IAudioMetadata): void {
+  const common = metadata.common
+  const native = metadata.native || {}
+
+  // 1. Album Artist enrichment (TPE2 or Vorbis ALBUMARTIST / ALBUM ARTIST)
+  if (!common.albumartist) {
+    for (const tagFormat of Object.keys(native)) {
+      const tagList = native[tagFormat]
+      if (Array.isArray(tagList)) {
+        for (const t of tagList) {
+          const tid = String(t.id).toUpperCase()
+          if (tid === 'TPE2' || tid === 'ALBUMARTIST' || tid === 'ALBUM ARTIST' || tid === 'ENSEMBLE' || tid === 'aART') {
+            if (t.value) {
+              common.albumartist = String(t.value).trim()
+              break
+            }
+          }
+        }
+      }
+      if (common.albumartist) break
+    }
+  }
+
+  // 2. Genre enrichment (TCON or Vorbis GENRE)
+  if (!common.genre || common.genre.length === 0) {
+    for (const tagFormat of Object.keys(native)) {
+      const tagList = native[tagFormat]
+      if (Array.isArray(tagList)) {
+        for (const t of tagList) {
+          const tid = String(t.id).toUpperCase()
+          if (tid === 'TCON' || tid === 'GENRE' || tid === '©GEN' || tid === 'WM/GENRE' || tid === 'GEN') {
+            if (t.value) {
+              const val = Array.isArray(t.value) ? t.value.map(String) : [String(t.value)]
+              const clean = val.map((g) => resolveGenreString(g)).filter(Boolean) as string[]
+              if (clean.length > 0) {
+                common.genre = clean
+                break
+              }
+            }
+          }
+        }
+      }
+      if (common.genre && common.genre.length > 0) break
+    }
+  } else {
+    // Clean any numeric ID3 genres in common.genre
+    common.genre = common.genre.map((g) => resolveGenreString(g) || g)
+  }
+
+  // 3. Year / Date enrichment (TYER, TDRC or Vorbis DATE / YEAR)
+  if (!common.year && !common.date) {
+    for (const tagFormat of Object.keys(native)) {
+      const tagList = native[tagFormat]
+      if (Array.isArray(tagList)) {
+        for (const t of tagList) {
+          const tid = String(t.id).toUpperCase()
+          if (tid === 'TYER' || tid === 'TDRC' || tid === 'DATE' || tid === 'YEAR' || tid === '©DAY') {
+            if (t.value) {
+              const strVal = String(t.value).trim()
+              const yearMatch = strVal.match(/\b\d{4}\b/)
+              if (yearMatch) {
+                common.year = parseInt(yearMatch[0], 10)
+              }
+              common.date = strVal
+              break
+            }
+          }
+        }
+      }
+      if (common.year || common.date) break
+    }
+  }
+
+  // 4. Track Number enrichment (TRCK or Vorbis TRACKNUMBER / TRACK)
+  if (!common.track || common.track.no === null || common.track.no === undefined) {
+    for (const tagFormat of Object.keys(native)) {
+      const tagList = native[tagFormat]
+      if (Array.isArray(tagList)) {
+        for (const t of tagList) {
+          const tid = String(t.id).toUpperCase()
+          if (tid === 'TRCK' || tid === 'TRACKNUMBER' || tid === 'TRACK' || tid === 'TRK') {
+            if (t.value) {
+              const strVal = String(t.value).trim()
+              const match = strVal.match(/^(\d+)(?:\/(\d+))?/)
+              if (match) {
+                common.track = {
+                  no: parseInt(match[1], 10),
+                  of: match[2] ? parseInt(match[2], 10) : common.track?.of ?? null
+                }
+                break
+              }
+            }
+          }
+        }
+      }
+      if (common.track && common.track.no !== null && common.track.no !== undefined) break
+    }
+  }
+}
+
+/**
  * Fast Metadata Reader:
  * Reads metadata without streaming the entire audio file.
  * - For MP3: reads ID3v2 tag + first 32KB of audio frames (for MPEG sync and duration).
  * - For FLAC: reads fLaC magic + all metadata blocks (filtering PICTURE block if skipCovers is true).
- * - For M4A: reads ftyp + moov atoms.
+ * - For DSF: reads DSD header + fmt chunk + ID3v2 tag at metadataPointer.
+ * - For DFF: reads FRM8 chunks + PROP + ID3 chunk.
  * - Fallback: mm.parseFile with duration: false and skipCovers option.
  */
 export async function fastReadMetadata(
@@ -294,11 +785,10 @@ export async function fastReadMetadata(
             (header[9] & 0x7f)
 
           if (tagSize > 0 && tagSize <= 25 * 1024 * 1024) {
-            // Read tag + 32KB for MPEG audio frames
             const readLen = Math.min(stat.size, 10 + tagSize + 32 * 1024)
             const buf = Buffer.alloc(readLen)
             await fd.read(buf, 0, readLen, 0)
-            return await mm.parseBuffer(
+            const meta = await mm.parseBuffer(
               buf,
               { mimeType: 'audio/mpeg', size: stat.size },
               {
@@ -306,6 +796,8 @@ export async function fastReadMetadata(
                 duration: true
               }
             )
+            enrichCommonMetadata(meta)
+            return meta
           }
         }
       } finally {
@@ -352,10 +844,11 @@ export async function fastReadMetadata(
           if (blocksToKeep.length > 0) {
             const hasSkippedPicture =
               blocksToKeep.length < (isLast ? blocksToKeep.length : 0) || options?.skipCovers
+            let meta: mm.IAudioMetadata
             if (!hasSkippedPicture) {
               const metaBuf = Buffer.alloc(offset)
               await fd.read(metaBuf, 0, offset, 0)
-              return await mm.parseBuffer(metaBuf, 'audio/flac', {
+              meta = await mm.parseBuffer(metaBuf, 'audio/flac', {
                 skipCovers: options?.skipCovers,
                 duration: true
               })
@@ -371,11 +864,13 @@ export async function fastReadMetadata(
                 chunks.push(blkBuf)
               }
               const finalBuf = Buffer.concat(chunks)
-              return await mm.parseBuffer(finalBuf, 'audio/flac', {
+              meta = await mm.parseBuffer(finalBuf, 'audio/flac', {
                 skipCovers: options?.skipCovers,
                 duration: true
               })
             }
+            enrichCommonMetadata(meta)
+            return meta
           }
         }
       } finally {
@@ -386,11 +881,189 @@ export async function fastReadMetadata(
     }
   }
 
-  // 3. Fallback: parseFile with skipCovers and duration: false
-  return await mm.parseFile(filePath, {
+  // 3. DSF Fast Reader (Direct Seek to Header & ID3v2 metadataPointer)
+  if (ext === '.dsf') {
+    try {
+      const fd = await fs.promises.open(filePath, 'r')
+      try {
+        const headerBuf = Buffer.alloc(80)
+        const { bytesRead } = await fd.read(headerBuf, 0, 80, 0)
+        if (bytesRead >= 80 && headerBuf.toString('ascii', 0, 4) === 'DSD ') {
+          const metadataPointer = Number(headerBuf.readBigUInt64LE(20))
+          const channelNum = headerBuf.readUInt32LE(52)
+          const samplingFrequency = headerBuf.readUInt32LE(56)
+          const bitsPerSample = headerBuf.readUInt32LE(60) || 1
+          const sampleCount = headerBuf.readBigUInt64LE(64)
+          const duration = samplingFrequency > 0 ? Number(sampleCount) / samplingFrequency : undefined
+          const bitrate = bitsPerSample * samplingFrequency * channelNum
+
+          let dsfMeta: mm.IAudioMetadata | null = null
+
+          if (metadataPointer > 0) {
+            const id3TagBuf = await readDsfId3v2TagBuffer(filePath)
+            if (id3TagBuf) {
+              dsfMeta = await mm.parseBuffer(id3TagBuf, 'audio/mpeg', {
+                skipCovers: options?.skipCovers,
+                duration: false
+              })
+            }
+          }
+
+          if (!dsfMeta) {
+            dsfMeta = {
+              format: {} as any,
+              common: {
+                title: path.basename(filePath, ext),
+                artist: 'Unknown',
+                album: 'Unknown'
+              } as any,
+              native: {},
+              quality: {} as any
+            }
+          }
+
+          const fmt = dsfMeta.format as any
+          fmt.container = 'DSF'
+          fmt.codec = 'DSD'
+          fmt.lossless = true
+          fmt.numberOfChannels = channelNum
+          fmt.sampleRate = samplingFrequency
+          fmt.bitsPerSample = bitsPerSample
+          fmt.duration = duration
+          fmt.bitrate = bitrate
+
+          enrichCommonMetadata(dsfMeta)
+          return dsfMeta
+        }
+      } finally {
+        await fd.close()
+      }
+    } catch {
+      // fallback to parseFile
+    }
+  }
+
+  // 4. DFF (DSDIFF) Fast Reader
+  if (ext === '.dff') {
+    try {
+      const id3Buf = await readDffId3v2TagBuffer(filePath)
+      if (id3Buf) {
+        const dffMeta = await mm.parseBuffer(id3Buf, 'audio/mpeg', {
+          skipCovers: options?.skipCovers,
+          duration: false
+        })
+        const fmt = dffMeta.format as any
+        fmt.container = 'DSDIFF'
+        fmt.codec = 'DSD'
+        fmt.lossless = true
+        fmt.bitsPerSample = 1
+        fmt.sampleRate = fmt.sampleRate || 2822400
+        enrichCommonMetadata(dffMeta)
+        return dffMeta
+      }
+    } catch {
+      // fallback to parseFile
+    }
+  }
+
+  // 5. Fallback: parseFile with skipCovers and duration: false
+  const meta = await mm.parseFile(filePath, {
     skipCovers: options?.skipCovers ?? false,
     duration: false
   })
+  enrichCommonMetadata(meta)
+  return meta
+}
+
+/**
+ * Universal Fast Audio Metadata Extractor
+ * Returns a strongly-typed `FastAudioMetadata` object including optional
+ * `genre`, `year`, `trackNumber`, `albumArtist` extracted from ID3v2 frames
+ * (TCON, TYER/TDRC, TRCK, TPE2) and Vorbis comments.
+ */
+export async function parseFastAudioMetadata(
+  filePath: string,
+  options?: { skipCovers?: boolean }
+): Promise<FastAudioMetadata> {
+  const meta = await fastReadMetadata(filePath, options)
+  const common = meta.common
+  const fmt = meta.format
+
+  const ext = path.extname(filePath).toLowerCase()
+  const isDsd = ext === '.dsf' || ext === '.dff' || ext === '.dsd'
+
+  let genre: string | undefined = undefined
+  if (common.genre && common.genre.length > 0) {
+    genre = Array.isArray(common.genre) ? common.genre.join(', ') : String(common.genre)
+  }
+
+  let year: string | undefined = undefined
+  if (common.year) {
+    year = String(common.year)
+  } else if (common.date) {
+    year = String(common.date)
+  }
+
+  let trackNumber: string | undefined = undefined
+  let totalTracks: string | undefined = undefined
+  if (common.track) {
+    if (common.track.no !== null && common.track.no !== undefined) {
+      trackNumber = String(common.track.no)
+    }
+    if (common.track.of !== null && common.track.of !== undefined) {
+      totalTracks = String(common.track.of)
+    }
+  }
+
+  let discNumber: string | undefined = undefined
+  let totalDiscs: string | undefined = undefined
+  if (common.disk) {
+    if (common.disk.no !== null && common.disk.no !== undefined) {
+      discNumber = String(common.disk.no)
+    }
+    if (common.disk.of !== null && common.disk.of !== undefined) {
+      totalDiscs = String(common.disk.of)
+    }
+  }
+
+  const artist = common.artist || undefined
+  const artists = common.artists || (artist ? splitArtistNames(artist) : undefined)
+  const albumArtist = common.albumartist || undefined
+
+  let cover: ExtractedCover | null = null
+  if (!options?.skipCovers && common.picture && common.picture.length > 0) {
+    const pic = common.picture[0]
+    let format = pic.format || 'image/jpeg'
+    if (!format.includes('/')) format = `image/${format}`
+    cover = { data: Buffer.from(pic.data), format }
+  }
+
+  return {
+    title: common.title || path.basename(filePath, ext),
+    artist,
+    artists,
+    album: common.album || undefined,
+    albumArtist,
+    genre,
+    year,
+    trackNumber,
+    totalTracks,
+    discNumber,
+    totalDiscs,
+    comment: common.comment ? common.comment.join(' ') : undefined,
+    composer: common.composer ? common.composer.join(', ') : undefined,
+    lyrics: common.lyrics && common.lyrics.length > 0 ? (typeof common.lyrics[0] === 'string' ? common.lyrics[0] : (common.lyrics[0] as any).text) : undefined,
+    duration: fmt.duration,
+    sampleRate: fmt.sampleRate || (isDsd ? 2822400 : undefined),
+    bitsPerSample: fmt.bitsPerSample || (isDsd ? 1 : undefined),
+    bitrate: fmt.bitrate,
+    numberOfChannels: fmt.numberOfChannels,
+    lossless: fmt.lossless || isDsd,
+    format: fmt.container || ext.replace('.', '').toUpperCase(),
+    codec: fmt.codec,
+    container: fmt.container,
+    cover
+  }
 }
 
 /**

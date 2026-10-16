@@ -199,9 +199,14 @@ body {
   display: inline !important;
 }
 
+[data-ui-style="classic"] .btn-badge {
+  display: inline-block !important;
+}
+
 /* Chế độ Tinh gọn (Sleek): Ẩn toàn bộ nhãn văn bản của các ô và nút hệ thống, chỉ dùng icon */
 [data-ui-style="sleek"] .btn-text,
-[data-ui-style="sleek"] .sys-btn-text {
+[data-ui-style="sleek"] .sys-btn-text,
+[data-ui-style="sleek"] .btn-badge {
   display: none !important;
 }
 
@@ -210,4 +215,4 @@ body {
   padding-left: 0.65rem !important;
   padding-right: 0.65rem !important;
   gap: 0 !important;
-}
+}

@@ -72,7 +72,9 @@ export interface MeisRadioApi {
   preloadStream: (targetId: string) => Promise<any>
 
   // BASS & Bit-Perfect Audio API (WASAPI & ASIO + DSD Native)
-  bassPlay: (url: string, crossfade?: number) => Promise<any>
+  bassPlay: (url: string, deviceIdOrCrossfade?: any, exclusive?: boolean, startTime?: number, endTime?: number) => Promise<any>
+  bassSetGapless: (enabled: boolean) => Promise<any>
+  bassPreloadNext: (filePath: string, startTime?: number, endTime?: number) => Promise<any>
   bassResume: () => Promise<any>
   bassPause: () => Promise<any>
   bassStop: () => Promise<any>
@@ -91,6 +93,19 @@ export interface MeisRadioApi {
   onBassEnded: (callback: () => void) => () => void
   onBassError: (callback: (err: string) => void) => () => void
   onBassAudioParams: (callback: (params: any) => void) => () => void
+  onBassGaplessTransition: (callback: (data: { nextPath: string; nextInfo: any }) => void) => () => void
+
+  // SQLite QoL & Library Features
+  getWaveformPeaks: (filePath: string, numPeaks?: number, startTime?: number, endTime?: number) => Promise<number[]>
+  getFavorites: () => Promise<string[]>
+  toggleFavorite: (filePath: string, isFavorite?: boolean) => Promise<boolean>
+  getLyricOffsets: () => Promise<Record<string, number>>
+  setLyricOffset: (filePath: string, offsetSec: number) => Promise<any>
+  getSmartPlaylists: () => Promise<any[]>
+  saveSmartPlaylist: (playlist: any) => Promise<any>
+  deleteSmartPlaylist: (id: string) => Promise<any>
+  saveUserPlaylist: (playlist: any) => Promise<any>
+  onLibraryFsChanged: (callback: (data: { eventType: string; filename: string }) => void) => () => void
 
   // Legacy aliases
   mpvPlay?: (url: string, crossfade: number) => Promise<any>

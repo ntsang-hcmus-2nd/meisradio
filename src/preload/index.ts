@@ -81,7 +81,11 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   preloadStream: (targetId: string) => ipcRenderer.invoke('music:preloadStream', targetId),
 
   // BASS & Bit-Perfect Audio API (WASAPI & ASIO + DSD Native)
-  bassPlay: (url: string, crossfade?: number) => ipcRenderer.invoke('bass:play', url, crossfade),
+  bassPlay: (url: string, deviceIdOrCrossfade?: any, exclusive?: boolean, startTime?: number, endTime?: number) =>
+    ipcRenderer.invoke('bass:play', url, deviceIdOrCrossfade, exclusive, startTime, endTime),
+  bassSetGapless: (enabled: boolean) => ipcRenderer.invoke('bass:setGapless', enabled),
+  bassPreloadNext: (filePath: string, startTime?: number, endTime?: number) =>
+    ipcRenderer.invoke('bass:preloadNext', filePath, startTime, endTime),
   bassResume: () => ipcRenderer.invoke('bass:resume'),
   bassPause: () => ipcRenderer.invoke('bass:pause'),
   bassStop: () => ipcRenderer.invoke('bass:stop'),
@@ -123,6 +127,30 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     const handler = (_e: any, params: any) => callback(params)
     ipcRenderer.on('bass:audio-out-params', handler)
     return () => ipcRenderer.removeListener('bass:audio-out-params', handler)
+  },
+  onBassGaplessTransition: (callback: (data: { nextPath: string; nextInfo: any }) => void) => {
+    const handler = (_e: any, data: any) => callback(data)
+    ipcRenderer.on('bass:gapless-transition', handler)
+    return () => ipcRenderer.removeListener('bass:gapless-transition', handler)
+  },
+
+  // SQLite QoL & Library Features
+  getWaveformPeaks: (filePath: string, numPeaks?: number, startTime?: number, endTime?: number) =>
+    ipcRenderer.invoke('music:getWaveformPeaks', filePath, numPeaks, startTime, endTime),
+  getFavorites: () => ipcRenderer.invoke('music:getFavorites'),
+  toggleFavorite: (filePath: string, isFavorite?: boolean) =>
+    ipcRenderer.invoke('music:toggleFavorite', filePath, isFavorite),
+  getLyricOffsets: () => ipcRenderer.invoke('music:getLyricOffsets'),
+  setLyricOffset: (filePath: string, offsetSec: number) =>
+    ipcRenderer.invoke('music:setLyricOffset', filePath, offsetSec),
+  getSmartPlaylists: () => ipcRenderer.invoke('music:getSmartPlaylists'),
+  saveSmartPlaylist: (playlist: any) => ipcRenderer.invoke('music:saveSmartPlaylist', playlist),
+  deleteSmartPlaylist: (id: string) => ipcRenderer.invoke('music:deleteSmartPlaylist', id),
+  saveUserPlaylist: (playlist: any) => ipcRenderer.invoke('music:saveUserPlaylist', playlist),
+  onLibraryFsChanged: (callback: (data: { eventType: string; filename: string }) => void) => {
+    const handler = (_event: any, data: any) => callback(data)
+    ipcRenderer.on('library:fs-changed', handler)
+    return () => ipcRenderer.removeListener('library:fs-changed', handler)
   },
 
   // Legacy aliases

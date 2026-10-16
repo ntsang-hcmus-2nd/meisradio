@@ -72,7 +72,10 @@ import {
   Upload,
   SlidersHorizontal,
   LayoutTemplate,
-  Flame
+  Flame,
+  Heart,
+  CheckSquare,
+  Square
 } from 'lucide-react'
 import {
   TableVirtuoso,
@@ -109,6 +112,7 @@ import { VolumeSlider } from './components/VolumeSlider'
 import { PlayerToolsMenu } from './components/PlayerToolsMenu'
 import { ContextMenu, ContextMenuItem } from './components/ContextMenu'
 import { DragDropOverlay } from './components/DragDropOverlay'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 // TỐI ƯU HÓA: Nạp lười (Code Splitting) các modal và màn hình phụ để giảm kích thước bundle và tăng tốc mở app
 const PlaylistRenameModal = React.lazy(() =>
@@ -153,6 +157,18 @@ const BackupModal = React.lazy(() =>
 const DownloadsView = React.lazy(() =>
   import('./components/DownloadsView').then((m) => ({ default: m.DownloadsView }))
 )
+const DuplicateFinderModal = React.lazy(() =>
+  import('./components/modals/DuplicateFinderModal').then((m) => ({
+    default: m.DuplicateFinderModal
+  }))
+)
+const SmartPlaylistModal = React.lazy(() =>
+  import('./components/modals/SmartPlaylistModal').then((m) => ({
+    default: m.SmartPlaylistModal
+  }))
+)
+import { QuickFilterChips } from './components/QuickFilterChips'
+import { BatchActionBar } from './components/BatchActionBar'
 
 import { extractThemeColors, initThemeColorCache, generateThemeFromColor } from './utils/colorUtils'
 
@@ -178,7 +194,10 @@ import {
   useLibraryStore,
   useSettingsStore,
   useAudioStore,
-  useLyricsStore
+  useLyricsStore,
+  loadPlaybackSession,
+  savePlaybackSession,
+  scheduleSavePlaybackSession
 } from './stores'
 
 // --- HELPER FUNCTIONS & INTERFACES (OUTSIDE COMPONENT) ---
@@ -200,112 +219,8 @@ const getBrowserSinkId = (deviceId: string | null | undefined): string => {
     return ''
   return deviceId
 }
-
-export const PRESERVED_ARTIST_NAMES = [
-  'AC/DC',
-  'Tyler, The Creator',
-  'Earth, Wind & Fire',
-  'Earth Wind & Fire',
-  'Simon & Garfunkel',
-  'Hall & Oates',
-  'Daryl Hall & John Oates',
-  'Crosby, Stills, Nash & Young',
-  'Crosby, Stills & Nash',
-  'Emerson, Lake & Palmer',
-  'Blood, Sweat & Tears',
-  'Brooks & Dunn',
-  'Bell, Book & Candle',
-  'K/DA',
-  'Panic! At The Disco',
-  'Florence + The Machine',
-  'Florence and the Machine',
-  'Tom Petty and the Heartbreakers',
-  'KC & The Sunshine Band',
-  'K-Ci & JoJo',
-  'Meg & Dia',
-  'Katrina and the Waves',
-  'Huey Lewis & The News',
-  'Joan Jett & the Blackhearts',
-  'Bob Marley & The Wailers',
-  'Marina & The Diamonds',
-  'Of Monsters and Men',
-  'Above & Beyond',
-  'Arms and Sleepers',
-  'Me & My',
-  'Jack & Jack',
-  'Dan + Shay',
-  'King & Prince',
-  'Sunstroke Project & Olia Tira'
-]
-
-export const splitArtistString = (raw: string): string[] => {
-  if (!raw || typeof raw !== 'string') return []
-  const trimmed = raw.trim()
-  if (
-    !trimmed ||
-    trimmed.toLowerCase() === 'unknown' ||
-    trimmed.toLowerCase() === 'unknown artist'
-  ) {
-    return []
-  }
-
-  for (const preserved of PRESERVED_ARTIST_NAMES) {
-    if (trimmed.toLowerCase() === preserved.toLowerCase()) {
-      return [preserved]
-    }
-  }
-
-  let working = trimmed
-  const placeholders: { token: string; original: string }[] = []
-  PRESERVED_ARTIST_NAMES.forEach((preserved, idx) => {
-    const regex = new RegExp(preserved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
-    if (regex.test(working)) {
-      const token = `__PRESERVED_ARTIST_${idx}__`
-      working = working.replace(regex, token)
-      placeholders.push({ token, original: preserved })
-    }
-  })
-
-  // Bảo vệ hậu tố danh xưng đi kèm dấu phẩy (ví dụ: Grover Washington, Jr. hoặc Sammy Davis, Jr.)
-  working = working.replace(
-    /,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;\/|)\]])/gi,
-    (_, g1) => `___JRSR___${g1}`
-  )
-
-  // Chuẩn hóa định dạng feat / ft trong ngoặc: (feat. X) -> feat. X
-  working = working.replace(
-    /[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]\}]+)[\)\]\}]/gi,
-    ' feat. $1'
-  )
-
-  // Tách bằng các ký hiệu phân cách phổ biến
-  const splitRegex =
-    /(?:\s*;\s*|\0+|\s*[\/\\]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
-  const parts = working.split(splitRegex)
-  const result: string[] = []
-
-  for (let part of parts) {
-    for (const p of placeholders) {
-      part = part.replace(new RegExp(p.token, 'g'), p.original)
-    }
-    part = part.replace(/___JRSR___/g, ', ')
-
-    const clean = part
-      .trim()
-      .replace(/^[\(\[\{]/, '')
-      .replace(/[\)\]\}]$/, '')
-      .trim()
-    if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
-      if (/^(jr\.?|sr\.?|iii|ii|iv)$/i.test(clean)) continue
-
-      if (!result.some((existing) => existing.toLowerCase() === clean.toLowerCase())) {
-        result.push(clean)
-      }
-    }
-  }
-
-  return result.length > 0 ? result : [trimmed]
-}
+import { PRESERVED_ARTIST_NAMES, splitArtistString } from './utils/textUtils'
+export { PRESERVED_ARTIST_NAMES, splitArtistString }
 
 import { WebGLVisualizer } from './components/visualizers/WebGLVisualizer'
 import { WebGLSpectrogram } from './components/visualizers/WebGLSpectrogram'
@@ -486,23 +401,59 @@ const TrackRow = React.memo(
     onArtistClick
   }: any) => {
     const { t } = useTranslation()
+    const selectedTrackIds = useLibraryStore((s) => s.selectedTrackIds)
+    const toggleSelectTrackId = useLibraryStore((s) => s.toggleSelectTrackId)
+    const trackKey = track.id || track.filePath
+    const isSelected = !!trackKey && selectedTrackIds.includes(trackKey)
+
+    const handleRowSelectOrPlay = (e: React.MouseEvent) => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (trackKey) toggleSelectTrackId(trackKey)
+        return
+      }
+      handleRowClick(track, tracks)
+    }
+
     return (
       <>
         <td
           onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={() => handleRowClick(track, tracks)}
-          className="py-3 text-center text-zinc-500 group-hover:text-white w-10 sm:w-12 text-xs font-mono"
+          onClick={handleRowSelectOrPlay}
+          className={`py-3 text-center text-zinc-500 group-hover:text-white w-10 sm:w-12 text-xs font-mono transition-colors select-none ${
+            isSelected ? 'bg-theme-10/20 text-theme-10 font-bold' : ''
+          }`}
         >
-          {isThisTrackPlaying && isPlaying ? (
-            <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" />
-          ) : (
-            index + 1
-          )}
+          <div
+            className="inline-flex items-center justify-center cursor-pointer w-6 h-6 rounded hover:bg-white/10 mx-auto"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (trackKey) toggleSelectTrackId(trackKey)
+            }}
+            title={isSelected ? t('common.deselect') || 'Deselect' : t('common.select') || 'Select'}
+          >
+            {isSelected ? (
+              <CheckSquare size={14} className="text-theme-10" />
+            ) : isThisTrackPlaying && isPlaying ? (
+              <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" />
+            ) : (
+              <>
+                <span className={selectedTrackIds.length > 0 ? 'hidden' : 'group-hover:hidden'}>
+                  {index + 1}
+                </span>
+                <Square
+                  size={14}
+                  className={`${selectedTrackIds.length > 0 ? 'inline' : 'hidden group-hover:inline'} text-zinc-500 hover:text-zinc-300`}
+                />
+              </>
+            )}
+          </div>
         </td>
         <td
           onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={() => handleRowClick(track, tracks)}
-          className="py-3 pr-4 min-w-0"
+          onClick={handleRowSelectOrPlay}
+          className={`py-3 pr-4 min-w-0 transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
         >
           <div className="flex items-center gap-3.5 min-w-0">
             <div className="w-10 h-10 bg-theme-30 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center shadow-sm">
@@ -522,7 +473,7 @@ const TrackRow = React.memo(
             </div>
             <div className="min-w-0 flex-1">
               <p
-                className={`font-semibold text-sm transition-colors truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}
+                className={`font-semibold text-sm transition-colors truncate ${isThisTrackPlaying ? 'text-theme-10' : isSelected ? 'text-theme-10 font-bold' : 'text-white group-hover:text-theme-10'}`}
               >
                 {track.title}
               </p>
@@ -537,16 +488,16 @@ const TrackRow = React.memo(
         </td>
         <td
           onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={() => handleRowClick(track, tracks)}
-          className="py-3 pr-4 text-zinc-400 truncate text-xs hidden md:table-cell"
+          onClick={handleRowSelectOrPlay}
+          className={`py-3 pr-4 text-zinc-400 truncate text-xs hidden md:table-cell transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
           title={track.album || 'Unknown'}
         >
           {track.album || 'Unknown'}
         </td>
         <td
           onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={() => handleRowClick(track, tracks)}
-          className="py-3 w-28 sm:w-32 text-center whitespace-nowrap"
+          onClick={handleRowSelectOrPlay}
+          className={`py-3 w-28 sm:w-32 text-center whitespace-nowrap transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
         >
           {(() => {
             const isDsd = isDsdTrack(track)
@@ -572,14 +523,14 @@ const TrackRow = React.memo(
         </td>
         <td
           onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={() => handleRowClick(track, tracks)}
-          className="py-3 text-right pr-4 text-zinc-400 font-mono text-xs w-16 sm:w-20 whitespace-nowrap"
+          onClick={handleRowSelectOrPlay}
+          className={`py-3 text-right pr-4 text-zinc-400 font-mono text-xs w-16 sm:w-20 whitespace-nowrap transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
         >
           {formatDuration(track.duration)}
         </td>
         <td
           onContextMenu={(e) => onContextMenu?.(track, e)}
-          className="py-3 text-center w-10 sm:w-11"
+          className={`py-3 text-center w-10 sm:w-11 transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
         >
           <button
             onClick={(e) => {
@@ -1261,7 +1212,9 @@ export default function App() {
     sleepTimerMode,
     setSleepTimerMode,
     setSleepTimerRemaining,
-    setShowSleepTimerMenu
+    setShowSleepTimerMenu,
+    currentTime,
+    setCurrentTime
   } = usePlayerStore()
 
   // UI Store
@@ -1365,7 +1318,21 @@ export default function App() {
     isYtmLoggedIn,
     setIsYtmLoggedIn,
     preAggregatedData,
-    setPreAggregatedData
+    setPreAggregatedData,
+    favoriteTrackIds,
+    setFavoriteTrackIds,
+    toggleFavoriteId,
+    quickFilter,
+    setQuickFilter,
+    selectedTrackIds,
+    setSelectedTrackIds,
+    toggleSelectTrackId,
+    clearSelectedTracks,
+    smartPlaylists,
+    setSmartPlaylists,
+    trackLyricOffsets,
+    setTrackLyricOffsets,
+    updateTrackLyricOffset
   } = useLibraryStore()
 
   // Settings Store
@@ -1430,7 +1397,11 @@ export default function App() {
     setIsDownloading,
     setDownloadProgress,
     loudnessNormalization,
-    setLoudnessNormalization
+    setLoudnessNormalization,
+    gaplessEnabled,
+    setGaplessEnabled,
+    waveformSeekbarEnabled,
+    setWaveformSeekbarEnabled
   } = useSettingsStore()
 
   // Audio & EQ Store
@@ -1499,14 +1470,31 @@ export default function App() {
   // Tag Editor & Track Info States
   const [editingTrack, setEditingTrack] = useState<any | null>(null)
   const [infoTrack, setInfoTrack] = useState<any | null>(null)
-  const [editTags, setEditTags] = useState({
+  const [editTags, setEditTags] = useState<{
+    title: string
+    artist: string
+    album: string
+    albumArtist?: string
+    genre?: string
+    year?: string | number
+    trackNumber?: string | number
+    discNumber?: string | number
+    lyrics: string
+    [key: string]: any
+  }>({
     title: '',
     artist: '',
     album: '',
+    albumArtist: '',
     genre: '',
+    year: '',
+    trackNumber: '',
+    discNumber: '',
     lyrics: ''
   })
   const [editImagePath, setEditImagePath] = useState<string | null>(null)
+  const [showDuplicateFinder, setShowDuplicateFinder] = useState(false)
+  const [showSmartPlaylists, setShowSmartPlaylists] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-mode', appMode)
@@ -2833,6 +2821,25 @@ export default function App() {
     setRepeatMode((prev) => ((prev + 1) % 3) as 0 | 1 | 2)
   }
 
+  const handleSeekForward = (seconds: number = 10) => {
+    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
+      window.api.bassSeek(seconds, 'relative')
+    } else if (audioRef.current && currentTrack) {
+      audioRef.current.currentTime = Math.min(
+        audioRef.current.duration || 9999,
+        audioRef.current.currentTime + seconds
+      )
+    }
+  }
+
+  const handleSeekBackward = (seconds: number = 10) => {
+    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
+      window.api.bassSeek(-seconds, 'relative')
+    } else if (audioRef.current && currentTrack) {
+      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - seconds)
+    }
+  }
+
   const handleLoadedMetadata = () => {
     if (audioRef.current && currentTrack) {
       const actualDuration = audioRef.current.duration
@@ -2841,6 +2848,13 @@ export default function App() {
         setLibraryTracks((prevTracks) =>
           prevTracks.map((t) => (t.id === currentTrack.id ? { ...t, duration: actualDuration } : t))
         )
+      }
+      if (typeof currentTrack.startTime === 'number' && currentTrack.startTime > 0) {
+        audioRef.current.currentTime = currentTrack.startTime
+      } else if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
+        const seekTo = pendingSeekTimeRef.current
+        pendingSeekTimeRef.current = null
+        audioRef.current.currentTime = seekTo
       }
     }
   }
@@ -3287,10 +3301,7 @@ export default function App() {
       document.documentElement.style.setProperty('--theme-10', currentTrack.themeColors.accent10)
     }
 
-    const trackCover =
-      trackHighResCover ||
-      currentTrack?.coverArtHighRes ||
-      currentTrack?.coverArt
+    const trackCover = trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt
 
     if (trackCover) {
       const safeTrackCover = formatImageSource(trackCover, streamPort) || trackCover
@@ -3359,6 +3370,7 @@ export default function App() {
   // --- Tag Editor ---
   const openTagEditor = useCallback((track: any, e?: React.MouseEvent) => {
     e?.stopPropagation()
+    if (!track) return
     setEditingTrack(track)
 
     let rawLyrics = ''
@@ -3372,10 +3384,14 @@ export default function App() {
       title: track.title || '',
       artist: track.artist || '',
       album: track.album || '',
+      albumArtist: track.albumArtist || '',
       genre:
         track.genre && track.genre !== 'Unknown' && track.genre !== 'Chưa phân loại'
           ? track.genre
           : '',
+      year: track.year || '',
+      trackNumber: track.trackNumber || '',
+      discNumber: track.discNumber || '',
       lyrics: rawLyrics
     })
     setEditImagePath(null)
@@ -3402,8 +3418,11 @@ export default function App() {
   }
 
   const saveTags = async () => {
+    if (!editingTrack) return
+    const targetPath = editingTrack.filePath || editingTrack.id
+    if (!targetPath) return
     // @ts-ignore
-    const res = await window.api.updateTags(editingTrack.id, editTags, editImagePath)
+    const res = await window.api.updateTags(targetPath, editTags, editImagePath)
     if (res.success) {
       showToast(res.note || t('toasts.tagSavedSuccess'), 'success')
       const newCover = res.coverUrl || currentTrack?.coverArt
@@ -3418,7 +3437,11 @@ export default function App() {
               artist: editTags.artist,
               artists: effectiveArtists,
               album: editTags.album,
+              albumArtist: editTags.albumArtist,
               genre: editTags.genre,
+              year: editTags.year,
+              trackNumber: editTags.trackNumber,
+              discNumber: editTags.discNumber,
               lyrics: editTags.lyrics,
               coverArt: newCover || t.coverArt
             }
@@ -3436,7 +3459,11 @@ export default function App() {
           artist: editTags.artist,
           artists: effectiveArtists,
           album: editTags.album,
+          albumArtist: editTags.albumArtist,
           genre: editTags.genre,
+          year: editTags.year,
+          trackNumber: editTags.trackNumber,
+          discNumber: editTags.discNumber,
           lyrics: editTags.lyrics,
           coverArt: newCover || currentTrack.coverArt
         })
@@ -3547,7 +3574,7 @@ export default function App() {
         id: 'edit-tags',
         label: t('contextMenu.editTags'),
         icon: <Edit2 size={14} />,
-        disabled: track.isCloud,
+        disabled: track.isCloud || track.isCueTrack,
         onClick: () => openTagEditor(track, e)
       },
       {
@@ -4158,15 +4185,71 @@ export default function App() {
   }, [chunkedAlphabetGroups])
 
   const processedLibraryTracks = useMemo(() => {
-    const filtered = getFilteredTracks(libraryTracks)
+    let tracks = libraryTracks
+    if (quickFilter !== 'all') {
+      const favSet = new Set(favoriteTrackIds)
+      tracks = tracks.filter((t) => {
+        const isDsd = isDsdTrack(t)
+        const fmt = (t.format || '').toUpperCase()
+        if (quickFilter === 'favorites') {
+          return favSet.has(t.id) || (t.filePath && favSet.has(t.filePath))
+        }
+        if (quickFilter === 'lossless') {
+          return isDsd || t.lossless || ['FLAC', 'WAV', 'ALAC', 'AIFF', 'APE'].includes(fmt)
+        }
+        if (quickFilter === 'hires') {
+          return (
+            isDsd ||
+            (t.sampleRate && t.sampleRate >= 88200) ||
+            (t.bitDepth && t.bitDepth >= 24)
+          )
+        }
+        if (quickFilter === 'dsd') {
+          return isDsd
+        }
+        if (quickFilter === 'cue') {
+          return t.isCueTrack || t.cueFilePath
+        }
+        return true
+      })
+    }
+    const filtered = getFilteredTracks(tracks)
     return getSortedTracks(filtered)
-  }, [libraryTracks, deferredSearchQuery, sortField, sortOrder])
+  }, [libraryTracks, quickFilter, favoriteTrackIds, deferredSearchQuery, sortField, sortOrder])
 
   const processedPlaylistTracks = useMemo(() => {
     if (!activePlaylist) return []
-    const filtered = getFilteredTracks(activePlaylist.tracks)
+    let tracks = activePlaylist.tracks || []
+    if (quickFilter !== 'all') {
+      const favSet = new Set(favoriteTrackIds)
+      tracks = tracks.filter((t) => {
+        const isDsd = isDsdTrack(t)
+        const fmt = (t.format || '').toUpperCase()
+        if (quickFilter === 'favorites') {
+          return favSet.has(t.id) || (t.filePath && favSet.has(t.filePath))
+        }
+        if (quickFilter === 'lossless') {
+          return isDsd || t.lossless || ['FLAC', 'WAV', 'ALAC', 'AIFF', 'APE'].includes(fmt)
+        }
+        if (quickFilter === 'hires') {
+          return (
+            isDsd ||
+            (t.sampleRate && t.sampleRate >= 88200) ||
+            (t.bitDepth && t.bitDepth >= 24)
+          )
+        }
+        if (quickFilter === 'dsd') {
+          return isDsd
+        }
+        if (quickFilter === 'cue') {
+          return t.isCueTrack || t.cueFilePath
+        }
+        return true
+      })
+    }
+    const filtered = getFilteredTracks(tracks)
     return getSortedTracks(filtered)
-  }, [activePlaylist, deferredSearchQuery, sortField, sortOrder])
+  }, [activePlaylist, quickFilter, favoriteTrackIds, deferredSearchQuery, sortField, sortOrder])
 
   const matchedPlaylists = useMemo(() => {
     const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
@@ -4304,6 +4387,14 @@ export default function App() {
       }
     }
     getDevices()
+
+    if (navigator?.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', getDevices)
+      return () => {
+        navigator.mediaDevices.removeEventListener('devicechange', getDevices)
+      }
+    }
+    return undefined
   }, [bitPerfectType])
 
   // Fetch Original High-Res Cover for Fullscreen Lyrics
@@ -4413,8 +4504,108 @@ export default function App() {
       fetchScDashboard()
       setIsConfigLoaded(true)
       loadLibrary()
+
+      // Restore playback session if no track is currently loaded
+      if (!usePlayerStore.getState().currentTrack) {
+        const session = loadPlaybackSession()
+        if (session && session.currentTime > 0) {
+          pendingSeekTimeRef.current = session.currentTime
+        }
+      }
+
+      // SQLite QoL & Library Features on startup
+      if (window.api?.getFavorites) {
+        window.api
+          .getFavorites()
+          .then((favs) => {
+            if (Array.isArray(favs)) setFavoriteTrackIds(favs)
+          })
+          .catch(() => {})
+      }
+      if (window.api?.getLyricOffsets) {
+        window.api
+          .getLyricOffsets()
+          .then((offsets) => {
+            if (offsets && typeof offsets === 'object') setTrackLyricOffsets(offsets)
+          })
+          .catch(() => {})
+      }
+      if (window.api?.getSmartPlaylists) {
+        window.api
+          .getSmartPlaylists()
+          .then((spls) => {
+            if (Array.isArray(spls)) setSmartPlaylists(spls)
+          })
+          .catch(() => {})
+      }
     })
   }, [])
+
+  // Listen for library file system changes (background library auto-update)
+  useEffect(() => {
+    if (window.api?.onLibraryFsChanged) {
+      const unFs = window.api.onLibraryFsChanged(() => {
+        loadLibrary(true, false)
+      })
+      return () => {
+        if (typeof unFs === 'function') unFs()
+      }
+    }
+    return undefined
+  }, [])
+
+  // Auto-save playback session on track / queue / state change
+  useEffect(() => {
+    scheduleSavePlaybackSession()
+  }, [currentTrack, playQueue, isShuffle, repeatMode])
+
+  // Sync gapless playback setting to BASS
+  useEffect(() => {
+    window.api?.bassSetGapless?.(gaplessEnabled)
+  }, [gaplessEnabled])
+
+  // Preload next track for BASS gapless playback (Bit-Perfect or DSD mode)
+  useEffect(() => {
+    if (!gaplessEnabled || (!bitPerfectEnabled && !isDsdTrack(currentTrack))) {
+      return
+    }
+    if (!currentTrack || !isPlaying || playQueue.length === 0) {
+      return
+    }
+    const currentIndex = playQueue.findIndex(
+      (t) =>
+        (t.filePath === currentTrack.filePath || t.id === currentTrack.id) &&
+        t.startTime === currentTrack.startTime
+    )
+    let nextTrack: any = null
+    if (repeatMode === 2) {
+      nextTrack = currentTrack
+    } else if (currentIndex !== -1) {
+      let nextIdx = currentIndex + 1
+      if (nextIdx >= playQueue.length && repeatMode === 1) {
+        nextIdx = 0
+      }
+      if (nextIdx >= 0 && nextIdx < playQueue.length) {
+        nextTrack = playQueue[nextIdx]
+      }
+    }
+
+    if (nextTrack && nextTrack.filePath && !nextTrack.isOnline) {
+      window.api?.bassPreloadNext?.(nextTrack.filePath, nextTrack.startTime, nextTrack.endTime)
+    }
+  }, [currentTrack, playQueue, repeatMode, isPlaying, bitPerfectEnabled, gaplessEnabled])
+
+  // Per-Track Lyric Offset: restore saved offset when track changes
+  useEffect(() => {
+    if (currentTrack) {
+      const trackKey = currentTrack.filePath || currentTrack.id
+      if (trackKey && trackLyricOffsets[trackKey] !== undefined) {
+        setLyricOffset(trackLyricOffsets[trackKey])
+        return
+      }
+    }
+    setLyricOffset(0)
+  }, [currentTrack?.filePath, currentTrack?.id, trackLyricOffsets])
 
   // Auto-save Config & Update Tray
   useEffect(() => {
@@ -4993,6 +5184,22 @@ export default function App() {
 
     const handleTimeUpdate = () => {
       // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Chỉ cập nhật khi giao diện đang mở trên màn hình) ---
+      setCurrentTime(audio.currentTime)
+
+      // CUE virtual track boundary check
+      if (
+        currentTrack &&
+        typeof currentTrack.endTime === 'number' &&
+        currentTrack.endTime > 0 &&
+        audio.currentTime >= currentTrack.endTime
+      ) {
+        if (!hasTriggeredCrossfadeRef.current) {
+          hasTriggeredCrossfadeRef.current = true
+          handleNext()
+        }
+        return
+      }
+
       const activeIdx = useLyricsStore.getState().currentLyricIndex
       if (!document.hidden && lyrics.length > 0 && lyrics[0].unsynced) {
         // Lời thô không có mốc thời gian: không highlight theo thời gian phát
@@ -5561,6 +5768,13 @@ export default function App() {
       try {
         localStorage.setItem('meis_lyric_offset', String(next))
       } catch (e) {}
+      if (currentTrack) {
+        const trackKey = currentTrack.filePath || currentTrack.id
+        if (trackKey) {
+          updateTrackLyricOffset(trackKey, next)
+          window.api?.setLyricOffset?.(trackKey, next).catch(() => {})
+        }
+      }
       showToast(t('player.lyricOffsetToast', { offset: next > 0 ? `+${next}` : next }), 'info')
       return next
     })
@@ -5571,6 +5785,13 @@ export default function App() {
     try {
       localStorage.setItem('meis_lyric_offset', '0')
     } catch (e) {}
+    if (currentTrack) {
+      const trackKey = currentTrack.filePath || currentTrack.id
+      if (trackKey) {
+        updateTrackLyricOffset(trackKey, 0)
+        window.api?.setLyricOffset?.(trackKey, 0).catch(() => {})
+      }
+    }
     showToast(t('player.lyricOffsetResetToast'), 'info')
   }
 
@@ -5623,23 +5844,26 @@ export default function App() {
           fixedHeaderContent={() => (
             <tr className="text-zinc-500 border-b border-theme-30/50 select-none bg-theme-60 shadow-sm text-xs">
               <th
-                onClick={() => handleSort('id')}
+                onClick={() => {
+                  if (selectedTrackIds.length > 0 && selectedTrackIds.length === tracks.length) {
+                    clearSelectedTracks()
+                  } else {
+                    const allIds = tracks.map((t) => t.id || t.filePath).filter(Boolean)
+                    setSelectedTrackIds(allIds)
+                  }
+                }}
                 className="pb-3 pt-3.5 font-medium w-10 sm:w-12 text-center cursor-pointer group hover:text-white transition whitespace-nowrap"
-                title={t('trackTable.sortIndex')}
+                title={
+                  selectedTrackIds.length > 0 && selectedTrackIds.length === tracks.length
+                    ? t('common.deselectAll') || 'Deselect All'
+                    : t('common.selectAll') || 'Select All'
+                }
               >
                 <div className="inline-flex items-center gap-1 justify-center">
-                  <span>{t('trackTable.index')}</span>
-                  {sortField === 'id' ? (
-                    sortOrder === 'asc' ? (
-                      <ArrowUp size={11} className="text-theme-10" />
-                    ) : (
-                      <ArrowDown size={11} className="text-theme-10" />
-                    )
+                  {selectedTrackIds.length > 0 && selectedTrackIds.length === tracks.length ? (
+                    <CheckSquare size={13} className="text-theme-10" />
                   ) : (
-                    <ArrowUpDown
-                      size={11}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    />
+                    <span>{t('trackTable.index')}</span>
                   )}
                 </div>
               </th>
@@ -5791,6 +6015,7 @@ export default function App() {
               })
               if (index !== useLyricsStore.getState().currentLyricIndex) setCurrentLyricIndex(index)
             }
+            setCurrentTime(val)
           }
         })
       : undefined
@@ -5833,8 +6058,39 @@ export default function App() {
         })
       : undefined
 
+    const unGapless = window.api?.onBassGaplessTransition
+      ? window.api.onBassGaplessTransition(({ nextPath, nextInfo }) => {
+          const currentIndex = playQueue.findIndex(
+            (t) =>
+              (t.filePath === currentTrack?.filePath || t.id === currentTrack?.id) &&
+              t.startTime === currentTrack?.startTime
+          )
+          let candidateTrack: any = null
+          if (repeatMode === 2) {
+            candidateTrack = currentTrack
+          } else if (currentIndex !== -1) {
+            let nextIdx = currentIndex + 1
+            if (nextIdx >= playQueue.length && repeatMode === 1) nextIdx = 0
+            if (nextIdx >= 0 && nextIdx < playQueue.length) {
+              candidateTrack = playQueue[nextIdx]
+            }
+          }
+
+          if (candidateTrack && candidateTrack.filePath === nextPath) {
+            setCurrentTrack(candidateTrack)
+          } else {
+            const found = playQueue.find((t) => t.filePath === nextPath)
+            if (found) {
+              setCurrentTrack(found)
+            }
+          }
+          setIsPlaying(true)
+        })
+      : undefined
+
     const unError = window.api.onBassError
       ? window.api.onBassError((err: string) => {
+          setIsPlaying(false)
           showToast(
             `${language === 'vi' ? 'Lỗi âm thanh WASAPI/ASIO' : 'WASAPI/ASIO Audio error'}: ${err}`,
             'error'
@@ -5855,6 +6111,7 @@ export default function App() {
       if (typeof unDuration === 'function') unDuration()
       if (typeof unPaused === 'function') unPaused()
       if (typeof unEnded === 'function') unEnded()
+      if (typeof unGapless === 'function') unGapless()
       if (typeof unError === 'function') unError()
       if (typeof unAudioParams === 'function') unAudioParams()
     }
@@ -5866,7 +6123,9 @@ export default function App() {
     sleepTimerMode,
     currentTrack,
     lyrics,
-    lyricOffset
+    lyricOffset,
+    playQueue,
+    repeatMode
   ])
 
   useEffect(() => {
@@ -5879,7 +6138,13 @@ export default function App() {
   useEffect(() => {
     if (currentTrack && currentTrack.filePath) {
       if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-        window.api.bassPlay(currentTrack.filePath, crossfadeEnabled ? crossfadeDuration : 0)
+        window.api.bassPlay(
+          currentTrack.filePath,
+          crossfadeEnabled ? crossfadeDuration : 0,
+          bitPerfectEnabled,
+          currentTrack.startTime,
+          currentTrack.endTime
+        )
         if (audioRef.current) audioRef.current.pause()
         if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
           const seekTo = pendingSeekTimeRef.current
@@ -5950,7 +6215,7 @@ export default function App() {
         }}
         crossOrigin="anonymous" // QUAN TRỌNG: Ổn định luồng CORS cho Web Audio API
         preload="auto"
-        autoPlay={!bitPerfectEnabled && !isDsdTrack(currentTrack)}
+        autoPlay={!bitPerfectEnabled && !isDsdTrack(currentTrack) && isPlaying}
         src={
           currentTrack && !isDsdTrack(currentTrack)
             ? formatAudioSource(currentTrack.filePath, streamPort)
@@ -6014,6 +6279,34 @@ export default function App() {
         }}
         loop={repeatMode === 2}
       />
+
+      {/* Hidden HTML5 Audio Element for Next-Track Gapless Audio Frame Caching */}
+      {gaplessEnabled && !bitPerfectEnabled && !isDsdTrack(currentTrack) && (() => {
+        const currentIndex = playQueue.findIndex(
+          (t) =>
+            (t.id === currentTrack?.id || t.filePath === currentTrack?.filePath) &&
+            t.startTime === currentTrack?.startTime
+        )
+        let nextTrack: any = null
+        if (repeatMode === 2) {
+          nextTrack = currentTrack
+        } else if (currentIndex !== -1) {
+          let nextIdx = currentIndex + 1
+          if (nextIdx >= playQueue.length && repeatMode === 1) nextIdx = 0
+          if (nextIdx >= 0 && nextIdx < playQueue.length) nextTrack = playQueue[nextIdx]
+        }
+        if (nextTrack && nextTrack.filePath && !nextTrack.isOnline && !isDsdTrack(nextTrack)) {
+          return (
+            <audio
+              key={`gapless_preload_${nextTrack.filePath}_${nextTrack.startTime || 0}`}
+              preload="auto"
+              src={formatAudioSource(nextTrack.filePath, streamPort)}
+              style={{ display: 'none' }}
+            />
+          )
+        }
+        return null
+      })()}
 
       {/* 2. RẼ NHÁNH GIAO DIỆN BẰNG TERNARY OPERATOR */}
       {isMiniPlayer ? (
@@ -6143,7 +6436,97 @@ export default function App() {
           {/* ========================================= */}
           <DownloadProgressToast t={t} />
 
-          <React.Suspense fallback={null}>
+          {/* Multi-Select Batch Action Bar */}
+          <BatchActionBar
+            onPlaySelected={(ids) => {
+              const idSet = new Set(ids)
+              const selectedTracks = libraryTracks.filter(
+                (t) => idSet.has(t.id) || (t.filePath && idSet.has(t.filePath))
+              )
+              if (selectedTracks.length > 0) {
+                handleRowClick(selectedTracks[0], selectedTracks)
+              }
+            }}
+            onAddToQueue={(ids) => {
+              const idSet = new Set(ids)
+              const selectedTracks = libraryTracks.filter(
+                (t) => idSet.has(t.id) || (t.filePath && idSet.has(t.filePath))
+              )
+              if (selectedTracks.length > 0) {
+                setPlayQueue((prev) => [...prev, ...selectedTracks])
+                showToast(
+                  `${t('toasts.addedToQueue') || 'Đã thêm vào hàng đợi'}: +${selectedTracks.length}`,
+                  'success'
+                )
+              }
+            }}
+            onAddToFavorites={async (ids) => {
+              const nextFavs = Array.from(new Set([...favoriteTrackIds, ...ids]))
+              setFavoriteTrackIds(nextFavs)
+              if (window.api?.toggleFavorite) {
+                for (const id of ids) {
+                  await window.api.toggleFavorite(id, true).catch(() => {})
+                }
+              }
+              showToast(
+                `${t('favorites.addToFavorites') || 'Đã thêm vào yêu thích'}: +${ids.length}`,
+                'success'
+              )
+            }}
+            onDeleteSelected={async (ids) => {
+              const idSet = new Set(ids)
+              const matched = libraryTracks.filter(
+                (t) => idSet.has(t.id) || (t.filePath && idSet.has(t.filePath))
+              )
+              const paths = matched.map((t) => t.filePath).filter(Boolean) as string[]
+              if (paths.length === 0) return
+              const confirmed = window.confirm(
+                `${t('batchActions.deleteSelected') || 'Xóa các bài đã chọn'} (${paths.length} ${t('common.tracks') || 'bài'})?`
+              )
+              if (!confirmed) return
+              if (window.api?.deleteTrack) {
+                for (const p of paths) {
+                  try {
+                    await window.api.deleteTrack(p, false)
+                  } catch {}
+                }
+                showToast(t('toasts.movedToTrash') || 'Đã chuyển vào thùng rác', 'info')
+                clearSelectedTracks()
+                loadLibrary(true, false)
+              }
+            }}
+            onClearSelection={clearSelectedTracks}
+          />
+
+          <ErrorBoundary fallback={null}>
+            <React.Suspense fallback={null}>
+            <DuplicateFinderModal
+              isOpen={showDuplicateFinder}
+              onClose={() => setShowDuplicateFinder(false)}
+              onDeleteTracks={async (trackPaths) => {
+                if (window.api?.deleteTrack) {
+                  for (const p of trackPaths) {
+                    try {
+                      await window.api.deleteTrack(p, false)
+                    } catch {}
+                  }
+                  showToast(t('toasts.movedToTrash') || 'Đã xóa bản trùng lặp', 'info')
+                  loadLibrary(true, false)
+                }
+              }}
+              onPlayTrack={(tr) => handleRowClick(tr, libraryTracks)}
+            />
+
+            <SmartPlaylistModal
+              isOpen={showSmartPlaylists}
+              onClose={() => setShowSmartPlaylists(false)}
+              onPlayPlaylist={(tracks) => {
+                if (tracks && tracks.length > 0) {
+                  handleRowClick(tracks[0], tracks)
+                }
+              }}
+            />
+
             <CloudActionModal
               track={cloudActionTrack}
               isDownloading={isDownloading}
@@ -6160,15 +6543,17 @@ export default function App() {
               />
             )}
 
-            <TagEditorModal
-              track={editingTrack}
-              tags={editTags}
-              imagePath={editImagePath}
-              setTags={setEditTags}
-              onSelectImage={handleSelectTagImage}
-              onSave={saveTags}
-              onClose={() => setEditingTrack(null)}
-            />
+            {editingTrack && (
+              <TagEditorModal
+                track={editingTrack}
+                tags={editTags}
+                imagePath={editImagePath}
+                setTags={setEditTags}
+                onSelectImage={handleSelectTagImage}
+                onSave={saveTags}
+                onClose={() => setEditingTrack(null)}
+              />
+            )}
 
             <PlaylistRenameModal
               isOpen={playlistRename.isOpen}
@@ -6243,10 +6628,24 @@ export default function App() {
             <CommandPaletteModal
               onPlayTrack={handlePlayTrack}
               onStartRadio={() => handleStartRadio()}
+              onTogglePlay={handlePlayPause}
+              onNext={handleNext}
+              onPrev={handlePrev}
+              onToggleShuffle={toggleShuffle}
+              onToggleRepeat={toggleRepeat}
+              onVolumeUp={handleVolumeUp}
+              onVolumeDown={handleVolumeDown}
+              onToggleMute={toggleMute}
+              onSeekForward={handleSeekForward}
+              onSeekBackward={handleSeekBackward}
+              onReloadLibrary={handleReloadLibrary}
+              onAddLibraryFolder={handleAddLibraryFolder}
+              onNavigateToArtist={navigateToArtist}
             />
             <MusicInsightsModal />
             <BackupModal />
           </React.Suspense>
+          </ErrorBoundary>
           <DragDropOverlay isDragging={isDraggingFile} />
 
           {contextMenu && (
@@ -7525,6 +7924,15 @@ export default function App() {
                           </button>
                         </div>
                       </div>
+
+                      {/* Quick Filter Chips (All, Favorites, Lossless, Hi-Res, DSD, CUE) */}
+                      <div className="mb-4">
+                        <QuickFilterChips
+                          onOpenDuplicateFinder={() => setShowDuplicateFinder(true)}
+                          onOpenSmartPlaylists={() => setShowSmartPlaylists(true)}
+                        />
+                      </div>
+
                       {libraryPath ? (
                         processedLibraryTracks.length > 0 ? (
                           renderTrackTable(processedLibraryTracks)
@@ -7871,7 +8279,9 @@ export default function App() {
                                         <Disc
                                           size={16}
                                           className={
-                                            accentColorMode === 'track' ? 'text-theme-10' : 'text-zinc-400'
+                                            accentColorMode === 'track'
+                                              ? 'text-theme-10'
+                                              : 'text-zinc-400'
                                           }
                                         />
                                         {t('settings.customBg.accentTrack')}
@@ -7968,7 +8378,8 @@ export default function App() {
                                     <div className="flex items-center gap-2 flex-wrap">
                                       {PRESET_ACCENT_COLORS.map((preset) => {
                                         const isSelected =
-                                          customAccentColor.toLowerCase() === preset.color.toLowerCase()
+                                          customAccentColor.toLowerCase() ===
+                                          preset.color.toLowerCase()
                                         return (
                                           <button
                                             key={preset.color}
@@ -8028,138 +8439,158 @@ export default function App() {
                                 <label className="block text-xs font-semibold uppercase tracking-wider text-theme-10 mb-2">
                                   {t('settings.customBg.wallpaperTitle')}
                                 </label>
-                              {/* Checkbox tùy chọn dùng ảnh bìa bài hát */}
-                              <label className="flex items-center gap-3 cursor-pointer mb-4 select-none group w-fit">
-                                <input
-                                  type="checkbox"
-                                  checked={useTrackCoverAsBg}
-                                  onChange={(e) => setUseTrackCoverAsBg(e.target.checked)}
-                                  className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
-                                />
-                                <span className="text-sm text-zinc-300 group-hover:text-white transition">
-                                  {t('settings.customBg.useTrackCover')}
-                                </span>
-                              </label>
-
-                              {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
-                              {!useTrackCoverAsBg && (
-                                <div className="flex gap-2.5 sm:gap-3 items-center mb-4 flex-wrap">
+                                {/* Checkbox tùy chọn dùng ảnh bìa bài hát */}
+                                <label className="flex items-center gap-3 cursor-pointer mb-4 select-none group w-fit">
                                   <input
-                                    type="text"
-                                    value={bgImageInput}
-                                    onChange={(e) => setBgImageInput(e.target.value)}
-                                    placeholder={t('settings.customBg.placeholder')}
-                                    className="flex-1 min-w-[200px] bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-sm text-zinc-300 focus:border-theme-10 outline-none"
+                                    type="checkbox"
+                                    checked={useTrackCoverAsBg}
+                                    onChange={(e) => setUseTrackCoverAsBg(e.target.checked)}
+                                    className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
                                   />
-                                  <button
-                                    onClick={() => {
-                                      const normalized = normalizeImagePath(bgImageInput)
-                                      if (normalized) {
-                                        setBgImageInput(normalized)
-                                        setCustomBgImage(normalized)
-                                      }
-                                    }}
-                                    className="sys-btn flex items-center gap-1.5 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                    title={t('settings.customBg.applyLink')}
-                                  >
-                                    <Check size={15} />
-                                    <span className="btn-text">
-                                      {t('settings.customBg.applyLink')}
-                                    </span>
-                                  </button>
-                                  <button
-                                    onClick={async () => {
-                                      const filePath = await window.api.selectImageFile()
-                                      if (filePath) {
-                                        const normalized = normalizeImagePath(filePath)
-                                        setBgImageInput(normalized)
-                                        setCustomBgImage(normalized)
-                                      }
-                                    }}
-                                    className="sys-btn flex items-center gap-1.5 bg-theme-10 hover:bg-theme-10/90 text-white px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer shadow-lg shadow-theme-10/20"
-                                    title={t('settings.customBg.chooseImage')}
-                                  >
-                                    <ImageIcon size={15} />
-                                    <span className="btn-text">
-                                      {t('settings.customBg.chooseImage')}
-                                    </span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setCustomBgImage(null)
-                                      setBgImageInput('')
-                                    }}
-                                    className="sys-btn flex items-center gap-1.5 bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                    title={t('settings.customBg.removeBg')}
-                                  >
-                                    <Trash2 size={15} />
-                                    <span className="btn-text">
-                                      {t('settings.customBg.removeBg')}
-                                    </span>
-                                  </button>
-                                </div>
-                              )}
-
-                              <div className="flex flex-col gap-4">
-                                <div className="flex items-center gap-4">
-                                  <span className="text-sm text-zinc-300 w-32">
-                                    {t('settings.customBg.opacity')}:
+                                  <span className="text-sm text-zinc-300 group-hover:text-white transition">
+                                    {t('settings.customBg.useTrackCover')}
                                   </span>
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.05"
-                                    value={customBgOpacity}
-                                    onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))}
-                                    onWheel={(e) => {
-                                      e.preventDefault()
-                                      e.stopPropagation()
-                                      const delta = e.deltaY < 0 ? 0.05 : -0.05
-                                      setCustomBgOpacity((prev) =>
-                                        Math.max(
-                                          0,
-                                          Math.min(1, Math.round((prev + delta) * 100) / 100)
+                                </label>
+
+                                {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
+                                {!useTrackCoverAsBg && (
+                                  <div className="flex gap-2.5 sm:gap-3 items-center mb-4 flex-wrap">
+                                    <input
+                                      type="text"
+                                      value={bgImageInput}
+                                      onChange={(e) => setBgImageInput(e.target.value)}
+                                      placeholder={t('settings.customBg.placeholder')}
+                                      className="flex-1 min-w-[200px] bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-sm text-zinc-300 focus:border-theme-10 outline-none"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const normalized = normalizeImagePath(bgImageInput)
+                                        if (normalized) {
+                                          setBgImageInput(normalized)
+                                          setCustomBgImage(normalized)
+                                        }
+                                      }}
+                                      className="sys-btn flex items-center gap-1.5 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                                      title={t('settings.customBg.applyLink')}
+                                    >
+                                      <Check size={15} />
+                                      <span className="btn-text">
+                                        {t('settings.customBg.applyLink')}
+                                      </span>
+                                    </button>
+                                    <button
+                                      onClick={async () => {
+                                        const filePath = await window.api.selectImageFile()
+                                        if (filePath) {
+                                          const normalized = normalizeImagePath(filePath)
+                                          setBgImageInput(normalized)
+                                          setCustomBgImage(normalized)
+                                        }
+                                      }}
+                                      className="sys-btn flex items-center gap-1.5 bg-theme-10 hover:bg-theme-10/90 text-white px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer shadow-lg shadow-theme-10/20"
+                                      title={t('settings.customBg.chooseImage')}
+                                    >
+                                      <ImageIcon size={15} />
+                                      <span className="btn-text">
+                                        {t('settings.customBg.chooseImage')}
+                                      </span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setCustomBgImage(null)
+                                        setBgImageInput('')
+                                      }}
+                                      className="sys-btn flex items-center gap-1.5 bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
+                                      title={t('settings.customBg.removeBg')}
+                                    >
+                                      <Trash2 size={15} />
+                                      <span className="btn-text">
+                                        {t('settings.customBg.removeBg')}
+                                      </span>
+                                    </button>
+                                  </div>
+                                )}
+
+                                <div className="flex flex-col gap-4">
+                                  <div className="flex items-center gap-4">
+                                    <span className="text-sm text-zinc-300 w-32">
+                                      {t('settings.customBg.opacity')}:
+                                    </span>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="1"
+                                      step="0.05"
+                                      value={customBgOpacity}
+                                      onChange={(e) =>
+                                        setCustomBgOpacity(parseFloat(e.target.value))
+                                      }
+                                      onWheel={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        const delta = e.deltaY < 0 ? 0.05 : -0.05
+                                        setCustomBgOpacity((prev) =>
+                                          Math.max(
+                                            0,
+                                            Math.min(1, Math.round((prev + delta) * 100) / 100)
+                                          )
                                         )
-                                      )
-                                    }}
-                                    className="flex-1 accent-theme-10"
-                                  />
-                                  <span className="text-sm font-mono text-zinc-400 w-12 text-right">
-                                    {Math.round(customBgOpacity * 100)}%
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <span className="text-sm text-zinc-300 w-32">
-                                    {t('settings.customBg.blur')}:
-                                  </span>
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    step="1"
-                                    value={customBgBlur}
-                                    onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
-                                    onWheel={(e) => {
-                                      e.preventDefault()
-                                      e.stopPropagation()
-                                      const delta = e.deltaY < 0 ? 2 : -2
-                                      setCustomBgBlur((prev) =>
-                                        Math.max(0, Math.min(100, prev + delta))
-                                      )
-                                    }}
-                                    className="flex-1 accent-theme-10"
-                                  />
-                                  <span className="text-sm font-mono text-zinc-400 w-12 text-right">
-                                    {customBgBlur}px
-                                  </span>
+                                      }}
+                                      className="flex-1 accent-theme-10"
+                                    />
+                                    <span className="text-sm font-mono text-zinc-400 w-12 text-right">
+                                      {Math.round(customBgOpacity * 100)}%
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <span className="text-sm text-zinc-300 w-32">
+                                      {t('settings.customBg.blur')}:
+                                    </span>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="100"
+                                      step="1"
+                                      value={customBgBlur}
+                                      onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
+                                      onWheel={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        const delta = e.deltaY < 0 ? 2 : -2
+                                        setCustomBgBlur((prev) =>
+                                          Math.max(0, Math.min(100, prev + delta))
+                                        )
+                                      }}
+                                      className="flex-1 accent-theme-10"
+                                    />
+                                    <span className="text-sm font-mono text-zinc-400 w-12 text-right">
+                                      {customBgBlur}px
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
+                            </>
+                          )}
+
+                          {/* Thanh tiến trình dạng sóng âm (Waveform Seekbar Toggle) */}
+                          <div className="flex items-center justify-between pt-4 border-t border-theme-30/40">
+                            <div className="flex flex-col pr-4">
+                              <span className="text-zinc-300 text-sm font-medium">
+                                {t('settings.customBg.waveformSeekbar')}
+                              </span>
+                              <span className="text-xs text-zinc-400 mt-0.5">
+                                {t('settings.customBg.waveformSeekbarDesc')}
+                              </span>
                             </div>
-                          </>
-                        )}
+                            <input
+                              type="checkbox"
+                              checked={waveformSeekbarEnabled}
+                              onChange={(e) => setWaveformSeekbarEnabled(e.target.checked)}
+                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
                       {/* ISLAND 2: NGÔN NGỮ (LANGUAGE) */}
                       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
@@ -8318,7 +8749,13 @@ export default function App() {
                                   } else {
                                     if (isDsdTrack(prevTrack)) {
                                       // DSD không thể giải mã qua Web Audio HTML5, tiếp tục phát bằng BASS
-                                      window.api.bassPlay(prevTrack.filePath, 0)
+                                      window.api.bassPlay(
+                                        prevTrack.filePath,
+                                        0,
+                                        val,
+                                        prevTrack.startTime,
+                                        prevTrack.endTime
+                                      )
                                     } else {
                                       // Nhạc PCM: Dừng BASS và giải phóng thiết bị độc quyền ngay lập tức
                                       await window.api.bassStop().catch(() => {})
@@ -8504,6 +8941,26 @@ export default function App() {
                             onChange={(e) => setLoudnessNormalization(e.target.checked)}
                             className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
                           />
+                        </div>
+
+                        {/* Phát nhạc liền mạch (Gapless Playback) */}
+                        <div className="flex flex-col gap-2 pt-4 border-t border-theme-30/40">
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col pr-4">
+                              <span className="text-zinc-300 text-sm font-medium">
+                                {t('settings.gaplessPlayback')}
+                              </span>
+                              <span className="text-xs text-zinc-400 mt-0.5">
+                                {t('settings.gaplessPlaybackDesc')}
+                              </span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={gaplessEnabled}
+                              onChange={(e) => setGaplessEnabled(e.target.checked)}
+                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -10215,6 +10672,12 @@ export default function App() {
                           </div>
                         </div>
                       </div>
+                      <div className="mb-3">
+                        <QuickFilterChips
+                          onOpenDuplicateFinder={() => setShowDuplicateFinder(true)}
+                          onOpenSmartPlaylists={() => setShowSmartPlaylists(true)}
+                        />
+                      </div>
                       <div className="flex-1 min-h-0 flex flex-col">
                         {renderTrackTable(processedPlaylistTracks)}
                       </div>
@@ -10618,6 +11081,48 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {currentTrack && (
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    const trackKey = currentTrack.filePath || currentTrack.id
+                    if (!trackKey) return
+                    const isFav = favoriteTrackIds.includes(trackKey)
+                    toggleFavoriteId(trackKey)
+                    if (window.api?.toggleFavorite) {
+                      await window.api.toggleFavorite(trackKey, !isFav).catch(() => {})
+                    }
+                    showToast(
+                      !isFav
+                        ? t('favorites.addedToFavorites') || 'Đã thêm vào yêu thích'
+                        : t('favorites.removedFromFavorites') || 'Đã xóa khỏi yêu thích',
+                      'info',
+                      1500
+                    )
+                  }}
+                  className={`p-1.5 rounded-full transition-all shrink-0 cursor-pointer ${
+                    favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
+                      ? 'text-rose-500 hover:text-rose-400 bg-rose-500/10'
+                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                  }`}
+                  title={
+                    favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
+                      ? t('favorites.removeFromFavorites') || 'Bỏ yêu thích'
+                      : t('favorites.addToFavorites') || 'Yêu thích'
+                  }
+                >
+                  <Heart
+                    size={18}
+                    className={
+                      favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
+                        ? 'fill-rose-500'
+                        : ''
+                    }
+                  />
+                </button>
+              )}
             </div>
 
             {/* Cụm điều khiển & Thanh tiến trình luôn nằm ở vị trí trung tâm tuyệt đối */}
