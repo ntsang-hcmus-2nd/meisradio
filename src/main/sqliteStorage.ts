@@ -183,6 +183,16 @@ class KoffiSqlite3 {
     }
   }
 
+  public checkpoint(mode: 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE' = 'TRUNCATE'): boolean {
+    if (!this.db) return false
+    try {
+      this.exec(`PRAGMA wal_checkpoint(${mode});`)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   public close(): void {
     if (this.db) {
       try {
@@ -386,6 +396,14 @@ export class SqliteStorage {
     this.initDatabase()
     this.prepareStatements()
     this.migrateExistingJsonFiles()
+
+    // Thu nhỏ và dọn dẹp WAL ngay khi khởi động
+    this.checkpoint('TRUNCATE')
+  }
+
+  public checkpoint(mode: 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE' = 'TRUNCATE'): boolean {
+    if (!this.db) return false
+    return this.db.checkpoint(mode)
   }
 
   private resolveSqliteDll(): string {
@@ -419,6 +437,7 @@ export class SqliteStorage {
       PRAGMA synchronous = NORMAL;
       PRAGMA temp_store = MEMORY;
       PRAGMA cache_size = -8000;
+      PRAGMA wal_autocheckpoint = 1000;
 
       -- 1. Metadata cache: metadata của từng file âm thanh (thay thế metadata-cache.json)
       CREATE TABLE IF NOT EXISTS metadata_cache (
@@ -1089,6 +1108,7 @@ export class SqliteStorage {
           }
         }
       })
+      this.checkpoint('PASSIVE')
     } catch (e) {
       console.warn('[SqliteStorage.setLibraryCache] Error saving cache:', e)
     }
@@ -1105,16 +1125,21 @@ export class SqliteStorage {
       if (row) return row
     }
 
-    // Fallback: so khớp normalizePathKey nếu không tìm thấy trực tiếp
+    // Fallback: so khớp targeted theo tên tệp (tránh Full Table Scan SELECT * FROM library_tracks)
     if (this.db) {
       try {
-        const normTarget = normalizePathKey(filePath)
-        const stmt = this.db.prepare('SELECT id, file_path, track_json FROM library_tracks;')
-        const allRows = stmt.all<{ id: string; file_path: string; track_json: string }>()
-        stmt.finalize()
-        for (const r of allRows) {
-          if (normalizePathKey(r.file_path) === normTarget || normalizePathKey(r.id) === normTarget) {
-            return r
+        const basename = path.basename(filePath)
+        if (basename) {
+          const stmt = this.db.prepare(
+            'SELECT id, file_path, track_json FROM library_tracks WHERE file_path LIKE ? OR id LIKE ? LIMIT 10;'
+          )
+          const rows = stmt.all<{ id: string; file_path: string; track_json: string }>(`%${basename}%`, `%${basename}%`)
+          stmt.finalize()
+          const normTarget = normalizePathKey(filePath)
+          for (const r of rows) {
+            if (normalizePathKey(r.file_path) === normTarget || normalizePathKey(r.id) === normTarget) {
+              return r
+            }
           }
         }
       } catch { /* ignore */ }

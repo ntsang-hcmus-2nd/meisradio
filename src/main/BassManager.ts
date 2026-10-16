@@ -178,6 +178,7 @@ export class BassManager extends EventEmitter {
   private progressTimer: NodeJS.Timeout | null = null
   private activeWasapiStream = 0
   private activeAsioStream = 0
+  private currentAsioDevice = -1
 
   // Gapless & Bit-Perfect State
   private gaplessEnabled: boolean = true
@@ -786,6 +787,7 @@ export class BassManager extends EventEmitter {
    * Giải phóng thiết bị âm thanh đang giữ độc quyền
    */
   private releaseDevices() {
+    this.currentAsioDevice = -1
     try {
       if (this.BASS_ASIO_Stop) this.BASS_ASIO_Stop()
       if (this.BASS_ASIO_ChannelReset) this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
@@ -871,14 +873,19 @@ export class BassManager extends EventEmitter {
         }
       }
 
-      // Init ASIO device
+      // Init ASIO device only if not already initialized on this device
       if (this.BASS_ASIO_Init) {
-        this.BASS_ASIO_Free()
-        const ok = this.BASS_ASIO_Init(devIndex, BASS_ASIO_THREAD)
-        if (!ok) {
-          const errCode = this.BASS_ASIO_ErrorGetCode ? this.BASS_ASIO_ErrorGetCode() : 0
-          console.warn(`ASIO Init failed (device ${devIndex}, code ${errCode}). Falling back to WASAPI...`)
-          return this.playWasapi(filePath, isDsd, startTime, endTime)
+        if (this.currentAsioDevice !== devIndex) {
+          try {
+            if (this.BASS_ASIO_Free) this.BASS_ASIO_Free()
+          } catch {}
+          const ok = this.BASS_ASIO_Init(devIndex, BASS_ASIO_THREAD)
+          if (!ok) {
+            const errCode = this.BASS_ASIO_ErrorGetCode ? this.BASS_ASIO_ErrorGetCode() : 0
+            console.warn(`ASIO Init failed (device ${devIndex}, code ${errCode}). Falling back to WASAPI...`)
+            return this.playWasapi(filePath, isDsd, startTime, endTime)
+          }
+          this.currentAsioDevice = devIndex
         }
       }
 
@@ -903,12 +910,18 @@ export class BassManager extends EventEmitter {
           // Kiểm tra xem driver ASIO có hỗ trợ DSD mode không
           const dsdSupported = this.BASS_ASIO_SetDSD ? this.BASS_ASIO_SetDSD(true) : false
 
-          if (dsdSupported && this.BASS_ASIO_ChannelEnable) {
+          if (dsdSupported) {
             this.BASS_ASIO_SetRate(dsdRate)
             this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
             this.activeAsioStream = chan
-            const en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioDsdCallback, null)
-            if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
+            let en0 = false
+            if (this.BASS_ASIO_ChannelEnableBASS) {
+              en0 = this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+            }
+            if (!en0 && this.BASS_ASIO_ChannelEnable) {
+              en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioDsdCallback, null)
+              if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
+            }
             if (en0) {
               outSampleRate = dsdRate
               const dsdFactor = Math.round(dsdRate / 44100)
@@ -935,13 +948,16 @@ export class BassManager extends EventEmitter {
             this.BASS_ASIO_SetRate(ci.freq)
             this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
             this.activeAsioStream = chan
-            if (this.BASS_ASIO_ChannelSetFormat) {
-              this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
+            let en0 = false
+            if (this.BASS_ASIO_ChannelEnableBASS) {
+              en0 = this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
             }
-            const en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-            if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
-            if (!en0) {
-              this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+            if (!en0 && this.BASS_ASIO_ChannelEnable) {
+              if (this.BASS_ASIO_ChannelSetFormat) {
+                this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
+              }
+              en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
+              if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
             }
             outSampleRate = ci.freq
             outFormat = 'DSD (DoP)'
@@ -959,13 +975,16 @@ export class BassManager extends EventEmitter {
             this.BASS_ASIO_SetRate(176400)
             this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
             this.activeAsioStream = chan
-            if (this.BASS_ASIO_ChannelSetFormat) {
-              this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
+            let en0 = false
+            if (this.BASS_ASIO_ChannelEnableBASS) {
+              en0 = this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
             }
-            const en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-            if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
-            if (!en0) {
-              this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+            if (!en0 && this.BASS_ASIO_ChannelEnable) {
+              if (this.BASS_ASIO_ChannelSetFormat) {
+                this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
+              }
+              en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
+              if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
             }
             outSampleRate = 176400
             outFormat = 'DSD-to-PCM (176.4kHz)'
@@ -981,13 +1000,16 @@ export class BassManager extends EventEmitter {
           this.BASS_ASIO_SetRate(ci.freq)
           this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
           this.activeAsioStream = chan
-          if (this.BASS_ASIO_ChannelSetFormat) {
-            this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
+          let en0 = false
+          if (this.BASS_ASIO_ChannelEnableBASS) {
+            en0 = this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
           }
-          const en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-          if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
-          if (!en0) {
-            this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+          if (!en0 && this.BASS_ASIO_ChannelEnable) {
+            if (this.BASS_ASIO_ChannelSetFormat) {
+              this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
+            }
+            en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
+            if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
           }
           if (ci.chans === 1 && this.BASS_ASIO_ChannelEnableMirror) {
             this.BASS_ASIO_ChannelEnableMirror(1, false, 0)
@@ -1327,7 +1349,7 @@ export class BassManager extends EventEmitter {
           }
         }
       } catch {}
-    }, 100)
+    }, 200)
   }
 
   private stopProgressTimer() {
@@ -1384,12 +1406,10 @@ export class BassManager extends EventEmitter {
       try {
         if (this.BASS_ASIO_Stop) this.BASS_ASIO_Stop()
         if (this.BASS_ASIO_ChannelReset) this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
-        if (this.BASS_ASIO_Free) this.BASS_ASIO_Free()
       } catch {}
     } else {
       try {
         if (this.BASS_WASAPI_Stop) this.BASS_WASAPI_Stop(true)
-        if (this.BASS_WASAPI_Free) this.BASS_WASAPI_Free()
       } catch {}
     }
 

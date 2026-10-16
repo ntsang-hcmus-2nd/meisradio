@@ -7321,6 +7321,7 @@ app.on('before-quit', () => {
   saveThemeColorsCache(true)
   if (sqliteStorage) {
     try {
+      sqliteStorage.checkpoint('TRUNCATE')
       sqliteStorage.close()
     } catch (e) {}
   }
