@@ -137,6 +137,12 @@ export class BassManager extends EventEmitter {
   // DSD
   private BASS_DSD_StreamCreateFile: any
 
+  // Raw CD-DA BIN Stream
+  private BASS_StreamCreateFileUser: any
+  private binFileProcs: any = null
+  private binContexts: Map<number, { fd: number; curPos: number; header: Buffer; fileSize: number; totalLen: number }> = new Map()
+  private nextBinContextId: number = 1
+
   // ASIO
   private BASS_ASIO_GetDeviceInfo: any
   private BASS_ASIO_Init: any
@@ -265,6 +271,110 @@ export class BassManager extends EventEmitter {
       // Init BASS No-Sound device 0 for decoding
       this.BASS_Init(0, 48000, 0, null, null)
 
+      // Raw CD-DA .bin stream support via BASS_StreamCreateFileUser
+      const PFILECLOSEPROC = koffi.proto('void __stdcall FILECLOSEPROC(uint64_t user)')
+      const PFILELENPROC = koffi.proto('uint64 __stdcall FILELENPROC(uint64_t user)')
+      const PFILEREADPROC = koffi.proto('uint32 __stdcall PFILEREADPROC(void *buffer, uint32 length, uint64_t user)')
+      const PFILESEEKPROC = koffi.proto('int __stdcall PFILESEEKPROC(uint64 offset, uint64_t user)')
+
+      koffi.struct('BASS_FILEPROCS', {
+        close: koffi.pointer(PFILECLOSEPROC),
+        length: koffi.pointer(PFILELENPROC),
+        read: koffi.pointer(PFILEREADPROC),
+        seek: koffi.pointer(PFILESEEKPROC)
+      })
+
+      this.BASS_StreamCreateFileUser = this.bassLib.func(
+        'uint32_t BASS_StreamCreateFileUser(uint32_t system, uint32_t flags, _In_ BASS_FILEPROCS *procs, uint64_t user)'
+      )
+
+      const closeCb = koffi.register((user: any) => {
+        try {
+          const id = Number(user)
+          const ctx = this.binContexts.get(id)
+          if (ctx) {
+            try {
+              fs.closeSync(ctx.fd)
+            } catch {}
+            this.binContexts.delete(id)
+          }
+        } catch (err) {
+          console.error('[BassManager] Error in closeCb:', err)
+        }
+      }, koffi.pointer(PFILECLOSEPROC))
+
+      const lenCb = koffi.register((user: any) => {
+        try {
+          const ctx = this.binContexts.get(Number(user))
+          return BigInt(ctx ? ctx.totalLen : 0)
+        } catch (err) {
+          console.error('[BassManager] Error in lenCb:', err)
+          return 0n
+        }
+      }, koffi.pointer(PFILELENPROC))
+
+      const readCb = koffi.register((bufPtr: any, length: number, user: any) => {
+        try {
+          const ctx = this.binContexts.get(Number(user))
+          if (!ctx || !bufPtr || length <= 0) return 0
+          if (ctx.curPos >= ctx.totalLen) return 0
+          const toRead = Math.min(length, ctx.totalLen - ctx.curPos)
+          if (toRead <= 0) return 0
+
+          let bytesWritten = 0
+          const outBuf = Buffer.alloc(toRead)
+
+          if (ctx.curPos < 44) {
+            const headerAvail = 44 - ctx.curPos
+            const headerToCopy = Math.min(toRead, headerAvail)
+            ctx.header.copy(outBuf, 0, ctx.curPos, ctx.curPos + headerToCopy)
+            bytesWritten += headerToCopy
+            ctx.curPos += headerToCopy
+          }
+
+          if (bytesWritten < toRead) {
+            const fileOffset = ctx.curPos - 44
+            const remaining = toRead - bytesWritten
+            try {
+              const n = fs.readSync(ctx.fd, outBuf, bytesWritten, remaining, fileOffset)
+              bytesWritten += n
+              ctx.curPos += n
+            } catch {
+              // Ignore read error (closed fd or EOF)
+            }
+          }
+
+          if (bytesWritten > 0) {
+            koffi.encode(bufPtr, koffi.array('uint8', bytesWritten), outBuf)
+          }
+          return bytesWritten
+        } catch (err) {
+          console.error('[BassManager] Error in readCb:', err)
+          return 0
+        }
+      }, koffi.pointer(PFILEREADPROC))
+
+      const seekCb = koffi.register((offset: any, user: any) => {
+        try {
+          const ctx = this.binContexts.get(Number(user))
+          if (!ctx) return 0
+          const off = Number(offset)
+          if (off > ctx.totalLen) return 0
+          ctx.curPos = off
+          return 1
+        } catch (err) {
+          console.error('[BassManager] Error in seekCb:', err)
+          return 0
+        }
+      }, koffi.pointer(PFILESEEKPROC))
+
+      this.binFileProcs = {
+        close: closeCb,
+        length: lenCb,
+        read: readCb,
+        seek: seekCb
+      }
+
       // Load plugins
       if (fs.existsSync(dsdDll)) {
         this.BASS_PluginLoad(dsdDll, 0)
@@ -302,7 +412,11 @@ export class BassManager extends EventEmitter {
 
         // Persistent ASIO callback supporting gapless Bit-Perfect playback
         this.asioCallback = koffi.register((_input: boolean, _channel: number, buffer: any, length: number) => {
-          return this.processAudioData(buffer, length)
+          try {
+            return this.processAudioData(buffer, length)
+          } catch {
+            return 0
+          }
         }, koffi.pointer(ASIOPROC))
         this.asioDsdCallback = this.asioCallback
       }
@@ -493,6 +607,28 @@ export class BassManager extends EventEmitter {
     }
     this.currentFilePath = nextPath
 
+    // Nếu đang ở chế độ ASIO, kích hoạt kênh ASIO cho stream mới trước khi giải phóng stream cũ
+    if (this.currentMode === 'asio') {
+      try {
+        if (this.BASS_ASIO_ChannelReset) {
+          this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
+        }
+        let en = false
+        if (this.BASS_ASIO_ChannelEnableBASS) {
+          en = this.BASS_ASIO_ChannelEnableBASS(false, 0, nextStream, true)
+        }
+        if (!en && this.BASS_ASIO_ChannelEnable) {
+          if (this.BASS_ASIO_ChannelSetFormat) {
+            this.BASS_ASIO_ChannelSetFormat(false, 0, 19)
+          }
+          this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
+          if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
+        }
+      } catch (err) {
+        console.error('Error re-enabling ASIO channel on gapless transition:', err)
+      }
+    }
+
     // Giải phóng stream cũ
     if (oldStream) {
       try {
@@ -612,6 +748,8 @@ export class BassManager extends EventEmitter {
         const targetRate = this.currentTrackInfo?.freq || 176400
         nextChan = this.BASS_DSD_StreamCreateFile(false, resolvedPath, 0, 0, BASS_SAMPLE_FLOAT | BASS_STREAM_DECODE | BASS_UNICODE, targetRate)
       }
+    } else if (lowerNext.endsWith('.bin')) {
+      nextChan = this.createBinStream(resolvedPath, BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT)
     } else {
       nextChan = this.BASS_StreamCreateFile(false, resolvedPath, 0, 0, BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_UNICODE)
     }
@@ -856,6 +994,77 @@ export class BassManager extends EventEmitter {
   }
 
   /**
+   * Tạo header RIFF WAV giả lập 44-byte cho CD-DA raw PCM 16-bit 44.1kHz Stereo
+   */
+  private createWavHeader(
+    dataSize: number,
+    sampleRate: number = 44100,
+    numChannels: number = 2,
+    bitsPerSample: number = 16
+  ): Buffer {
+    const byteRate = sampleRate * numChannels * (bitsPerSample / 8)
+    const blockAlign = numChannels * (bitsPerSample / 8)
+    const buf = Buffer.alloc(44)
+    buf.write('RIFF', 0)
+    buf.writeUInt32LE(dataSize + 36, 4)
+    buf.write('WAVE', 8)
+    buf.write('fmt ', 12)
+    buf.writeUInt32LE(16, 16)
+    buf.writeUInt16LE(1, 20)
+    buf.writeUInt16LE(numChannels, 22)
+    buf.writeUInt32LE(sampleRate, 24)
+    buf.writeUInt32LE(byteRate, 28)
+    buf.writeUInt16LE(blockAlign, 32)
+    buf.writeUInt16LE(bitsPerSample, 34)
+    buf.write('data', 36)
+    buf.writeUInt32LE(dataSize, 40)
+    return buf
+  }
+
+  /**
+   * Tạo stream giải mã BASS cho tệp ảnh đĩa CD-DA raw PCM (.bin) qua BASS_StreamCreateFileUser
+   */
+  private createBinStream(filePath: string, flags: number): number {
+    if (!this.BASS_StreamCreateFileUser || !this.binFileProcs) return 0
+    try {
+      const stat = fs.statSync(filePath)
+      const fd = fs.openSync(filePath, 'r')
+      const header = this.createWavHeader(stat.size, 44100, 2, 16)
+      const id = this.nextBinContextId++
+      const ctx = {
+        fd,
+        curPos: 0,
+        header,
+        fileSize: stat.size,
+        totalLen: stat.size + 44
+      }
+      this.binContexts.set(id, ctx)
+
+      const chan = this.BASS_StreamCreateFileUser(0, flags, this.binFileProcs, id)
+      if (!chan) {
+        try {
+          fs.closeSync(fd)
+        } catch {}
+        this.binContexts.delete(id)
+        return 0
+      }
+      return chan
+    } catch (e) {
+      console.error('Failed to create BIN stream:', e)
+      return 0
+    }
+  }
+
+  private cleanupAllBinContexts(): void {
+    for (const ctx of this.binContexts.values()) {
+      try {
+        fs.closeSync(ctx.fd)
+      } catch {}
+    }
+    this.binContexts.clear()
+  }
+
+  /**
    * Xử lý phát qua ASIO (bao gồm DSD Native, DoP, và PCM Bit-Perfect)
    */
   private playAsio(filePath: string, isDsd: boolean, startTime: number = 0, endTime: number = 0): boolean {
@@ -991,8 +1200,12 @@ export class BassManager extends EventEmitter {
           }
         }
       } else {
-        // PCM (FLAC, WAV, MP3, OPUS, ALAC, etc.)
-        chan = this.BASS_StreamCreateFile(false, filePath, 0, 0, BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_UNICODE)
+        // PCM (FLAC, WAV, MP3, OPUS, ALAC, BIN, etc.)
+        if (filePath.toLowerCase().endsWith('.bin')) {
+          chan = this.createBinStream(filePath, BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT)
+        } else {
+          chan = this.BASS_StreamCreateFile(false, filePath, 0, 0, BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_UNICODE)
+        }
         if (chan) {
           const ci: any = {}
           this.BASS_ChannelGetInfo(chan, ci)
@@ -1095,7 +1308,11 @@ export class BassManager extends EventEmitter {
         chan = this.BASS_DSD_StreamCreateFile(false, filePath, 0, 0, BASS_SAMPLE_FLOAT | BASS_STREAM_DECODE | BASS_UNICODE, 176400)
         outSampleRate = 176400
       } else {
-        chan = this.BASS_StreamCreateFile(false, filePath, 0, 0, BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_UNICODE)
+        if (filePath.toLowerCase().endsWith('.bin')) {
+          chan = this.createBinStream(filePath, BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT)
+        } else {
+          chan = this.BASS_StreamCreateFile(false, filePath, 0, 0, BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_UNICODE)
+        }
         if (chan) {
           const ci: any = {}
           this.BASS_ChannelGetInfo(chan, ci)
@@ -1331,7 +1548,9 @@ export class BassManager extends EventEmitter {
 
         // Kiểm tra giới hạn CUE sheet ảo (currentEndTime)
         if (this.currentEndTime > 0 && rawPos >= this.currentEndTime) {
-          if (!this.preloadedStream) {
+          if (this.gaplessEnabled && this.preloadedStream) {
+            this.transitionToPreloadedStream()
+          } else {
             this.emit('ended')
             this.stop()
           }
@@ -1343,7 +1562,9 @@ export class BassManager extends EventEmitter {
         const rawDur = this.getRawDuration()
         const endCondition = this.currentEndTime > 0 ? this.currentEndTime : rawDur
         if (isActive === BASS_ACTIVE_STOPPED || (endCondition > 0 && rawPos >= endCondition - 0.1)) {
-          if (!this.preloadedStream) {
+          if (this.gaplessEnabled && this.preloadedStream) {
+            this.transitionToPreloadedStream()
+          } else {
             this.emit('ended')
             this.stop()
           }
@@ -1465,6 +1686,7 @@ export class BassManager extends EventEmitter {
 
   public killSync() {
     this.stop()
+    this.cleanupAllBinContexts()
     this.releaseDevices()
     if (this.BASS_Free) {
       try {

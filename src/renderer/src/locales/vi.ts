@@ -479,7 +479,7 @@ export const vi: TranslationDictionary = {
       lyrics: 'Lời bài hát (Định dạng LRC hoặc văn bản thuần)',
       lyricsFormatInfo: '[00:00.00] Lời bài hát',
       lyricsPlaceholder: '[00:01.00] Dán lời bài hát có mốc thời gian hoặc lời thuần vào đây...',
-      saveDirect: 'Lưu thay đổi trực tiếp',
+      saveDirect: 'Lưu',
       albumArtist: 'Nghệ sĩ của đĩa nhạc',
       genre: 'Thể loại',
       releaseYear: 'Năm phát hành',

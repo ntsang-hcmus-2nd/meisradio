@@ -769,6 +769,35 @@ export async function fastReadMetadata(
 ): Promise<mm.IAudioMetadata> {
   const ext = path.extname(filePath).toLowerCase()
 
+  // 0. Raw CD-DA .bin image handler (44.1kHz, 16-bit stereo PCM)
+  if (ext === '.bin') {
+    try {
+      const stat = await fs.promises.stat(filePath)
+      const dur = Math.max(0, stat.size / 176400)
+      return {
+        format: {
+          container: 'CD-DA (BIN)',
+          codec: 'PCM',
+          duration: dur,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitsPerSample: 16,
+          bitrate: 1411200,
+          lossless: true
+        },
+        common: {
+          title: path.basename(filePath, ext),
+          artist: 'Unknown Artist',
+          album: path.basename(path.dirname(filePath)),
+          genre: [],
+          picture: []
+        },
+        native: {},
+        quality: {}
+      } as any
+    } catch {}
+  }
+
   // 1. MP3 Fast Reader
   if (ext === '.mp3') {
     try {

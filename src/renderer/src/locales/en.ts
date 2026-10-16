@@ -474,7 +474,7 @@ export const en: TranslationDictionary = {
       lyrics: 'Lyrics (LRC format or plain text)',
       lyricsFormatInfo: '[00:00.00] Lyrics',
       lyricsPlaceholder: '[00:01.00] Paste timestamped or plain lyrics here...',
-      saveDirect: 'Save Changes Directly',
+      saveDirect: 'Save',
       albumArtist: 'Album Artist',
       genre: 'Genre',
       releaseYear: 'Release Year',

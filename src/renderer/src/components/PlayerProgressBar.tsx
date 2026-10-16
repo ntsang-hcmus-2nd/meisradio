@@ -100,7 +100,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
   // Reset time when track changes
   useEffect(() => {
     setCurrentTime(0)
-  }, [currentTrack?.id, currentTrack?.filePath])
+  }, [currentTrack?.id, currentTrack?.filePath, currentTrack?.startTime])
 
   // --- Waveform Peaks Management ---
   const [peaks, setPeaks] = useState<number[]>([])
@@ -111,7 +111,9 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       return
     }
 
-    const cacheKey = currentTrack.filePath || currentTrack.id || currentTrack.title || 'default'
+    const start = currentTrack.startTime || 0
+    const end = currentTrack.endTime || 0
+    const cacheKey = `${currentTrack.filePath || currentTrack.id || currentTrack.title || 'default'}#${start}-${end}`
     if (waveformPeaksCache.has(cacheKey)) {
       setPeaks(waveformPeaksCache.get(cacheKey)!)
       return
@@ -190,12 +192,14 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
     // Standard HTML5 Audio mode
     let intervalId: any = null
 
-    const checkAndLoop = (cur: number) => {
+    const trackStart = currentTrack?.startTime || 0
+
+    const checkAndLoop = (rel: number) => {
       const la = loopARef.current
       const lb = loopBRef.current
-      if (la !== null && lb !== null && lb > la && cur >= lb) {
+      if (la !== null && lb !== null && lb > la && rel >= lb) {
         if (audioRef.current) {
-          audioRef.current.currentTime = la
+          audioRef.current.currentTime = trackStart + la
         }
         setCurrentTime(la)
         return true
@@ -210,8 +214,9 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       const update = () => {
         if (isDraggingRef.current) return
         const cur = audio.currentTime || 0
-        if (!checkAndLoop(cur)) {
-          setCurrentTime(cur)
+        const rel = Math.max(0, cur - trackStart)
+        if (!checkAndLoop(rel)) {
+          setCurrentTime(rel)
         }
       }
 
@@ -237,8 +242,9 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       intervalId = setInterval(() => {
         if (!isDraggingRef.current && audioRef.current) {
           const cur = audioRef.current.currentTime || 0
-          if (!checkAndLoop(cur)) {
-            setCurrentTime(cur)
+          const rel = Math.max(0, cur - trackStart)
+          if (!checkAndLoop(rel)) {
+            setCurrentTime(rel)
           }
           if (!cleanupListeners && audioRef.current) {
             cleanupListeners = attachListeners()
@@ -251,7 +257,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       if (cleanupListeners) cleanupListeners()
       if (intervalId) clearInterval(intervalId)
     }
-  }, [audioRef, useBassTime, isPlaying, currentTrack?.id, currentTrack?.filePath])
+  }, [audioRef, useBassTime, isPlaying, currentTrack?.id, currentTrack?.filePath, currentTrack?.startTime])
 
   // --- Seek Commit Handler ---
   const commitSeek = useCallback(
@@ -262,12 +268,13 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
           window.api.bassSeek(clamped)
         }
       } else if (audioRef.current) {
-        audioRef.current.currentTime = clamped
+        const trackStart = currentTrack?.startTime || 0
+        audioRef.current.currentTime = trackStart + clamped
       }
       setCurrentTime(clamped)
       setIsDragging(false)
     },
-    [duration, useBassTime, audioRef]
+    [duration, useBassTime, audioRef, currentTrack?.startTime]
   )
 
   // --- Waveform Mouse / Touch Drag Scrubbing ---

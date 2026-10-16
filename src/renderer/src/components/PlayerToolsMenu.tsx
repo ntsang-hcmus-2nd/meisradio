@@ -109,7 +109,7 @@ export const PlayerToolsMenu: React.FC<PlayerToolsMenuProps> = React.memo(
 
         {/* Popover Panel */}
         {isOpen && (
-          <div className="absolute bottom-full right-0 mb-3 w-64 bg-zinc-900/95 border border-theme-30/70 backdrop-blur-xl rounded-2xl p-2 shadow-2xl z-50 text-xs space-y-1 animate-fade-in select-none">
+          <div className="absolute bottom-full right-0 mb-3 w-64 max-h-[calc(100vh-7.5rem)] overflow-y-auto no-scrollbar bg-zinc-900/95 border border-theme-30/70 backdrop-blur-xl rounded-2xl p-2 shadow-2xl z-50 text-xs space-y-1 animate-fade-in select-none">
             {/* Header */}
             <div className="px-2.5 py-1.5 border-b border-theme-30/50 flex items-center justify-between">
               <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">

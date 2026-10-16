@@ -385,6 +385,10 @@ export class SqliteStorage {
   private stmtSaveUserPlaylist: KoffiPreparedStatement | null = null
   private stmtDeleteUserPlaylist: KoffiPreparedStatement | null = null
 
+  private stmtGetOnlineLyric: KoffiPreparedStatement | null = null
+  private stmtSetOnlineLyric: KoffiPreparedStatement | null = null
+  private stmtClearOnlineLyrics: KoffiPreparedStatement | null = null
+
   constructor(dataFolder: string) {
     this.dataFolder = dataFolder
     const dbPath = path.join(dataFolder, 'library.db')
@@ -532,6 +536,17 @@ export class SqliteStorage {
         tracks_json TEXT NOT NULL DEFAULT '[]',
         cover_art TEXT,
         created_at INTEGER,
+        updated_at INTEGER
+      );
+
+      -- 10. Online Lyrics Cache
+      CREATE TABLE IF NOT EXISTS online_lyrics_cache (
+        cache_key TEXT PRIMARY KEY,
+        title TEXT,
+        artist TEXT,
+        lyrics TEXT NOT NULL,
+        is_synced INTEGER NOT NULL DEFAULT 1,
+        source TEXT NOT NULL DEFAULT 'lrclib',
         updated_at INTEGER
       );
     `)
@@ -717,6 +732,19 @@ export class SqliteStorage {
       this.stmtDeleteUserPlaylist = this.db.prepare('DELETE FROM user_playlists WHERE id = ?;')
     } catch (e) {
       console.warn('[SqliteStorage] Lỗi prepare statements cho user_playlists:', e)
+    }
+
+    // Online Lyrics Cache
+    try {
+      this.stmtGetOnlineLyric = this.db.prepare(
+        'SELECT lyrics, is_synced, source FROM online_lyrics_cache WHERE cache_key = ?;'
+      )
+      this.stmtSetOnlineLyric = this.db.prepare(
+        'INSERT OR REPLACE INTO online_lyrics_cache (cache_key, title, artist, lyrics, is_synced, source, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);'
+      )
+      this.stmtClearOnlineLyrics = this.db.prepare('DELETE FROM online_lyrics_cache;')
+    } catch (e) {
+      console.warn('[SqliteStorage] Lỗi prepare statements cho online_lyrics_cache:', e)
     }
   }
 
@@ -1765,6 +1793,64 @@ export class SqliteStorage {
     }
   }
 
+  // ==========================================
+  // ONLINE LYRICS CACHE APIS
+  // ==========================================
+
+  public getOnlineLyric(key: string): { lyrics: string; isSynced: boolean; source: string } | null {
+    if (!this.stmtGetOnlineLyric || !key) return null
+    try {
+      const row = this.stmtGetOnlineLyric.get<{
+        lyrics: string
+        is_synced: number
+        source: string
+      }>(key)
+      if (row && row.lyrics) {
+        return {
+          lyrics: row.lyrics,
+          isSynced: Boolean(row.is_synced),
+          source: row.source || 'lrclib'
+        }
+      }
+    } catch (e) {
+      console.warn('[SqliteStorage.getOnlineLyric] Error:', e)
+    }
+    return null
+  }
+
+  public setOnlineLyric(
+    key: string,
+    title: string,
+    artist: string,
+    lyrics: string,
+    isSynced: boolean,
+    source: string
+  ): void {
+    if (!this.stmtSetOnlineLyric || !key || !lyrics) return
+    try {
+      this.stmtSetOnlineLyric.run(
+        key,
+        title || '',
+        artist || '',
+        lyrics,
+        isSynced ? 1 : 0,
+        source || 'lrclib',
+        Date.now()
+      )
+    } catch (e) {
+      console.warn('[SqliteStorage.setOnlineLyric] Error:', e)
+    }
+  }
+
+  public clearOnlineLyrics(): void {
+    if (!this.stmtClearOnlineLyrics) return
+    try {
+      this.stmtClearOnlineLyrics.run()
+    } catch (e) {
+      console.warn('[SqliteStorage.clearOnlineLyrics] Error:', e)
+    }
+  }
+
   public close(): void {
     if (this.db) {
       try {
@@ -1804,6 +1890,10 @@ export class SqliteStorage {
         this.stmtGetUserPlaylists?.finalize()
         this.stmtSaveUserPlaylist?.finalize()
         this.stmtDeleteUserPlaylist?.finalize()
+
+        this.stmtGetOnlineLyric?.finalize()
+        this.stmtSetOnlineLyric?.finalize()
+        this.stmtClearOnlineLyrics?.finalize()
 
         this.db.close()
       } catch { /* ignore */ }
@@ -1894,4 +1984,23 @@ export function removeTracksFromLibraryCache(filePaths: string[]): void {
 
 export function removeTracksByDirectoryPrefix(dirPath: string): void {
   activeSqliteStorage?.removeTracksByDirectoryPrefix(dirPath)
+}
+
+export function getOnlineLyric(key: string): { lyrics: string; isSynced: boolean; source: string } | null {
+  return activeSqliteStorage ? activeSqliteStorage.getOnlineLyric(key) : null
+}
+
+export function setOnlineLyric(
+  key: string,
+  title: string,
+  artist: string,
+  lyrics: string,
+  isSynced: boolean,
+  source: string
+): void {
+  activeSqliteStorage?.setOnlineLyric(key, title, artist, lyrics, isSynced, source)
+}
+
+export function clearOnlineLyrics(): void {
+  activeSqliteStorage?.clearOnlineLyrics()
 }

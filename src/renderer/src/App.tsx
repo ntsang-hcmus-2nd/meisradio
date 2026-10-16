@@ -1433,6 +1433,8 @@ export default function App() {
   const playlistsLoadMoreRef = useRef<HTMLDivElement>(null)
   const sleepTimerOriginalVolRef = useRef<number | null>(null)
   const hasTriggeredCrossfadeRef = useRef(false)
+  const isSwitchingTrackRef = useRef(false)
+  const isGaplessTransitioningRef = useRef(false)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
   const dragCounterRef = useRef(0)
 
@@ -2350,6 +2352,7 @@ export default function App() {
 
   // --- Player Controls ---
   const handlePlayTrack = async (track: any) => {
+    isSwitchingTrackRef.current = true
     hasTriggeredCrossfadeRef.current = false
     if (crossfadeEnabled && isPlaying && audioRef.current && currentTrack && !bitPerfectEnabled) {
       try {
@@ -2424,6 +2427,11 @@ export default function App() {
     prevTrackModeRef.current = nextMode
     if (audioRef.current && nextMode === 'webaudio') {
       audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
+      // CUE Sheet cùng file: trình duyệt không đổi src nên onLoadedMetadata không bắn, cập nhật vị trí và phát ngay
+      if (currentTrack && currentTrack.filePath === trackToPlay.filePath) {
+        audioRef.current.currentTime = trackToPlay.startTime || 0
+        audioRef.current.play().catch(() => {})
+      }
     }
 
     setCurrentTrack(trackToPlay)
@@ -2457,6 +2465,9 @@ export default function App() {
       } catch (e) {}
       return updated
     })
+    setTimeout(() => {
+      isSwitchingTrackRef.current = false
+    }, 500)
   }
 
   // --- THUẬT TOÁN GỢI Ý BÀI HÁT CHO DASHBOARD TỪ THƯ MỤC NHẠC ---
@@ -2660,6 +2671,11 @@ export default function App() {
   }
 
   const handleNext = () => {
+    if (isSwitchingTrackRef.current) return
+    isSwitchingTrackRef.current = true
+    setTimeout(() => {
+      isSwitchingTrackRef.current = false
+    }, 500)
     if (audioRef.current && !crossfadeEnabled) audioRef.current.currentTime = 0
     if (!currentTrack) return
     if (!playQueue || playQueue.length === 0) return
@@ -2705,18 +2721,25 @@ export default function App() {
   }
 
   const handlePrev = () => {
+    if (isSwitchingTrackRef.current) return
+    isSwitchingTrackRef.current = true
+    setTimeout(() => {
+      isSwitchingTrackRef.current = false
+    }, 500)
     if (!currentTrack) return
     const isDsd = isDsdTrack(currentTrack)
     const useBass = bitPerfectEnabled || isDsd
     const curTime = useBass
       ? (audioRef.current as any)?._currentTime || 0
       : audioRef.current?.currentTime || 0
+    const trackStart = currentTrack.startTime || 0
+    const relTime = useBass ? curTime : Math.max(0, curTime - trackStart)
 
-    if (curTime > 3) {
+    if (relTime > 3) {
       if (useBass) {
         window.api.bassSeek(0, 'absolute')
       } else if (audioRef.current) {
-        audioRef.current.currentTime = 0
+        audioRef.current.currentTime = trackStart
       }
       return
     }
@@ -5148,7 +5171,16 @@ export default function App() {
                 { time: 0, text: '', unsynced: true },
                 {
                   time: 0,
-                  text: `(${t('lyrics.sourceNote', { source: mmRes.source === 'lrclib' ? 'LRCLIB' : 'Musixmatch' })})`,
+                  text: `(${t('lyrics.sourceNote', {
+                    source:
+                      mmRes.source === 'lrclib'
+                        ? 'LRCLIB'
+                        : mmRes.source === 'netease'
+                          ? 'NetEase Cloud'
+                          : mmRes.source === 'kugou'
+                            ? 'Kugou Music'
+                            : 'Musixmatch'
+                  })})`,
                   unsynced: true
                 }
               ])
@@ -5187,11 +5219,14 @@ export default function App() {
       setCurrentTime(audio.currentTime)
 
       // CUE virtual track boundary check
+      const trackStart = currentTrack?.startTime || 0
+      const trackEnd = currentTrack?.endTime || 0
       if (
-        currentTrack &&
-        typeof currentTrack.endTime === 'number' &&
-        currentTrack.endTime > 0 &&
-        audio.currentTime >= currentTrack.endTime
+        !isSwitchingTrackRef.current &&
+        !audio.seeking &&
+        trackEnd > trackStart &&
+        audio.currentTime >= trackStart &&
+        audio.currentTime >= trackEnd - 0.25
       ) {
         if (!hasTriggeredCrossfadeRef.current) {
           hasTriggeredCrossfadeRef.current = true
@@ -5240,6 +5275,8 @@ export default function App() {
 
       // --- LOGIC 3: CROSSFADE TRANSITION SANG BÀI KẾ TIẾP ---
       if (
+        !isSwitchingTrackRef.current &&
+        !audio.seeking &&
         crossfadeEnabled &&
         !bitPerfectEnabled &&
         audio.duration &&
@@ -5992,6 +6029,7 @@ export default function App() {
             ;(audioRef.current as any)._currentTime = val
             const dur = (audioRef.current as any)._duration || currentTrack?.duration || 0
             if (
+              !isSwitchingTrackRef.current &&
               crossfadeEnabled &&
               dur > crossfadeDuration &&
               dur - val <= crossfadeDuration &&
@@ -6077,10 +6115,12 @@ export default function App() {
           }
 
           if (candidateTrack && candidateTrack.filePath === nextPath) {
+            isGaplessTransitioningRef.current = true
             setCurrentTrack(candidateTrack)
           } else {
             const found = playQueue.find((t) => t.filePath === nextPath)
             if (found) {
+              isGaplessTransitioningRef.current = true
               setCurrentTrack(found)
             }
           }
@@ -6136,6 +6176,10 @@ export default function App() {
 
   // Watch currentTrack
   useEffect(() => {
+    if (isGaplessTransitioningRef.current) {
+      isGaplessTransitioningRef.current = false
+      return
+    }
     if (currentTrack && currentTrack.filePath) {
       if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
         window.api.bassPlay(
@@ -6156,6 +6200,9 @@ export default function App() {
       } else {
         // Dừng BASS/WASAPI khi phát bằng HTML Audio để giải phóng thiết bị
         window.api.bassStop().catch(() => {})
+        if (audioRef.current && typeof currentTrack.startTime === 'number') {
+          audioRef.current.currentTime = currentTrack.startTime
+        }
       }
     }
   }, [currentTrack, bitPerfectEnabled, bitPerfectType, crossfadeEnabled, crossfadeDuration])
@@ -10868,7 +10915,7 @@ export default function App() {
             {/* FULLSCREEN LYRICS */}
             {isLyricsMaximized && showLyricsPanel && (
               <div
-                className="flex-1 flex flex-col bg-transparent z-40 relative animate-fade-in"
+                className="flex-1 flex flex-col bg-transparent z-10 relative animate-fade-in"
                 style={{ willChange: 'opacity, transform' }}
               >
                 <div className="absolute top-8 right-8 flex items-center gap-3 z-50">
@@ -10977,7 +11024,7 @@ export default function App() {
           </div>
 
           {/* PLAYER BAR */}
-          <footer className="h-24 bg-theme-60 border-t border-theme-30 flex items-center justify-between px-3.5 sm:px-6 z-20 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+          <footer className="h-24 bg-theme-60 border-t border-theme-30 flex items-center justify-between px-3.5 sm:px-6 z-30 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
             <div className="flex items-center gap-3 sm:gap-4 w-[28%] max-w-[260px] lg:max-w-[320px] min-w-0 z-10">
               <div className="w-12 h-12 sm:w-14 sm:h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
                 <DynamicCoverArt
@@ -11211,7 +11258,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 sm:gap-3.5 w-[28%] max-w-[260px] lg:max-w-[320px] min-w-0 text-zinc-400 z-10">
+            <div className="flex items-center justify-end gap-2 sm:gap-3.5 w-[28%] max-w-[260px] lg:max-w-[320px] min-w-0 text-zinc-400 relative z-20">
               {!isCore && (
                 <>
                   {!isLite && (

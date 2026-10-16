@@ -46,7 +46,8 @@ export const AUDIO_PROBE_EXTS = [
   '.aiff',
   '.alac',
   '.aac',
-  '.wma'
+  '.wma',
+  '.bin'
 ]
 
 /**
@@ -371,13 +372,15 @@ export function parseCueContent(content: string, cueFilePath: string = ''): CueS
   // Build final CueTrackInfo list and compute start / end times
   const tracks: CueTrackInfo[] = []
 
+  const defaultAlbumName = cueFilePath ? path.parse(cueFilePath).name : 'Unknown Album'
+
   for (let i = 0; i < rawTracks.length; i++) {
     const raw = rawTracks[i]
     const trackNo = raw.trackNumber
     const title = raw.title || `Track ${trackNo}`
     const artist = raw.artist || albumArtist || 'Unknown Artist'
     const artists = splitArtistNames(artist)
-    const album = albumTitle || 'Unknown Album'
+    const album = albumTitle || defaultAlbumName
     const genre = raw.genre || globalGenre || undefined
     const year = raw.year || globalYear || undefined
 
@@ -419,7 +422,7 @@ export function parseCueContent(content: string, cueFilePath: string = ''): CueS
 
   return {
     cueFilePath,
-    album: albumTitle || undefined,
+    album: albumTitle || defaultAlbumName,
     albumArtist: albumArtist || undefined,
     genre: globalGenre || undefined,
     year: globalYear || undefined,
@@ -461,6 +464,19 @@ export async function resolveCueSheetDurations(
           fileDurationCache[track.audioFilePath] = await durationResolver(track.audioFilePath)
         } catch {
           fileDurationCache[track.audioFilePath] = undefined
+        }
+
+        // Fallback for raw CD-DA .bin image files (16-bit 44.1kHz stereo PCM = 176400 bytes/sec)
+        if (
+          fileDurationCache[track.audioFilePath] === undefined &&
+          track.audioFilePath.toLowerCase().endsWith('.bin')
+        ) {
+          try {
+            if (fs.existsSync(track.audioFilePath)) {
+              const stat = fs.statSync(track.audioFilePath)
+              fileDurationCache[track.audioFilePath] = Math.max(0, stat.size / 176400)
+            }
+          } catch {}
         }
       }
 

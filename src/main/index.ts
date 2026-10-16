@@ -63,7 +63,9 @@ export const SUPPORTED_AUDIO_EXTS = [
   '.wma',
   '.dsf',
   '.dff',
-  '.dsd'
+  '.dsd',
+  '.bin',
+  '.ape'
 ]
 
 /**
@@ -1554,15 +1556,10 @@ app.whenReady().then(async () => {
     const actualStart = startTime
     const actualEnd = endTime
 
-    // Hỗ trợ tương thích ngược: nếu truyền crossfade dưới dạng số ở tham số 2
-    if (
-      typeof deviceIdOrCrossfade === 'number' &&
-      exclusive === undefined &&
-      startTime === undefined &&
-      endTime === undefined
-    ) {
+    // Nếu truyền crossfadeDuration dưới dạng số ở tham số 2
+    if (typeof deviceIdOrCrossfade === 'number') {
       actualDevice = undefined
-      actualExclusive = true
+      actualExclusive = typeof exclusive === 'boolean' ? exclusive : true
     }
 
     return bassManager?.playFile(rawPath, actualDevice, actualExclusive, actualStart, actualEnd)
@@ -2536,6 +2533,12 @@ app.whenReady().then(async () => {
             const cueEndTime = cueTrack.endTime || parentDur
             const cueDur = cueTrack.duration || Math.max(0, cueEndTime - cueTrack.startTime)
 
+            const isBinFile = cueTrack.audioFilePath.toLowerCase().endsWith('.bin')
+            const effectiveFormat = parentTrack?.format || (isBinFile ? 'CD-DA (BIN)' : 'AUDIO')
+            const effectiveBitrate = parentTrack?.bitrate || (isBinFile ? 1411200 : undefined)
+            const effectiveSampleRate = parentTrack?.sampleRate || (isBinFile ? 44100 : undefined)
+            const effectiveBitDepth = parentTrack?.bitDepth || (isBinFile ? 16 : undefined)
+
             const cueTrackEntry = {
               id: `${pathToFileURL(cueTrack.audioFilePath).href}#track-${cueTrack.trackNumber}`,
               filePath: pathToFileURL(cueTrack.audioFilePath).href,
@@ -2559,10 +2562,10 @@ app.whenReady().then(async () => {
               trackNo: cueTrack.trackNumber,
               trackNumber: cueTrack.trackNumber,
               discNumber: parentTrack?.discNumber || null,
-              format: parentTrack?.format || 'AUDIO',
-              bitrate: parentTrack?.bitrate,
-              sampleRate: parentTrack?.sampleRate,
-              bitDepth: parentTrack?.bitDepth,
+              format: effectiveFormat,
+              bitrate: effectiveBitrate,
+              sampleRate: effectiveSampleRate,
+              bitDepth: effectiveBitDepth,
               lossless: parentTrack?.lossless ?? true,
               isDsd: parentTrack?.isDsd ?? false,
               isCloud: false,
@@ -3233,6 +3236,9 @@ app.whenReady().then(async () => {
           } else {
             args.push('-to', endTime.toString())
           }
+        }
+        if (rawPath.toLowerCase().endsWith('.bin')) {
+          args.push('-f', 's16le', '-ar', '44100', '-ac', '2')
         }
         args.push('-i', rawPath, '-vn', '-ac', '1', '-ar', '1000', '-f', 's16le', '-')
 
@@ -4461,7 +4467,7 @@ app.whenReady().then(async () => {
     success: boolean
     lyrics?: string
     isSynced?: boolean
-    source?: 'lrclib' | 'musixmatch'
+    source?: 'lrclib' | 'netease' | 'kugou' | 'musixmatch'
     error?: string
     code?: 'NO_TOKEN' | 'RATE_LIMITED' | 'NETWORK' | 'NOT_FOUND' | 'NO_LYRICS' | 'BAD_RESPONSE'
   }
@@ -4739,28 +4745,59 @@ app.whenReady().then(async () => {
   // ------------------------------------------
   // LRCLIB (https://lrclib.net) — API lời bài hát miễn phí, không cần khóa, có cả lời đồng bộ (LRC)
   // ------------------------------------------
-  const LRCLIB_BASE = 'https://lrclib.net/api'
+  function getLrclibBase(): string {
+    const cfg = getConfig()
+    const custom = typeof cfg?.lrclibBaseUrl === 'string' ? cfg.lrclibBaseUrl.trim() : ''
+    if (custom && (custom.startsWith('http://') || custom.startsWith('https://'))) {
+      return custom.replace(/\/+$/, '') + (custom.includes('/api') ? '' : '/api')
+    }
+    return 'https://lrclib.net/api'
+  }
+
   const LRCLIB_HEADERS = {
-    'User-Agent': 'MeisRadio/0.4.6 (https://github.com/meisradio)',
+    'User-Agent': 'MeisRadio/1.0.0 (https://github.com/subzerofroze/meisradio)',
+    'Lrclib-Client': 'MeisRadio/1.0.0 (https://github.com/subzerofroze/meisradio)',
+    'X-User-Agent': 'MeisRadio/1.0.0 (https://github.com/subzerofroze/meisradio)',
     Accept: 'application/json'
   }
 
+  let lrclibCooldownUntil = 0
+
   async function lrclibFetch(
     endpoint: string,
-    params: Record<string, string>
+    params: Record<string, string>,
+    retries = 1
   ): Promise<{ status: number; data: any }> {
+    if (Date.now() < lrclibCooldownUntil) {
+      return { status: 503, data: null }
+    }
+
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), MXM_TIMEOUT_MS)
     try {
+      const baseUrl = getLrclibBase()
       const res = await fetch(
-        `${LRCLIB_BASE}/${endpoint}?${new URLSearchParams(params).toString()}`,
+        `${baseUrl}/${endpoint}?${new URLSearchParams(params).toString()}`,
         { headers: LRCLIB_HEADERS, signal: controller.signal }
       )
-      if (res.status === 429) {
-        const err: any = new Error('LRCLIB giới hạn tần suất truy vấn (HTTP 429)')
-        err.code = 'RATE_LIMITED'
-        throw err
+
+      if (res.status === 503 || res.status === 429) {
+        if (retries > 0) {
+          const retryAfterHdr = res.headers.get('retry-after')
+          const delaySec = retryAfterHdr
+            ? Math.min(Math.max(parseInt(retryAfterHdr, 10) || 1, 1), 4)
+            : 1.5
+          await new Promise((r) => setTimeout(r, delaySec * 1000 + Math.random() * 300))
+          return lrclibFetch(endpoint, params, retries - 1)
+        }
+        // Sau khi retry vẫn gặp 503/429 -> kích hoạt cooldown 2 phút để không làm nghẽn luồng phát nhạc
+        lrclibCooldownUntil = Date.now() + 2 * 60 * 1000
+        console.warn(
+          `[LRCLIB] Gặp mã HTTP ${res.status} (quá tải hoặc bị giới hạn), kích hoạt cooldown 2 phút và chuyển sang nguồn dự phòng`
+        )
+        return { status: res.status, data: null }
       }
+
       let data: any = null
       try {
         data = await res.json()
@@ -4768,19 +4805,14 @@ app.whenReady().then(async () => {
         /* body rỗng/không phải JSON */
       }
       if (!res.ok && res.status !== 404) {
-        const err: any = new Error(`LRCLIB trả về HTTP ${res.status}`)
-        err.code = 'NETWORK'
-        throw err
+        return { status: res.status, data: null }
       }
       return { status: res.status, data }
     } catch (e: any) {
       if (e?.name === 'AbortError') {
-        const err: any = new Error('Hết thời gian chờ LRCLIB')
-        err.code = 'NETWORK'
-        throw err
+        return { status: 408, data: null }
       }
-      if (!e?.code) e.code = 'NETWORK'
-      throw e
+      return { status: 500, data: null }
     } finally {
       clearTimeout(timer)
     }
@@ -4860,37 +4892,240 @@ app.whenReady().then(async () => {
     return { success: false, code: 'NOT_FOUND', error: 'Không tìm thấy bài hát khớp trên LRCLIB' }
   }
 
-  // Lấy lời online: LRCLIB trước (ổn định, miễn phí) -> Musixmatch dự phòng
+  // ------------------------------------------
+  // NetEase Cloud Music API — Nguồn dự phòng chất lượng cao, không cần token, hỗ trợ LRC đồng bộ
+  // ------------------------------------------
+  async function fetchNetEaseLyrics(
+    title: string,
+    artist: string,
+    duration?: number
+  ): Promise<MxmResult | null> {
+    const cleanTitle = mxmCleanTitle(title) || title
+    const artists = splitArtistString(artist)
+    const primaryArtist = artists[0] || artist
+    const query = `${cleanTitle} ${primaryArtist}`.trim()
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 6000)
+    try {
+      const searchUrl = `http://music.163.com/api/cloudsearch/pc?s=${encodeURIComponent(query)}&type=1&offset=0&limit=5`
+      const searchRes = await fetch(searchUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Referer: 'http://music.163.com/'
+        },
+        signal: controller.signal
+      })
+      if (!searchRes.ok) return null
+      const searchData = await searchRes.json()
+      const songs = Array.isArray(searchData?.result?.songs) ? searchData.result.songs : []
+      if (songs.length === 0) return null
+
+      const wantTitle = mxmNormalize(cleanTitle)
+      const wantArtists = (artists.length > 0 ? artists : [artist]).map(mxmNormalize).filter(Boolean)
+
+      let bestSong: any = null
+      let bestScore = 0
+      for (const s of songs) {
+        if (!s?.id) continue
+        const gotTitle = mxmNormalize(mxmCleanTitle(String(s.name || '')))
+        const songArtists = Array.isArray(s.ar)
+          ? s.ar.map((a: any) => mxmNormalize(String(a.name || '')))
+          : []
+
+        let titleScore = 0
+        if (gotTitle === wantTitle) titleScore = 3
+        else if (gotTitle && (gotTitle.includes(wantTitle) || wantTitle.includes(gotTitle)))
+          titleScore = 1
+        if (titleScore === 0) continue
+
+        const artistOk =
+          wantArtists.length === 0 ||
+          wantArtists.some((wa) => songArtists.some((sa: string) => sa.includes(wa) || wa.includes(sa)))
+        if (!artistOk) continue
+
+        if (
+          typeof duration === 'number' &&
+          Number.isFinite(duration) &&
+          duration > 0 &&
+          typeof s.dt === 'number'
+        ) {
+          const dtSec = s.dt / 1000
+          if (Math.abs(dtSec - duration) > 8) continue
+        }
+
+        const score = titleScore + (s.dt ? 1 : 0)
+        if (score > bestScore) {
+          bestScore = score
+          bestSong = s
+        }
+      }
+
+      if (!bestSong && songs.length > 0) bestSong = songs[0]
+      if (!bestSong?.id) return null
+
+      const lyricUrl = `https://music.163.com/api/song/lyric?id=${bestSong.id}&lv=1&kv=1&tv=-1`
+      const lyrRes = await fetch(lyricUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Referer: 'http://music.163.com/'
+        },
+        signal: controller.signal
+      })
+      if (!lyrRes.ok) return null
+      const lyrData = await lyrRes.json()
+      const rawLrc = lyrData?.lrc?.lyric
+      if (typeof rawLrc === 'string' && rawLrc.trim()) {
+        const isSynced = hasLrcTimestamps(rawLrc)
+        return {
+          success: true,
+          lyrics: rawLrc.trim(),
+          isSynced,
+          source: 'netease'
+        }
+      }
+      return null
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  // ------------------------------------------
+  // Kugou Music API — Nguồn dự phòng phụ trợ (LRC đồng bộ, Base64 decode)
+  // ------------------------------------------
+  async function fetchKugouLyrics(
+    title: string,
+    artist: string,
+    duration?: number
+  ): Promise<MxmResult | null> {
+    const cleanTitle = mxmCleanTitle(title) || title
+    const artists = splitArtistString(artist)
+    const primaryArtist = artists[0] || artist
+    const query = `${cleanTitle} ${primaryArtist}`.trim()
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 6000)
+    try {
+      let searchUrl = `http://lyrics.kugou.com/search?ver=1&man=yes&client=pc&keyword=${encodeURIComponent(query)}`
+      if (typeof duration === 'number' && Number.isFinite(duration) && duration > 0) {
+        searchUrl += `&duration=${Math.round(duration * 1000)}`
+      }
+      const searchRes = await fetch(searchUrl, { signal: controller.signal })
+      if (!searchRes.ok) return null
+      const searchData = await searchRes.json()
+      const candidates = Array.isArray(searchData?.candidates) ? searchData.candidates : []
+      if (candidates.length === 0) return null
+
+      const wantTitle = mxmNormalize(cleanTitle)
+      const wantArtists = (artists.length > 0 ? artists : [artist]).map(mxmNormalize).filter(Boolean)
+
+      let bestCand: any = null
+      let bestScore = 0
+      for (const c of candidates) {
+        if (!c?.id || !c?.accesskey) continue
+        const gotSong = mxmNormalize(mxmCleanTitle(String(c.song || '')))
+        const gotSinger = mxmNormalize(String(c.singer || ''))
+
+        let titleScore = 0
+        if (gotSong === wantTitle) titleScore = 3
+        else if (gotSong && (gotSong.includes(wantTitle) || wantTitle.includes(gotSong)))
+          titleScore = 1
+        if (titleScore === 0) continue
+
+        const artistOk =
+          wantArtists.length === 0 ||
+          wantArtists.some((wa) => gotSinger.includes(wa) || wa.includes(gotSinger))
+        if (!artistOk) continue
+
+        const score = titleScore + (c.score || 0)
+        if (score > bestScore) {
+          bestScore = score
+          bestCand = c
+        }
+      }
+
+      if (!bestCand && candidates.length > 0) bestCand = candidates[0]
+      if (!bestCand?.id || !bestCand?.accesskey) return null
+
+      const dlUrl = `http://lyrics.kugou.com/download?ver=1&client=pc&id=${bestCand.id}&accesskey=${bestCand.accesskey}&fmt=lrc&charset=utf8`
+      const dlRes = await fetch(dlUrl, { signal: controller.signal })
+      if (!dlRes.ok) return null
+      const dlData = await dlRes.json()
+      if (typeof dlData?.content === 'string' && dlData.content.trim()) {
+        const decoded = Buffer.from(dlData.content, 'base64').toString('utf-8')
+        if (decoded.trim()) {
+          const isSynced = hasLrcTimestamps(decoded)
+          return {
+            success: true,
+            lyrics: decoded.trim(),
+            isSynced,
+            source: 'kugou'
+          }
+        }
+      }
+      return null
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  // Lấy lời online đa nguồn: LRCLIB (ưu tiên) -> NetEase (dự phòng 1) -> Kugou (dự phòng 2) -> Musixmatch (dự phòng 3)
   async function fetchOnlineLyrics(
     title: string,
     artist: string,
     album?: string,
     duration?: number
   ): Promise<MxmResult> {
-    let primaryError: MxmResult | null = null
+    // 1. Thử LRCLIB (nguồn chính)
     try {
-      const r = await fetchLrclibLyrics(title, artist, album, duration)
-      if (r.success) return r
-      primaryError = r
-    } catch (e: any) {
-      console.error('Lỗi API LRCLIB:', e)
-      primaryError = {
-        success: false,
-        code: e?.code || 'NETWORK',
-        error: e?.message || 'Lỗi không xác định khi gọi LRCLIB'
+      const lrclibRes = await fetchLrclibLyrics(title, artist, album, duration)
+      if (lrclibRes && lrclibRes.success && lrclibRes.lyrics) {
+        return lrclibRes
       }
+    } catch (e: any) {
+      console.warn('[Lyrics] Lỗi khi gọi LRCLIB, chuyển sang nguồn dự phòng:', e?.message || e)
     }
 
+    // 2. Thử NetEase Cloud Music (nguồn dự phòng cấp 1 - kho dữ liệu khổng lồ, đồng bộ LRC chính xác)
     try {
-      const r = await fetchMusixmatchLyricsInternal(title, artist)
-      if (r.success) return r
-      // Ưu tiên báo lỗi "có ý nghĩa" hơn (không tìm thấy) thay vì lỗi hạ tầng của nguồn dự phòng
-      if (r.code === 'NOT_FOUND' || r.code === 'NO_LYRICS')
-        return primaryError.code === 'NETWORK' ? r : primaryError
-      return primaryError
+      const neteaseRes = await fetchNetEaseLyrics(title, artist, duration)
+      if (neteaseRes && neteaseRes.success && neteaseRes.lyrics) {
+        return neteaseRes
+      }
     } catch (e: any) {
-      console.error('Lỗi API Musixmatch:', e)
-      return primaryError
+      console.warn('[Lyrics] Lỗi khi gọi NetEase:', e?.message || e)
+    }
+
+    // 3. Thử Kugou Music (nguồn dự phòng cấp 2)
+    try {
+      const kugouRes = await fetchKugouLyrics(title, artist, duration)
+      if (kugouRes && kugouRes.success && kugouRes.lyrics) {
+        return kugouRes
+      }
+    } catch (e: any) {
+      console.warn('[Lyrics] Lỗi khi gọi Kugou:', e?.message || e)
+    }
+
+    // 4. Thử Musixmatch (nguồn dự phòng cuối cùng)
+    try {
+      const mxmRes = await fetchMusixmatchLyricsInternal(title, artist)
+      if (mxmRes && mxmRes.success && mxmRes.lyrics) {
+        return mxmRes
+      }
+    } catch (e: any) {
+      /* ignore */
+    }
+
+    return {
+      success: false,
+      code: 'NOT_FOUND',
+      error: 'Không tìm thấy lời bài hát trên các nguồn online (LRCLIB, NetEase, Kugou, Musixmatch)'
     }
   }
 
@@ -4913,6 +5148,8 @@ app.whenReady().then(async () => {
       }
 
       const cacheKey = `${mxmNormalize(title)}|${mxmNormalize(artist)}`
+
+      // 1. Kiểm tra cache RAM
       const cached = mxmResultCache.get(cacheKey)
       if (cached) {
         if (cached.result.success || Date.now() - cached.at < MXM_NEGATIVE_CACHE_MS)
@@ -4920,14 +5157,39 @@ app.whenReady().then(async () => {
         mxmResultCache.delete(cacheKey)
       }
 
+      // 2. Kiểm tra cache SQLite nhúng (tải siêu tốc 0ms, không tốn bất kỳ request mạng nào)
+      const dbCached = sqliteStorage.getOnlineLyric(cacheKey)
+      if (dbCached && dbCached.lyrics) {
+        const res: MxmResult = {
+          success: true,
+          lyrics: dbCached.lyrics,
+          isSynced: dbCached.isSynced,
+          source: dbCached.source as any
+        }
+        mxmCacheSet(cacheKey, res)
+        return res
+      }
+
+      // 3. Tra cứu đa nguồn online (LRCLIB -> NetEase -> Kugou -> Musixmatch)
       const result = await fetchOnlineLyrics(
         title,
         artist,
         typeof album === 'string' ? album : undefined,
         typeof duration === 'number' ? duration : undefined
       )
-      // Chỉ cache kết quả chắc chắn (có lời / không có lời); lỗi mạng, token, giới hạn tần suất thì không cache
-      if (result.success || result.code === 'NOT_FOUND' || result.code === 'NO_LYRICS') {
+
+      // Lưu kết quả thành công vào SQLite vĩnh viễn và RAM cache
+      if (result.success && result.lyrics) {
+        sqliteStorage.setOnlineLyric(
+          cacheKey,
+          title,
+          artist,
+          result.lyrics,
+          Boolean(result.isSynced),
+          result.source || 'lrclib'
+        )
+        mxmCacheSet(cacheKey, result)
+      } else if (result.code === 'NOT_FOUND' || result.code === 'NO_LYRICS') {
         mxmCacheSet(cacheKey, result)
       }
       return result
@@ -4951,16 +5213,52 @@ app.whenReady().then(async () => {
       ) {
         return { success: false, code: 'NOT_FOUND', error: 'Thiếu tên bài hát hoặc nghệ sĩ' }
       }
-      try {
-        return await fetchLrclibLyrics(
+
+      const cacheKey = `${mxmNormalize(title)}|${mxmNormalize(artist)}`
+
+      // 1. Kiểm tra cache RAM
+      const cached = mxmResultCache.get(cacheKey)
+      if (cached) {
+        if (cached.result.success || Date.now() - cached.at < MXM_NEGATIVE_CACHE_MS)
+          return cached.result
+        mxmResultCache.delete(cacheKey)
+      }
+
+      // 2. Kiểm tra cache SQLite
+      const dbCached = sqliteStorage.getOnlineLyric(cacheKey)
+      if (dbCached && dbCached.lyrics) {
+        const res: MxmResult = {
+          success: true,
+          lyrics: dbCached.lyrics,
+          isSynced: dbCached.isSynced,
+          source: dbCached.source as any
+        }
+        mxmCacheSet(cacheKey, res)
+        return res
+      }
+
+      // 3. Tra cứu đa nguồn online
+      const result = await fetchOnlineLyrics(
+        title,
+        artist,
+        typeof album === 'string' ? album : undefined,
+        typeof duration === 'number' ? duration : undefined
+      )
+
+      if (result.success && result.lyrics) {
+        sqliteStorage.setOnlineLyric(
+          cacheKey,
           title,
           artist,
-          typeof album === 'string' ? album : undefined,
-          typeof duration === 'number' ? duration : undefined
+          result.lyrics,
+          Boolean(result.isSynced),
+          result.source || 'lrclib'
         )
-      } catch (e: any) {
-        return { success: false, code: 'NETWORK', error: e?.message || 'Lỗi khi gọi LRCLIB' }
+        mxmCacheSet(cacheKey, result)
+      } else if (result.code === 'NOT_FOUND' || result.code === 'NO_LYRICS') {
+        mxmCacheSet(cacheKey, result)
       }
+      return result
     }
   )
 
@@ -5958,11 +6256,33 @@ app.whenReady().then(async () => {
         const stat = fs.statSync(targetPath)
         const fileSize = stat.size
         const ext = path.extname(targetPath).toLowerCase()
+        const isBin = ext === '.bin'
+        const effectiveFileSize = isBin ? fileSize + 44 : fileSize
+
+        let binWavHeader: Buffer | null = null
+        if (isBin) {
+          binWavHeader = Buffer.alloc(44)
+          binWavHeader.write('RIFF', 0)
+          binWavHeader.writeUInt32LE(fileSize + 36, 4)
+          binWavHeader.write('WAVE', 8)
+          binWavHeader.write('fmt ', 12)
+          binWavHeader.writeUInt32LE(16, 16)
+          binWavHeader.writeUInt16LE(1, 20) // PCM format
+          binWavHeader.writeUInt16LE(2, 22) // 2 Channels (Stereo)
+          binWavHeader.writeUInt32LE(44100, 24) // 44.1kHz Sample Rate
+          binWavHeader.writeUInt32LE(176400, 28) // 176400 Byte Rate (44100 * 2 * 2)
+          binWavHeader.writeUInt16LE(4, 32) // Block Align
+          binWavHeader.writeUInt16LE(16, 34) // 16-bit
+          binWavHeader.write('data', 36)
+          binWavHeader.writeUInt32LE(fileSize, 40)
+        }
 
         const mimeMap: Record<string, string> = {
           '.mp3': 'audio/mpeg',
           '.flac': 'audio/flac',
           '.wav': 'audio/wav',
+          '.bin': 'audio/wav',
+          '.ape': 'audio/ape',
           '.m4a': 'audio/mp4',
           '.aac': 'audio/aac',
           '.ogg': 'audio/ogg',
@@ -5974,11 +6294,11 @@ app.whenReady().then(async () => {
           '.dff': 'audio/x-dff',
           '.dsd': 'audio/dsd'
         }
-        const contentType = mimeMap[ext] || 'application/octet-stream'
+        const contentType = isBin ? 'audio/wav' : mimeMap[ext] || 'application/octet-stream'
 
         if (req.method === 'HEAD') {
           res.writeHead(200, {
-            'Content-Length': fileSize,
+            'Content-Length': effectiveFileSize,
             'Content-Type': contentType,
             'Accept-Ranges': 'bytes',
             'Access-Control-Allow-Origin': '*',
@@ -5993,16 +6313,16 @@ app.whenReady().then(async () => {
         if (range) {
           const parts = range.replace(/bytes=/, '').split('-')
           const start = parseInt(parts[0], 10)
-          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+          const end = parts[1] ? parseInt(parts[1], 10) : effectiveFileSize - 1
 
           if (
             isNaN(start) ||
-            start >= fileSize ||
-            (parts[1] && (isNaN(end) || end >= fileSize || start > end))
+            start >= effectiveFileSize ||
+            (parts[1] && (isNaN(end) || end >= effectiveFileSize || start > end))
           ) {
             res
               .writeHead(416, {
-                'Content-Range': `bytes */${fileSize}`,
+                'Content-Range': `bytes */${effectiveFileSize}`,
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
               })
@@ -6011,9 +6331,8 @@ app.whenReady().then(async () => {
           }
 
           const chunksize = end - start + 1
-          const fileStream = fs.createReadStream(targetPath, { start, end })
           res.writeHead(206, {
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Content-Range': `bytes ${start}-${end}/${effectiveFileSize}`,
             'Accept-Ranges': 'bytes',
             'Content-Length': chunksize,
             'Content-Type': contentType,
@@ -6022,16 +6341,45 @@ app.whenReady().then(async () => {
             'Access-Control-Expose-Headers':
               'Content-Range, Accept-Ranges, Content-Length, Content-Type'
           })
-          fileStream.pipe(res)
-          req.on('close', () => {
-            fileStream.destroy()
-          })
-          fileStream.on('error', () => {
-            if (!res.headersSent) res.writeHead(500).end()
-          })
+
+          if (isBin && binWavHeader) {
+            if (start < 44) {
+              const headerSlice = binWavHeader.subarray(start, Math.min(44, end + 1))
+              res.write(headerSlice)
+              if (end >= 44) {
+                const fileStream = fs.createReadStream(targetPath, { start: 0, end: end - 44 })
+                fileStream.pipe(res)
+                req.on('close', () => fileStream.destroy())
+                fileStream.on('error', () => {
+                  if (!res.headersSent) res.writeHead(500).end()
+                })
+              } else {
+                res.end()
+              }
+            } else {
+              const fileStream = fs.createReadStream(targetPath, {
+                start: start - 44,
+                end: end - 44
+              })
+              fileStream.pipe(res)
+              req.on('close', () => fileStream.destroy())
+              fileStream.on('error', () => {
+                if (!res.headersSent) res.writeHead(500).end()
+              })
+            }
+          } else {
+            const fileStream = fs.createReadStream(targetPath, { start, end })
+            fileStream.pipe(res)
+            req.on('close', () => {
+              fileStream.destroy()
+            })
+            fileStream.on('error', () => {
+              if (!res.headersSent) res.writeHead(500).end()
+            })
+          }
         } else {
           res.writeHead(200, {
-            'Content-Length': fileSize,
+            'Content-Length': effectiveFileSize,
             'Content-Type': contentType,
             'Accept-Ranges': 'bytes',
             'Cache-Control': 'no-cache',
@@ -6039,6 +6387,9 @@ app.whenReady().then(async () => {
             'Access-Control-Expose-Headers':
               'Content-Range, Accept-Ranges, Content-Length, Content-Type'
           })
+          if (isBin && binWavHeader) {
+            res.write(binWavHeader)
+          }
           const fileStream = fs.createReadStream(targetPath)
           fileStream.pipe(res)
           req.on('close', () => {
