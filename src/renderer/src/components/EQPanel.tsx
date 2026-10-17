@@ -567,7 +567,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-3 pr-1">
               {filteredAutoEqProfiles.length === 0 ? (
                 <div className="col-span-2 text-center text-zinc-500 py-12">
-                  No headphone profiles matched "{searchHeadphone}".
+                  No headphone profiles matched &quot;{searchHeadphone}&quot;.
                 </div>
               ) : (
                 filteredAutoEqProfiles.map(p => {

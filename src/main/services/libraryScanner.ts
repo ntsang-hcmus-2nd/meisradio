@@ -207,17 +207,17 @@ export function splitArtistString(raw: string): string[] {
   })
 
   working = working.replace(
-    /,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;\/|)\]])/gi,
+    /,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;/|)\]])/gi,
     (_, g1) => `___JRSR___${g1}`
   )
 
   working = working.replace(
-    /[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]\}]+)[\)\]\}]/gi,
+    /[([{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]}]+)[)\]}]/gi,
     ' feat. $1'
   )
 
   const splitRegex =
-    /(?:\s*;\s*|\0+|\s*[\/\\]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
+    /(?:\s*;\s*|\0+|\s*[/\\/]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
 
   const parts = working.split(splitRegex)
   const result: string[] = []
@@ -230,8 +230,8 @@ export function splitArtistString(raw: string): string[] {
 
     const clean = part
       .trim()
-      .replace(/^[\(\[\{]/, '')
-      .replace(/[\)\]\}]$/, '')
+      .replace(/^[([{]/, '')
+      .replace(/[)\]}]$/, '')
       .trim()
     if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
       if (/^(jr\.?|sr\.?|iii|ii|iv)$/i.test(clean)) continue
@@ -298,7 +298,7 @@ export function extractArtists(
 
   const titleToCheck = metadata?.common?.title || fallbackTitle || ''
   if (titleToCheck) {
-    const featMatch = titleToCheck.match(/[\(\[]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]]+)[\)\]]/i)
+    const featMatch = titleToCheck.match(/[([]\s*(?:feat\.?|ft\.?|featuring)\s+([^()[\]]+)[)\]]/i)
     if (featMatch && featMatch[1]) {
       rawArtistsList.push(featMatch[1].trim())
     }
@@ -1556,7 +1556,7 @@ export function registerLibraryScannerIpc(): void {
     if (canceled || filePaths.length === 0) return { success: false }
     const newPath = filePaths[0]
     const config = getConfig()
-    let currentPaths: string[] =
+    const currentPaths: string[] =
       config.libraryPaths || (config.libraryPath ? [config.libraryPath] : [])
     const index = currentPaths.indexOf(oldPath)
     if (index !== -1) {

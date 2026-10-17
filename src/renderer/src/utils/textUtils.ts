@@ -124,19 +124,19 @@ export const splitArtistString = (raw: string): string[] => {
 
   // Bảo vệ hậu tố danh xưng đi kèm dấu phẩy (ví dụ: Grover Washington, Jr. hoặc Sammy Davis, Jr.)
   working = working.replace(
-    /,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;\/|)\]])/gi,
+    /,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;/|)\]])/gi,
     (_, g1) => `___JRSR___${g1}`
   )
 
   // Chuẩn hóa định dạng feat / ft trong ngoặc: (feat. X) -> feat. X
   working = working.replace(
-    /[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]\}]+)[\)\]\}]/gi,
+    /[([{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]}]+)[)\]}]/gi,
     ' feat. $1'
   )
 
   // Tách bằng các ký hiệu phân cách phổ biến
   const splitRegex =
-    /(?:\s*;\s*|\0+|\s*[\/\\]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
+    /(?:\s*;\s*|\0+|\s*[/\\/]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
   const parts = working.split(splitRegex)
   const result: string[] = []
 
@@ -148,8 +148,8 @@ export const splitArtistString = (raw: string): string[] => {
 
     const clean = part
       .trim()
-      .replace(/^[\(\[\{]/, '')
-      .replace(/[\)\]\}]$/, '')
+      .replace(/^[([{]/, '')
+      .replace(/[)\]}]$/, '')
       .trim()
     if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
       if (/^(jr\.?|sr\.?|iii|ii|iv)$/i.test(clean)) continue

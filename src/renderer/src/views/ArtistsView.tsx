@@ -57,7 +57,9 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
 
   const chunkedAlphabetGroups = useMemo(() => {
     let globalRowIndex = 0
-    return artistsData.alphabetGroups.map((grp, grpIdx) => {
+    const result: any[] = []
+    for (let grpIdx = 0; grpIdx < artistsData.alphabetGroups.length; grpIdx++) {
+      const grp = artistsData.alphabetGroups[grpIdx]
       const isCollapsed = Boolean(collapsedArtistLetters[grp.letter])
       const artists = isCollapsed ? [] : grp.artists || []
       const rows: any[][] = []
@@ -66,14 +68,15 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
       }
       const startRowIndex = globalRowIndex
       globalRowIndex += rows.length
-      return {
+      result.push({
         ...grp,
         rows,
         startRowIndex,
         groupIndex: grpIdx,
         isCollapsed
-      }
-    })
+      })
+    }
+    return result
   }, [artistsData.alphabetGroups, collapsedArtistLetters])
 
   const alphabetGroupCounts = useMemo(() => {

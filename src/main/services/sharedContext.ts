@@ -332,7 +332,7 @@ export const COMMON_IMAGE_EXTENSIONS = [
  */
 export function sanitizeDirectoryName(name: string): string {
   if (!name || typeof name !== 'string') return 'Untitled'
-  let safe = name.replace(/[<>:"\/\\|?*\x00-\x1f]/g, '').trim()
+  let safe = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim()
   safe = safe.replace(/[\s.]+$/, '').trim()
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(safe)) {
     safe += '_folder'
@@ -345,7 +345,7 @@ export function sanitizeDirectoryName(name: string): string {
  */
 export function sanitizeFileName(name: string): string {
   if (!name || typeof name !== 'string') return 'track'
-  let safe = name.replace(/[<>:"\/\\|?*\x00-\x1f]/g, '').trim()
+  let safe = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim()
   safe = safe.replace(/[\s.]+$/, '').trim()
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(safe)) {
     safe += '_file'

@@ -740,7 +740,7 @@ export default function App() {
     const letterMap = new Map<string, typeof artistsList>()
     for (const artist of artistsList) {
       const trimmed = (artist.name || '').trim()
-      let firstChar = trimmed.charAt(0).toUpperCase()
+      const firstChar = trimmed.charAt(0).toUpperCase()
       const normalized = firstChar
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -1541,7 +1541,7 @@ export default function App() {
                 className="font-whisper text-xl"
                 style={{ letterSpacing: '1px', marginTop: '2px' }}
               >
-                Mei's Radio
+                Mei&apos;s Radio
               </span>
             </div>
           </div>

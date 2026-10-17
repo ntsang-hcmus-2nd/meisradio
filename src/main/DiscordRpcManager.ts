@@ -343,7 +343,7 @@ export class DiscordRpcManager {
     }
 
     // 4. Small Image (Status & Audio Quality)
-    let qualityParts: string[] = []
+    const qualityParts: string[] = []
     if (showQuality) {
       const isDsd = (format && /^(dsd|dsf|dff|dsdiff)/i.test(format)) || (sampleRate && sampleRate >= 2000000) || bitDepth === 1
       if (isDsd) {

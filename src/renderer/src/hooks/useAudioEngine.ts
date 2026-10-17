@@ -47,6 +47,7 @@ export function useAudioEngine() {
   const isSwitchingTrackRef = useRef(false)
   const isGaplessTransitioningRef = useRef(false)
   const prevTrackModeRef = useRef<'bass' | 'webaudio'>('webaudio')
+  const handleNextRef = useRef<() => void>(() => {})
 
   // Stores
   const currentTrack = usePlayerStore((s) => s.currentTrack)
@@ -502,7 +503,7 @@ export function useAudioEngine() {
               !hasTriggeredCrossfadeRef.current
             ) {
               hasTriggeredCrossfadeRef.current = true
-              handleNext()
+              handleNextRef.current()
             } else if (
               hasTriggeredCrossfadeRef.current &&
               dur > crossfadeDuration &&
@@ -555,7 +556,7 @@ export function useAudioEngine() {
           const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
           if (useBass) {
             if (!hasTriggeredCrossfadeRef.current) {
-              handleNext()
+              handleNextRef.current()
             }
             hasTriggeredCrossfadeRef.current = false
           }
@@ -586,7 +587,7 @@ export function useAudioEngine() {
             setCurrentTrack(candidateTrack)
             setIsPlaying(true)
           } else {
-            handleNext()
+            handleNextRef.current()
           }
         })
       : undefined
@@ -601,8 +602,9 @@ export function useAudioEngine() {
         })
       : undefined
 
-    const unParams = ((window.api as any)?.onBassAudioOutParams || (window.api as any)?.onBassAudioParams)
-      ? ((window.api as any)?.onBassAudioOutParams || (window.api as any)?.onBassAudioParams)((params: any) => {
+    const onParamsFn = (window.api as any)?.onBassAudioOutParams || (window.api as any)?.onBassAudioParams
+    const unParams = typeof onParamsFn === 'function'
+      ? onParamsFn((params: any) => {
           setBassOutParams(params)
         })
       : undefined
@@ -775,7 +777,7 @@ export function useAudioEngine() {
       } catch (e) {}
     }
 
-    let trackToPlay = { ...track }
+    const trackToPlay = { ...track }
 
     const isOnlineTrack =
       trackToPlay.isOnline ||
@@ -962,6 +964,10 @@ export function useAudioEngine() {
     handlePlayTrack(playQueue[nextIndex])
   }
 
+  useEffect(() => {
+    handleNextRef.current = handleNext
+  })
+
   const handlePrev = () => {
     if (isSwitchingTrackRef.current) return
     isSwitchingTrackRef.current = true
@@ -1074,7 +1080,9 @@ export function useAudioEngine() {
   }
 
   const handlePlayTrackRef = useRef(handlePlayTrack)
-  handlePlayTrackRef.current = handlePlayTrack
+  useEffect(() => {
+    handlePlayTrackRef.current = handlePlayTrack
+  })
 
   const handleRowClick = useCallback(async (track: any, contextList?: any[]) => {
     if (contextList) {

@@ -455,6 +455,7 @@ export class SqliteStorage {
     const dllPath = this.resolveSqliteDll()
 
     this.db = new KoffiSqlite3(dllPath, dbPath)
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     activeSqliteStorage = this
 
     this.initDatabase()

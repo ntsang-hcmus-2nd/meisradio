@@ -96,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4 pb-3 shrink-0 border-b border-theme-30/20">
         <h1 className="text-2xl font-whisper text-theme-10 tracking-widest flex items-center gap-2 opacity-90" style={{ letterSpacing: '2px' }}>
           <img loading="lazy" src={logoImg} alt="Logo" className="w-7 h-7 object-contain shrink-0" /> 
-          <span className="truncate mt-0.5">Mei's Radio</span>
+          <span className="truncate mt-0.5">Mei&apos;s Radio</span>
         </h1>
       </div>
 

@@ -260,7 +260,7 @@ export function createPictureBlock(
 ): Buffer {
   let width = 0
   let height = 0
-  let colorDepth = 24
+  const colorDepth = 24
 
   try {
     if (nativeImage && typeof nativeImage.createFromBuffer === 'function') {

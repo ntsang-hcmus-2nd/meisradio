@@ -76,7 +76,7 @@ export function formatScTrack(item: any): any {
   if (!track.id || !track.title) return null
 
   // Tìm ảnh bìa chất lượng cao (thay t500x500 hoặc large)
-  let coverUrl = track.artwork_url || track.user?.avatar_url || null
+  const coverUrl = track.artwork_url || track.user?.avatar_url || null
   let highResCover = coverUrl
   if (coverUrl) {
     highResCover = coverUrl.replace('-large.', '-t500x500.').replace('-badge.', '-t500x500.')

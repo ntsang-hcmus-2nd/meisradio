@@ -275,13 +275,13 @@ export async function downloadMultipleFiles(
         await new Promise((resolve) => setTimeout(resolve, 1500))
       }
 
-      let originalTitle = (file.title || 'track').replace(/^\d+[\s\.\-\_]+/, '').trim()
-      const safeTitle = originalTitle.replace(/[<>:"\/\\|?*]/g, '_').trim()
+      const originalTitle = (file.title || 'track').replace(/^\d+[\s.\-_]+/, '').trim()
+      const safeTitle = originalTitle.replace(/[<>:"/\\|?*]/g, '_').trim()
       const ext = file.format ? file.format.toLowerCase() : 'mp3'
       const filename = `${safeTitle}.${ext}`
 
       const tempPath = join(rootPath, `temp_${Date.now()}_${filename}`)
-      let destPath = join(rootPath, filename)
+      const destPath = join(rootPath, filename)
 
       const response = await fetch(file.url)
 
@@ -300,7 +300,7 @@ export async function downloadMultipleFiles(
       try {
         metadata = await mm.parseFile(tempPath)
         if (metadata.common.title) {
-          title = metadata.common.title.replace(/^\d+[\s\.\-\_]+/, '').trim()
+          title = metadata.common.title.replace(/^\d+[\s.\-_]+/, '').trim()
         }
         if (metadata.common.artist) artist = metadata.common.artist
         if (metadata.common.album) album = metadata.common.album

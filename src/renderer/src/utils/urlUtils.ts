@@ -86,7 +86,7 @@ export function formatAudioSource(filePath: string | undefined | null, streamPor
   }
 
   const rawPath = extractRawFilePath(trimmed)
-  let port = (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
+  const port = (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
 
   if (port > 0 && rawPath) {
     return `http://127.0.0.1:${port}/local-audio?path=${encodeURIComponent(rawPath)}`
@@ -109,7 +109,7 @@ export function formatImageSource(filePath: string | undefined | null, streamPor
     return trimmed
   }
 
-  let port = (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
+  const port = (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
 
   // 2. Nếu đã là URL stream /cover nội bộ, bảo toàn endpoint /cover và các tham số query (size=...)
   if (trimmed.includes('/cover?')) {

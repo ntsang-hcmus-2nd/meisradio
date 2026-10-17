@@ -210,7 +210,7 @@ export function cueTimeToSeconds(timeStr: string): number {
  */
 export function resolveReferencedAudioPath(cueDir: string, referencedFile: string): string {
   // Normalize path separators
-  const cleanRef = referencedFile.replace(/^[\\\/]+/, '').replace(/\\/g, path.sep).replace(/\//g, path.sep)
+  const cleanRef = referencedFile.replace(/^[\\/]+/, '').replace(/\\/g, path.sep).replace(/\//g, path.sep)
   const exactPath = path.isAbsolute(cleanRef) ? cleanRef : path.resolve(cueDir, cleanRef)
 
   if (fs.existsSync(exactPath)) {
