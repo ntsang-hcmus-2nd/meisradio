@@ -110,7 +110,7 @@ import {
   scheduleSavePlaybackSession
 } from './stores'
 import { useTranslation, useLanguage } from './locales'
-import { formatAudioSource } from './utils/urlUtils'
+import { formatAudioSource, extractRawFilePath } from './utils/urlUtils'
 import { sliderToGain } from './utils/audioUtils'
 import { isDsdTrack, formatDuration } from './utils/formatUtils'
 import { splitArtistString, removeAccents, matchesQuery, PRESERVED_ARTIST_NAMES } from './utils/textUtils'
@@ -572,10 +572,13 @@ export default function App() {
 
   const handleToggleMiniPlayer = useCallback(() => {
     const nextState = !isMiniPlayer
+    if (nextState) {
+      setIsLyricsMaximized(false)
+    }
     setIsMiniPlayer(nextState)
     // @ts-ignore
     window.api?.toggleMiniPlayer?.(nextState)
-  }, [isMiniPlayer, setIsMiniPlayer])
+  }, [isMiniPlayer, setIsMiniPlayer, setIsLyricsMaximized])
 
   const handleToggleLyrics = useCallback(() => {
     if (showLyricsPanel) {
@@ -1056,7 +1059,9 @@ export default function App() {
       if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
       else if (cfg.liteMode !== undefined) setAppMode(cfg.liteMode ? 'lite' : 'default')
       if (cfg.uiStyle !== undefined) setUiStyle(cfg.uiStyle)
-      if (cfg.customBgImage !== undefined) setCustomBgImage(cfg.customBgImage)
+      if (cfg.customBgImage !== undefined) {
+        setCustomBgImage(extractRawFilePath(cfg.customBgImage) || cfg.customBgImage)
+      }
       if (cfg.useTrackCoverAsBg !== undefined) setUseTrackCoverAsBg(cfg.useTrackCoverAsBg)
       if (cfg.accentColorMode !== undefined) setAccentColorMode(cfg.accentColorMode)
       if (cfg.customAccentColor !== undefined) setCustomAccentColor(cfg.customAccentColor)
@@ -1563,7 +1568,11 @@ export default function App() {
               isCore={theming.isCore}
             />
 
-            <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10 overflow-hidden">
+            <main
+              className={`flex-1 flex flex-col min-w-0 bg-transparent relative z-10 overflow-hidden ${
+                isLyricsMaximized && showLyricsPanel ? 'hidden' : ''
+              }`}
+            >
               {/* HEADER SEARCH & NAVIGATION */}
               <div className="flex items-center justify-between p-4 sm:px-6 lg:px-8 border-b border-theme-30/30 gap-4 flex-wrap">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1954,20 +1963,20 @@ export default function App() {
                   />
                 )}
               </div>
-
-              {/* FULLSCREEN VINYL LYRICS */}
-              {isLyricsMaximized && showLyricsPanel && (
-                <FullscreenLyrics
-                  lyrics={lyricsData.lyrics}
-                  originalCover={lyricsData.originalCover}
-                  audioRef={audioEngine.audioRef}
-                  analyserNodeRef={audioEngine.analyserNodeRef}
-                  navigateToArtist={navigateToArtist}
-                  changeLyricOffset={lyricsData.changeLyricOffset}
-                  resetLyricOffset={lyricsData.resetLyricOffset}
-                />
-              )}
             </main>
+
+            {/* FULLSCREEN VINYL LYRICS */}
+            {isLyricsMaximized && showLyricsPanel && (
+              <FullscreenLyrics
+                lyrics={lyricsData.lyrics}
+                originalCover={lyricsData.originalCover}
+                audioRef={audioEngine.audioRef}
+                analyserNodeRef={audioEngine.analyserNodeRef}
+                navigateToArtist={navigateToArtist}
+                changeLyricOffset={lyricsData.changeLyricOffset}
+                resetLyricOffset={lyricsData.resetLyricOffset}
+              />
+            )}
           </div>
 
           {/* BOTTOM PLAYER BAR */}

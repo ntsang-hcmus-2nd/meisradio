@@ -1012,7 +1012,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         targetPath = targetPath.replace(/\//g, '\\')
       }
 
-      if (!isAllowedLocalPath(targetPath)) {
+      if (!isAllowedLocalPath(targetPath, true)) {
         res.writeHead(403).end('Truy cập bị từ chối: Đường dẫn không hợp lệ')
         return
       }
@@ -1032,7 +1032,9 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
           '.webp': 'image/webp',
           '.gif': 'image/gif',
           '.bmp': 'image/bmp',
-          '.svg': 'image/svg+xml'
+          '.svg': 'image/svg+xml',
+          '.jfif': 'image/jpeg',
+          '.avif': 'image/avif'
         }
         const contentType = imgMimeMap[ext] || 'application/octet-stream'
         res.writeHead(200, {

@@ -39,7 +39,7 @@ export const vi: TranslationDictionary = {
     genres: 'Thể loại',
     userPlaylists: 'Danh sách phát của tôi',
     downloads: 'Tải xuống',
-    analytics: 'Thống kê chuyên sâu',
+    analytics: 'Thống kê',
     cloudConnection: 'Liên kết đám mây',
     googleDrive: 'Google Drive',
     settings: 'Cài đặt'

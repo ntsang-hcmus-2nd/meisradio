@@ -39,7 +39,7 @@ export const en: TranslationDictionary = {
     genres: 'Genres',
     userPlaylists: 'My Playlists',
     downloads: 'Downloads',
-    analytics: 'Listening Analytics',
+    analytics: 'Analytics',
     cloudConnection: 'Cloud Sync',
     googleDrive: 'Google Drive',
     settings: 'Settings'

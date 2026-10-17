@@ -23,7 +23,8 @@ import {
   dirtyThemeColorKeys,
   getMainWindow,
   getFfmpegPath,
-  trimNativeMemory
+  trimNativeMemory,
+  registerAllowedDroppedFile
 } from './sharedContext'
 import { parseCueFile, resolveCueSheetDurations } from '../cueParser'
 import { fastReadMetadata, findFolderCoverImage, ID3V1_GENRES } from '../fastAudioParser'
@@ -2103,6 +2104,7 @@ export function registerLibraryScannerIpc(): void {
       ]
     })
     if (canceled || filePaths.length === 0) return null
+    registerAllowedDroppedFile(filePaths[0])
     return filePaths[0]
   })
 

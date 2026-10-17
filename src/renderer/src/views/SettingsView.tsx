@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Settings,
   Palette,
@@ -26,7 +26,7 @@ import {
   Shuffle
 } from 'lucide-react'
 import { CustomSelect } from '../components/CustomSelect'
-import { normalizeImagePath } from '../components/DynamicCoverArt'
+import { extractRawFilePath } from '../utils/urlUtils'
 import { isDsdTrack } from '../utils/formatUtils'
 import { sliderToGain } from '../utils/audioUtils'
 import {
@@ -81,7 +81,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   setUpdaterStatus
 }) => {
   const { t, language, setLanguage } = useTranslation()
-  const [bgImageInput, setBgImageInput] = useState('')
+  const customBgImage = useSettingsStore((state) => state.customBgImage)
+  const [bgImageInput, setBgImageInput] = useState(() => extractRawFilePath(customBgImage) || customBgImage || '')
+
+  useEffect(() => {
+    if (customBgImage) {
+      setBgImageInput(extractRawFilePath(customBgImage) || customBgImage)
+    } else {
+      setBgImageInput('')
+    }
+  }, [customBgImage])
 
   // Settings Store
   const uiStyle = useSettingsStore((state) => state.uiStyle)
@@ -538,10 +547,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     />
                     <button
                       onClick={() => {
-                        const normalized = normalizeImagePath(bgImageInput)
-                        if (normalized) {
-                          setBgImageInput(normalized)
-                          setCustomBgImage(normalized)
+                        const trimmed = bgImageInput.trim()
+                        if (trimmed) {
+                          const cleanPath = extractRawFilePath(trimmed) || trimmed
+                          setBgImageInput(cleanPath)
+                          setCustomBgImage(cleanPath)
+                          if (!cleanPath.startsWith('http://') && !cleanPath.startsWith('https://')) {
+                            // @ts-ignore
+                            window.api?.registerDroppedFiles?.([cleanPath])
+                          }
                         }
                       }}
                       className="sys-btn flex items-center gap-1.5 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
@@ -554,11 +568,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </button>
                     <button
                       onClick={async () => {
+                        // @ts-ignore
                         const filePath = await window.api.selectImageFile()
                         if (filePath) {
-                          const normalized = normalizeImagePath(filePath)
-                          setBgImageInput(normalized)
-                          setCustomBgImage(normalized)
+                          setBgImageInput(filePath)
+                          setCustomBgImage(filePath)
+                          // @ts-ignore
+                          window.api?.registerDroppedFiles?.([filePath])
                         }
                       }}
                       className="sys-btn flex items-center gap-1.5 bg-theme-10 hover:bg-theme-10/90 text-white px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer shadow-lg shadow-theme-10/20"

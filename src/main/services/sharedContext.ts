@@ -137,6 +137,10 @@ export function saveConfig(data: any) {
     }
   }
 
+  if (data.customBgImage && typeof data.customBgImage === 'string') {
+    registerAllowedDroppedFile(data.customBgImage)
+  }
+
   // Mã hóa API Key trước khi ghi đè xuống file JSON
   if (app.isReady() && safeStorage.isEncryptionAvailable()) {
     if (data.googleDriveApiKey && !data.googleDriveApiKey.startsWith('ENC:')) {
@@ -247,6 +251,17 @@ export const allowedDroppedFiles = new Set<string>()
 export function normalizeLocalPath(filePath: string): string {
   if (!filePath || typeof filePath !== 'string') return ''
   let clean = filePath
+  if (
+    clean.includes('/local-audio?path=') ||
+    clean.includes('/local-file?path=') ||
+    clean.includes('/cover?path=')
+  ) {
+    try {
+      const u = new URL(clean)
+      const p = u.searchParams.get('path')
+      if (p) clean = p
+    } catch (_) {}
+  }
   if (clean.startsWith('file://')) {
     try {
       clean = fileURLToPath(clean)
@@ -323,7 +338,10 @@ export const COMMON_IMAGE_EXTENSIONS = [
   '.png',
   '.webp',
   '.gif',
-  '.bmp'
+  '.bmp',
+  '.jfif',
+  '.svg',
+  '.avif'
 ]
 
 /**
@@ -367,7 +385,12 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
     base === 'config.json' ||
     base === 'music-config.json' ||
     base === 'settings.json' ||
-    base === 'credentials.json'
+    base === 'credentials.json' ||
+    base.endsWith('.pem') ||
+    base.endsWith('.key') ||
+    base.endsWith('.sqlite') ||
+    base.endsWith('.db') ||
+    base.endsWith('.id_rsa')
   ) {
     return false
   }
@@ -389,6 +412,11 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
     if (!isAllowedExt && !isDirectory) {
       return false
     }
+
+    // Cho phép hiển thị tất cả các tệp hình ảnh hợp lệ (ảnh nền, cover art) không phải tệp nhạy cảm
+    if (COMMON_IMAGE_EXTENSIONS.includes(ext)) {
+      return true
+    }
   }
 
   // Check if explicitly registered as dropped file
@@ -403,6 +431,18 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
   // Allowed directories
   try {
     const config = getConfig()
+
+    // Cho phép hình nền tùy chọn customBgImage đã lưu trong cấu hình
+    if (config.customBgImage && typeof config.customBgImage === 'string') {
+      const bgNorm = normalizeLocalPath(config.customBgImage)
+      if (bgNorm) {
+        const bgNormLower = isWin ? bgNorm.toLowerCase() : bgNorm
+        if (normLower === bgNormLower) {
+          return true
+        }
+      }
+    }
+
     const allowedDirs: (string | null | undefined)[] = [
       IMAGE_CACHE_DIR,
       ...(config.libraryPaths || []),

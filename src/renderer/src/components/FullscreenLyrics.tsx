@@ -39,12 +39,23 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
   const streamPort = useSettingsStore((s) => s.streamPort)
   const isLite = appMode === 'lite' || appMode === 'core'
 
+  // Escape key listener to exit fullscreen lyrics
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsLyricsMaximized(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [setIsLyricsMaximized])
+
   return (
     <div
-      className="flex-1 flex flex-col bg-transparent z-10 relative animate-fade-in"
+      className="flex-1 flex flex-col bg-transparent z-10 relative animate-fade-in overflow-hidden"
       style={{ willChange: 'opacity, transform' }}
     >
-      <div className="absolute top-8 right-8 flex items-center gap-3 z-50">
+      <div className="absolute top-6 sm:top-8 right-6 sm:right-8 flex items-center gap-3 z-50">
         <div className="flex items-center gap-1.5 text-xs bg-theme-60/80 backdrop-blur-md border border-theme-30/60 p-1.5 px-3 rounded-full shadow-lg">
           <span className="text-zinc-400 text-[11px] mr-1">{t('player.lyricOffset')}:</span>
           <button
@@ -75,13 +86,14 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
         </div>
         <button
           onClick={() => setIsLyricsMaximized(false)}
-          className="text-zinc-400 hover:text-white bg-theme-30 p-3 rounded-full hover:scale-110 transition-transform cursor-pointer"
+          title={t('common.minimize') || 'Thu nhỏ (Esc)'}
+          className="text-zinc-400 hover:text-white bg-theme-30 p-2.5 sm:p-3 rounded-full hover:scale-110 transition-transform cursor-pointer shadow-lg"
         >
-          <Minimize2 size={24} />
+          <Minimize2 size={22} className="sm:w-6 sm:h-6" />
         </button>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-12">
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-12 overflow-hidden">
         <div className="w-1/2 flex flex-col items-center justify-center gap-6">
           <div className="w-[min(28vw,38vh)] max-w-[420px] min-w-[240px] aspect-square rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
             <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-10 rounded-full mix-blend-overlay"></div>

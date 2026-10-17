@@ -539,7 +539,12 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         category: 'action',
         badge: t('spotlight.categoryCommands'),
         action: () => {
-          setIsLyricsMaximized(!isLyricsMaximized)
+          if (!isLyricsMaximized) {
+            setShowLyricsPanel(true)
+            setIsLyricsMaximized(true)
+          } else {
+            setIsLyricsMaximized(false)
+          }
           setShow(false)
         }
       },

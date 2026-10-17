@@ -46,6 +46,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const storeSetActiveGenre = useLibraryStore((s) => s.setActiveGenre)
   const storeSetActiveUserPlaylist = useLibraryStore((s) => s.setActiveUserPlaylist)
   const storeAppMode = useSettingsStore((s) => s.appMode)
+  const isLyricsMaximized = useUIStore((s) => s.isLyricsMaximized)
+  const setIsLyricsMaximized = useUIStore((s) => s.setIsLyricsMaximized)
 
   const activeView = propActiveView !== undefined ? propActiveView : storeActiveView
   const setActiveView = propSetActiveView || storeSetActiveView
@@ -62,6 +64,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isHomeExpanded, setIsHomeExpanded] = useState<boolean>(true)
 
   const handleHomeParentClick = () => {
+    if (isLyricsMaximized) {
+      setIsLyricsMaximized(false)
+    }
     if (activeView !== 'home') {
       handleNavClick('home')
     } else {
@@ -70,6 +75,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   const handleNavClick = (view: string) => {
+    if (isLyricsMaximized) {
+      setIsLyricsMaximized(false)
+    }
     setActiveView(view as any)
     setSearchQuery('')
     setSearchInput('')
