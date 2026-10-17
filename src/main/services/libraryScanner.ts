@@ -1840,8 +1840,12 @@ export function registerLibraryScannerIpc(): void {
         }
         if (endTime !== undefined && endTime > 0) {
           if (startTime !== undefined && startTime > 0) {
-            args.push('-to', (endTime - startTime).toString())
+            // -to đặt trước -i là mốc thời gian TUYỆT ĐỐI (sẽ báo lỗi
+            // "to value smaller than -ss" nếu nhỏ hơn startTime).
+            // Khi kết hợp với -ss, dùng -t (độ dài) thay thế.
+            args.push('-t', Math.max(0.1, endTime - startTime).toString())
           } else {
+            // Không có -ss: -to vẫn phải là mốc tuyệt đối.
             args.push('-to', endTime.toString())
           }
         }
@@ -1984,6 +1988,11 @@ export function registerLibraryScannerIpc(): void {
           track.endTime > (track.startTime || 0)
         ) {
           args.push('-to', track.endTime.toString())
+        }
+        // File .bin là ảnh đĩa RAW PCM (s16le, 44.1kHz, stereo) - FFmpeg không
+        // tự nhận diện được định dạng nên phải chỉ định trước -i.
+        if (rawPath.toLowerCase().endsWith('.bin')) {
+          args.push('-f', 's16le', '-ar', '44100', '-ac', '2')
         }
 
         args.push('-i', rawPath)

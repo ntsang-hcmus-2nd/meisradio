@@ -268,6 +268,13 @@ export async function searchOnline(query: string) {
 export function getStreamUrl(track: any) {
   try {
     const streamPort = getStreamPort()
+    // Google Drive: proxy file trực tiếp qua stream server (url có sẵn API key trong track)
+    if (track.platform === 'drive' || track.id?.startsWith('gd-')) {
+      return {
+        success: true,
+        url: `http://127.0.0.1:${streamPort}/play?id=${encodeURIComponent(track.id || 'gd-')}&platform=drive&url=${encodeURIComponent(track.url || '')}`
+      }
+    }
     if (track.platform === 'soundcloud' || track.id?.startsWith('sc-')) {
       const rawId = track.originalId || track.id.replace(/^sc-/, '')
       return {

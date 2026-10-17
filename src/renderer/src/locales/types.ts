@@ -26,6 +26,7 @@ export interface TranslationDictionary {
     warning: string
     notice: string
     back: string
+    copied: string
   }
   sidebar: {
     library: string
@@ -362,6 +363,8 @@ export interface TranslationDictionary {
     sleepTimerEndTrackToast: string
     sleepTimerMinsToast: string
     sleepTimerStoppedToast: string
+    audioErrorToast: string
+    fileMissingToast: string
     sleepTimerRemainingTitle: string
     sleepTimerStopEndTitle: string
     abLoop: string
@@ -604,6 +607,7 @@ export interface TranslationDictionary {
     downloadError: string
     tagSavedSuccess: string
     addedToQueue: string
+    alreadyInQueue: string
     addedToPlaylist: string
     removedFromPlaylist: string
     movedToTrash: string

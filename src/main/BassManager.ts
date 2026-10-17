@@ -1052,11 +1052,15 @@ export class BassManager extends EventEmitter {
    */
   private createBinStream(filePath: string, flags: number): number {
     if (!this.BASS_StreamCreateFileUser || !this.binFileProcs) return 0
+    // Theo dõi fd bên ngoài try để nhánh catch luôn đóng được khi fs.openSync đã thành công
+    // (ví dụ createWavHeader/BASS_StreamCreateFileUser throw), tránh rò rỉ file descriptor.
+    let fd: number = -1
+    let id: number = 0
     try {
       const stat = fs.statSync(filePath)
-      const fd = fs.openSync(filePath, 'r')
+      fd = fs.openSync(filePath, 'r')
       const header = this.createWavHeader(stat.size, 44100, 2, 16)
-      const id = this.nextBinContextId++
+      id = this.nextBinContextId++
       const ctx = {
         fd,
         curPos: 0,
@@ -1068,15 +1072,42 @@ export class BassManager extends EventEmitter {
 
       const chan = this.BASS_StreamCreateFileUser(0, flags, this.binFileProcs, id)
       if (!chan) {
-        try {
-          fs.closeSync(fd)
-        } catch {}
-        this.binContexts.delete(id)
+        // Nếu BASS đã tự gọi FILECLOSEPROC, closeCb đã đóng fd và xóa ctx.
+        // Chỉ dọn dẹp khi ctx vẫn còn để tránh đóng nhầm fd số đã bị tái sử dụng.
+        const stale = this.binContexts.get(id)
+        if (stale) {
+          try {
+            fs.closeSync(stale.fd)
+          } catch {}
+          this.binContexts.delete(id)
+        }
+        id = 0
+        fd = -1
         return 0
       }
+      // Stream tạo thành công: quyền sở hữu fd chuyển cho BASS, sẽ được đóng qua FILECLOSEPROC
+      id = 0
+      fd = -1
       return chan
     } catch (e) {
       console.error('Failed to create BIN stream:', e)
+      // Dọn dẹp mọi tài nguyên đã cấp phát trước khi exception xảy ra (chỉ khi ctx còn tồn tại)
+      if (id !== 0) {
+        const stale = this.binContexts.get(id)
+        if (stale) {
+          try {
+            fs.closeSync(stale.fd)
+          } catch {}
+          this.binContexts.delete(id)
+        }
+        id = 0
+      }
+      if (fd >= 0) {
+        try {
+          fs.closeSync(fd)
+        } catch {}
+        fd = -1
+      }
       return 0
     }
   }

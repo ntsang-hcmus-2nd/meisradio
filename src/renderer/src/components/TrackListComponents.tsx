@@ -792,7 +792,15 @@ export const SortableQueueItem = React.memo(
     prev.isActive === next.isActive &&
     prev.isPlaying === next.isPlaying &&
     prev.isLite === next.isLite &&
-    prev.track.id === next.track.id
+    // Memo phải so cả nội dung track: nhiều bài không có `id` (undefined === undefined
+    // vẫn trả true) khiến khi kéo thả đổi chỗ 2 bài như thế, item không re-render
+    // dù hàng đợi đã đổi thứ tự
+    (prev.track === next.track ||
+      (String(prev.track?.id ?? '') === String(next.track?.id ?? '') &&
+        String(prev.track?.filePath ?? '') === String(next.track?.filePath ?? '') &&
+        String(prev.track?.title ?? '') === String(next.track?.title ?? '') &&
+        prev.track?.artist === next.track?.artist &&
+        prev.track?.artists === next.track?.artists))
 )
 SortableQueueItem.displayName = 'SortableQueueItem'
 

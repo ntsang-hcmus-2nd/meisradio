@@ -491,9 +491,8 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                     <span>{t('modals.eq.gain')}</span>
                     <span className="font-mono text-theme-10 font-bold">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
                   </div>
-                  <input 
-                    key={`${band.id}-${band.gain}`}
-                    type="range" 
+                  <input
+                    type="range"
                     min="-20" 
                     max="20" 
                     step="0.5" 

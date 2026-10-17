@@ -22,6 +22,7 @@ import {
   formatFileSize,
   getTrackFormatDisplay
 } from '../../utils/formatUtils'
+import { trackMatchesKeys, removeTrackKeysFromStores } from '../../utils/trackStateUtils'
 
 export interface DuplicateFinderModalProps {
   isOpen?: boolean
@@ -144,7 +145,8 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
     duplicateGroups.forEach((group) => {
       // Keep tracks[0] unchecked (it is the highest quality), check all others
       for (let i = 1; i < group.tracks.length; i++) {
-        const path = group.tracks[i].filePath || group.tracks[i].id
+        // Ưu tiên id (giữ hậu tố #track-N của CUE Sheet) để không xóa nhầm file album vật lý
+        const path = group.tracks[i].id || group.tracks[i].filePath
         if (path) {
           nextSelected.add(path)
         }
@@ -198,11 +200,15 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
 
       // Remove deleted tracks from library in-memory
       const pathSet = new Set(pathsToDelete)
-      setLibraryTracks((prev) =>
-        prev.filter((t) => !pathSet.has(t.filePath) && !pathSet.has(t.id))
-      )
+      setLibraryTracks((prev) => prev.filter((t) => !trackMatchesKeys(t, pathSet)))
+      // Đồng bộ phát nhạc: dọn playQueue / originalQueue / currentTrack /
+      // recentlyPlayed / playlists / userPlaylists cho các bài đã bị xóa khỏi đĩa
+      await removeTrackKeysFromStores(pathsToDelete)
       setSelectedPaths(new Set())
-      showToast(t('toasts.movedToTrash') || 'Moved selected duplicates to trash', 'success')
+      showToast(
+        t('toasts.movedToTrash', { title: `${pathsToDelete.length} ${t('common.tracks')}` }),
+        'success'
+      )
     } catch (err: any) {
       showToast(err?.message || 'Failed to delete tracks', 'error')
     } finally {
@@ -321,7 +327,8 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                 {/* Group Tracks */}
                 <div className="divide-y divide-zinc-800/40 text-xs">
                   {group.tracks.map((track, idx) => {
-                    const path = track.filePath || track.id || ''
+                    // Ưu tiên id (giữ hậu tố #track-N của CUE Sheet) khớp với handleToggleTrack/handleSelectLowerQuality
+                    const path = track.id || track.filePath || ''
                     const isSelected = selectedPaths.has(path)
                     const isHighest = idx === 0
                     const fmtDisplay = getTrackFormatDisplay(track)

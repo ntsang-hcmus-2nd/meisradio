@@ -25,7 +25,8 @@ export const vi: TranslationDictionary = {
     deletePermanently: 'Xóa vĩnh viễn',
     warning: 'Cảnh báo',
     notice: 'Thông báo',
-    back: 'Quay lại'
+    back: 'Quay lại',
+    copied: 'Đã sao chép'
   },
   sidebar: {
     library: 'Thư viện',
@@ -379,6 +380,8 @@ export const vi: TranslationDictionary = {
     sleepTimerEndTrackToast: 'Hẹn giờ: Sẽ dừng sau khi bài hát kết thúc',
     sleepTimerMinsToast: 'Hẹn giờ tắt nhạc sau {mins} phút',
     sleepTimerStoppedToast: 'Hẹn giờ: Đã dừng phát nhạc',
+    audioErrorToast: 'Không phát được bài này (lỗi nguồn hoặc định dạng không hỗ trợ)',
+    fileMissingToast: 'File nhạc không còn tồn tại — có thể đã bị xóa hoặc di chuyển bên ngoài ứng dụng',
     sleepTimerRemainingTitle: 'Hẹn giờ tắt: còn {time}',
     sleepTimerStopEndTitle: 'Hẹn giờ: Dừng khi hết bài',
     abLoop: 'Lặp đoạn A-B',
@@ -626,6 +629,7 @@ export const vi: TranslationDictionary = {
     downloadError: 'Có lỗi xảy ra khi tải tệp!',
     tagSavedSuccess: 'Đã lưu thông tin bài hát thành công!',
     addedToQueue: 'Đã thêm "{title}" vào hàng đợi!',
+    alreadyInQueue: '"{title}" đã có trong hàng đợi!',
     addedToPlaylist: 'Đã thêm vào danh sách phát "{name}"!',
     removedFromPlaylist: 'Đã xóa bài hát khỏi danh sách phát!',
     movedToTrash: 'Đã chuyển "{title}" vào thùng rác!',

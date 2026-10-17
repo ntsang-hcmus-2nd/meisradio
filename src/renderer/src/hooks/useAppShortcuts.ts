@@ -1,6 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
 import { usePlayerStore, useUIStore } from '../stores'
-import { isDsdTrack } from '../utils/formatUtils'
+import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUtils'
+
+/**
+ * Tua bằng thao tác chu vi / phím tắt trên thẻ audio (WebAudio chuẩn):
+ * kẹp phạm vi theo [startTime, endTime] của track CUE thay vì [0, duration]
+ * của cả tệp vật lý.
+ */
+const seekAudioBy = (
+  audio: HTMLAudioElement,
+  track: any,
+  delta: number
+) => {
+  const range = getTrackSeekRange(track, audio.duration)
+  audio.currentTime = clampSeekRange(audio.currentTime + delta, range)
+}
 
 interface UseAppShortcutsProps {
   audioRef: React.RefObject<HTMLAudioElement | null>
@@ -71,10 +85,7 @@ export function useAppShortcuts({
         if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
           window.api?.bassSeek?.(5, 'relative')
         } else if (audioRef.current && currentTrack) {
-          audioRef.current.currentTime = Math.min(
-            audioRef.current.duration || 9999,
-            audioRef.current.currentTime + 5
-          )
+          seekAudioBy(audioRef.current, currentTrack, 5)
         }
         return
       }
@@ -85,7 +96,7 @@ export function useAppShortcuts({
         if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
           window.api?.bassSeek?.(-5, 'relative')
         } else if (audioRef.current && currentTrack) {
-          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
+          seekAudioBy(audioRef.current, currentTrack, -5)
         }
         return
       }
@@ -243,17 +254,14 @@ export function useAppShortcuts({
           if (isBp || isDsdTrack(curTrack)) {
             window.api?.bassSeek?.(5, 'relative')
           } else if (audio.current && curTrack) {
-            audio.current.currentTime = Math.min(
-              audio.current.duration || 9999,
-              audio.current.currentTime + 5
-            )
+            seekAudioBy(audio.current, curTrack, 5)
           }
           break
         case 'seek-backward':
           if (isBp || isDsdTrack(curTrack)) {
             window.api?.bassSeek?.(-5, 'relative')
           } else if (audio.current && curTrack) {
-            audio.current.currentTime = Math.max(0, audio.current.currentTime - 5)
+            seekAudioBy(audio.current, curTrack, -5)
           }
           break
       }

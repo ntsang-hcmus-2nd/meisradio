@@ -25,7 +25,8 @@ export const en: TranslationDictionary = {
     deletePermanently: 'Delete Permanently',
     warning: 'Warning',
     notice: 'Notification',
-    back: 'Back'
+    back: 'Back',
+    copied: 'Copied'
   },
   sidebar: {
     library: 'Library',
@@ -375,6 +376,8 @@ export const en: TranslationDictionary = {
     sleepTimerEndTrackToast: 'Sleep timer: Stopping after current track ends',
     sleepTimerMinsToast: 'Sleep timer set for {mins} minutes',
     sleepTimerStoppedToast: 'Sleep timer: Playback stopped',
+    audioErrorToast: 'Cannot play this track (source error or unsupported format)',
+    fileMissingToast: 'Audio file is missing — it may have been deleted or moved outside the app',
     sleepTimerRemainingTitle: 'Sleep timer: {time} remaining',
     sleepTimerStopEndTitle: 'Sleep timer: Stopping at end of track',
     abLoop: 'A-B Repeat',
@@ -620,6 +623,7 @@ export const en: TranslationDictionary = {
     downloadError: 'An error occurred while downloading file!',
     tagSavedSuccess: 'Metadata saved successfully!',
     addedToQueue: 'Added "{title}" to queue!',
+    alreadyInQueue: '"{title}" is already in the queue!',
     addedToPlaylist: 'Added to playlist "{name}"!',
     removedFromPlaylist: 'Removed song from playlist!',
     movedToTrash: 'Moved "{title}" to Trash!',

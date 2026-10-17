@@ -7,9 +7,11 @@ import { spawn } from 'child_process'
 import { pathToFileURL } from 'url'
 import { nativeImage, ipcMain } from 'electron'
 import * as mm from 'music-metadata'
+import { is } from '@electron-toolkit/utils'
 import {
   getConfig,
   isAllowedLocalPath,
+  normalizeLocalPath,
   getFfmpegPath,
   IMAGE_CACHE_DIR,
   SUPPORTED_AUDIO_EXTS,
@@ -173,6 +175,31 @@ export function isBlockedSsrfHost(hostname: string): boolean {
 }
 
 // ==========================================
+// CORS WHITELIST: chỉ echo origin của giao diện renderer (dev)
+// ==========================================
+// Yêu cầu tái sử dụng: các yêu cầu <audio>/<img> từ renderer (prod dùng file://)
+// là yêu cầu no-cors và KHÔNG gửi header Origin, nên máy chủ không cần trả CORS header.
+// Với các yêu cầu fetch có Origin, chỉ echo origin của dev server (http://localhost:5173)
+// để chặn trang web bên ngoài đọc được dữ liệu trả về của server nội bộ.
+const TRUSTED_DEV_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i
+
+function applyStreamCors(req: http.IncomingMessage, res: http.ServerResponse): void {
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : ''
+  if (!origin) return
+  // Chỉ cho phép origin của ứng dụng trong môi trường dev; prod (file://) không gửi Origin.
+  if (is.dev && TRUSTED_DEV_ORIGIN_PATTERN.test(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Origin')
+    res.setHeader(
+      'Access-Control-Expose-Headers',
+      'Content-Range, Accept-Ranges, Content-Length, Content-Type'
+    )
+    res.setHeader('Vary', 'Origin')
+  }
+}
+
+// ==========================================
 // KHỞI TẠO HTTP STREAM SERVER NỘI BỘ
 // ==========================================
 export async function startStreamServer(preferredPort: number = 49876): Promise<number> {
@@ -181,13 +208,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
   }
 
   const server = http.createServer(async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Accept, Origin')
-    res.setHeader(
-      'Access-Control-Expose-Headers',
-      'Content-Range, Accept-Ranges, Content-Length, Content-Type'
-    )
+    applyStreamCors(req, res)
     if (req.method === 'OPTIONS') {
       res.writeHead(204)
       res.end()
@@ -212,7 +233,12 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         if (cached && cached.expires > Date.now()) directUrl = cached.url
         else {
           const config = getConfig()
-          if (platform === 'soundcloud') {
+          if (platform === 'drive') {
+            // Google Drive: proxy trực tiếp tệp Drive (API key đã nhúng sẵn trong track.url)
+            directUrl =
+              parsedUrl.searchParams.get('url') ||
+              `https://www.googleapis.com/drive/v3/files/${targetId.replace(/^gd-/, '')}?alt=media&key=${config.googleDriveApiKey}&acknowledgeAbuse=true`
+          } else if (platform === 'soundcloud') {
             const permalink = parsedUrl.searchParams.get('url') || undefined
             const rawScId = targetId.replace(/^sc-/, '')
             directUrl = await resolveScStreamUrl(rawScId, permalink, config.scOAuthToken)
@@ -260,7 +286,9 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             'pipe:1'
           )
 
-          const ffmpegProcess = spawn(ffmpegExe, ffmpegArgs, { stdio: ['ignore', 'pipe', 'ignore'] })
+          const ffmpegProcess = spawn(ffmpegExe, ffmpegArgs, {
+            stdio: ['ignore', 'pipe', 'ignore']
+          })
 
           res.writeHead(200, {
             'Content-Type': 'audio/mpeg',
@@ -294,7 +322,12 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             streamUrlCache.delete(targetId)
 
             const config = getConfig()
-            if (platform === 'soundcloud') {
+            if (platform === 'drive') {
+              // Google Drive trả 403: dựng lại URL bằng API key hiện tại
+              directUrl =
+                parsedUrl.searchParams.get('url') ||
+                `https://www.googleapis.com/drive/v3/files/${targetId.replace(/^gd-/, '')}?alt=media&key=${config.googleDriveApiKey}&acknowledgeAbuse=true`
+            } else if (platform === 'soundcloud') {
               const permalink = parsedUrl.searchParams.get('url') || undefined
               const rawScId = targetId.replace(/^sc-/, '')
               directUrl = await resolveScStreamUrl(rawScId, permalink, config.scOAuthToken)
@@ -487,12 +520,18 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         return
       }
 
-      const cacheKey = `${targetPath}_size_${targetSize}`
+      let mtimeMs = 0
+      try {
+        mtimeMs = Math.round(fs.statSync(targetPath).mtimeMs)
+      } catch (_) {}
+
+      const tParam = parsedUrl.searchParams.get('t') || ''
+      const cacheKey = `${targetPath}_size_${targetSize}_${mtimeMs}_${tParam}`
       const cached = targetSize > 0 ? getCoverFromCache(cacheKey) : undefined
       if (cached) {
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=604800, immutable',
+          'Cache-Control': tParam ? 'no-cache' : 'public, max-age=604800',
           'Content-Length': cached.length
         })
         res.end(cached)
@@ -831,11 +870,13 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
       }
 
       if (!isAllowedLocalPath(targetPath)) {
+        console.warn('[StreamServer] /local-audio 403 — đường dẫn không hợp lệ/không trong whitelist:', targetPath)
         res.writeHead(403).end('Truy cập bị từ chối: Đường dẫn không hợp lệ')
         return
       }
 
       if (!fs.existsSync(targetPath)) {
+        console.warn('[StreamServer] /local-audio 404 — file không tồn tại (đã bị xóa/di chuyển?):', targetPath)
         res.writeHead(404).end('File không tồn tại')
         return
       }
@@ -889,7 +930,6 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             'Content-Length': effectiveFileSize,
             'Content-Type': contentType,
             'Accept-Ranges': 'bytes',
-            'Access-Control-Allow-Origin': '*',
             'Access-Control-Expose-Headers':
               'Content-Range, Accept-Ranges, Content-Length, Content-Type'
           })
@@ -911,7 +951,6 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             res
               .writeHead(416, {
                 'Content-Range': `bytes */${effectiveFileSize}`,
-                'Access-Control-Allow-Origin': '*',
                 'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
               })
               .end()
@@ -925,7 +964,6 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             'Content-Length': chunksize,
             'Content-Type': contentType,
             'Cache-Control': 'no-cache',
-            'Access-Control-Allow-Origin': '*',
             'Access-Control-Expose-Headers':
               'Content-Range, Accept-Ranges, Content-Length, Content-Type'
           })
@@ -971,7 +1009,6 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             'Content-Type': contentType,
             'Accept-Ranges': 'bytes',
             'Cache-Control': 'no-cache',
-            'Access-Control-Allow-Origin': '*',
             'Access-Control-Expose-Headers':
               'Content-Range, Accept-Ranges, Content-Length, Content-Type'
           })
@@ -1041,7 +1078,6 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
           'Content-Length': stat.size,
           'Content-Type': contentType,
           'Cache-Control': 'public, max-age=86400',
-          'Access-Control-Allow-Origin': '*',
           'Access-Control-Expose-Headers': 'Content-Length, Content-Type'
         })
         const fileStream = fs.createReadStream(targetPath)
@@ -1103,6 +1139,26 @@ export function registerStreamServerIpc(): void {
   ipcMain.handle('music:getStreamPort', () => currentStreamPort)
   ipcMain.on('music:getStreamPortSync', (event) => {
     event.returnValue = currentStreamPort
+  })
+
+  // Kiểm tra nhanh file nhạc local còn nằm trên đĩa hay không (và có được phép
+  // stream qua /local-audio không). Dùng để chặn sớm trường hợp file bị xóa /
+  // di chuyển bên ngoài app — lỗi 404 của server bị Chromium quy về
+  // MEDIA_ERR_SRC_NOT_SUPPORTED "Format error" khá khó hiểu từ phía renderer.
+  ipcMain.handle('music:checkLocalAudioFile', (_event, rawPath: string) => {
+    try {
+      // normalizeLocalPath xử lý được cả: đường dẫn thô, file://, URL stream
+      // /local-audio|/local-file|/cover?path=... còn sót lại từ phiên cũ
+      const norm = normalizeLocalPath(typeof rawPath === 'string' ? rawPath : '')
+      if (!norm) return { exists: false, serving: false, size: 0, path: norm }
+      if (!fs.existsSync(norm)) return { exists: false, serving: false, size: 0, path: norm }
+      const stat = fs.statSync(norm)
+      const isFile = !!stat && stat.isFile()
+      const serving = isFile && isAllowedLocalPath(norm)
+      return { exists: isFile, serving, size: stat.size, path: norm }
+    } catch (_) {
+      return { exists: false, serving: false, size: 0, path: '' }
+    }
   })
 
   ipcMain.handle('music:getTrackCover', async (_, filePath: string) => {

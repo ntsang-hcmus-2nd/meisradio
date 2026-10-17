@@ -12,9 +12,29 @@ import { DEFAULT_DISCORD_CLIENT_ID } from '../DiscordRpcManager'
 // ==========================================
 // THƯ MỤC DỮ LIỆU ĐỘC LẬP
 // ==========================================
-export const DATA_FOLDER = is.dev
-  ? app.getPath('userData')
-  : join(path.dirname(app.getPath('exe')), 'MeisRadioData')
+function resolveDataFolder(): string {
+  if (!is.dev) {
+    try {
+      const exeDir = path.dirname(app.getPath('exe'))
+      const portableMarker = join(exeDir, 'portable')
+      const exeDataDir = join(exeDir, 'MeisRadioData')
+      if (fs.existsSync(portableMarker) || fs.existsSync(exeDataDir)) {
+        if (!fs.existsSync(exeDataDir)) {
+          fs.mkdirSync(exeDataDir, { recursive: true })
+        }
+        const testFile = join(exeDataDir, `.write_test_${Date.now()}`)
+        fs.writeFileSync(testFile, 'ok')
+        fs.unlinkSync(testFile)
+        return exeDataDir
+      }
+    } catch (_) {
+      // Nếu thư mục cạnh file exe không có quyền ghi (ví dụ cài trong Program Files), an toàn dùng userData
+    }
+  }
+  return app.getPath('userData')
+}
+
+export const DATA_FOLDER = resolveDataFolder()
 
 if (!fs.existsSync(DATA_FOLDER)) {
   try {
@@ -32,6 +52,16 @@ if (!fs.existsSync(IMAGE_CACHE_DIR)) {
 export const CONFIG_PATH = join(DATA_FOLDER, 'music-config.json')
 export const USER_PLAYLISTS_PATH = join(DATA_FOLDER, 'user-playlists.json')
 
+// Khóa cấu hình chứa thông tin nhạy cảm (MẬT KHẨU / TOKEN / API KEY).
+// Luôn được mã hóa bằng safeStorage khi lưu và giải mã khi đọc.
+const SENSITIVE_CONFIG_KEYS = [
+  'googleDriveApiKey',
+  'musixmatchApiKey',
+  'ytCookie',
+  'scOAuthToken',
+  'soulseekPassword'
+]
+
 // Khởi tạo SQLite Storage Engine (koffi C-FFI) thay thế toàn bộ cache JSON
 export const sqliteStorage = new SqliteStorage(DATA_FOLDER)
 
@@ -43,33 +73,16 @@ export function getConfig() {
     if (fs.existsSync(CONFIG_PATH)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
       if (app.isReady() && safeStorage.isEncryptionAvailable()) {
-        if (config.googleDriveApiKey && config.googleDriveApiKey.startsWith('ENC:')) {
-          try {
-            config.googleDriveApiKey = safeStorage.decryptString(
-              Buffer.from(config.googleDriveApiKey.replace('ENC:', ''), 'base64')
-            )
-          } catch (e) {}
-        }
-        if (config.musixmatchApiKey && config.musixmatchApiKey.startsWith('ENC:')) {
-          try {
-            config.musixmatchApiKey = safeStorage.decryptString(
-              Buffer.from(config.musixmatchApiKey.replace('ENC:', ''), 'base64')
-            )
-          } catch (e) {}
-        }
-        if (config.ytCookie && config.ytCookie.startsWith('ENC:')) {
-          try {
-            config.ytCookie = safeStorage.decryptString(
-              Buffer.from(config.ytCookie.replace('ENC:', ''), 'base64')
-            )
-          } catch (e) {}
-        }
-        if (config.scOAuthToken && config.scOAuthToken.startsWith('ENC:')) {
-          try {
-            config.scOAuthToken = safeStorage.decryptString(
-              Buffer.from(config.scOAuthToken.replace('ENC:', ''), 'base64')
-            )
-          } catch (e) {}
+        // Giải mã các khóa nhạy cảm (đã mã hóa bằng safeStorage) từ file JSON bao gồm cả soulseekPassword
+        for (const key of SENSITIVE_CONFIG_KEYS) {
+          const value = config[key]
+          if (typeof value === 'string' && value.startsWith('ENC:')) {
+            try {
+              config[key] = safeStorage.decryptString(
+                Buffer.from(value.replace('ENC:', ''), 'base64')
+              )
+            } catch (e) {}
+          }
         }
       }
 
@@ -141,50 +154,19 @@ export function saveConfig(data: any) {
     registerAllowedDroppedFile(data.customBgImage)
   }
 
-  // Mã hóa API Key trước khi ghi đè xuống file JSON
+  // Mã hóa các khóa nhạy cảm trước khi ghi đè xuống file JSON (chỉ mã hóa nếu giá trị hợp lệ và chưa được mã hóa)
+  // Lưu ý: newConfig chứa cả giá trị vừa giải mã từ getConfig() lẫn giá trị mới từ data,
+  // nên mọi giá trị plaintext bị rò rỉ (sau một lần lưu một phần) cũng sẽ được mã hóa lại khi ghi xuống đĩa.
   if (app.isReady() && safeStorage.isEncryptionAvailable()) {
-    if (data.googleDriveApiKey && !data.googleDriveApiKey.startsWith('ENC:')) {
-      try {
-        const encryptedBuffer = safeStorage.encryptString(data.googleDriveApiKey)
-        newConfig.googleDriveApiKey = `ENC:${encryptedBuffer.toString('base64')}`
-      } catch (e) {
-        console.error('Lỗi mã hóa Google Drive API Key', e)
-      }
-    }
-
-    if (data.musixmatchApiKey && !data.musixmatchApiKey.startsWith('ENC:')) {
-      try {
-        const encryptedBuffer = safeStorage.encryptString(data.musixmatchApiKey)
-        newConfig.musixmatchApiKey = `ENC:${encryptedBuffer.toString('base64')}`
-      } catch (e) {
-        console.error('Lỗi mã hóa Musixmatch API Key', e)
-      }
-    }
-
-    if (data.ytCookie && !data.ytCookie.startsWith('ENC:')) {
-      try {
-        const encryptedBuffer = safeStorage.encryptString(data.ytCookie)
-        newConfig.ytCookie = `ENC:${encryptedBuffer.toString('base64')}`
-      } catch (e) {
-        console.error('Lỗi mã hóa YT Cookie', e)
-      }
-    }
-
-    if (data.scOAuthToken && !data.scOAuthToken.startsWith('ENC:')) {
-      try {
-        const encryptedBuffer = safeStorage.encryptString(data.scOAuthToken)
-        newConfig.scOAuthToken = `ENC:${encryptedBuffer.toString('base64')}`
-      } catch (e) {
-        console.error('Lỗi mã hóa SoundCloud OAuth Token', e)
-      }
-    }
-
-    if (data.soulseekPassword && !data.soulseekPassword.startsWith('ENC:')) {
-      try {
-        const encryptedBuffer = safeStorage.encryptString(data.soulseekPassword)
-        newConfig.soulseekPassword = `ENC:${encryptedBuffer.toString('base64')}`
-      } catch (e) {
-        console.error('Lỗi mã hóa Soulseek Password', e)
+    for (const key of SENSITIVE_CONFIG_KEYS) {
+      const value = newConfig[key]
+      if (typeof value === 'string' && !value.startsWith('ENC:')) {
+        try {
+          const encryptedBuffer = safeStorage.encryptString(value)
+          newConfig[key] = `ENC:${encryptedBuffer.toString('base64')}`
+        } catch (e) {
+          console.error(`Lỗi mã hóa ${key}`, e)
+        }
       }
     }
   }
@@ -326,11 +308,7 @@ export const SUPPORTED_AUDIO_EXTS = [
   '.ape'
 ]
 
-export const ALLOWED_AUDIO_EXTENSIONS = [
-  ...SUPPORTED_AUDIO_EXTS,
-  '.cue',
-  '.lrc'
-]
+export const ALLOWED_AUDIO_EXTENSIONS = [...SUPPORTED_AUDIO_EXTS, '.cue', '.lrc']
 
 export const COMMON_IMAGE_EXTENSIONS = [
   '.jpg',
@@ -412,11 +390,13 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
     if (!isAllowedExt && !isDirectory) {
       return false
     }
-
-    // Cho phép hiển thị tất cả các tệp hình ảnh hợp lệ (ảnh nền, cover art) không phải tệp nhạy cảm
-    if (COMMON_IMAGE_EXTENSIONS.includes(ext)) {
-      return true
-    }
+    // LƯU Ý BẢO MẬT: Tệp ảnh KHÔNG tự động vượt qua kiểm tra thư mục/danh sách trắng.
+    // Ảnh nền / cover art hợp lệ phải nằm trong một trong các nguồn đã cho phép bên dưới:
+    //  - Danh sách tệp/thư mục được đăng ký (drag & drop, hộp thoại chọn ảnh)
+    //  - Ảnh nền tùy chỉnh đã lưu trong config (customBgImage)
+    //  - Các thư mục được cho phép (thư viện, .image_cache, userData, Music/Downloads/
+    //    Desktop/Documents/Pictures/Temp của người dùng)
+    // Như vậy trang web bên ngoài không thể đọc một tệp ảnh bất kỳ trên ổ đĩa chỉ vì biết đường dẫn.
   }
 
   // Check if explicitly registered as dropped file
@@ -475,7 +455,8 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
 // ==========================================
 // METADATA & THEME COLORS IN-MEMORY CACHE
 // ==========================================
-export const metadataCache: Record<string, { mtime: number; data: any }> = sqliteStorage.getAllMetadata()
+export const metadataCache: Record<string, { mtime: number; data: any }> =
+  sqliteStorage.getAllMetadata()
 export const dirtyMetadataKeys = new Set<string>()
 
 export function markMetadataDirty(key: string): void {

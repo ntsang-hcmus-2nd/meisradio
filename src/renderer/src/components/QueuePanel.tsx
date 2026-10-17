@@ -17,6 +17,7 @@ import {
 import { SortableQueueItem } from './TrackListComponents'
 import { usePlayerStore, useUIStore, useSettingsStore } from '../stores'
 import { useTranslation, useLanguage } from '../locales'
+import { isSameTrack } from '../utils/trackStateUtils'
 
 interface QueuePanelProps {
   onPlayTrack: (track: any) => void
@@ -103,7 +104,9 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
               strategy={verticalListSortingStrategy}
             >
               {visibleQueue.map((track, index) => {
-                const isActive = currentTrack?.id === track.id
+                // Dùng isSameTrack: id phải có truthy ở CẢ HAI bài — tránh currentTrack?.id
+                // === track.id === undefined khớp sai với mọi bài không có id
+                const isActive = isSameTrack(currentTrack, track)
                 return (
                   <SortableQueueItem
                     key={`queue-${index}`}

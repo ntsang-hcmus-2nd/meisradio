@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { usePlayerStore, useSettingsStore } from '../stores'
 import { formatImageSource } from '../utils/urlUtils'
-import { isDsdTrack } from '../utils/formatUtils'
+import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUtils'
 
 interface UseMediaSessionProps {
   audioRef: React.RefObject<HTMLAudioElement | null>
@@ -66,8 +66,10 @@ export function useMediaSession({
             if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
               window.api?.bassSeek?.(details.seekTime, 'absolute')
             } else if (audioRef.current) {
-              const trackStart = currentTrack?.startTime || 0
-              audioRef.current.currentTime = trackStart + details.seekTime
+              // seekTime là toạ độ ảo của track (0..duration); quy đổi sang toạ độ
+              // vật lý rồi kẹp vào phạm vi [startTime, endTime] của track CUE.
+              const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
+              audioRef.current.currentTime = clampSeekRange(range.start + details.seekTime, range)
             }
           }
         }
@@ -79,7 +81,11 @@ export function useMediaSession({
           if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
             window.api?.bassSeek?.(-offset, 'relative')
           } else if (audioRef.current) {
-            audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - offset)
+            const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
+            audioRef.current.currentTime = clampSeekRange(
+              audioRef.current.currentTime - offset,
+              range
+            )
           }
         }
       ],
@@ -89,10 +95,11 @@ export function useMediaSession({
           const offset = details.seekOffset || 5
           if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
             window.api?.bassSeek?.(offset, 'relative')
-          } else if (audioRef.current && audioRef.current.duration) {
-            audioRef.current.currentTime = Math.min(
-              audioRef.current.duration,
-              audioRef.current.currentTime + offset
+          } else if (audioRef.current) {
+            const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
+            audioRef.current.currentTime = clampSeekRange(
+              audioRef.current.currentTime + offset,
+              range
             )
           }
         }

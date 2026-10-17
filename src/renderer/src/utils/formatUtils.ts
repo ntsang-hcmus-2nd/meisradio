@@ -3,6 +3,47 @@
  */
 
 /**
+ * Tính phạm vi toạ độ tua hợp lệ của một track trên thẻ audio (toạ độ vật lý):
+ * - Track CUE: [startTime, endTime] là đoạn bên trong tệp vật lý dùng chung.
+ * - Track thường: [0, thời lượng tệp].
+ * Fallback khi thiếu endTime: start + duration (độ dài ảo của track), cuối cùng
+ * là thời lượng vật lý đang biết của thẻ audio.
+ */
+export function getTrackSeekRange(
+  track: any,
+  physicalDuration?: number
+): { start: number; end: number } {
+  const start =
+    typeof track?.startTime === 'number' && !isNaN(track.startTime) && track.startTime > 0
+      ? track.startTime
+      : 0
+  const endTime = typeof track?.endTime === 'number' && !isNaN(track.endTime) ? track.endTime : 0
+  let end = endTime > start ? endTime : 0
+  if (!end && typeof track?.duration === 'number' && !isNaN(track.duration) && track.duration > 0) {
+    end = start + track.duration
+  }
+  if (
+    !end &&
+    typeof physicalDuration === 'number' &&
+    !isNaN(physicalDuration) &&
+    physicalDuration > 0
+  ) {
+    end = physicalDuration
+  }
+  return { start, end }
+}
+
+/**
+ * Kẹp một vị trí tua (toạ độ vật lý của thẻ audio) vào phạm vi [start, end]
+ * của track. Trả về start nếu giá trị không hợp lệ.
+ */
+export function clampSeekRange(value: number, range: { start: number; end: number }): number {
+  if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) return range.start
+  const clamped = Math.max(range.start, value)
+  return range.end > 0 ? Math.min(range.end, clamped) : clamped
+}
+
+/**
  * Kiểm tra xem một bài hát có phải là định dạng DSD (Direct Stream Digital: .dsf, .dff, .dsd) hay không
  */
 export function isDsdTrack(track?: any): boolean {

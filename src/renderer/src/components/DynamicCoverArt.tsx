@@ -4,11 +4,11 @@ import { ListMusic } from 'lucide-react'
 export type CoverTier = 'sm' | 'md' | 'lg' | 'xl' | 'original'
 
 export const TIER_SIZES: Record<CoverTier, number> = {
-  sm: 96,       // List item (40-48px @ 2x DPR)
-  md: 200,      // Player bar (56px), Mini player (96px), small cards (120-140px)
-  lg: 360,      // Medium/large grid cards (160-260px @ 2x DPR)
-  xl: 600,      // Fullscreen vinyl disc (250-400px @ 2x DPR)
-  original: 0   // Original full resolution
+  sm: 96, // List item (40-48px @ 2x DPR)
+  md: 200, // Player bar (56px), Mini player (96px), small cards (120-140px)
+  lg: 360, // Medium/large grid cards (160-260px @ 2x DPR)
+  xl: 600, // Fullscreen vinyl disc (250-400px @ 2x DPR)
+  original: 0 // Original full resolution
 }
 
 export interface TrackCoverData {
@@ -45,10 +45,10 @@ export interface DynamicCoverArtProps {
   style?: React.CSSProperties
 }
 
-import { 
-  getGlobalStreamPort, 
-  setGlobalStreamPort, 
-  onStreamPortChange, 
+import {
+  getGlobalStreamPort,
+  setGlobalStreamPort,
+  onStreamPortChange,
   extractRawFilePath,
   formatImageSource
 } from '../utils/urlUtils'
@@ -79,7 +79,7 @@ export function resolveCoverUrl({
   const effectivePath = trackPath || track?.filePath
   const effectiveSrc = src !== undefined ? src : track?.coverArt
   const effectiveHighRes = highResSrc !== undefined ? highResSrc : track?.coverArtHighRes
-  const port = (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
+  const port = streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
 
   // 1. Dạng dữ liệu nhúng trực tiếp (Data URL / Blob URL)
   if (effectiveSrc && (effectiveSrc.startsWith('data:') || effectiveSrc.startsWith('blob:'))) {
@@ -87,12 +87,12 @@ export function resolveCoverUrl({
   }
 
   // 2. Nhạc trực tuyến (YouTube Music, SoundCloud, v.v., không phải localhost/127.0.0.1)
-  const isExternalOnline = track?.isOnline || (
-    effectiveSrc && 
-    (effectiveSrc.startsWith('http://') || effectiveSrc.startsWith('https://')) &&
-    !effectiveSrc.includes('127.0.0.1') &&
-    !effectiveSrc.includes('localhost')
-  )
+  const isExternalOnline =
+    track?.isOnline ||
+    (effectiveSrc &&
+      (effectiveSrc.startsWith('http://') || effectiveSrc.startsWith('https://')) &&
+      !effectiveSrc.includes('127.0.0.1') &&
+      !effectiveSrc.includes('localhost'))
 
   if (isExternalOnline) {
     if (targetSize >= 500 && effectiveHighRes) {
@@ -105,11 +105,27 @@ export function resolveCoverUrl({
   const cleanPath = extractRawFilePath(effectivePath)
   const cleanSrc = extractRawFilePath(effectiveSrc)
 
+  // Trích xuất query parameter từ effectiveSrc (ví dụ ?t=123...) để cache bust
+  let tParam = ''
+  if (effectiveSrc && effectiveSrc.includes('?')) {
+    const rawQuery = effectiveSrc.split('?')[1]
+    if (rawQuery) {
+      tParam = `&${rawQuery}`
+    }
+  }
+
+  // Ưu tiên cao: Nếu cleanSrc là một tệp hình ảnh trực tiếp (ảnh bìa tùy chỉnh của playlist hoặc ảnh trên đĩa)
+  const isDirectImage = cleanSrc && /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(cleanSrc)
+  if (isDirectImage && port > 0) {
+    const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
+    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}${tParam}`
+  }
+
   // Ưu tiên 3a: Đối với ảnh nhỏ và thẻ lưới vừa (tier sm, md hoặc targetSize <= 256px), nếu đã có sẵn thumbnail (cleanSrc),
   // tải trực tiếp qua cleanSrc để tránh backend phải mở và phân tích file audio gốc 50MB!
   if (targetSize <= 256 && cleanSrc && port > 0) {
     const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
-    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}`
+    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}${tParam}`
   }
 
   // Ưu tiên 3b: Sử dụng effectivePath (file audio hoặc folder playlist) cho kích thước lớn hơn (>256px)
@@ -122,111 +138,162 @@ export function resolveCoverUrl({
   // Ưu tiên 3c: Fallback sử dụng cleanSrc cho kích thước lớn nếu không có cleanPath
   if (cleanSrc && port > 0) {
     const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
-    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}`
+    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}${tParam}`
   }
 
   // 4. Fallback an toàn: Không bao giờ trả về file:// hoặc đường dẫn ổ đĩa Windows trực tiếp
   // để tránh kích hoạt lỗi "Not allowed to load local resource" của Chromium
-  if (effectiveSrc && (effectiveSrc.startsWith('file://') || /^[a-zA-Z]:[\\/]/.test(effectiveSrc))) {
+  if (
+    effectiveSrc &&
+    (effectiveSrc.startsWith('file://') || /^[a-zA-Z]:[\\/]/.test(effectiveSrc))
+  ) {
     return null
   }
 
   return effectiveSrc || null
 }
 
-export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(({
-  track,
-  src,
-  highResSrc,
-  trackPath,
-  streamPort = 0,
-  tier = 'md',
-  size,
-  alt = 'Cover Art',
-  className = '',
-  imageClassName = '',
-  smartAspect = false,
-  animateSpin = false,
-  isPlaying = false,
-  isLite = false,
-  fallbackImageSrc = null,
-  fallbackIcon,
-  fallbackIconSize = 24,
-  loading = 'lazy',
-  decoding = 'async',
-  onClick,
-  style
-}) => {
-  const [hasError, setHasError] = useState(false)
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [currentPort, setCurrentPort] = useState<number>(() => {
-    return (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
-  })
-
-  useEffect(() => {
-    if (streamPort > 0) {
-      setCurrentPort(streamPort)
-      return
-    }
-    const unsub = onStreamPortChange((newPort) => {
-      setCurrentPort(newPort)
-    })
-    const syncPort = getGlobalStreamPort()
-    if (syncPort > 0 && syncPort !== currentPort) {
-      setCurrentPort(syncPort)
-    }
-    return unsub
-  }, [streamPort])
-
-  const resolvedUrl = useMemo(() => {
-    if (isLite) return null
-    return resolveCoverUrl({
-      track,
-      src,
-      highResSrc,
-      trackPath,
-      streamPort: currentPort,
-      tier,
-      size
-    })
-  }, [
-    isLite,
-    track?.id,
-    track?.filePath,
-    track?.coverArt,
-    track?.coverArtHighRes,
-    track?.isOnline,
+export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
+  ({
+    track,
     src,
     highResSrc,
     trackPath,
-    currentPort,
-    tier,
-    size
-  ])
+    streamPort = 0,
+    tier = 'md',
+    size,
+    alt = 'Cover Art',
+    className = '',
+    imageClassName = '',
+    smartAspect = false,
+    animateSpin = false,
+    isPlaying = false,
+    isLite = false,
+    fallbackImageSrc = null,
+    fallbackIcon,
+    fallbackIconSize = 24,
+    loading = 'lazy',
+    decoding = 'async',
+    onClick,
+    style
+  }) => {
+    const [hasError, setHasError] = useState(false)
+    const [isLoaded, setIsLoaded] = useState(false)
+    const [currentPort, setCurrentPort] = useState<number>(() => {
+      return streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
+    })
 
-  // Reset error state khi URL thay đổi
-  useEffect(() => {
-    setHasError(false)
-    setIsLoaded(false)
-  }, [resolvedUrl])
+    useEffect(() => {
+      if (streamPort > 0) {
+        setCurrentPort(streamPort)
+        return
+      }
+      const unsub = onStreamPortChange((newPort) => {
+        setCurrentPort(newPort)
+      })
+      const syncPort = getGlobalStreamPort()
+      if (syncPort > 0 && syncPort !== currentPort) {
+        setCurrentPort(syncPort)
+      }
+      return unsub
+    }, [streamPort])
 
-  // Khi ở chế độ Lite hoặc không có ảnh / bị lỗi tải ảnh
-  if (isLite || !resolvedUrl || hasError) {
-    if (fallbackImageSrc && !isLite) {
+    const resolvedUrl = useMemo(() => {
+      if (isLite) return null
+      return resolveCoverUrl({
+        track,
+        src,
+        highResSrc,
+        trackPath,
+        streamPort: currentPort,
+        tier,
+        size
+      })
+    }, [
+      isLite,
+      track?.id,
+      track?.filePath,
+      track?.coverArt,
+      track?.coverArtHighRes,
+      track?.isOnline,
+      src,
+      highResSrc,
+      trackPath,
+      currentPort,
+      tier,
+      size
+    ])
+
+    // Reset error state khi URL thay đổi
+    useEffect(() => {
+      setHasError(false)
+      setIsLoaded(false)
+    }, [resolvedUrl])
+
+    // Khi ở chế độ Lite hoặc không có ảnh / bị lỗi tải ảnh
+    if (isLite || !resolvedUrl || hasError) {
+      if (fallbackImageSrc && !isLite) {
+        return (
+          <div onClick={onClick} className={`relative overflow-hidden ${className}`} style={style}>
+            <img
+              loading={loading}
+              decoding={decoding}
+              src={fallbackImageSrc}
+              alt={alt}
+              className={`w-full h-full object-cover select-none pointer-events-none ${
+                animateSpin ? 'animate-spin-slow' : ''
+              } ${imageClassName}`}
+              style={
+                animateSpin
+                  ? {
+                      willChange: 'transform',
+                      animationPlayState: isPlaying ? 'running' : 'paused'
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        )
+      }
+
       return (
         <div
           onClick={onClick}
-          className={`relative overflow-hidden ${className}`}
+          className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700/60 to-zinc-900/60 text-zinc-500 select-none ${className}`}
           style={style}
         >
+          {fallbackIcon || <ListMusic size={fallbackIconSize} />}
+        </div>
+      )
+    }
+
+    // Trường hợp smartAspect: với ảnh YouTube 16:9, tạo lớp nền mờ + ảnh chính căn giữa giữ tỉ lệ
+    if (smartAspect) {
+      return (
+        <div
+          onClick={onClick}
+          className={`relative overflow-hidden flex items-center justify-center select-none ${className}`}
+          style={style}
+        >
+          {/* Ambient blurred backdrop lấp đầy khung hình */}
           <img
+            src={resolvedUrl}
+            aria-hidden="true"
             loading={loading}
             decoding={decoding}
-            src={fallbackImageSrc}
+            className="absolute inset-0 w-full h-full object-cover scale-125 blur-lg opacity-40 select-none pointer-events-none"
+          />
+          {/* Ảnh chính trọn vẹn không bị cắt xén hay méo tỉ lệ */}
+          <img
+            src={resolvedUrl}
             alt={alt}
-            className={`w-full h-full object-cover select-none pointer-events-none ${
-              animateSpin ? 'animate-spin-slow' : ''
-            } ${imageClassName}`}
+            loading={loading}
+            decoding={decoding}
+            onLoad={() => setIsLoaded(true)}
+            onError={() => setHasError(true)}
+            className={`relative z-10 max-w-full max-h-full object-contain pointer-events-none drop-shadow-sm transition-opacity duration-300 ${
+              isLoaded ? 'opacity-100' : 'opacity-0'
+            } ${animateSpin ? 'animate-spin-slow' : ''} ${imageClassName}`}
             style={
               animateSpin
                 ? { willChange: 'transform', animationPlayState: isPlaying ? 'running' : 'paused' }
@@ -237,34 +304,13 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(({
       )
     }
 
+    // Chế độ standard fill
     return (
       <div
         onClick={onClick}
-        className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700/60 to-zinc-900/60 text-zinc-500 select-none ${className}`}
+        className={`relative overflow-hidden select-none ${className}`}
         style={style}
       >
-        {fallbackIcon || <ListMusic size={fallbackIconSize} />}
-      </div>
-    )
-  }
-
-  // Trường hợp smartAspect: với ảnh YouTube 16:9, tạo lớp nền mờ + ảnh chính căn giữa giữ tỉ lệ
-  if (smartAspect) {
-    return (
-      <div
-        onClick={onClick}
-        className={`relative overflow-hidden flex items-center justify-center select-none ${className}`}
-        style={style}
-      >
-        {/* Ambient blurred backdrop lấp đầy khung hình */}
-        <img
-          src={resolvedUrl}
-          aria-hidden="true"
-          loading={loading}
-          decoding={decoding}
-          className="absolute inset-0 w-full h-full object-cover scale-125 blur-lg opacity-40 select-none pointer-events-none"
-        />
-        {/* Ảnh chính trọn vẹn không bị cắt xén hay méo tỉ lệ */}
         <img
           src={resolvedUrl}
           alt={alt}
@@ -272,8 +318,8 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(({
           decoding={decoding}
           onLoad={() => setIsLoaded(true)}
           onError={() => setHasError(true)}
-          className={`relative z-10 max-w-full max-h-full object-contain pointer-events-none drop-shadow-sm transition-opacity duration-300 ${
-            isLoaded ? 'opacity-100' : 'opacity-0'
+          className={`w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${
+            isLoaded ? 'opacity-100' : 'opacity-40'
           } ${animateSpin ? 'animate-spin-slow' : ''} ${imageClassName}`}
           style={
             animateSpin
@@ -284,33 +330,7 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(({
       </div>
     )
   }
-
-  // Chế độ standard fill
-  return (
-    <div
-      onClick={onClick}
-      className={`relative overflow-hidden select-none ${className}`}
-      style={style}
-    >
-      <img
-        src={resolvedUrl}
-        alt={alt}
-        loading={loading}
-        decoding={decoding}
-        onLoad={() => setIsLoaded(true)}
-        onError={() => setHasError(true)}
-        className={`w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${
-          isLoaded ? 'opacity-100' : 'opacity-40'
-        } ${animateSpin ? 'animate-spin-slow' : ''} ${imageClassName}`}
-        style={
-          animateSpin
-            ? { willChange: 'transform', animationPlayState: isPlaying ? 'running' : 'paused' }
-            : undefined
-        }
-      />
-    </div>
-  )
-})
+)
 
 DynamicCoverArt.displayName = 'DynamicCoverArt'
 
@@ -395,4 +415,3 @@ export const getDominantColor = (imageSrc: string, callback: (color: string) => 
   }
   img.src = targetSrc
 }
-

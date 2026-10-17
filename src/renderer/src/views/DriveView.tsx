@@ -6,6 +6,8 @@ import { useTranslation, useLanguage } from '../locales'
 interface DriveViewProps {
   loadLibrary: () => void
   processedLibraryTracks?: any[]
+  /** Stream All: đẩy cả folder Drive vào hàng đợi phát trực tuyến (KHÔNG động vào libraryTracks) */
+  onStreamAll?: (tracks: any[]) => void
   showAlert: (options: {
     title?: string
     message: string | React.ReactNode
@@ -14,7 +16,7 @@ interface DriveViewProps {
   }) => void
 }
 
-export function DriveView({ loadLibrary, processedLibraryTracks = [], showAlert }: DriveViewProps) {
+export function DriveView({ loadLibrary, processedLibraryTracks = [], onStreamAll, showAlert }: DriveViewProps) {
   const { t } = useTranslation()
   const { language } = useLanguage()
 
@@ -31,7 +33,7 @@ export function DriveView({ loadLibrary, processedLibraryTracks = [], showAlert 
     setDownloadProgress
   } = useSettingsStore()
 
-  const { libraryPath, setLibraryTracks, searchQuery } = useLibraryStore()
+  const { libraryPath, searchQuery } = useLibraryStore()
   const showToast = useUIStore((s) => s.showToast)
 
   const handleDriveSubmit = async () => {
@@ -77,8 +79,16 @@ export function DriveView({ loadLibrary, processedLibraryTracks = [], showAlert 
   }
 
   const handleDriveStream = () => {
-    setLibraryTracks((prev) => [...prev, ...driveFiles])
-    showToast(t('toasts.tracksAddedToPlaylist', { count: driveFiles.length }), 'success')
+    if (driveFiles.length === 0) return
+    // KHÔNG nối tạm file Drive vào libraryTracks — chỉ đẩy vào hàng đợi phát trực tuyến,
+    // giữ thư viện chính sạch (không còn bài "ma" khi quét lại hoặc danh sách thư mục khác nhau)
+    onStreamAll?.(driveFiles)
+    showToast(
+      language === 'vi'
+        ? `Đang phát trực tuyến ${driveFiles.length} tệp từ Google Drive...`
+        : `Streaming ${driveFiles.length} files from Google Drive...`,
+      'success'
+    )
   }
 
   const handleDriveDownload = async () => {

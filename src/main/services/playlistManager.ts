@@ -93,14 +93,17 @@ export function createUserPlaylist(
     createdAt: Date.now(),
     updatedAt: Date.now()
   }
+  ;(newPlaylist as any).tracks = []
+  ;(newPlaylist as any).coverArt = thumbnail || null
   playlists.unshift(newPlaylist)
   saveUserPlaylists(playlists)
   return { success: true, playlist: newPlaylist, playlists }
 }
 
-export function deleteUserPlaylist(
-  playlistId: string
-): { success: boolean; playlists: UserPlaylist[] } {
+export function deleteUserPlaylist(playlistId: string): {
+  success: boolean
+  playlists: UserPlaylist[]
+} {
   let playlists = getUserPlaylists()
   playlists = playlists.filter((p) => p.id !== playlistId)
   sqliteStorage.deleteUserPlaylist(playlistId)
@@ -148,22 +151,53 @@ export function updateUserPlaylist(
     target.description = updates.description.trim()
   }
 
+  const playlistHash = crypto
+    .createHash('md5')
+    .update('user_pl_' + playlistId)
+    .digest('hex')
+
   if (updates.customImagePath) {
-    const playlistHash = crypto
-      .createHash('md5')
-      .update('user_pl_' + playlistId)
-      .digest('hex')
-    const plCentralThumbPath = join(IMAGE_CACHE_DIR, `upl_${playlistHash}.jpg`)
+    try {
+      if (fs.existsSync(IMAGE_CACHE_DIR)) {
+        const files = fs.readdirSync(IMAGE_CACHE_DIR)
+        for (const file of files) {
+          if (file.startsWith(`upl_${playlistHash}`)) {
+            try {
+              fs.unlinkSync(join(IMAGE_CACHE_DIR, file))
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+
+    const plCentralThumbPath = join(IMAGE_CACHE_DIR, `upl_${playlistHash}_${Date.now()}.jpg`)
     try {
       const img = nativeImage.createFromPath(updates.customImagePath)
       const resized = img.resize({ width: 300, height: 300, quality: 'good' })
       fs.writeFileSync(plCentralThumbPath, resized.toJPEG(85))
       target.thumbnail = `${pathToFileURL(plCentralThumbPath).href}?t=${Date.now()}`
+      ;(target as any).coverArt = target.thumbnail
     } catch (e) {
       target.thumbnail = `${pathToFileURL(updates.customImagePath).href}?t=${Date.now()}`
+      ;(target as any).coverArt = target.thumbnail
     }
   } else if (updates.thumbnail !== undefined) {
     target.thumbnail = updates.thumbnail
+    ;(target as any).coverArt = updates.thumbnail
+    if (!updates.thumbnail) {
+      try {
+        if (fs.existsSync(IMAGE_CACHE_DIR)) {
+          const files = fs.readdirSync(IMAGE_CACHE_DIR)
+          for (const file of files) {
+            if (file.startsWith(`upl_${playlistHash}`)) {
+              try {
+                fs.unlinkSync(join(IMAGE_CACHE_DIR, file))
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+    }
   }
 
   target.updatedAt = Date.now()
@@ -181,11 +215,22 @@ export function addTracksToUserPlaylist(
   const playlists = getUserPlaylists()
   const target = playlists.find((p) => p.id === playlistId)
   if (target) {
-    const set = new Set(target.trackIds)
+    const existingIds = target.trackIds || (target as any).tracks || []
+    const existingNorm = new Set(
+      existingIds.map((id: string) => String(id).replace(/\\/g, '/').toLowerCase())
+    )
+    const newTrackIds = [...existingIds]
     for (const tp of trackPaths) {
-      if (tp) set.add(tp)
+      if (tp) {
+        const norm = String(tp).replace(/\\/g, '/').toLowerCase()
+        if (!existingNorm.has(norm)) {
+          existingNorm.add(norm)
+          newTrackIds.push(tp)
+        }
+      }
     }
-    target.trackIds = Array.from(set)
+    target.trackIds = newTrackIds
+    ;(target as any).tracks = newTrackIds
     target.updatedAt = Date.now()
     saveUserPlaylists(playlists)
     return { success: true, playlist: target, playlists }
@@ -200,7 +245,14 @@ export function removeTrackFromUserPlaylist(
   const playlists = getUserPlaylists()
   const target = playlists.find((p) => p.id === playlistId)
   if (target) {
-    target.trackIds = target.trackIds.filter((id) => id !== trackPath)
+    const normTarget = (trackPath || '').replace(/\\/g, '/').toLowerCase()
+    const currentIds = target.trackIds || (target as any).tracks || []
+    const updatedIds = currentIds.filter(
+      (id: string) =>
+        id !== trackPath && String(id).replace(/\\/g, '/').toLowerCase() !== normTarget
+    )
+    target.trackIds = updatedIds
+    ;(target as any).tracks = updatedIds
     target.updatedAt = Date.now()
     saveUserPlaylists(playlists)
     return { success: true, playlist: target, playlists }
@@ -216,6 +268,7 @@ export function reorderUserPlaylistTracks(
   const target = playlists.find((p) => p.id === playlistId)
   if (target) {
     target.trackIds = trackIds
+    ;(target as any).tracks = trackIds
     target.updatedAt = Date.now()
     saveUserPlaylists(playlists)
     return { success: true, playlist: target, playlists }
@@ -333,7 +386,11 @@ export function addTrackToPlaylist(
       return { success: false, error: 'Chưa cấu hình thư viện!' }
     }
     const safePlaylistName = sanitizeDirectoryName(playlistName)
-    if (!safePlaylistName || safePlaylistName === 'Untitled' || !isValidPlaylistName(safePlaylistName)) {
+    if (
+      !safePlaylistName ||
+      safePlaylistName === 'Untitled' ||
+      !isValidPlaylistName(safePlaylistName)
+    ) {
       return { success: false, error: 'Tên playlist không hợp lệ!' }
     }
     const resolvedRoot = path.resolve(rootPath)
@@ -563,10 +620,7 @@ export async function extractPlaylistThumbnail(
 
   try {
     const supportedExts = SUPPORTED_AUDIO_EXTS
-    const allAudioFiles = await getAudioFilesInDirectoryRecursiveAsync(
-      playlistPath,
-      supportedExts
-    )
+    const allAudioFiles = await getAudioFilesInDirectoryRecursiveAsync(playlistPath, supportedExts)
 
     const firstTrack = allAudioFiles[0]
     if (!firstTrack) {
@@ -679,22 +733,163 @@ export async function autoGeneratePlaylists(): Promise<{
   return { success: true, movedCount }
 }
 
+/**
+ * Kiểm tra file .cue có thực sự tham chiếu (dòng FILE) tới file audio đang xóa không.
+ * An toàn với cue album đa file (một .cue chứa nhiều FILE = nhiều file audio riêng):
+ * khi xóa 1 file audio, .cue vẫn có thể đang phục vụ các file audio khác => không được
+ * bẫy nhầm .cue vào thùng rác. Nếu .cue không đọc được nội dung thì trả về true
+ * (giữ hành vi cũ: xóa luôn để không để lại .cue mồ côi).
+ */
+function cueReferencesAudio(cueFile: string, audioFile: string): boolean {
+  try {
+    let text: string
+    try {
+      text = fs.readFileSync(cueFile, 'utf-8')
+    } catch {
+      // .cue không đọc được (rỗng/quyền hạn/IO) -> giữ hành vi cũ
+      return true
+    }
+    const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase()
+    const audioNorm = norm(path.normalize(audioFile))
+    const cueDir = path.dirname(cueFile)
+    const fileLineRe = /^\s*FILE\s+(?:"([^"]*)"|(\S+))\s+\S+/i
+    for (const line of text.split(/\r?\n/)) {
+      const m = line.match(fileLineRe)
+      if (!m) continue
+      let target = (m[1] !== undefined ? m[1] : m[2] || '').trim()
+      if (!target) continue
+      target = target.replace(/\\/g, '/')
+      try {
+        if (!path.isAbsolute(target)) target = path.resolve(cueDir, target)
+      } catch {
+        /* ignore */
+      }
+      if (norm(path.normalize(target)) === audioNorm) return true
+    }
+    // .cue đọc được nhưng không có dòng FILE nào khớp -> không phải của file này
+    return false
+  } catch {
+    return false
+  }
+}
+
 export async function deleteTrack(
   trackPath: string,
   _deletePermanently: boolean = false
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    let cleanPath = trackPath
-    const isCueTrack = cleanPath.includes('#track-')
-    if (isCueTrack) {
-      cleanPath = cleanPath.split('#track-')[0]
+    if (!trackPath) return { success: false, error: 'Không có đường dẫn bài hát' }
+
+    // ----- Xác định track ảo CUE Sheet (id hay là 1 file URL + "#track-N" như libraryScanner tạo) -----
+    const cueIdx = trackPath.indexOf('#track-')
+    const isCueTrack = cueIdx !== -1
+    const baseNoFrag = isCueTrack ? trackPath.slice(0, cueIdx) : trackPath
+    const cueSuffix = isCueTrack ? trackPath.slice(cueIdx) : '' // vd: "#track-3"
+
+    let rawPath = baseNoFrag.replace(/^file:\/\/\/?/, '')
+    if (isCueTrack || /^file:\/\//i.test(baseNoFrag)) {
+      try {
+        rawPath = decodeURIComponent(rawPath)
+      } catch {
+        /* giữ nguyên nếu decode thất bại */
+      }
     }
-    let rawPath = cleanPath.replace(/^file:\/\/\/?/, '')
     if (process.platform === 'win32') {
-      rawPath = decodeURIComponent(rawPath)
       if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
       rawPath = rawPath.replace(/\//g, '\\')
     }
+
+    // ======================================================
+    // TRACK ẢO CUE SHEET: TUYỆT ĐỐI KHÔNG ĐỤNG VÀO FILE VẬT LÝ (trừ khi là track cuối cùng)
+    // ======================================================
+    if (isCueTrack) {
+      // 1) Xóa chính xác entry ảo này khỏi SQLite (không khai triển path bỏ fragment,
+      //    không lọc library_cache theo file_path dùng chung -> không lệch các track anh em)
+      sqliteStorage.removeCueTrackFromLibrary(trackPath)
+
+      let filesDeleted = false
+      const audioExists = fs.existsSync(rawPath)
+      if (audioExists) {
+        // 2) Chỉ chạm vào file khi track này là track CUỐI CÙNG của album
+        const remainingSiblings = sqliteStorage.countOtherCueSiblingsForAudio(rawPath)
+        if (remainingSiblings === 0) {
+          try {
+            await shell.trashItem(rawPath)
+          } catch (_err) {
+            try {
+              fs.unlinkSync(rawPath)
+            } catch (e) {}
+          }
+
+          const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
+          if (fs.existsSync(lrcPath)) {
+            try {
+              await shell.trashItem(lrcPath)
+            } catch {
+              try {
+                fs.unlinkSync(lrcPath)
+              } catch {}
+            }
+          }
+
+          // .cue chỉ bị bẫy khi: thật sự tham chiếu file audio này VÀ không còn
+          // track CUE nào khác (đến từ file audio khác trong cue đa file) dùng nó
+          const cuePath = rawPath.replace(/\.[^/.]+$/, '.cue')
+          if (fs.existsSync(cuePath) && cueReferencesAudio(cuePath, rawPath)) {
+            const otherCueUsers = sqliteStorage.countCueTracksUsingCueFile(cuePath, rawPath)
+            if (otherCueUsers === 0) {
+              try {
+                await shell.trashItem(cuePath)
+              } catch {
+                try {
+                  fs.unlinkSync(cuePath)
+                } catch {}
+              }
+            }
+          }
+          filesDeleted = true
+        }
+        // remainingSiblings > 0 hoặc -1: còn track anh em -> giữ nguyên mọi file vật lý
+      }
+
+      if (filesDeleted) {
+        // 3) Dọn sạch mọi record SQLite trỏ về file audio này (chống ghost entries)
+        sqliteStorage.removeLibraryTracks([trackPath, baseNoFrag, rawPath])
+      }
+
+      // 4) Cache trong bộ nhớ: chỉ gỡ các key của track ảo này;
+      //    KHÔNG gỡ key của file gốc (vẫn hợp lệ cho các track anh em)
+      const keysToClear = new Set<string>(
+        [trackPath, `${rawPath}${cueSuffix}`, `${rawPath.replace(/\\/g, '/')}${cueSuffix}`].filter(
+          Boolean
+        ) as string[]
+      )
+      try {
+        keysToClear.add(`${pathToFileURL(rawPath).href}${cueSuffix}`)
+      } catch {
+        /* ignore */
+      }
+      if (filesDeleted) {
+        keysToClear.add(rawPath)
+        keysToClear.add(baseNoFrag)
+      }
+      for (const k of keysToClear) {
+        if (!k) continue
+        delete metadataCache[k]
+        delete themeColorsCache[k]
+        dirtyMetadataKeys.delete(k)
+        dirtyThemeColorKeys.delete(k)
+      }
+      saveMetadataCache()
+      saveThemeColorsCache()
+
+      return { success: true }
+    }
+
+    // ======================================================
+    // FILE VẬT LÝ (track thường): giữ nguyên hành vi cũ
+    // ======================================================
+    const cuePath = rawPath.replace(/\.[^/.]+$/, '.cue')
 
     if (fs.existsSync(rawPath)) {
       try {
@@ -715,9 +910,13 @@ export async function deleteTrack(
           } catch {}
         }
       }
+    }
 
-      const cuePath = rawPath.replace(/\.[^/.]+$/, '.cue')
-      if (fs.existsSync(cuePath)) {
+    // .cue chỉ bị bẫy khi nó thực sự tham chiếu file audio này và không còn
+    // track CUE nào khác dùng chung (cue đa file có nhiều FILE cùng 1 .cue)
+    if (fs.existsSync(cuePath) && cueReferencesAudio(cuePath, rawPath)) {
+      const otherCueUsers = sqliteStorage.countCueTracksUsingCueFile(cuePath, rawPath)
+      if (otherCueUsers === 0) {
         try {
           await shell.trashItem(cuePath)
         } catch {
@@ -728,19 +927,20 @@ export async function deleteTrack(
       }
     }
 
-    sqliteStorage.removeLibraryTracks([trackPath, cleanPath, rawPath])
+    // Dọn mọi record SQLite trỏ về file audio (gồm track CUE ảo chưa dọn -> chống ghost)
+    sqliteStorage.removeLibraryTracks([trackPath, baseNoFrag, rawPath])
 
     delete metadataCache[rawPath]
-    delete metadataCache[cleanPath]
+    delete metadataCache[baseNoFrag]
     delete metadataCache[trackPath]
     delete themeColorsCache[rawPath]
-    delete themeColorsCache[cleanPath]
+    delete themeColorsCache[baseNoFrag]
     delete themeColorsCache[trackPath]
     dirtyMetadataKeys.delete(rawPath)
-    dirtyMetadataKeys.delete(cleanPath)
+    dirtyMetadataKeys.delete(baseNoFrag)
     dirtyMetadataKeys.delete(trackPath)
     dirtyThemeColorKeys.delete(rawPath)
-    dirtyThemeColorKeys.delete(cleanPath)
+    dirtyThemeColorKeys.delete(baseNoFrag)
     dirtyThemeColorKeys.delete(trackPath)
     saveMetadataCache()
     saveThemeColorsCache()
@@ -844,14 +1044,30 @@ export function registerPlaylistManagerIpc(): void {
           .createHash('md5')
           .update('user_pl_' + playlistId)
           .digest('hex')
-        const plCentralThumbPath = join(IMAGE_CACHE_DIR, `upl_${playlistHash}.jpg`)
+
+        try {
+          if (fs.existsSync(IMAGE_CACHE_DIR)) {
+            const files = fs.readdirSync(IMAGE_CACHE_DIR)
+            for (const file of files) {
+              if (file.startsWith(`upl_${playlistHash}`)) {
+                try {
+                  fs.unlinkSync(join(IMAGE_CACHE_DIR, file))
+                } catch (_) {}
+              }
+            }
+          }
+        } catch (_) {}
+
+        const plCentralThumbPath = join(IMAGE_CACHE_DIR, `upl_${playlistHash}_${Date.now()}.jpg`)
         try {
           const img = nativeImage.createFromPath(imagePath)
-          const resized = img.resize({ width: 200, height: 200, quality: 'good' })
-          fs.writeFileSync(plCentralThumbPath, resized.toJPEG(80))
+          const resized = img.resize({ width: 300, height: 300, quality: 'good' })
+          fs.writeFileSync(plCentralThumbPath, resized.toJPEG(85))
           target.thumbnail = `${pathToFileURL(plCentralThumbPath).href}?t=${Date.now()}`
+          ;(target as any).coverArt = target.thumbnail
         } catch (e) {
           target.thumbnail = `${pathToFileURL(imagePath).href}?t=${Date.now()}`
+          ;(target as any).coverArt = target.thumbnail
         }
         target.updatedAt = Date.now()
         saveUserPlaylists(playlists)

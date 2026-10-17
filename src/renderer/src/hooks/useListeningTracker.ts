@@ -11,6 +11,29 @@ interface ActiveListeningSession {
   savedSec: number
   eventId: number | null
   lastTick: number
+  /**
+   * Hàng đợi tuần tự hóa các IPC ghi DB cho phiên này.
+   * Lần flush sau luôn đợi IPC trước hoàn tất -> chống chèn trùng (duplicate insert)
+   * khi Pause / chuyển bài xảy ra đúng lúc IPC recordPlayEvent đang xử lý.
+   */
+  syncQueue: Promise<void>
+  /** Đang có IPC ghi DB của phiên này đang chạy (chặn flush spam trong heartbeat) */
+  syncing: boolean
+}
+
+/**
+ * Khóa định danh duy nhất của track.
+ * LƯU Ý: các bài trong cùng một CUE Sheet dùng CHUNG filePath (file audio gốc)
+ * và chỉ phân biệt nhau bằng id (`file://...#track-N`) cùng startTime —
+ * vì vậy KHÔNG ĐƯỢC so sánh bằng `filePath || id` (sẽ coi cả album CUE là 1 bài).
+ */
+const getTrackKey = (track: any): string => {
+  if (!track) return ''
+  const base = String(track.id || track.filePath || track.path || '')
+  if (track.isCueTrack || track.cueFilePath || track.startTime != null) {
+    return `${base}|cue|${track.startTime ?? ''}|${track.endTime ?? ''}`
+  }
+  return base
 }
 
 /**
@@ -41,54 +64,76 @@ export function useListeningTracker(): void {
     return Math.min(5, (duration || 10) * 0.5)
   }, [])
 
-  // Hàm đồng bộ thời gian nghe hiện tại vào SQLite
+  // Hàm đồng bộ thời gian nghe hiện tại vào SQLite.
+  // Các IPC ghi (recordPlayEvent / updatePlayEventDuration) được TUẦN TỰ HÓA theo từng phiên
+  // qua hàng đợi session.syncQueue: flush nào cũng đợi IPC trước của phiên đó hoàn tất
+  // rồi mới chạy và tính thời lượng MỚI NHẤT ngay lúc ghi (không phải lúc xếp hàng).
+  // Nhờ vậy, Pause / chuyển bài xảy ra đúng lúc IPC đang xử lý sẽ trở thành UPDATE
+  // bản ghi đã chèn thay vì chèn thêm bản ghi trùng.
   const flushSession = useCallback(
-    async (session: ActiveListeningSession | null) => {
-      if (!session || !session.track) return
-      const threshold = getMinThreshold(session.track.duration)
-      const roundedDur = Math.round(session.listenedSec)
+    (session: ActiveListeningSession | null): Promise<void> => {
+      // Gán vào hằng cục bộ để giữ narrowing kiểu bên trong closure
+      const sess = session
+      if (!sess || !sess.track) return Promise.resolve()
 
-      // Nếu chưa đạt ngưỡng tối thiểu: bỏ qua (skip nhanh)
-      if (roundedDur < threshold) return
+      const runSync = async (): Promise<void> => {
+        try {
+          const threshold = getMinThreshold(sess.track.duration)
+          // Tính thời lượng lúc THỰC SỰ ghi = giá trị mới nhất (mọi việc trước đó đã hoàn tất)
+          const roundedDur = Math.round(sess.listenedSec)
 
-      const filePath = session.track.filePath || session.track.id || ''
+          // Nếu chưa đạt ngưỡng tối thiểu: bỏ qua (skip nhanh)
+          if (roundedDur < threshold) return
 
-      try {
-        if (session.eventId && session.eventId > 0) {
-          // Bản ghi đã tồn tại trong SQLite, cập nhật thời lượng thực tế
-          if (roundedDur > session.savedSec) {
-            await window.api?.updatePlayEventDuration?.({
-              eventId: session.eventId,
+          const filePath = sess.track.filePath || sess.track.id || ''
+          // Đánh dấu IPC đang bay TRƯỚC khi await để các nhịp heartbeat
+          // và các lần flush khác thấy được trạng thái này
+          sess.syncing = true
+
+          if (sess.eventId && sess.eventId > 0) {
+            // Bản ghi đã tồn tại trong SQLite, cập nhật thời lượng thực tế
+            if (roundedDur > sess.savedSec) {
+              await window.api?.updatePlayEventDuration?.({
+                eventId: sess.eventId,
+                durationSec: roundedDur,
+                filePath
+              })
+              sess.savedSec = roundedDur
+            }
+          } else {
+            // Chưa tạo bản ghi trong SQLite, tạo mới với thời lượng thực tế đã nghe
+            // (luôn chạy sau IPC trước đã hoàn tất => không bao giờ chèn 2 lần cho 1 phiên)
+            const res = await window.api?.recordPlayEvent?.({
+              filePath,
+              title: sess.track.title,
+              artist: sess.track.artist,
+              album: sess.track.album,
+              genre: sess.track.genre,
+              format: sess.track.format,
+              sampleRate: sess.track.sampleRate,
+              bitDepth: sess.track.bitDepth,
+              isLossless: sess.track.lossless,
+              isDsd: isDsdTrack(sess.track),
               durationSec: roundedDur,
-              filePath
+              playedAt: sess.playedAt,
+              audioMode: sess.audioMode
             })
-            session.savedSec = roundedDur
+            if (res && res.eventId) {
+              sess.eventId = res.eventId
+              sess.savedSec = roundedDur
+            }
           }
-        } else {
-          // Chưa tạo bản ghi trong SQLite, tạo mới với thời lượng thực tế đã nghe
-          const res = await window.api?.recordPlayEvent?.({
-            filePath,
-            title: session.track.title,
-            artist: session.track.artist,
-            album: session.track.album,
-            genre: session.track.genre,
-            format: session.track.format,
-            sampleRate: session.track.sampleRate,
-            bitDepth: session.track.bitDepth,
-            isLossless: session.track.lossless,
-            isDsd: isDsdTrack(session.track),
-            durationSec: roundedDur,
-            playedAt: session.playedAt,
-            audioMode: session.audioMode
-          })
-          if (res && res.eventId) {
-            session.eventId = res.eventId
-            session.savedSec = roundedDur
-          }
+        } catch (err) {
+          console.warn('[useListeningTracker] Failed to flush listening session:', err)
+        } finally {
+          sess.syncing = false
         }
-      } catch (err) {
-        console.warn('[useListeningTracker] Failed to flush listening session:', err)
       }
+
+      // Xếp hàng đợi sau IPC trước đó của phiên này
+      const task = sess.syncQueue.then(runSync)
+      sess.syncQueue = task.catch(() => undefined)
+      return task
     },
     [getMinThreshold]
   )
@@ -96,13 +141,14 @@ export function useListeningTracker(): void {
   // 1. Quản lý vòng đời phiên phát khi currentTrack thay đổi
   useEffect(() => {
     const prevSession = sessionRef.current
-    const newPath = currentTrack?.filePath || currentTrack?.id
+    const newKey = getTrackKey(currentTrack)
 
     if (prevSession) {
-      const prevPath = prevSession.track?.filePath || prevSession.track?.id
-      // Nếu đổi sang bài khác, flush phiên cũ và khởi tạo phiên mới
-      if (prevPath !== newPath) {
-        flushSession(prevSession)
+      const prevKey = getTrackKey(prevSession.track)
+      // Nếu đổi sang bài khác (kể cả bài kế tiếp trong cùng CUE Sheet):
+      // flush phiên cũ và khởi tạo phiên mới
+      if (prevKey !== newKey) {
+        void flushSession(prevSession)
         sessionRef.current = null
       }
     }
@@ -112,14 +158,14 @@ export function useListeningTracker(): void {
         sessionRef.current = {
           track: currentTrack,
           audioMode:
-            bitPerfectEnabled || isDsdTrack(currentTrack)
-              ? bitPerfectType || 'bass'
-              : 'webaudio',
+            bitPerfectEnabled || isDsdTrack(currentTrack) ? bitPerfectType || 'bass' : 'webaudio',
           playedAt: Date.now(),
           listenedSec: 0,
           savedSec: 0,
           eventId: null,
-          lastTick: Date.now()
+          lastTick: Date.now(),
+          syncQueue: Promise.resolve(),
+          syncing: false
         }
       }
     } else {
@@ -142,14 +188,14 @@ export function useListeningTracker(): void {
         sessionRef.current = {
           track: currentTrack,
           audioMode:
-            bitPerfectEnabled || isDsdTrack(currentTrack)
-              ? bitPerfectType || 'bass'
-              : 'webaudio',
+            bitPerfectEnabled || isDsdTrack(currentTrack) ? bitPerfectType || 'bass' : 'webaudio',
           playedAt: Date.now(),
           listenedSec: 0,
           savedSec: 0,
           eventId: null,
-          lastTick: Date.now()
+          lastTick: Date.now(),
+          syncQueue: Promise.resolve(),
+          syncing: false
         }
       }
     }
@@ -190,65 +236,25 @@ export function useListeningTracker(): void {
 
         const threshold = getMinThreshold(session.track?.duration)
 
-        // TH1: Vừa đạt ngưỡng nghe tối thiểu mà chưa có bản ghi DB -> tạo mới
-        if (session.listenedSec >= threshold && !session.eventId) {
-          const roundedDur = Math.round(session.listenedSec)
-          const track = session.track
-          const filePath = track.filePath || track.id || ''
-
-          window.api?.recordPlayEvent?.({
-            filePath,
-            title: track.title,
-            artist: track.artist,
-            album: track.album,
-            genre: track.genre,
-            format: track.format,
-            sampleRate: track.sampleRate,
-            bitDepth: track.bitDepth,
-            isLossless: track.lossless,
-            isDsd: isDsdTrack(track),
-            durationSec: roundedDur,
-            playedAt: session.playedAt,
-            audioMode: session.audioMode
-          })
-            .then((res) => {
-              if (res && res.eventId) {
-                if (sessionRef.current && sessionRef.current.playedAt === session.playedAt) {
-                  sessionRef.current.eventId = res.eventId
-                  sessionRef.current.savedSec = roundedDur
-                }
-              }
-            })
-            .catch((err) => {
-              console.warn('[useListeningTracker] Periodic recordPlayEvent failed:', err)
-            })
+        // TH1: Vừa đạt ngưỡng nghe tối thiểu mà chưa có bản ghi DB -> tạo mới.
+        // Không gọi recordPlayEvent trực tiếp: đi qua hàng đợi flushSession của phiên
+        // và bỏ qua nếu IPC trước (insert/update) đang xử lý -> không chèn trùng.
+        if (session.listenedSec >= threshold && !session.eventId && !session.syncing) {
+          void flushSession(session)
         }
         // TH2: Đã có bản ghi DB -> đồng bộ định kỳ mỗi khi nghe thêm >= 5 giây
-        else if (session.eventId && session.listenedSec - session.savedSec >= 5) {
-          const roundedDur = Math.round(session.listenedSec)
-          if (roundedDur > session.savedSec) {
-            const eventId = session.eventId
-            const filePath = session.track?.filePath || session.track?.id
-            window.api?.updatePlayEventDuration?.({
-              eventId,
-              durationSec: roundedDur,
-              filePath
-            })
-              .then(() => {
-                if (sessionRef.current && sessionRef.current.eventId === eventId) {
-                  sessionRef.current.savedSec = roundedDur
-                }
-              })
-              .catch((err) => {
-                console.warn('[useListeningTracker] Periodic updatePlayEventDuration failed:', err)
-              })
-          }
+        else if (
+          session.eventId &&
+          !session.syncing &&
+          session.listenedSec - session.savedSec >= 5
+        ) {
+          void flushSession(session)
         }
       }
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [isPlaying, currentTrack, getMinThreshold])
+  }, [isPlaying, currentTrack, getMinThreshold, flushSession])
 
   // 5. Lưu phiên an toàn khi tắt / reload ứng dụng (beforeunload)
   useEffect(() => {

@@ -5,6 +5,63 @@ import { useLibraryStore } from '../../stores/libraryStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useAudioStore } from '../../stores/audioStore'
 
+// Chuẩn hóa danh sách bài hát của playlist: hỗ trợ cả `trackIds` lẫn `tracks`.
+// Item có thể là string (id/filePath) hoặc object track đầy đủ; key tra cứu
+// được so khớp ở cả 2 dạng dấu \ và / giống useLibraryOperations.
+const resolvePlaylistTracks = (pl: any, libraryTracks: any[]): any[] => {
+  const rawItems = Array.isArray(pl?.trackIds)
+    ? pl.trackIds
+    : Array.isArray(pl?.tracks)
+      ? pl.tracks
+      : []
+  if (!rawItems || rawItems.length === 0) return []
+
+  // Map tra cứu bài trong thư viện theo id/filePath
+  const libraryMap = new Map<string, any>()
+  for (const t of libraryTracks) {
+    if (t.id) {
+      libraryMap.set(t.id, t)
+      libraryMap.set(String(t.id).replace(/\\/g, '/'), t)
+      libraryMap.set(String(t.id).replace(/\//g, '\\'), t)
+    }
+    if (t.filePath) {
+      libraryMap.set(t.filePath, t)
+      libraryMap.set(String(t.filePath).replace(/\\/g, '/'), t)
+      libraryMap.set(String(t.filePath).replace(/\//g, '\\'), t)
+    }
+  }
+
+  const seen = new Set<string>()
+  const resolved: any[] = []
+  for (const item of rawItems) {
+    const trackKey = typeof item === 'string' ? item : item?.id || item?.filePath
+    if (!trackKey) continue
+    const key = String(trackKey).replace(/\\/g, '/')
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const found =
+      libraryMap.get(trackKey) ||
+      libraryMap.get(key) ||
+      libraryMap.get(String(trackKey).replace(/\//g, '\\'))
+    if (found) {
+      resolved.push(found)
+    } else if (typeof item === 'object' && item.title) {
+      resolved.push(item)
+    } else {
+      // Bài ngoài thư viện vẫn xuất đường dẫn gốc để phần mềm khác mở được
+      const fileName = String(trackKey).split('/').pop()?.split('\\').pop() || trackKey
+      resolved.push({
+        id: trackKey,
+        filePath: trackKey,
+        title: fileName.replace(/\.[^/.]+$/, ''),
+        artist: 'Unknown Artist'
+      })
+    }
+  }
+  return resolved
+}
+
 export const BackupModal: React.FC = () => {
   const show = useUIStore((s) => s.showBackupModal)
   const setShow = useUIStore((s) => s.setShowBackupModal)
@@ -27,8 +84,11 @@ export const BackupModal: React.FC = () => {
       return
     }
 
-    const trackIdSet = new Set(pl.trackIds || [])
-    const tracksToExport = libraryTracks.filter(t => trackIdSet.has(t.id || t.filePath))
+    const tracksToExport = resolvePlaylistTracks(pl, libraryTracks)
+    if (tracksToExport.length === 0) {
+      showToast(`Danh sách "${pl.name}" không có bài hát nào để xuất (.m3u8)`, 'error')
+      return
+    }
 
     let m3uContent = '#EXTM3U\n'
     m3uContent += `#PLAYLIST:${pl.name}\n\n`
@@ -50,7 +110,7 @@ export const BackupModal: React.FC = () => {
     a.click()
     URL.revokeObjectURL(url)
 
-    showToast(`Đã xuất danh sách "${pl.name}" sang tệp .m3u8 thành công`, 'success')
+    showToast(`Đã xuất danh sách "${pl.name}" (${tracksToExport.length} bài) sang tệp .m3u8 thành công`, 'success')
   }
 
   // 2. Nhập Playlist từ .m3u8
@@ -144,8 +204,18 @@ export const BackupModal: React.FC = () => {
             const existing = userPlaylists.find(p => p.id === pl.id)
             if (!existing) {
               const created = await window.api.createUserPlaylist(pl.name, pl.description, pl.thumbnail)
-              if (created && pl.trackIds) {
-                await window.api.addTracksToUserPlaylist(created.id, pl.trackIds)
+              if (created) {
+                // Fallback: bản sao lưu cũ có thể chỉ chứa `tracks` thay vì `trackIds`
+                const trackIds = Array.isArray(pl.trackIds)
+                  ? pl.trackIds
+                  : Array.isArray(pl.tracks)
+                    ? pl.tracks
+                        .map((tr: any) => (typeof tr === 'string' ? tr : tr?.id || tr?.filePath))
+                        .filter(Boolean)
+                    : []
+                if (trackIds.length > 0) {
+                  await window.api.addTracksToUserPlaylist(created.id, trackIds)
+                }
               }
             }
           }
@@ -218,7 +288,7 @@ export const BackupModal: React.FC = () => {
                   <option value="">Chưa có Playlist người dùng nào</option>
                 ) : (
                   userPlaylists.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.trackIds?.length || 0} bài)</option>
+                    <option key={p.id} value={p.id}>{p.name} ({p.trackIds?.length || p.tracks?.length || 0} bài)</option>
                   ))
                 )}
               </select>

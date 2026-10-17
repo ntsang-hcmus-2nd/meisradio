@@ -7,7 +7,15 @@ interface EditPlaylistModalProps {
   isOpen: boolean
   playlist: any | null
   onClose: () => void
-  onSave: (playlistId: string, updates: { name: string; description: string; thumbnail?: string | null; customImagePath?: string }) => Promise<void> | void
+  onSave: (
+    playlistId: string,
+    updates: {
+      name: string
+      description: string
+      thumbnail?: string | null
+      customImagePath?: string
+    }
+  ) => Promise<void> | void
 }
 
 export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
@@ -99,22 +107,30 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
               {t('modals.editPlaylist.coverLabel')}
             </label>
             <div className="flex items-center gap-5">
-              <div 
+              <div
                 onClick={handlePickImage}
                 className="w-28 h-28 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-theme-10 overflow-hidden relative group cursor-pointer flex items-center justify-center shrink-0 shadow-md transition"
                 title={t('modals.editPlaylist.chooseImage')}
               >
                 {previewUrl ? (
-                  <img src={formatImageSource(previewUrl)} alt="Cover preview" className="w-full h-full object-cover" />
+                  <img
+                    src={formatImageSource(previewUrl)}
+                    alt="Cover preview"
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-zinc-600 gap-1">
                     <ImageIcon size={32} />
-                    <span className="text-[10px] text-zinc-500 font-medium">{t('modals.editPlaylist.chooseImageShort')}</span>
+                    <span className="text-[10px] text-zinc-500 font-medium">
+                      {t('modals.editPlaylist.chooseImageShort')}
+                    </span>
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1">
-                  <FolderOpen size={20} />
-                  <span>{t('modals.editPlaylist.changeImageShort')}</span>
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1.5 p-2 text-center">
+                  <FolderOpen size={20} className="shrink-0" />
+                  <span className="text-center font-medium leading-tight select-none">
+                    {t('modals.editPlaylist.changeImageShort')}
+                  </span>
                 </div>
               </div>
 

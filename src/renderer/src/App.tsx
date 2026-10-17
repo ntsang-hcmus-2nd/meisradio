@@ -115,6 +115,7 @@ import { sliderToGain } from './utils/audioUtils'
 import { isDsdTrack, formatDuration } from './utils/formatUtils'
 import { splitArtistString, removeAccents, matchesQuery, PRESERVED_ARTIST_NAMES } from './utils/textUtils'
 import { filterTracksByQuickFilter, getFilteredTracks, getSortedTracks } from './utils/trackFilterUtils'
+import { fisherYatesShuffle } from './utils/arrayUtils'
 
 export { PRESERVED_ARTIST_NAMES, splitArtistString }
 
@@ -416,6 +417,22 @@ export default function App() {
         ?.catch(() => {})
     }
   }, [setOriginalQueue, setPlayQueue, audioEngine])
+
+  /**
+   * Stream All (DriveView): phát trực tiếp toàn bộ file Google Drive vừa quét.
+   * KHÔNG nối tạm tracks vào libraryTracks — chỉ đẩy vào hàng đợi và stream bài đầu tiên
+   * (getStreamUrl hỗ trợ platform 'drive' qua proxy /play của stream server).
+   */
+  const handleDriveStreamAll = useCallback(
+    (tracks: any[]) => {
+      if (!tracks || tracks.length === 0) return
+      const queue = usePlayerStore.getState().isShuffle ? fisherYatesShuffle(tracks) : tracks
+      setOriginalQueue(queue)
+      setPlayQueue(queue)
+      audioEngine.handlePlayTrack(queue[0])
+    },
+    [setOriginalQueue, setPlayQueue, audioEngine]
+  )
 
   const handleDashboardItemClick = useCallback(async (item: any) => {
     if (item.videoId && !item.isArtist) {
@@ -1052,8 +1069,14 @@ export default function App() {
       if (cfg.driveLink) setDriveLink(cfg.driveLink)
       if (cfg.selectedDeviceId)
         setSelectedDeviceId(cfg.selectedDeviceId === '0' ? 'auto' : cfg.selectedDeviceId)
+      // Tôn trọng giá trị showVisualizer người dùng đã lưu (kể cả false).
+      // Chỉ bật mặc định visualizer cho chế độ Default khi config chưa từng
+      // lưu giá trị này, tránh ghi đè lựa chọn của người dùng mỗi lần khởi động.
       if (cfg.showVisualizer !== undefined && !cfg.bitPerfectEnabled) setShowVisualizer(cfg.showVisualizer)
-      if (cfg.appMode === 'default' || (!cfg.appMode && !cfg.liteMode)) setShowVisualizer(true)
+      else if (cfg.showVisualizer === undefined && !cfg.bitPerfectEnabled) {
+        const isDefaultMode = cfg.appMode === 'default' || (!cfg.appMode && !cfg.liteMode)
+        if (isDefaultMode) setShowVisualizer(true)
+      }
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
       if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
@@ -1090,7 +1113,14 @@ export default function App() {
 
       if (!usePlayerStore.getState().currentTrack) {
         const session = loadPlaybackSession()
-        if (session && session.currentTime > 0) {
+        // Chỉ giữ lại vị trí phát nếu có bài hát khôi phục và bài đó có thể phát
+        // (file DSD cần Bit-Perfect bật sẵn), tránh để tồn đọng gây nhảy thời gian.
+        const restoredTrack = session?.currentTrack
+        const canRestoreSeek =
+          restoredTrack && restoredTrack.filePath
+            ? usePlayerStore.getState().bitPerfectEnabled || !isDsdTrack(restoredTrack)
+            : false
+        if (session && session.currentTime > 0 && canRestoreSeek) {
           audioEngine.pendingSeekTimeRef.current = session.currentTime
         }
       }
@@ -1246,13 +1276,21 @@ export default function App() {
         }
         onPlay={audioEngine.handleAudioPlay}
         onLoadedMetadata={() => {
-          if (
-            audioEngine.audioRef.current &&
+          const audio = audioEngine.audioRef.current
+          if (!audio) return
+          // Chế độ WebAudio (chuẩn): khôi phục vị trí phát cũ của phiên nghe
+          // và giải phóng giá trị tồn đọng (pendingSeekTimeRef) ngay khi bài đã load,
+          // tránh nhảy thời gian sai nếu người dùng bật Bit-Perfect sau đó.
+          const pendingSeek = audioEngine.pendingSeekTimeRef.current
+          if (pendingSeek !== null && pendingSeek > 0) {
+            audio.currentTime = (currentTrack?.startTime || 0) + pendingSeek
+            audioEngine.pendingSeekTimeRef.current = null
+          } else if (
             currentTrack?.startTime &&
             currentTrack.startTime > 0 &&
-            audioEngine.audioRef.current.currentTime < currentTrack.startTime
+            audio.currentTime < currentTrack.startTime
           ) {
-            audioEngine.audioRef.current.currentTime = currentTrack.startTime
+            audio.currentTime = currentTrack.startTime
           }
         }}
         onEnded={audioEngine.handleAudioEnded}
@@ -1326,7 +1364,9 @@ export default function App() {
               if (selectedTracks.length > 0) {
                 setPlayQueue((prev) => [...prev, ...selectedTracks])
                 showToast(
-                  `${t('toasts.addedToQueue') || 'Đã thêm vào hàng đợi'}: +${selectedTracks.length}`,
+                  t('toasts.addedToQueue', {
+                    title: `${selectedTracks.length} ${t('common.tracks')}`
+                  }),
                   'success'
                 )
               }
@@ -1349,7 +1389,7 @@ export default function App() {
               const matched = libraryTracks.filter(
                 (trk) => idSet.has(trk.id) || (trk.filePath && idSet.has(trk.filePath))
               )
-              const paths = matched.map((trk) => trk.filePath).filter(Boolean) as string[]
+              const paths = matched.map((trk) => trk.id || trk.filePath).filter(Boolean) as string[]
               if (paths.length === 0) return
               const confirmed = window.confirm(
                 `${t('batchActions.deleteSelected') || 'Xóa các bài đã chọn'} (${paths.length} ${t('common.tracks') || 'bài'})?`
@@ -1361,7 +1401,10 @@ export default function App() {
                     await window.api.deleteTrack(p, false)
                   } catch {}
                 }
-                showToast(t('toasts.movedToTrash') || 'Đã chuyển vào thùng rác', 'info')
+                showToast(
+                  t('toasts.movedToTrash', { title: `${paths.length} ${t('common.tracks')}` }),
+                  'info'
+                )
                 clearSelectedTracks()
                 libraryOps.loadLibrary(true, false)
               }
@@ -1381,7 +1424,12 @@ export default function App() {
                         await window.api.deleteTrack(p, false)
                       } catch {}
                     }
-                    showToast(t('toasts.movedToTrash') || 'Đã xóa bản trùng lặp', 'info')
+                    showToast(
+                      t('toasts.movedToTrash', {
+                        title: `${trackPaths.length} ${t('common.tracks')}`
+                      }),
+                      'info'
+                    )
                     libraryOps.loadLibrary(true, false)
                   }
                 }}
@@ -1904,6 +1952,7 @@ export default function App() {
                     <DriveView
                       loadLibrary={libraryOps.loadLibrary}
                       processedLibraryTracks={processedLibraryTracks}
+                      onStreamAll={handleDriveStreamAll}
                       showAlert={libraryOps.showAlert}
                     />
                   )}

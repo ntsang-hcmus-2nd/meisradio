@@ -88,17 +88,24 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                 <DynamicCoverArt
                   src={
                     activeUserPlaylist.thumbnail ||
+                    activeUserPlaylist.coverArt ||
                     activeUserPlaylistTracks.find((t) => t.coverArt)?.coverArt
                   }
-                  trackPath={activeUserPlaylistTracks[0]?.filePath}
+                  trackPath={
+                    activeUserPlaylist.thumbnail || activeUserPlaylist.coverArt
+                      ? undefined
+                      : activeUserPlaylistTracks[0]?.filePath
+                  }
                   tier="lg"
                   isLite={isLite}
                   fallbackIcon={<ListPlus size={44} className="text-zinc-600" />}
                   className="w-full h-full"
                 />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1">
-                  <ImageIcon size={18} />
-                  <span>{t('modals.editPlaylist.title')}</span>
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1.5 p-3 text-center">
+                  <ImageIcon size={20} className="shrink-0" />
+                  <span className="text-center font-medium leading-tight select-none">
+                    {t('modals.editPlaylist.title')}
+                  </span>
                 </div>
               </div>
 
@@ -122,16 +129,12 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                   <button
                     onClick={() => {
                       if (activeUserPlaylistTracks.length > 0) {
-                        handleRowClick(
-                          activeUserPlaylistTracks[0],
-                          activeUserPlaylistTracks
-                        )
+                        handleRowClick(activeUserPlaylistTracks[0], activeUserPlaylistTracks)
                       }
                     }}
                     className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
                   >
-                    <Play size={16} className="fill-current" />{' '}
-                    {t('userPlaylistsView.playAll')}
+                    <Play size={16} className="fill-current" /> {t('userPlaylistsView.playAll')}
                   </button>
                   <button
                     onClick={() => {
@@ -208,9 +211,7 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div className="flex items-end gap-3 min-w-0 flex-1">
           <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">
-            {searchQuery
-              ? t('userPlaylistsView.searchResults')
-              : t('userPlaylistsView.title')}
+            {searchQuery ? t('userPlaylistsView.searchResults') : t('userPlaylistsView.title')}
           </h2>
           <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
             {userPlaylists.length} {t('userPlaylistsView.playlistCount')}
@@ -256,15 +257,13 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                   <div className="col-span-1 text-center">#</div>
                   <div className="col-span-6">{t('userPlaylistsView.title')}</div>
                   <div className="col-span-3 text-center">{t('common.songs')}</div>
-                  <div className="col-span-2 text-right">
-                    {t('trackTable.actions')}
-                  </div>
+                  <div className="col-span-2 text-right">{t('trackTable.actions')}</div>
                 </div>
                 <div className="divide-y divide-theme-30/20">
                   {matchedUserPlaylists.map((pl, idx) => {
                     const resolved = getResolvedUserPlaylistTracks(pl)
                     const coverImg =
-                      pl.thumbnail || resolved.find((t) => t.coverArt)?.coverArt
+                      pl.thumbnail || pl.coverArt || resolved.find((t) => t.coverArt)?.coverArt
 
                     return (
                       <div
@@ -280,20 +279,19 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                           <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
                             <DynamicCoverArt
                               src={coverImg}
-                              trackPath={resolved[0]?.filePath}
+                              trackPath={
+                                pl.thumbnail || pl.coverArt ? undefined : resolved[0]?.filePath
+                              }
                               tier="sm"
                               isLite={isLite}
-                              fallbackIcon={
-                                <ListPlus size={20} className="text-zinc-600" />
-                              }
+                              fallbackIcon={<ListPlus size={20} className="text-zinc-600" />}
                               className="w-full h-full"
                             />
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  if (resolved.length > 0)
-                                    handleRowClick(resolved[0], resolved)
+                                  if (resolved.length > 0) handleRowClick(resolved[0], resolved)
                                 }}
                                 className="text-white hover:scale-110 transition"
                               >
@@ -350,7 +348,7 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                 {matchedUserPlaylists.map((pl, idx) => {
                   const resolved = getResolvedUserPlaylistTracks(pl)
                   const coverImg =
-                    pl.thumbnail || resolved.find((t) => t.coverArt)?.coverArt
+                    pl.thumbnail || pl.coverArt || resolved.find((t) => t.coverArt)?.coverArt
 
                   return (
                     <div
@@ -366,12 +364,12 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                         <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
                           <DynamicCoverArt
                             src={coverImg}
-                            trackPath={resolved[0]?.filePath}
+                            trackPath={
+                              pl.thumbnail || pl.coverArt ? undefined : resolved[0]?.filePath
+                            }
                             tier="sm"
                             isLite={isLite}
-                            fallbackIcon={
-                              <ListPlus size={16} className="text-zinc-600" />
-                            }
+                            fallbackIcon={<ListPlus size={16} className="text-zinc-600" />}
                             className="w-full h-full"
                           />
                         </div>
@@ -388,8 +386,7 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            if (resolved.length > 0)
-                              handleRowClick(resolved[0], resolved)
+                            if (resolved.length > 0) handleRowClick(resolved[0], resolved)
                           }}
                           className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
                           title={t('artistsView.playAll')}
@@ -418,7 +415,7 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
               {matchedUserPlaylists.map((pl) => {
                 const resolved = getResolvedUserPlaylistTracks(pl)
                 const coverImg =
-                  pl.thumbnail || resolved.find((t) => t.coverArt)?.coverArt
+                  pl.thumbnail || pl.coverArt || resolved.find((t) => t.coverArt)?.coverArt
 
                 return (
                   <div
@@ -430,12 +427,10 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                     <div className="aspect-square bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-md">
                       <DynamicCoverArt
                         src={coverImg}
-                        trackPath={resolved[0]?.filePath}
+                        trackPath={pl.thumbnail || pl.coverArt ? undefined : resolved[0]?.filePath}
                         tier="md"
                         isLite={isLite}
-                        fallbackIcon={
-                          <ListPlus size={36} className="text-zinc-600" />
-                        }
+                        fallbackIcon={<ListPlus size={36} className="text-zinc-600" />}
                         className="w-full h-full"
                         imageClassName="group-hover:scale-105 transition duration-300"
                       />
@@ -443,8 +438,7 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            if (resolved.length > 0)
-                              handleRowClick(resolved[0], resolved)
+                            if (resolved.length > 0) handleRowClick(resolved[0], resolved)
                           }}
                           className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg"
                         >

@@ -4,6 +4,10 @@ import { useTranslation } from '../locales'
 import { useLibraryStore } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
+import {
+  trackMatchesKeys,
+  removeTrackKeysFromStores
+} from '../utils/trackStateUtils'
 
 export interface BatchActionBarProps {
   selectedTrackIds?: string[]
@@ -79,7 +83,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     if (matched.length > 0) {
       const currentQueue = usePlayerStore.getState().playQueue || []
       usePlayerStore.getState().setPlayQueue([...currentQueue, ...matched])
-      showToast(`${t('toasts.addedToQueue') || 'Added to queue'}: +${matched.length}`, 'success')
+      showToast(t('toasts.addedToQueue', { title: `${matched.length} ${t('common.tracks')}` }), 'success')
     }
   }
 
@@ -104,7 +108,8 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     }
 
     const matched = getMatchedTracks()
-    const paths = matched.map((t) => t.filePath).filter(Boolean) as string[]
+    // Ưu tiên id (giữ hậu tố #track-N của CUE Sheet) để không xóa nhầm file album vật lý
+    const paths = matched.map((t) => t.id || t.filePath).filter(Boolean) as string[]
 
     if (paths.length === 0) return
 
@@ -121,7 +126,13 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           /* ignore */
         }
       }
-      showToast(t('toasts.movedToTrash') || 'Moved to trash', 'info')
+      // Đồng bộ state renderer: xóa khỏi libraryTracks + hàng đợi + playlists + recentlyPlayed
+      const keySet = new Set(paths)
+      useLibraryStore
+        .getState()
+        .setLibraryTracks((prev) => prev.filter((trk) => !trackMatchesKeys(trk, keySet)))
+      await removeTrackKeysFromStores(paths)
+      showToast(t('toasts.movedToTrash', { title: `${paths.length} ${t('common.tracks')}` }), 'info')
       handleClear()
     }
   }

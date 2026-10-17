@@ -14,7 +14,34 @@ import { TrackTable } from '../components/TrackTable'
 import { SC_GENRES } from '../components/TrackListComponents'
 import { fisherYatesShuffle } from '../utils/arrayUtils'
 import { useTranslation } from '../locales'
-import { useSettingsStore } from '../stores'
+import { useSettingsStore, useUIStore, usePlayerStore } from '../stores'
+
+/**
+ * Chuẩn hóa 1 raw item trên dashboard SoundCloud thành track format nội bộ
+ * (giống khối normalize trong App.handleScItemClick) trước khi vào playQueue:
+ * đảm bảo có isOnline / platform / id sc-... để engine phát online đúng luồng.
+ */
+function normalizeScQueueItem(item: any): any | null {
+  if (!item || item.isPlaylist || item.playlistId) return null
+  const originalId = String(item.originalId ?? item.videoId ?? '')
+  if (!originalId && !item.id) return null
+  const id = item.id || `sc-${originalId}`
+  return {
+    id,
+    originalId,
+    title: item.title,
+    artist: item.artist || item.subtitle,
+    album: item.album || 'SoundCloud Single',
+    duration: item.duration || 0,
+    format: 'STREAM',
+    isCloud: true,
+    isOnline: true,
+    platform: 'soundcloud',
+    permalinkUrl: item.permalinkUrl,
+    coverArt: item.coverArt || item.thumbnails?.[0]?.url || null,
+    coverArtHighRes: item.coverArtHighRes || null
+  }
+}
 
 export interface SoundCloudViewProps {
   activeAlbum: any
@@ -71,6 +98,7 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
 }) => {
   const { t } = useTranslation()
   const isLite = useSettingsStore((state) => state.appMode === 'lite' || state.appMode === 'core')
+  const showToast = useUIStore((s) => s.showToast)
 
   return (
     <div className="flex flex-col h-full">
@@ -314,8 +342,31 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                                     {
                                       id: 'sc-queue',
                                       label: t('contextMenu.addQueue'),
-                                      onClick: () =>
-                                        setPlayQueue((prev) => [...prev, item])
+                                      onClick: () => {
+                                        const track = normalizeScQueueItem(item)
+                                        if (!track) return
+                                        const queueKey = track.originalId || track.id
+                                        const existingQueue =
+                                          usePlayerStore.getState().playQueue || []
+                                        if (
+                                          existingQueue.some(
+                                            (p) => (p.originalId || p.id) === queueKey
+                                          )
+                                        ) {
+                                          showToast(
+                                            t('toasts.alreadyInQueue', {
+                                              title: track.title
+                                            }),
+                                            'info'
+                                          )
+                                          return
+                                        }
+                                        setPlayQueue((prev: any[]) => [...(prev || []), track])
+                                        showToast(
+                                          t('toasts.addedToQueue', { title: track.title }),
+                                          'success'
+                                        )
+                                      }
                                     },
                                     {
                                       id: 'sc-dl',

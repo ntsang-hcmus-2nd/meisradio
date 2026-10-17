@@ -226,6 +226,8 @@ export async function fetchDriveFiles(
         duration: 0,
         format: format,
         isCloud: true,
+        isOnline: true,
+        platform: 'drive',
         url: `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${apiKey}&acknowledgeAbuse=true`,
         coverArt: null
       }

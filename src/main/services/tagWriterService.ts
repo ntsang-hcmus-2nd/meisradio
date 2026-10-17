@@ -175,51 +175,111 @@ export async function updateTags(
         path.dirname(rawPath),
         `temp_tag_${Date.now()}_${path.basename(rawPath)}`
       )
-      const args = ['-y', '-i', rawPath, '-c', 'copy']
-      if (newTags.title !== undefined && String(newTags.title).trim())
-        args.push('-metadata', `title=${String(newTags.title).trim()}`)
-      if (targetArtist && String(targetArtist).trim())
-        args.push('-metadata', `artist=${String(targetArtist).trim()}`)
-      if (newTags.album !== undefined && String(newTags.album).trim())
-        args.push('-metadata', `album=${String(newTags.album).trim()}`)
-      if (newTags.albumArtist !== undefined && String(newTags.albumArtist).trim())
-        args.push('-metadata', `album_artist=${String(newTags.albumArtist).trim()}`)
-      if (newTags.genre !== undefined && String(newTags.genre).trim())
-        args.push('-metadata', `genre=${String(newTags.genre).trim()}`)
-      if (newTags.year !== undefined && String(newTags.year).trim())
-        args.push('-metadata', `date=${String(newTags.year).trim()}`)
-      if (newTags.trackNumber !== undefined && newTags.trackNumber !== null)
-        args.push('-metadata', `track=${newTags.trackNumber}`)
-      if (newTags.discNumber !== undefined && newTags.discNumber !== null)
-        args.push('-metadata', `disc=${newTags.discNumber}`)
-      args.push(tempOutput)
 
-      await new Promise<void>((resolve, reject) => {
-        const ff = spawn(ffmpegExe, args)
-        ff.on('close', (code) => {
-          if (code === 0 && fs.existsSync(tempOutput)) {
-            try {
-              fs.renameSync(tempOutput, rawPath)
-              resolve()
-            } catch {
+      // Chuẩn bị tệp ảnh bìa để đính kèm vào FFmpeg (nghe các stream bìa mới)
+      let coverAttachmentPath: string | null = null
+      let tempCoverPath: string | null = null
+      if (rawImagePath && fs.existsSync(rawImagePath)) {
+        coverAttachmentPath = rawImagePath
+      } else if (picBuffer) {
+        const coverExt =
+          picMime === 'image/png' ? '.png' : picMime === 'image/webp' ? '.webp' : '.jpg'
+        tempCoverPath = join(path.dirname(rawPath), `temp_cover_${Date.now()}${coverExt}`)
+        try {
+          fs.writeFileSync(tempCoverPath, picBuffer)
+          coverAttachmentPath = tempCoverPath
+        } catch {
+          coverAttachmentPath = null
+        }
+      }
+
+      // Xây dựng args. Ưu tiên -i trước để các -metadata phía sau luôn thuộc về output.
+      const buildArgs = (withImage: boolean): string[] => {
+        const args: string[] = ['-y', '-i', rawPath]
+        if (withImage && coverAttachmentPath) args.push('-i', coverAttachmentPath)
+        if (newTags.title !== undefined && String(newTags.title).trim())
+          args.push('-metadata', `title=${String(newTags.title).trim()}`)
+        if (targetArtist && String(targetArtist).trim())
+          args.push('-metadata', `artist=${String(targetArtist).trim()}`)
+        if (newTags.album !== undefined && String(newTags.album).trim())
+          args.push('-metadata', `album=${String(newTags.album).trim()}`)
+        if (newTags.albumArtist !== undefined && String(newTags.albumArtist).trim())
+          args.push('-metadata', `album_artist=${String(newTags.albumArtist).trim()}`)
+        if (newTags.genre !== undefined && String(newTags.genre).trim())
+          args.push('-metadata', `genre=${String(newTags.genre).trim()}`)
+        if (newTags.year !== undefined && String(newTags.year).trim())
+          args.push('-metadata', `date=${String(newTags.year).trim()}`)
+        if (newTags.trackNumber !== undefined && newTags.trackNumber !== null)
+          args.push('-metadata', `track=${newTags.trackNumber}`)
+        if (newTags.discNumber !== undefined && newTags.discNumber !== null)
+          args.push('-metadata', `disc=${newTags.discNumber}`)
+        args.push('-c', 'copy')
+        if (withImage && coverAttachmentPath) {
+          // Loại các stream video/bìa cũ của nguồn, đính kèm ảnh mới làm attached_pic
+          args.push(
+            '-map',
+            '0',
+            '-map',
+            '-0:v',
+            '-map',
+            '1:v',
+            '-c:v',
+            'mjpeg',
+            '-metadata:s:v',
+            'title=Album cover',
+            '-metadata:s:v',
+            'comment=Cover (front)',
+            '-disposition:v',
+            'attached_pic'
+          )
+        }
+        args.push(tempOutput)
+        return args
+      }
+
+      const runFfmpeg = (args: string[]): Promise<void> =>
+        new Promise<void>((resolve, reject) => {
+          const ff = spawn(ffmpegExe, args)
+          ff.on('close', (code) => {
+            if (code === 0 && fs.existsSync(tempOutput)) {
               try {
-                fs.copyFileSync(tempOutput, rawPath)
-                fs.unlinkSync(tempOutput)
+                fs.renameSync(tempOutput, rawPath)
                 resolve()
-              } catch (cErr) {
-                reject(cErr)
+              } catch {
+                try {
+                  fs.copyFileSync(tempOutput, rawPath)
+                  fs.unlinkSync(tempOutput)
+                  resolve()
+                } catch (cErr) {
+                  reject(cErr)
+                }
               }
+            } else {
+              if (fs.existsSync(tempOutput)) {
+                try {
+                  fs.unlinkSync(tempOutput)
+                } catch {}
+              }
+              reject(new Error(`FFmpeg exited with code ${code}`))
             }
-          } else {
-            if (fs.existsSync(tempOutput)) {
-              try {
-                fs.unlinkSync(tempOutput)
-              } catch {}
-            }
-            reject(new Error(`FFmpeg exited with code ${code}`))
-          }
+          })
         })
-      })
+
+      try {
+        try {
+          await runFfmpeg(buildArgs(Boolean(coverAttachmentPath)))
+        } catch (_imgErr) {
+          // Một số container có thể không hỗ trợ stream bìa đính kèm:
+          // fallback ghi tag mà không đính kèm ảnh để không mất các tag khác
+          await runFfmpeg(buildArgs(false))
+        }
+      } finally {
+        if (tempCoverPath && fs.existsSync(tempCoverPath)) {
+          try {
+            fs.unlinkSync(tempCoverPath)
+          } catch {}
+        }
+      }
 
       if (newTags.lyrics !== undefined && typeof newTags.lyrics === 'string') {
         const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')

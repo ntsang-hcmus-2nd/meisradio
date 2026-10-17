@@ -9,7 +9,7 @@ import {
 } from '../stores'
 import { useTranslation, useLanguage } from '../locales'
 import { sliderToGain } from '../utils/audioUtils'
-import { isDsdTrack } from '../utils/formatUtils'
+import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUtils'
 import { fisherYatesShuffle } from '../utils/arrayUtils'
 
 export const getBrowserSinkId = (deviceId: string | null | undefined): string => {
@@ -37,6 +37,8 @@ export function useAudioEngine() {
   const analyserNodeRef = useRef<AnalyserNode | null>(null)
   const compressorNodeRef = useRef<DynamicsCompressorNode | null>(null)
   const crossfeedGainNodeRef = useRef<GainNode | null>(null)
+  const crossfeedMergerNodeRef = useRef<GainNode | null>(null)
+  const crossfeedNodesRef = useRef<AudioNode[]>([])
 
   // Internal State & Control Refs
   const [audioRemountCount, setAudioRemountCount] = useState(0)
@@ -45,6 +47,11 @@ export function useAudioEngine() {
   const preloadedRef = useRef<string | null>(null)
   const hasTriggeredCrossfadeRef = useRef(false)
   const isSwitchingTrackRef = useRef(false)
+  // "Giấy phép crossfade" cho object track hiện hành: handler timeUpdate từ render
+  // cũ (closure còn giữ currentTrack của bài trước) vẫn bắn tiếp trong lúc
+  // handlePlayTrack đang resolve stream bài online — so identity để chặn trigger
+  // lặp trong cửa sổ đó, tránh tự động nhảy qua 2 bài liên tiếp.
+  const crossfadeArmedTrackRef = useRef<any>(null)
   const isGaplessTransitioningRef = useRef(false)
   const prevTrackModeRef = useRef<'bass' | 'webaudio'>('webaudio')
   const handleNextRef = useRef<() => void>(() => {})
@@ -109,6 +116,22 @@ export function useAudioEngine() {
 
   const currentSampleRate = currentTrack?.sampleRate || 44100
 
+  // Refs giữ giá trị crossfade mới nhất, tránh đưa crossfadeEnabled/crossfadeDuration
+  // vào dependency array của effect bassPlay (gọi lại sẽ restart bài hát từ 0:00
+  // khi đang phát Bit-Perfect). Tham số crossfade truyền xuống main bị bỏ qua
+  // (_crossfadeDuration), crossfade xử lý hoàn toàn ở listener onBassTime phía renderer.
+  const crossfadeEnabledRef = useRef(crossfadeEnabled)
+  const crossfadeDurationRef = useRef(crossfadeDuration)
+
+  useEffect(() => {
+    crossfadeEnabledRef.current = crossfadeEnabled
+    crossfadeDurationRef.current = crossfadeDuration
+  }, [crossfadeEnabled, crossfadeDuration])
+
+  useEffect(() => {
+    crossfadeArmedTrackRef.current = currentTrack || null
+  }, [currentTrack])
+
   useEffect(() => {
     selectedDeviceRef.current = selectedDeviceId
   }, [selectedDeviceId])
@@ -148,7 +171,36 @@ export function useAudioEngine() {
     compressorNodeRef.current = null
     filterNodesRef.current = []
     crossfeedGainNodeRef.current = null
+    crossfeedMergerNodeRef.current = null
+    crossfeedNodesRef.current = []
     setAudioRemountCount((c) => c + 1)
+  }, [])
+
+  // Ngắt toàn bộ node của chuỗi Crossfeed của lần setupAudio trước (splitter,
+  // lowpass, delay, crossMerger, crossfeedGain, crossfeedMerger). Nếu không ngắt,
+  // mỗi lần setupAudio chạy lại khi đổi bài, chuỗi cũ còn nối vào analyserNode
+  // (được tái sử dụng giữa các lần setup) → rò rỉ node và chồng chéo luồng âm
+  // thanh khi bật Crossfeed DSP.
+  const teardownCrossfeed = useCallback(() => {
+    crossfeedNodesRef.current.forEach((node) => {
+      try {
+        node.disconnect()
+      } catch (e) {}
+    })
+    crossfeedNodesRef.current = []
+    if (crossfeedGainNodeRef.current && crossfeedGainNodeRef.current !== crossfeedMergerNodeRef.current) {
+      try {
+        crossfeedGainNodeRef.current.disconnect()
+      } catch (e) {}
+    }
+    if (crossfeedMergerNodeRef.current) {
+      try {
+        // Ngắt connection crossfeedMerger → analyser của lần setup trước
+        crossfeedMergerNodeRef.current.disconnect()
+      } catch (e) {}
+    }
+    crossfeedGainNodeRef.current = null
+    crossfeedMergerNodeRef.current = null
   }, [])
 
   // Audio Output Devices Discovery
@@ -262,6 +314,9 @@ export function useAudioEngine() {
         preampNodeRef.current = null
         compressorNodeRef.current = null
         filterNodesRef.current = []
+        crossfeedMergerNodeRef.current = null
+        crossfeedGainNodeRef.current = null
+        crossfeedNodesRef.current = []
       }
       if (isCancelled) return
 
@@ -327,6 +382,7 @@ export function useAudioEngine() {
         } catch (e) {}
       })
       filterNodesRef.current = []
+      teardownCrossfeed()
 
       let replayGainMultiplier = 1.0
       if (!bitPerfectEnabled && replayGainMode !== 'off' && currentTrack) {
@@ -373,11 +429,17 @@ export function useAudioEngine() {
       }
 
       // Binaural Crossfeed DSP
+      // Toàn bộ node phụ trợ của chuỗi crossfeed được lưu vào crossfeedNodesRef
+      // để teardownCrossfeed() có thể ngắt sạch khi setupAudio chạy lại (đổi bài,
+      // đổi EQ...), tránh chồng chéo luồng âm thanh.
       const crossfeedMerger = ctx.createGain()
       crossfeedMerger.gain.value = 1.0
+      crossfeedMergerNodeRef.current = crossfeedMerger
+      crossfeedNodesRef.current = [crossfeedMerger]
       prevNode.connect(crossfeedMerger)
 
       const splitter = ctx.createChannelSplitter(2)
+      crossfeedNodesRef.current.push(splitter)
       prevNode.connect(splitter)
 
       const filterL = ctx.createBiquadFilter()
@@ -393,6 +455,7 @@ export function useAudioEngine() {
 
       const delayR = ctx.createDelay()
       delayR.delayTime.value = 0.0003
+      crossfeedNodesRef.current.push(filterL, filterR, delayL, delayR)
 
       splitter.connect(filterL, 0)
       filterL.connect(delayL)
@@ -401,12 +464,14 @@ export function useAudioEngine() {
       filterR.connect(delayR)
 
       const crossMerger = ctx.createChannelMerger(2)
+      crossfeedNodesRef.current.push(crossMerger)
       delayR.connect(crossMerger, 0, 0)
       delayL.connect(crossMerger, 0, 1)
 
       const crossfeedGain = ctx.createGain()
       crossfeedGain.gain.value = crossfeedSetting ? 0.28 : 0
       crossfeedGainNodeRef.current = crossfeedGain
+      crossfeedNodesRef.current.push(crossfeedGain)
 
       crossMerger.connect(crossfeedGain)
       crossfeedGain.connect(crossfeedMerger)
@@ -657,14 +722,38 @@ export function useAudioEngine() {
         return
       }
       if (bitPerfectEnabled) {
-        window.api?.bassPlay?.(
-          currentTrack.filePath,
-          crossfadeEnabled ? crossfadeDuration : 0,
-          bitPerfectEnabled,
-          currentTrack.startTime,
-          currentTrack.endTime
-        )
-        if (audioRef.current) audioRef.current.pause()
+        // Chỉ mở stream & phát khi thực sự đang phát (isPlaying).
+        // Khi khôi phục phiên nghe khi mở app, isPlaying = false nên KHÔNG tự phát nhạc.
+        if (isPlaying) {
+          window.api?.bassPlay?.(
+            currentTrack.filePath,
+            crossfadeEnabledRef.current ? crossfadeDurationRef.current : 0,
+            bitPerfectEnabled,
+            currentTrack.startTime,
+            currentTrack.endTime
+          )
+          if (audioRef.current) audioRef.current.pause()
+        } else {
+          // Khôi phục phiên nghe ở trạng thái tạm dừng:
+          // vẫn mở stream trong BASS (mute để kêu lảnh) rồi pause lại ngay,
+          // để nút Play sau đó hoạt động bình thường qua bassResume().
+          ;(async () => {
+            try {
+              // Chờ qua vòng flush hiện tại để IPC setVolume từ effect khác chạy trước
+              await new Promise((r) => setTimeout(r, 0))
+              await window.api?.bassSetVolume?.(0)
+              await window.api?.bassPlay?.(
+                currentTrack.filePath,
+                crossfadeEnabledRef.current ? crossfadeDurationRef.current : 0,
+                bitPerfectEnabled,
+                currentTrack.startTime,
+                currentTrack.endTime
+              )
+              window.api?.bassPause?.()
+            } catch {}
+            window.api?.bassSetVolume?.(sliderToGain(volume))
+          })()
+        }
         if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
           const seekTo = pendingSeekTimeRef.current
           pendingSeekTimeRef.current = null
@@ -674,12 +763,20 @@ export function useAudioEngine() {
         }
       } else {
         window.api?.bassStop?.().catch(() => {})
-        if (audioRef.current && typeof currentTrack.startTime === 'number') {
-          audioRef.current.currentTime = currentTrack.startTime
+        if (audioRef.current) {
+          // Chế độ WebAudio (chuẩn): định vị theo startTime của CUE, sau đó
+          // khôi phục vị trí phát cũ của phiên nghe nếu có tồn đọng,
+          // tránh luôn phát lại từ 0:00 khi mở app.
+          const startOffset =
+            typeof currentTrack.startTime === 'number' ? currentTrack.startTime : 0
+          audioRef.current.currentTime = startOffset
+          if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
+            audioRef.current.currentTime = startOffset + pendingSeekTimeRef.current
+          }
         }
       }
     }
-  }, [currentTrack, bitPerfectEnabled, bitPerfectType, crossfadeEnabled, crossfadeDuration])
+  }, [currentTrack, bitPerfectEnabled, bitPerfectType])
 
   // Watch EQ & Preamp for BASS
   useEffect(() => {
@@ -752,32 +849,13 @@ export function useAudioEngine() {
     isSwitchingTrackRef.current = true
     hasTriggeredCrossfadeRef.current = false
 
-    if (crossfadeEnabled && isPlaying && audioRef.current && currentTrack && !bitPerfectEnabled) {
-      try {
-        const fadeAudio = new Audio(audioRef.current.src)
-        fadeAudio.currentTime = audioRef.current.currentTime
-        const curVol = Math.max(0, Math.min(1, sliderToGain(volume)))
-        fadeAudio.volume = curVol
-        fadeAudio.play().catch(() => {})
-
-        const steps = Math.max(1, crossfadeDuration * 20)
-        const step = curVol / steps
-        const fadeInterval = setInterval(() => {
-          const nextVol = fadeAudio.volume - step
-          if (nextVol > 0.01) {
-            fadeAudio.volume = Math.max(0, Math.min(1, nextVol))
-          } else {
-            clearInterval(fadeInterval)
-            fadeAudio.pause()
-            fadeAudio.removeAttribute('src')
-            fadeAudio.src = ''
-            fadeAudio.load()
-          }
-        }, 50)
-      } catch (e) {}
-    }
-
     const trackToPlay = { ...track }
+    // Cấp phép crossfade cho track mới NGAY LẬP TỨC (trước khi chờ resolve stream
+    // online) để handler timeUpdate của bài cũ — closure currentTrack vẫn là object
+    // cũ — không thể tự gọi handleNext lần nữa trong cửa sổ chờ. Nếu resolve lỗi
+    // và return sớm, giấy phép lệch với bài cũ cũng chấp nhận được (được re-arm
+    // ở effect [currentTrack] của lần đổi bài kế tiếp).
+    crossfadeArmedTrackRef.current = trackToPlay
 
     const isOnlineTrack =
       trackToPlay.isOnline ||
@@ -808,6 +886,25 @@ export function useAudioEngine() {
       }
     }
 
+    // Kiểm tra file nhạc local còn nằm trên đĩa trước khi phát: file bị xóa/di
+    // chuyển bên ngoài app khiến /local-audio trả 404, và Chromium quy lỗi đó về
+    // MEDIA_ERR_SRC_NOT_SUPPORTED "Format error" khó hiểu. Chặn sớm với thông
+    // báo rõ ràng (giống nhánh DSD phía trên: reset isSwitchingTrackRef trước khi thoát).
+    if (!isOnlineTrack && trackToPlay.filePath && typeof trackToPlay.filePath === 'string') {
+      try {
+        // @ts-ignore
+        const probe = await window.api?.checkLocalAudioFile?.(trackToPlay.filePath)
+        if (probe && !probe.exists) {
+          isSwitchingTrackRef.current = false
+          console.warn('[Audio] Bỏ qua phát — file nguồn không còn tồn tại:', probe.path || trackToPlay.filePath)
+          showToast(t('player.fileMissingToast'), 'error')
+          return
+        }
+      } catch (_) {
+        // IPC kiểm tra lỗi → bỏ qua bước chặn, để luồng phát chính xử lý qua handleAudioError
+      }
+    }
+
     const nextMode = bitPerfectEnabled || isDsdTrack(trackToPlay) ? 'bass' : 'webaudio'
     if (prevTrackModeRef.current === 'bass' && nextMode === 'webaudio') {
       await window.api?.bassStop?.().catch(() => {})
@@ -825,8 +922,54 @@ export function useAudioEngine() {
     prevTrackModeRef.current = nextMode
 
     if (audioRef.current && nextMode === 'webaudio') {
-      audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
-      if (currentTrack && currentTrack.filePath === trackToPlay.filePath) {
+      const isSameFile = !!currentTrack && currentTrack.filePath === trackToPlay.filePath
+      let startedCrossfade = false
+
+      // Crossfade HTML5/WebAudio: nhân bản bài cũ sang một Audio riêng để fade out,
+      // bài mới vào sau đó trên thẻ chính. Volume của fadeAudio PHẢI map qua
+      // sliderToGain (đường cong bậc 2, G = x^2) để khớp độ to của thẻ chính, đồng
+      // thời tắt tiếng ngay trên thẻ chính vì nó vẫn đang phát bài cũ cho tới khi
+      // src mới được commit, tránh hai luồng cùng phát khiến bài cũ vọt lên gần
+      // 2 lần độ to trước khi nhỏ dần.
+      if (crossfadeEnabled && isPlaying && currentTrack && !bitPerfectEnabled) {
+        try {
+          const fadeAudio = new Audio(audioRef.current.src)
+          fadeAudio.currentTime = audioRef.current.currentTime
+          const sliderVol = Math.max(0, Math.min(1, volume))
+          fadeAudio.volume = sliderToGain(sliderVol)
+          audioRef.current.volume = 0
+          fadeAudio.play().catch(() => {})
+          startedCrossfade = true
+
+          // Nội suy vị trí slider tuyến tính theo thời gian rồi mới map qua
+          // sliderToGain: độ to thính giác của bài cũ giảm đều trong crossfadeDuration
+          const ticks = Math.max(1, Math.round(crossfadeDuration * 20))
+          let tick = 0
+          const fadeInterval = setInterval(() => {
+            tick++
+            const fadeGain = sliderToGain(sliderVol * (1 - tick / ticks))
+            if (fadeGain > 0.0001) {
+              fadeAudio.volume = fadeGain
+            } else {
+              clearInterval(fadeInterval)
+              fadeAudio.pause()
+              fadeAudio.removeAttribute('src')
+              fadeAudio.src = ''
+              fadeAudio.load()
+            }
+          }, 50)
+        } catch (e) {}
+      }
+
+      // Khi crossfade đã bắt đầu và src sắp được thay bằng bài mới: giữ thẻ chính
+      // ở mức 0 tiếng để nhường bài cũ cho fadeAudio (Watch Volume effect + onPlay
+      // sẽ khôi phục gain đầy đủ ngay sau khi src mới được gán). Còn lại (không
+      // crossfade, hoặc replay đúng file đang phát - src không đổi nên không có
+      // effect khôi phục): đặt lại gain đầy đủ ngay.
+      if (!startedCrossfade || isSameFile) {
+        audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
+      }
+      if (isSameFile) {
         audioRef.current.currentTime = trackToPlay.startTime || 0
         audioRef.current.play().catch(() => {})
       }
@@ -1137,10 +1280,10 @@ export function useAudioEngine() {
     if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
       window.api?.bassSeek?.(seconds, 'relative')
     } else if (audioRef.current) {
-      audioRef.current.currentTime = Math.min(
-        audioRef.current.duration || 0,
-        audioRef.current.currentTime + seconds
-      )
+      // Kẹp phạm vi theo [startTime, endTime] của track CUE thay vì [0, duration]
+      // của cả tệp vật lý (tua qua ranh giới CUE sẽ nhảy sang bài kế tiếp).
+      const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
+      audioRef.current.currentTime = clampSeekRange(audioRef.current.currentTime + seconds, range)
     }
   }
 
@@ -1148,7 +1291,8 @@ export function useAudioEngine() {
     if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
       window.api?.bassSeek?.(-seconds, 'relative')
     } else if (audioRef.current) {
-      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - seconds)
+      const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
+      audioRef.current.currentTime = clampSeekRange(audioRef.current.currentTime - seconds, range)
     }
   }
 
@@ -1188,6 +1332,41 @@ export function useAudioEngine() {
     setCurrentTime(relTime)
 
     const trackEnd = currentTrack?.endTime || 0
+    // Điểm kết thúc hiệu dụng: ranh giới CUE (endTime) nếu có, ngược lại là chu kỳ
+    // phát dài thật của nguồn (bài thường / CUE full file).
+    const effectiveEnd = trackEnd > trackStart ? trackEnd : audio.duration || 0
+    // Thời gian còn lại theo toạ độ ảo của track (khớp cách BASS tính
+    // getDuration/getPosition: đều trừ startTime, cộng dồn ranh giới endTime)
+    const remaining = effectiveEnd > 0 ? Math.max(0, effectiveEnd - audio.currentTime) : Infinity
+
+    // Crossfade HTML5/WebAudio — tương tự nhánh onBassTime của BASS: gọi handleNext
+    // sớm `crossfadeDuration` giây trước khi bài kết thúc để bridging hai bài trong
+    // suốt quá trình fade out, thay vì đợi thẻ phát hết bài rồi mới chuyển (không
+    // còn dư thời gian cho fade).
+    if (
+      !isSwitchingTrackRef.current &&
+      !audio.seeking &&
+      crossfadeEnabled &&
+      !bitPerfectEnabled &&
+      crossfadeArmedTrackRef.current === currentTrack &&
+      effectiveEnd > crossfadeDuration &&
+      remaining <= crossfadeDuration &&
+      !hasTriggeredCrossfadeRef.current
+    ) {
+      hasTriggeredCrossfadeRef.current = true
+      handleNext()
+      return
+    } else if (
+      hasTriggeredCrossfadeRef.current &&
+      crossfadeEnabled &&
+      effectiveEnd > crossfadeDuration &&
+      remaining > crossfadeDuration + 2
+    ) {
+      // Đã bật cờ crossfade nhưng chưa sang bài (ví dụ người dùng tua ngược ra
+      // giữa bài): gỡ cờ để có thể phát lại khi tiến sát kết thúc lần nữa.
+      hasTriggeredCrossfadeRef.current = false
+    }
+
     if (
       !isSwitchingTrackRef.current &&
       !audio.seeking &&
@@ -1246,8 +1425,70 @@ export function useAudioEngine() {
     hasTriggeredCrossfadeRef.current = false
   }
 
-  const handleAudioError = (e: any) => {
-    console.error('[Audio Error]', e)
+  const MEDIA_ERROR_NAMES: Record<number, string> = {
+    1: 'MEDIA_ERR_ABORTED',
+    2: 'MEDIA_ERR_NETWORK',
+    3: 'MEDIA_ERR_DECODE',
+    4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+  }
+
+  // async: phần cuối dùng await để xác minh nguyên nhân lỗi nguồn local,
+  // handler sự kiện chỉ cần trả Promise — React chấp nhận bình thường.
+  const handleAudioError = async (e: any) => {
+    // DOM 'error' trên <audio> không mang thông tin trong event — chi tiết thật
+    // nằm ở MediaError của chính phần tử (audio.error), nên đọc từ đó thay vì
+    // in cả SyntheticEvent của React ra console.
+    const audio = (e?.target as HTMLAudioElement) || audioRef.current
+    const mediaError = audio?.error
+
+    // Không có MediaError → vỡ mór tầm thường (abort/sự kiện ký sinh khi đổi
+    // src, gắn lại thẻ, ...), bỏ qua để tránh gây ồn console.
+    if (!mediaError) return
+
+    const code = mediaError.code
+    const codeName = MEDIA_ERROR_NAMES[code] || `MEDIA_ERR_UNKNOWN(${code})`
+
+    // Đang load lại luồng đứt mạng (xem handleAudioEnded) hoặc đổi src bình
+    // thường gây MEDIA_ERR_ABORTED — không phải lỗi thật, giữ nguyên trạng thái
+    // phát để chạy nối lại.
+    if (code === 1) {
+      console.warn('[Audio] Fetch bị hủy trong quá trình load, bỏ qua (aborted)')
+      return
+    }
+
+    const src = audio?.currentSrc || audio?.src || ''
+    console.error(
+      `[Audio Error] ${codeName} code=${code}`,
+      mediaError.message || '(không có message từ trình duyệt)',
+      'src=', src ? src.slice(0, 300) : '(trống)'
+    )
+
+    setIsPlaying(false)
+
+    // Với luồng local (/local-audio): cả HTTP 404 (file bị xóa/di chuyển) lẫn 403
+    // (đường dẫn không trong whitelist) đều bị Chromium quy đồng thành
+    // MEDIA_ERR_SRC_NOT_SUPPORTED "Format error" — xác minh lại với main process
+    // để báo đúng nguyên nhân thay vì thông báo chung chung.
+    if (code === 4 && src.includes('/local-audio?path=')) {
+      try {
+        // @ts-ignore
+        const probe = await window.api?.checkLocalAudioFile?.(src)
+        if (probe && !probe.exists) {
+          console.error('[Audio Error] File nguồn không còn trên đĩa (HTTP 404):', probe.path)
+          showToast(t('player.fileMissingToast'), 'error')
+          return
+        }
+        if (probe && !probe.serving) {
+          console.error('[Audio Error] File nguồn tồn tại nhưng bị từ chối stream (HTTP 403):', probe.path)
+        }
+      } catch (_) {
+        // Không xác minh được nguyên nhân → giữ thông báo chung chung phía dưới
+      }
+    }
+
+    // Thẻ <audio> đã dừng phát sau lỗi thật → đồng bộ lại trạng thái UI,
+    // tránh trường hợp nút Pause/mở khóa trạng thái đang "phát" ma.
+    showToast(t('player.audioErrorToast'), 'error')
   }
 
   return {
