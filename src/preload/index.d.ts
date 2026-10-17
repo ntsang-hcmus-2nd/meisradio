@@ -3,6 +3,7 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 export interface MeisRadioApi {
   getConfig: () => Promise<any>
   saveConfig: (data: any) => Promise<any>
+  registerDroppedFiles: (paths: string[]) => Promise<{ success: boolean }>
   updateTags: (filePath: string, tags: any, imagePath: string | null) => Promise<any>
   getTrackDetails: (filePath: string) => Promise<any>
   selectImageFile: () => Promise<string | null>
@@ -85,7 +86,7 @@ export interface MeisRadioApi {
   setBassBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => Promise<any>
   setBitPerfectOutputType: (type: 'wasapi' | 'asio') => Promise<any>
   setAudioDevice: (deviceId: string) => Promise<any>
-  getAudioDevices: (type?: 'wasapi' | 'asio') => Promise<{ name: string; description: string; type?: 'wasapi' | 'asio' }[]>
+  getAudioDevices: (type?: 'wasapi' | 'asio') => Promise<{ success: boolean; devices: { name: string; description: string; type?: 'wasapi' | 'asio' }[]; error?: string }>
 
   onBassTime: (callback: (val: number) => void) => () => void
   onBassDuration: (callback: (val: number) => void) => () => void
@@ -97,6 +98,17 @@ export interface MeisRadioApi {
 
   // SQLite QoL & Library Features
   getWaveformPeaks: (filePath: string, numPeaks?: number, startTime?: number, endTime?: number) => Promise<number[]>
+  convertAudioTrack: (
+    track: {
+      filePath: string
+      title?: string
+      artist?: string
+      album?: string
+      startTime?: number
+      endTime?: number
+    },
+    targetFormat: 'flac' | 'mp3' | 'wav'
+  ) => Promise<{ success: boolean; outputPath?: string; canceled?: boolean; error?: string }>
   getFavorites: () => Promise<string[]>
   toggleFavorite: (filePath: string, isFavorite?: boolean) => Promise<boolean>
   getLyricOffsets: () => Promise<Record<string, number>>
@@ -146,9 +158,43 @@ export interface MeisRadioApi {
   soulseekSelectDownloadFolder: () => Promise<string | null>
   soulseekSetDownloadFolder: (folder: string) => Promise<{ success: boolean }>
   soulseekOpenDownloadFolder: () => Promise<{ success: boolean }>
+  soulseekClearCompletedDownloads: () => Promise<any>
   onSoulseekStatusChanged: (callback: (status: any) => void) => () => void
   onSoulseekDownloadProgress: (callback: (data: any) => void) => () => void
   onSoulseekDownloadCompleted: (callback: (data: any) => void) => () => void
+
+  // Analytics
+  recordPlayEvent: (event: {
+    filePath: string
+    trackId?: string
+    title?: string
+    artist?: string
+    album?: string
+    genre?: string
+    format?: string
+    sampleRate?: number
+    bitDepth?: number
+    isLossless?: boolean
+    isDsd?: boolean
+    audioMode?: string
+    duration?: number
+    durationSec?: number
+    playedAt?: number
+    timestamp?: number
+  }) => Promise<{ success: boolean; eventId?: number }>
+  updatePlayEventDuration: (data: {
+    eventId: number
+    durationSec: number
+    filePath?: string
+  }) => Promise<{ success: boolean }>
+  getAdvancedStats: (rangeDays?: number) => Promise<any>
+
+  // Auto-Updater
+  updaterGetStatus: () => Promise<any>
+  updaterCheck: () => Promise<any>
+  updaterDownload: () => Promise<any>
+  updaterInstall: () => Promise<any>
+  onUpdaterStatusChanged: (callback: (status: any) => void) => () => void
 }
 
 declare global {

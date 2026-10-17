@@ -68,8 +68,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
   const currentTrack = propTrack !== undefined ? propTrack : storeTrack
   const bitPerfectEnabled = propBitPerfect !== undefined ? propBitPerfect : storeBitPerfect
-  const isDsd = isDsdTrack(currentTrack)
-  const useBassTime = bitPerfectEnabled || isDsd
+  const useBassTime = Boolean(bitPerfectEnabled || isDsdTrack(currentTrack))
 
   const [currentTime, setCurrentTime] = useState(0)
   const [isDragging, setIsDragging] = useState(false)

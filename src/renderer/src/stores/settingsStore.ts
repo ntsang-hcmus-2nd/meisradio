@@ -37,6 +37,8 @@ export interface SettingsState {
   isDownloading: boolean
   downloadProgress: { current: number; total: number; fileName: string } | null
   loudnessNormalization: boolean
+  replayGainMode: 'off' | 'track' | 'album'
+  crossfeedEnabled: boolean
   gaplessEnabled: boolean
   waveformSeekbarEnabled: boolean
 
@@ -75,6 +77,8 @@ export interface SettingsState {
   setIsDownloading: (downloading: boolean | ((prev: boolean) => boolean)) => void
   setDownloadProgress: (progress: { current: number; total: number; fileName: string } | null | ((prev: any) => any)) => void
   setLoudnessNormalization: (enabled: boolean | ((prev: boolean) => boolean)) => void
+  setReplayGainMode: (mode: 'off' | 'track' | 'album' | ((prev: 'off' | 'track' | 'album') => 'off' | 'track' | 'album')) => void
+  setCrossfeedEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setGaplessEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setWaveformSeekbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
 }
@@ -86,6 +90,24 @@ const resolveVal = <T>(valOrFn: T | ((prev: T) => T), prev: T): T => {
 const getInitialLoudnessNorm = (): boolean => {
   try {
     return localStorage.getItem('meis_loudness_norm') === 'true'
+  } catch {
+    return false
+  }
+}
+
+const getInitialReplayGainMode = (): 'off' | 'track' | 'album' => {
+  try {
+    const saved = localStorage.getItem('meis_replaygain_mode')
+    if (saved === 'off' || saved === 'track' || saved === 'album') return saved
+  } catch {
+    /* ignore */
+  }
+  return 'off'
+}
+
+const getInitialCrossfeedEnabled = (): boolean => {
+  try {
+    return localStorage.getItem('meis_crossfeed_enabled') === 'true'
   } catch {
     return false
   }
@@ -201,6 +223,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   isDownloading: false,
   downloadProgress: null,
   loudnessNormalization: getInitialLoudnessNorm(),
+  replayGainMode: getInitialReplayGainMode(),
+  crossfeedEnabled: getInitialCrossfeedEnabled(),
   gaplessEnabled: getInitialGaplessEnabled(),
   waveformSeekbarEnabled: getInitialWaveformSeekbarEnabled(),
 
@@ -262,6 +286,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     const next = resolveVal(valOrFn, s.loudnessNormalization)
     try { localStorage.setItem('meis_loudness_norm', String(next)) } catch { /* ignore */ }
     return { loudnessNormalization: next }
+  }),
+  setReplayGainMode: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.replayGainMode)
+    try { localStorage.setItem('meis_replaygain_mode', next) } catch { /* ignore */ }
+    return { replayGainMode: next }
+  }),
+  setCrossfeedEnabled: (valOrFn) => set((s) => {
+    const next = resolveVal(valOrFn, s.crossfeedEnabled)
+    try { localStorage.setItem('meis_crossfeed_enabled', String(next)) } catch { /* ignore */ }
+    return { crossfeedEnabled: next }
   }),
   setGaplessEnabled: (valOrFn) => set((s) => {
     const next = resolveVal(valOrFn, s.gaplessEnabled)

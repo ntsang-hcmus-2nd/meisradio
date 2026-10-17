@@ -5,6 +5,7 @@ import { CustomSelect } from './CustomSelect'
 import { EQBand } from '../App'
 import { BUILTIN_AUTOEQ_PROFILES, parsePeaceEqText, exportPeaceEqText, AutoEqProfile } from './autoeq/autoeqProfiles'
 import { useTranslation } from '../locales'
+import { useSettingsStore } from '../stores'
 
 interface EQPanelProps {
   showEQ: boolean
@@ -23,6 +24,8 @@ export const EQPanel: React.FC<EQPanelProps> = ({
   preampGain, setPreampGain
 }) => {
   const { t } = useTranslation()
+  const crossfeedEnabled = useSettingsStore((s) => s.crossfeedEnabled)
+  const setCrossfeedEnabled = useSettingsStore((s) => s.setCrossfeedEnabled)
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
@@ -288,6 +291,19 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                 type="checkbox" 
                 checked={isEqEnabled} 
                 onChange={e => setIsEqEnabled(e.target.checked)} 
+                className="w-4 h-4 accent-theme-10 cursor-pointer" 
+              />
+            </label>
+
+            <label 
+              className="flex items-center gap-2 cursor-pointer bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-theme-10"
+              title="Crossfeed (Headphone Spatializer DSP)"
+            >
+              <span className="text-zinc-300 text-xs font-semibold">Crossfeed</span>
+              <input 
+                type="checkbox" 
+                checked={crossfeedEnabled} 
+                onChange={e => setCrossfeedEnabled(e.target.checked)} 
                 className="w-4 h-4 accent-theme-10 cursor-pointer" 
               />
             </label>

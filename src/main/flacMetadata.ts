@@ -579,6 +579,26 @@ export async function writeFlacMetadata(
 }
 
 /**
+ * Ghi thẻ FLAC và ảnh bìa trực tiếp (hỗ trợ buffer ảnh hoặc xóa ảnh)
+ */
+export function writeFlacTagsAndPicture(
+  filePath: string,
+  tags: FlacTagUpdate,
+  pictureBuffer?: Buffer | null
+): { success: boolean; error?: string } {
+  const updates: FlacTagUpdate = { ...tags }
+  if (pictureBuffer) {
+    updates.picture = {
+      data: pictureBuffer,
+      mimeType: 'image/jpeg'
+    }
+  } else if (pictureBuffer === null) {
+    updates.picture = null
+  }
+  return updateFlacTags(filePath, updates)
+}
+
+/**
  * Đọc thông tin thẻ FLAC mà không tải toàn bộ file âm thanh vào bộ nhớ
  */
 export function readFlacTags(filePath: string): FlacTagUpdate | null {

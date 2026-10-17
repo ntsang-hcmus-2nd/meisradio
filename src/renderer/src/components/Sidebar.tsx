@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Home, Library, Disc, Mic2, Tag, ListPlus, Cloud, Settings, ChevronDown, ChevronRight, FolderDown } from 'lucide-react'
+import { Home, Library, Disc, Mic2, Tag, ListPlus, Cloud, Settings, ChevronDown, ChevronRight, FolderDown, BarChart3 } from 'lucide-react'
 import logoImg from '../../../../resources/HoT_Chibi_Icon.png'
 import { useTranslation } from '../locales'
 
@@ -179,6 +179,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <li onClick={() => handleNavClick('genres')} className={`flex items-center gap-2.5 cursor-pointer py-1.5 px-2 rounded-md text-sm transition-colors ${activeView === 'genres' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><Tag size={17} /> <span>{t('sidebar.genres')}</span></li>
               <li onClick={() => handleNavClick('user-playlists')} className={`flex items-center gap-2.5 cursor-pointer py-1.5 px-2 rounded-md text-sm transition-colors ${activeView === 'user-playlists' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><ListPlus size={17} /> <span>{t('sidebar.userPlaylists')}</span></li>
               <li onClick={() => handleNavClick('downloads')} className={`flex items-center gap-2.5 cursor-pointer py-1.5 px-2 rounded-md text-sm transition-colors ${activeView === 'downloads' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><FolderDown size={17} /> <span>{t('sidebar.downloads')}</span></li>
+              <li onClick={() => handleNavClick('analytics')} className={`flex items-center gap-2.5 cursor-pointer py-1.5 px-2 rounded-md text-sm transition-colors ${activeView === 'analytics' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}><BarChart3 size={17} /> <span>{t('sidebar.analytics')}</span></li>
             </ul>
           </div>
           

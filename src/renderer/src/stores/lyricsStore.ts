@@ -4,6 +4,7 @@ export interface LyricLine {
   time: number
   text: string
   unsynced?: boolean
+  words?: { time: number; text: string }[]
 }
 
 export interface LyricsState {

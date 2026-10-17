@@ -2,7 +2,7 @@ import { SlskClient, FileAttribute, Download, DownloadProgress, DownloadResult, 
 import { app, dialog, BrowserWindow, shell, safeStorage } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { sanitizeFileName } from './index'
+import { sanitizeFileName } from './services/sharedContext'
 
 export interface SoulseekFormattedResult {
   id: string
@@ -34,13 +34,15 @@ export interface SoulseekDownloadItem {
   receivedBytes: number
   progress: number
   speed: number
-  status: DownloadStatus | 'queued_peer' | 'error'
+  status: DownloadStatus | 'queued_peer' | 'error' | 'completed'
   queuePlace?: number
   error?: string
   startedAt: number
   completedAt?: number
   downloadRef?: Download
 }
+
+export type SoulseekDownloadStatus = Omit<SoulseekDownloadItem, 'downloadRef'>
 
 const AUDIO_EXTS = new Set([
   '.flac',
@@ -264,28 +266,56 @@ export class SoulseekManager {
     this.notifyStatus()
   }
 
+  getDownloads(): SoulseekDownloadStatus[] {
+    return Array.from(this.activeDownloads.values()).map((item) => ({
+      id: item.id,
+      user: item.user,
+      file: item.file,
+      filename: item.filename,
+      destinationPath: item.destinationPath,
+      size: item.size,
+      receivedBytes: item.receivedBytes,
+      progress: item.progress,
+      speed: item.speed,
+      status: item.status,
+      queuePlace: item.queuePlace,
+      error: item.error,
+      startedAt: item.startedAt,
+      completedAt: item.completedAt
+    }))
+  }
+
+  clearCompletedDownloads(): SoulseekDownloadStatus[] {
+    for (const [id, item] of this.activeDownloads) {
+      if (
+        item.status === 'complete' ||
+        (item.status as string) === 'completed' ||
+        item.status === 'failed' ||
+        (item.status as string) === 'error' ||
+        item.status === 'cancelled'
+      ) {
+        if (item.downloadRef) {
+          try {
+            item.downloadRef.cancel('Cleared completed')
+          } catch {}
+          item.downloadRef = undefined
+        }
+        this.activeDownloads.delete(id)
+        this.speedCalcIntervals.delete(id)
+        this.lastNotifyTime.delete(id)
+      }
+    }
+    this.notifyStatus()
+    return this.getDownloads()
+  }
+
   getStatus() {
     return {
       connected: this.connected,
       isConnecting: this.isConnecting,
       username: this.username,
       downloadFolder: this.downloadFolder,
-      activeDownloads: Array.from(this.activeDownloads.values()).map((item) => ({
-        id: item.id,
-        user: item.user,
-        file: item.file,
-        filename: item.filename,
-        destinationPath: item.destinationPath,
-        size: item.size,
-        receivedBytes: item.receivedBytes,
-        progress: item.progress,
-        speed: item.speed,
-        status: item.status,
-        queuePlace: item.queuePlace,
-        error: item.error,
-        startedAt: item.startedAt,
-        completedAt: item.completedAt
-      }))
+      activeDownloads: this.getDownloads()
     }
   }
 
@@ -409,6 +439,7 @@ export class SoulseekManager {
       }
     }
 
+    let activeDownloadId = ''
     try {
       const folder = this.downloadFolder
       if (!fs.existsSync(folder)) {
@@ -430,6 +461,7 @@ export class SoulseekManager {
       }
 
       const downloadId = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+      activeDownloadId = downloadId
 
       const download = this.client!.download({
         user: item.user,
@@ -499,6 +531,7 @@ export class SoulseekManager {
         downloadRecord.receivedBytes = res.receivedBytes
         downloadRecord.completedAt = Date.now()
         downloadRecord.speed = 0
+        downloadRecord.downloadRef = undefined
         this.speedCalcIntervals.delete(downloadId)
         this.notifyDownloadUpdate(downloadRecord, true)
 
@@ -515,6 +548,16 @@ export class SoulseekManager {
         downloadRecord.status = 'error'
         downloadRecord.error = err.message || 'Lỗi truyền tải tệp'
         downloadRecord.speed = 0
+        downloadRecord.downloadRef = undefined
+        this.speedCalcIntervals.delete(downloadId)
+        this.notifyDownloadUpdate(downloadRecord, true)
+      })
+
+      ;(download as any).on?.('error', (err: Error) => {
+        downloadRecord.status = 'error'
+        downloadRecord.error = err?.message || 'Lỗi truyền tải tệp'
+        downloadRecord.speed = 0
+        downloadRecord.downloadRef = undefined
         this.speedCalcIntervals.delete(downloadId)
         this.notifyDownloadUpdate(downloadRecord, true)
       })
@@ -522,6 +565,14 @@ export class SoulseekManager {
       return { success: true, id: downloadId }
     } catch (err: any) {
       console.error('[Soulseek] Lỗi bắt đầu tải xuống:', err)
+      if (activeDownloadId) {
+        const item = this.activeDownloads.get(activeDownloadId)
+        if (item) {
+          item.downloadRef = undefined
+          item.status = 'error'
+          item.error = err?.message || 'Không thể bắt đầu tải xuống'
+        }
+      }
       return { success: false, error: err.message || 'Không thể bắt đầu tải xuống' }
     }
   }
@@ -547,6 +598,7 @@ export class SoulseekManager {
 
     item.status = 'cancelled'
     item.speed = 0
+    item.downloadRef = undefined
     this.speedCalcIntervals.delete(id)
     this.notifyDownloadUpdate(item, true)
     return true

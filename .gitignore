@@ -151,3 +151,9 @@ AGENTS.md
 #bass
 bass*.zip
 bass*/
+
+.refactor-backup/
+tests/
+
+serverplan.md
+todo.md

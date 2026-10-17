@@ -188,7 +188,22 @@ export class BassManager extends EventEmitter {
 
   // Gapless & Bit-Perfect State
   private gaplessEnabled: boolean = true
+  private isTransitioningStream: boolean = false
   private preloadedStream: number = 0
+
+  private get activeStream(): number {
+    return this.currentStream
+  }
+  private set activeStream(val: number) {
+    this.currentStream = val
+  }
+
+  private get nextActiveStream(): number {
+    return this.preloadedStream
+  }
+  private set nextActiveStream(val: number) {
+    this.preloadedStream = val
+  }
   private preloadedFilePath: string | null = null
   private preloadedInfo: PreloadTrackInfo | null = null
   private currentStartTime: number = 0
@@ -571,92 +586,103 @@ export class BassManager extends EventEmitter {
   /**
    * Chuyển đổi luồng không khoảng lặng (Seamless Gapless Stream Transition)
    */
-  private transitionToPreloadedStream(): void {
-    const oldStream = this.currentStream
-    const nextStream = this.preloadedStream
-    const nextPath = this.preloadedFilePath
-    const nextInfo = this.preloadedInfo
+  private transitionToPreloadedStream(): boolean {
+    if (this.isTransitioningStream || !this.nextActiveStream || !this.bassLib) return false
+    this.isTransitioningStream = true
 
-    this.currentStream = nextStream
-    this.activeWasapiStream = nextStream
-    this.activeAsioStream = nextStream
+    try {
+      const oldStream = this.activeStream
+      const nextStream = this.nextActiveStream
+      const nextPath = this.preloadedFilePath
+      const nextInfo = this.preloadedInfo
 
-    this.preloadedStream = 0
-    this.preloadedFilePath = null
-    this.preloadedInfo = null
+      this.activeStream = this.nextActiveStream
+      this.nextActiveStream = 0
+      this.activeWasapiStream = nextStream
+      this.activeAsioStream = nextStream
 
-    this.currentStartTime = nextInfo?.startTime || 0
-    this.currentEndTime = nextInfo?.endTime || 0
-    if (this.currentEndTime > 0 && this.BASS_ChannelSeconds2Bytes) {
-      this.currentEndByte = this.BASS_ChannelSeconds2Bytes(this.currentStream, this.currentEndTime)
-    } else {
-      this.currentEndByte = 0
-    }
+      this.preloadedFilePath = null
+      this.preloadedInfo = null
 
-    if (nextInfo) {
-      this.currentTrackInfo = {
-        freq: nextInfo.freq,
-        chans: nextInfo.chans,
-        origres: nextInfo.origres,
-        isDsd: nextInfo.isDsd,
-        dsdRate: nextInfo.dsdRate,
-        isNativeDsd: this.currentTrackInfo?.isNativeDsd,
-        isDoP: this.currentTrackInfo?.isDoP
+      this.currentStartTime = nextInfo?.startTime || 0
+      this.currentEndTime = nextInfo?.endTime || 0
+      if (this.currentEndTime > 0 && this.BASS_ChannelSeconds2Bytes) {
+        this.currentEndByte = this.BASS_ChannelSeconds2Bytes(this.activeStream, this.currentEndTime)
+      } else {
+        this.currentEndByte = 0
       }
-      this.currentIsDsd = nextInfo.isDsd
-    }
-    this.currentFilePath = nextPath
 
-    // Nếu đang ở chế độ ASIO, kích hoạt kênh ASIO cho stream mới trước khi giải phóng stream cũ
-    if (this.currentMode === 'asio') {
-      try {
-        if (this.BASS_ASIO_ChannelReset) {
-          this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
+      if (nextInfo) {
+        this.currentTrackInfo = {
+          freq: nextInfo.freq,
+          chans: nextInfo.chans,
+          origres: nextInfo.origres,
+          isDsd: nextInfo.isDsd,
+          dsdRate: nextInfo.dsdRate,
+          isNativeDsd: this.currentTrackInfo?.isNativeDsd,
+          isDoP: this.currentTrackInfo?.isDoP
         }
-        let en = false
-        if (this.BASS_ASIO_ChannelEnableBASS) {
-          en = this.BASS_ASIO_ChannelEnableBASS(false, 0, nextStream, true)
-        }
-        if (!en && this.BASS_ASIO_ChannelEnable) {
-          if (this.BASS_ASIO_ChannelSetFormat) {
-            this.BASS_ASIO_ChannelSetFormat(false, 0, 19)
+        this.currentIsDsd = nextInfo.isDsd
+      }
+      this.currentFilePath = nextPath
+
+      // Nếu đang ở chế độ ASIO, kích hoạt kênh ASIO cho stream mới trước khi giải phóng stream cũ
+      if (this.currentMode === 'asio') {
+        try {
+          if (this.BASS_ASIO_ChannelReset) {
+            this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
           }
-          this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-          if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
+          let en = false
+          if (this.BASS_ASIO_ChannelEnableBASS) {
+            en = this.BASS_ASIO_ChannelEnableBASS(false, 0, nextStream, true)
+          }
+          if (!en && this.BASS_ASIO_ChannelEnable) {
+            if (this.BASS_ASIO_ChannelSetFormat && !this.currentTrackInfo?.isNativeDsd) {
+              this.BASS_ASIO_ChannelSetFormat(false, 0, 19)
+            }
+            this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
+            if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
+          }
+        } catch (err) {
+          console.error('Error re-enabling ASIO channel on gapless transition:', err)
         }
-      } catch (err) {
-        console.error('Error re-enabling ASIO channel on gapless transition:', err)
       }
-    }
 
-    // Giải phóng stream cũ
-    if (oldStream) {
-      try {
-        this.BASS_StreamFree(oldStream)
-      } catch {}
-    }
-
-    // Áp dụng âm lượng cho stream mới
-    this.setVolume(this.currentVolume)
-
-    // Thông báo cho Main process & Renderer qua callback và event mà không làm nghẽn audio thread
-    setImmediate(() => {
-      if (nextPath) {
-        if (this.onGaplessTransitionCallback) {
+      // Defer freeing oldStream to avoid blocking real-time audio threads
+      setImmediate(() => {
+        if (oldStream && this.bassLib) {
           try {
-            this.onGaplessTransitionCallback(nextPath, nextInfo)
-          } catch (e) {
-            console.error('Error in onGaplessTransitionCallback:', e)
-          }
+            this.BASS_StreamFree(oldStream)
+          } catch {}
         }
-        this.emit('gapless-transition', nextPath, nextInfo)
-        this.emit('track-transition', nextPath, nextInfo)
-      }
-      const dur = this.getDuration()
-      if (dur > 0) {
-        this.emit('duration', dur)
-      }
-    })
+      })
+
+      // Áp dụng âm lượng cho stream mới
+      this.setVolume(this.currentVolume)
+
+      // Thông báo cho Main process & Renderer qua callback và event mà không làm nghẽn audio thread
+      setImmediate(() => {
+        if (nextPath) {
+          if (this.onGaplessTransitionCallback) {
+            try {
+              this.onGaplessTransitionCallback(nextPath, nextInfo)
+            } catch (e) {
+              console.error('Error in onGaplessTransitionCallback:', e)
+            }
+          }
+          this.emit('gapless-transition', nextPath, nextInfo)
+          this.emit('track-transition', nextPath, nextInfo)
+        }
+        const dur = this.getDuration()
+        if (dur > 0) {
+          this.emit('duration', dur)
+        }
+      })
+
+      return true
+    } finally {
+      this.isTransitioningStream = false
+    }
   }
 
   /**
@@ -1420,15 +1446,18 @@ export class BassManager extends EventEmitter {
         if (this.BASS_WASAPI_GetInfo(wi) && wi.freq) {
           activeFreq = wi.freq
           if (isExclusive) {
-            if (wi.freq !== streamFreq) {
-              console.warn(`WASAPI Exclusive hardware frequency mismatch: device is ${wi.freq}Hz, stream is ${streamFreq}Hz. Strict Bit-Perfect prevents software resampling!`)
-              // TUYỆT ĐỐI KHÔNG gọi BASS_ChannelSetAttribute(chan, BASS_ATTRIB_FREQ, wi.freq) trong chế độ Bit-Perfect!
+            if (wi.freq !== streamFreq || (wi.chans && wi.chans !== chans)) {
+              console.warn(
+                `WASAPI Exclusive hardware format mismatch: device is ${wi.freq}Hz ${wi.chans || chans}ch, stream is ${streamFreq}Hz ${chans}ch. Strict Bit-Perfect prevents software tampering!`
+              )
             }
           } else {
             // Chế độ Shared: cho phép resample để khớp với mixer của Windows
-            if (wi.freq !== streamFreq) {
-              console.log(`WASAPI Shared rate mismatch: mixer is ${wi.freq}Hz, stream is ${streamFreq}Hz. Resampling for Shared mode.`)
-              this.BASS_ChannelSetAttribute(chan, BASS_ATTRIB_FREQ, wi.freq)
+            if (wi.freq !== streamFreq || (wi.chans && wi.chans !== chans)) {
+              console.log(
+                `WASAPI Shared rate mismatch: mixer is ${wi.freq}Hz, stream is ${streamFreq}Hz. Resampling for Shared mode.`
+              )
+              this.createResamplerMixer(chan, wi.freq, wi.chans || chans)
             }
           }
         }
@@ -1455,6 +1484,17 @@ export class BassManager extends EventEmitter {
       this.emit('error', `WASAPI Playback Error: ${e.message}`)
       return false
     }
+  }
+
+  public createResamplerMixer(stream: number, freq: number, _chans?: number): number {
+    if (this.BASS_ChannelSetAttribute && stream && freq) {
+      try {
+        this.BASS_ChannelSetAttribute(stream, BASS_ATTRIB_FREQ, freq)
+      } catch (e) {
+        console.warn('Failed to set resampler frequency on stream:', e)
+      }
+    }
+    return stream
   }
 
   private formatBassErrorMessage(code: number, mode: 'wasapi' | 'asio'): string {
@@ -1645,11 +1685,16 @@ export class BassManager extends EventEmitter {
   }
 
   public seek(posSeconds: number, _mode: 'relative' | 'absolute' = 'absolute') {
-    if (!this.currentStream || !this.BASS_ChannelSeconds2Bytes || !this.BASS_ChannelSetPosition) return
+    if (!this.activeStream || !this.BASS_ChannelSeconds2Bytes || !this.BASS_ChannelSetPosition) return
     try {
-      const targetSec = this.currentStartTime > 0 ? (this.currentStartTime + posSeconds) : posSeconds
-      const bytes = this.BASS_ChannelSeconds2Bytes(this.currentStream, Math.max(0, targetSec))
-      this.BASS_ChannelSetPosition(this.currentStream, bytes, BASS_POS_BYTE)
+      const baseSec = _mode === 'relative' ? this.getPosition() + posSeconds : posSeconds
+      const clampedRel = Math.max(0, baseSec)
+      let targetSec = this.currentStartTime + clampedRel
+      if (this.currentEndTime > 0 && targetSec > this.currentEndTime) {
+        targetSec = this.currentEndTime
+      }
+      const bytes = this.BASS_ChannelSeconds2Bytes(this.activeStream, targetSec)
+      this.BASS_ChannelSetPosition(this.activeStream, bytes, BASS_POS_BYTE)
     } catch {}
   }
 

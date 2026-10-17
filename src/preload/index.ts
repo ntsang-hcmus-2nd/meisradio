@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
   getConfig: () => ipcRenderer.invoke('music:getConfig'),
   saveConfig: (data: any) => ipcRenderer.invoke('music:saveConfig', data),
+  registerDroppedFiles: (paths: string[]) => ipcRenderer.invoke('music:registerDroppedFiles', paths),
   
   updateTags: (filePath: string, tags: any, imagePath: string | null) => ipcRenderer.invoke('music:updateTags', filePath, tags, imagePath),
   getTrackDetails: (filePath: string) => ipcRenderer.invoke('music:getTrackDetails', filePath),
@@ -137,6 +137,17 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   // SQLite QoL & Library Features
   getWaveformPeaks: (filePath: string, numPeaks?: number, startTime?: number, endTime?: number) =>
     ipcRenderer.invoke('music:getWaveformPeaks', filePath, numPeaks, startTime, endTime),
+  convertAudioTrack: (
+    track: {
+      filePath: string
+      title?: string
+      artist?: string
+      album?: string
+      startTime?: number
+      endTime?: number
+    },
+    targetFormat: 'flac' | 'mp3' | 'wav'
+  ) => ipcRenderer.invoke('music:convertAudioTrack', track, targetFormat),
   getFavorites: () => ipcRenderer.invoke('music:getFavorites'),
   toggleFavorite: (filePath: string, isFavorite?: boolean) =>
     ipcRenderer.invoke('music:toggleFavorite', filePath, isFavorite),
@@ -236,6 +247,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   soulseekSelectDownloadFolder: () => ipcRenderer.invoke('soulseek:selectDownloadFolder'),
   soulseekSetDownloadFolder: (folder: string) => ipcRenderer.invoke('soulseek:setDownloadFolder', folder),
   soulseekOpenDownloadFolder: () => ipcRenderer.invoke('soulseek:openDownloadFolder'),
+  soulseekClearCompletedDownloads: (): Promise<any> => ipcRenderer.invoke('soulseek:clearCompletedDownloads'),
   onSoulseekStatusChanged: (callback: (status: any) => void) => {
     const handler = (_event: any, status: any) => callback(status)
     ipcRenderer.on('soulseek:status-changed', handler)
@@ -251,16 +263,29 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     ipcRenderer.on('soulseek:download-completed', handler)
     return () => ipcRenderer.removeListener('soulseek:download-completed', handler)
   },
+
+  // Analytics
+  recordPlayEvent: (event: any) => ipcRenderer.invoke('music:recordPlayEvent', event),
+  updatePlayEventDuration: (data: any) => ipcRenderer.invoke('music:updatePlayEventDuration', data),
+  getAdvancedStats: (rangeDays?: number) => ipcRenderer.invoke('music:getAdvancedStats', rangeDays),
+
+  // Auto-Updater
+  updaterGetStatus: () => ipcRenderer.invoke('updater:getStatus'),
+  updaterCheck: () => ipcRenderer.invoke('updater:check'),
+  updaterDownload: () => ipcRenderer.invoke('updater:download'),
+  updaterInstall: () => ipcRenderer.invoke('updater:install'),
+  onUpdaterStatusChanged: (callback: (status: any) => void) => {
+    const handler = (_event: any, status: any) => callback(status)
+    ipcRenderer.on('updater:status-changed', handler)
+    return () => ipcRenderer.removeListener('updater:status-changed', handler)
+  },
 }
 
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) { console.error(error) }
 } else {
-  // @ts-ignore
-  window.electron = electronAPI
   // @ts-ignore
   window.api = api
 }

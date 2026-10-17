@@ -86,22 +86,23 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(({
   const actualDriverMode: 'wasapi' | 'asio' = (audioOutParams?.mode?.toLowerCase() === 'asio' || (!audioOutParams?.mode && bitPerfectType === 'asio')) ? 'asio' : 'wasapi'
 
   // Output Device friendly name
+  const safeAudioDevices = Array.isArray(availableAudioDevices) ? availableAudioDevices : []
   const getDeviceDisplayName = (): string => {
     if (!isBASS) {
       return t('modals.spectrogram.defaultDevice')
     }
     if (!selectedDeviceId || selectedDeviceId === 'auto' || selectedDeviceId === 'default' || selectedDeviceId === '0') {
-      const autoDev = availableAudioDevices.find(d => d.name === 'auto')
+      const autoDev = safeAudioDevices.find(d => d.name === 'auto')
       if (autoDev && autoDev.description && !autoDev.description.includes('Auto') && !autoDev.description.includes('Tự động')) {
         return autoDev.description
       }
-      const firstRealDev = availableAudioDevices.find(d => d.name !== 'auto' && d.name !== '0' && d.description)
+      const firstRealDev = safeAudioDevices.find(d => d.name !== 'auto' && d.name !== '0' && d.description)
       if (firstRealDev) {
         return firstRealDev.description
       }
       return t('modals.spectrogram.autoDevice')
     }
-    const match = availableAudioDevices.find(d => d.name === selectedDeviceId)
+    const match = safeAudioDevices.find(d => d.name === selectedDeviceId)
     if (match) return match.description
     if (selectedDeviceId.startsWith('wasapi/')) {
       return 'WASAPI Endpoint'

@@ -231,6 +231,21 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
   const setDownloads = useSoulseekStore((s) => s.setDownloads)
   const clearCompletedDownloads = useSoulseekStore((s) => s.clearCompletedDownloads)
 
+  const handleClearCompleted = useCallback(async () => {
+    try {
+      if ((window as any).api?.soulseekClearCompletedDownloads) {
+        const remaining = await (window as any).api.soulseekClearCompletedDownloads()
+        if (Array.isArray(remaining)) {
+          setDownloads(remaining)
+          return
+        }
+      }
+    } catch (err) {
+      console.error('[DownloadsView] Error clearing completed downloads via API:', err)
+    }
+    clearCompletedDownloads()
+  }, [clearCompletedDownloads, setDownloads])
+
   // Local component form states
   const [loginUser, setLoginUser] = useState('')
   const [loginPass, setLoginPass] = useState('')
@@ -483,7 +498,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
 
   return (
     <div
-      className={`flex flex-col h-full space-y-4 select-none animate-fade-in text-zinc-100 ${
+      className={`flex flex-col h-full space-y-4 select-none text-zinc-100 ${
         !connected ? 'overflow-y-auto pr-1 no-scrollbar' : 'overflow-hidden'
       }`}
     >
@@ -693,7 +708,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
             {activeTab === 'transfers' && downloadsList.length > 0 && (
               <button
                 type="button"
-                onClick={clearCompletedDownloads}
+                onClick={handleClearCompleted}
                 className="sys-btn text-xs text-zinc-400 hover:text-red-400 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-white/5 transition cursor-pointer"
                 title={t('downloads.clearFinished')}
               >
@@ -705,7 +720,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
 
           {/* TAB 1: SEARCH & RESULTS */}
           {activeTab === 'search' && (
-            <div className="flex flex-col space-y-3.5 flex-1 min-h-0">
+            <div className="flex flex-col space-y-3.5 flex-1 min-h-0 animate-fade-in">
               {/* SEARCH BAR */}
               <form onSubmit={handleSearch} className="flex gap-2 shrink-0">
                 <div className="relative flex-1">
@@ -881,7 +896,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
 
           {/* TAB 2: TRANSFERS & QUEUE */}
           {activeTab === 'transfers' && (
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 animate-fade-in">
               {downloadsList.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-20 text-zinc-500 space-y-3">
                   <Download size={40} className="text-zinc-700" />

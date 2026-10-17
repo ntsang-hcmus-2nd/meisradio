@@ -25,6 +25,53 @@ export interface LibraryCacheData {
   preAggregated: any
 }
 
+export interface AdvancedListeningStats {
+  overview: {
+    totalPlays: number
+    totalListenSeconds: number
+    uniqueTracks: number
+    uniqueArtists: number
+    uniqueAlbums: number
+    losslessRatio: number
+    hiResRatio: number
+    dsdPlays: number
+    bitPerfectRatio: number
+  }
+  hourlyDistribution: number[]
+  weekdayDistribution: number[]
+  dailyActivity: { date: string; plays: number; minutes: number }[]
+  topArtists: { name: string; plays: number; totalSeconds: number }[]
+  topAlbums: { name: string; artist: string; plays: number; totalSeconds: number }[]
+  topGenres: { name: string; plays: number; percentage: number }[]
+  formatBreakdown: { format: string; count: number; percentage: number }[]
+  topTracks: {
+    filePath: string
+    title: string
+    artist: string
+    album: string
+    format: string
+    plays: number
+    totalSeconds: number
+    lastPlayed: number
+  }[]
+}
+
+export interface PlayEventInput {
+  filePath: string
+  title?: string
+  artist?: string
+  album?: string
+  genre?: string
+  format?: string
+  sampleRate?: number
+  bitDepth?: number
+  isLossless?: boolean
+  isDsd?: boolean
+  audioMode?: string
+  durationSec?: number
+  playedAt?: number
+}
+
 /**
  * Normalizes any file path or file:// URL into a standardized lower-case, forward-slash key
  * for reliable cross-platform comparisons.
@@ -103,6 +150,7 @@ class KoffiSqlite3 {
   private _bind_int64: any
   private _bind_null: any
   private _changes: any
+  private _last_insert_rowid: any
 
   constructor(dllPath: string, dbPath: string) {
     this.lib = koffi.load(dllPath)
@@ -126,9 +174,10 @@ class KoffiSqlite3 {
     this._bind_text = this.lib.func('int sqlite3_bind_text(void *stmt, int iCol, const char *val, int nByte, intptr_t destructor)')
     this._bind_double = this.lib.func('int sqlite3_bind_double(void *stmt, int iCol, double val)')
     this._bind_int = this.lib.func('int sqlite3_bind_int(void *stmt, int iCol, int val)')
-    this._bind_int64 = this.lib.func('int64 sqlite3_bind_int64(void *stmt, int iCol, int64 val)')
+    this._bind_int64 = this.lib.func('int sqlite3_bind_int64(void *stmt, int iCol, int64 val)')
     this._bind_null = this.lib.func('int sqlite3_bind_null(void *stmt, int iCol)')
     this._changes = this.lib.func('int sqlite3_changes(void *db)')
+    this._last_insert_rowid = this.lib.func('int64 sqlite3_last_insert_rowid(void *db)')
 
     const dbPtr = [null]
     // SQLITE_OPEN_READWRITE (0x02) | SQLITE_OPEN_CREATE (0x04) | SQLITE_OPEN_FULLMUTEX (0x10000)
@@ -167,6 +216,11 @@ class KoffiSqlite3 {
   public getChanges(): number {
     if (!this.db) return 0
     return this._changes(this.db)
+  }
+
+  public lastInsertRowid(): number {
+    if (!this.db) return 0
+    return Number(this._last_insert_rowid(this.db))
   }
 
   public transaction<T>(fn: () => T): T {
@@ -283,7 +337,7 @@ class KoffiPreparedStatement {
         if (type === 5) { // SQLITE_NULL
           row[name] = null
         } else if (type === 1) { // SQLITE_INTEGER
-          row[name] = this.driver._colInt(this.stmt, i)
+          row[name] = Number(this.driver._colInt64(this.stmt, i))
         } else if (type === 2) { // SQLITE_FLOAT
           row[name] = this.driver._colDouble(this.stmt, i)
         } else { // SQLITE_TEXT or other
@@ -308,7 +362,7 @@ class KoffiPreparedStatement {
         if (type === 5) {
           row[name] = null
         } else if (type === 1) {
-          row[name] = this.driver._colInt(this.stmt, i)
+          row[name] = Number(this.driver._colInt64(this.stmt, i))
         } else if (type === 2) {
           row[name] = this.driver._colDouble(this.stmt, i)
         } else {
@@ -388,6 +442,12 @@ export class SqliteStorage {
   private stmtGetOnlineLyric: KoffiPreparedStatement | null = null
   private stmtSetOnlineLyric: KoffiPreparedStatement | null = null
   private stmtClearOnlineLyrics: KoffiPreparedStatement | null = null
+
+  private stmtRecordPlayEvent: KoffiPreparedStatement | null = null
+  private stmtUpdatePlayEventDuration: KoffiPreparedStatement | null = null
+  private stmtGetPlayEventById: KoffiPreparedStatement | null = null
+  private stmtIncrementPlayStat: KoffiPreparedStatement | null = null
+  private stmtUpdatePlayStatDuration: KoffiPreparedStatement | null = null
 
   constructor(dataFolder: string) {
     this.dataFolder = dataFolder
@@ -549,6 +609,32 @@ export class SqliteStorage {
         source TEXT NOT NULL DEFAULT 'lrclib',
         updated_at INTEGER
       );
+
+      -- 11. Play Events (Advanced Audiophile Listening Analytics)
+      CREATE TABLE IF NOT EXISTS play_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_path TEXT NOT NULL,
+        title TEXT,
+        artist TEXT,
+        album TEXT,
+        genre TEXT,
+        format TEXT,
+        sample_rate INTEGER,
+        bit_depth INTEGER,
+        is_lossless INTEGER DEFAULT 0,
+        is_dsd INTEGER DEFAULT 0,
+        audio_mode TEXT DEFAULT 'webaudio',
+        duration_sec REAL DEFAULT 0,
+        played_at INTEGER NOT NULL
+      );
+
+      -- 12. Play Stats (Cumulative aggregation sync)
+      CREATE TABLE IF NOT EXISTS play_stats (
+        file_path TEXT PRIMARY KEY,
+        play_count INTEGER DEFAULT 0,
+        total_duration REAL DEFAULT 0,
+        last_played INTEGER
+      );
     `)
 
     // 2. Migration an toàn cho các cột mới nếu DB đã tồn tại từ các phiên bản cũ
@@ -637,7 +723,10 @@ export class SqliteStorage {
       'CREATE INDEX IF NOT EXISTS idx_lib_tracks_lyrics ON library_tracks(has_lyrics);',
       'CREATE INDEX IF NOT EXISTS idx_lib_tracks_hires ON library_tracks(is_hi_res);',
       'CREATE INDEX IF NOT EXISTS idx_waveform_mtime ON waveform_cache(mtime);',
-      'CREATE INDEX IF NOT EXISTS idx_fav_tracks_added ON favorite_tracks(added_at);'
+      'CREATE INDEX IF NOT EXISTS idx_fav_tracks_added ON favorite_tracks(added_at);',
+      'CREATE INDEX IF NOT EXISTS idx_play_events_played_at ON play_events(played_at);',
+      'CREATE INDEX IF NOT EXISTS idx_play_events_artist ON play_events(artist);',
+      'CREATE INDEX IF NOT EXISTS idx_play_stats_count ON play_stats(play_count);'
     ]
 
     for (const sql of createIndexes) {
@@ -646,6 +735,92 @@ export class SqliteStorage {
       } catch {
         /* Bỏ qua nếu index đã tồn tại */
       }
+    }
+
+    // 4. Chuẩn hóa dữ liệu play_events cũ không thực tế (loại bỏ skip < 5s và kẹp thời gian thực)
+    try {
+      this.sanitizeLegacyPlayEvents()
+    } catch (e) {
+      console.warn('[SqliteStorage] Lỗi sanitizeLegacyPlayEvents:', e)
+    }
+  }
+
+  /**
+   * Chuẩn hóa dữ liệu thống kê cũ: loại bỏ các lượt skip chớp nhoáng (< 5s)
+   * và kẹp thời gian nghe giữa các bài liên tiếp để không vượt quá thời gian thực tế.
+   */
+  private sanitizeLegacyPlayEvents(): void {
+    if (!this.db) return
+    try {
+      const stmt = this.db.prepare('SELECT id, file_path, duration_sec, played_at FROM play_events ORDER BY played_at ASC;')
+      let rows: any[] = []
+      try {
+        rows = stmt.all()
+      } finally {
+        stmt.finalize()
+      }
+      if (!rows || rows.length === 0) return
+
+      let modified = false
+      const toDelete: number[] = []
+      const toUpdate: { id: number; dur: number }[] = []
+
+      for (let i = 0; i < rows.length; i++) {
+        const current = rows[i]
+        const next = i + 1 < rows.length ? rows[i + 1] : null
+
+        if (next) {
+          const timeDiffSec = (next.played_at - current.played_at) / 1000
+          if (timeDiffSec > 0 && timeDiffSec < (current.duration_sec || 0) - 1) {
+            if (timeDiffSec < 5) {
+              toDelete.push(current.id)
+              modified = true
+              continue
+            } else {
+              toUpdate.push({ id: current.id, dur: Math.round(timeDiffSec) })
+              modified = true
+              continue
+            }
+          }
+        }
+      }
+
+      if (modified) {
+        this.db.transaction(() => {
+          if (toDelete.length > 0) {
+            const delStmt = this.db!.prepare('DELETE FROM play_events WHERE id = ?;')
+            try {
+              for (const id of toDelete) {
+                delStmt.run(id)
+              }
+            } finally {
+              delStmt.finalize()
+            }
+          }
+          if (toUpdate.length > 0) {
+            const updStmt = this.db!.prepare('UPDATE play_events SET duration_sec = ? WHERE id = ?;')
+            try {
+              for (const item of toUpdate) {
+                updStmt.run(item.dur, item.id)
+              }
+            } finally {
+              updStmt.finalize()
+            }
+          }
+
+          // Tái đồng bộ play_stats theo play_events chuẩn
+          this.db!.exec('DELETE FROM play_stats;')
+          this.db!.exec(`
+            INSERT INTO play_stats (file_path, play_count, total_duration, last_played)
+            SELECT file_path, COUNT(*), SUM(duration_sec), MAX(played_at)
+            FROM play_events
+            GROUP BY file_path;
+          `)
+        })
+        console.log(`[SqliteStorage] Đã chuẩn hóa dữ liệu thống kê cũ: xóa ${toDelete.length} lượt skip ảo, cập nhật ${toUpdate.length} bản ghi.`)
+      }
+    } catch (err) {
+      console.warn('[SqliteStorage] Error in sanitizeLegacyPlayEvents:', err)
     }
   }
 
@@ -745,6 +920,35 @@ export class SqliteStorage {
       this.stmtClearOnlineLyrics = this.db.prepare('DELETE FROM online_lyrics_cache;')
     } catch (e) {
       console.warn('[SqliteStorage] Lỗi prepare statements cho online_lyrics_cache:', e)
+    }
+
+    // Audiophile Play Events & Stats
+    try {
+      this.stmtRecordPlayEvent = this.db.prepare(`
+        INSERT INTO play_events (
+          file_path, title, artist, album, genre, format,
+          sample_rate, bit_depth, is_lossless, is_dsd, audio_mode, duration_sec, played_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      `)
+      this.stmtUpdatePlayEventDuration = this.db.prepare(`
+        UPDATE play_events SET duration_sec = ? WHERE id = ?;
+      `)
+      this.stmtGetPlayEventById = this.db.prepare(`
+        SELECT id, file_path, duration_sec FROM play_events WHERE id = ?;
+      `)
+      this.stmtIncrementPlayStat = this.db.prepare(`
+        INSERT INTO play_stats (file_path, play_count, total_duration, last_played)
+        VALUES (?, 1, ?, ?)
+        ON CONFLICT(file_path) DO UPDATE SET
+          play_count = play_count + 1,
+          total_duration = total_duration + excluded.total_duration,
+          last_played = excluded.last_played;
+      `)
+      this.stmtUpdatePlayStatDuration = this.db.prepare(`
+        UPDATE play_stats SET total_duration = MAX(0, total_duration + ?), last_played = ? WHERE file_path = ?;
+      `)
+    } catch (e) {
+      console.warn('[SqliteStorage] Lỗi prepare statements cho play_events/play_stats:', e)
     }
   }
 
@@ -1851,6 +2055,597 @@ export class SqliteStorage {
     }
   }
 
+  public recordPlayEvent(event: PlayEventInput): number {
+    if (!this.db || !event || !event.filePath) return 0
+    const playedAt = event.playedAt && event.playedAt > 0 ? event.playedAt : Date.now()
+    const durationSec = typeof event.durationSec === 'number' && !isNaN(event.durationSec) ? Math.max(0, event.durationSec) : 0
+    const isLossless = event.isLossless ? 1 : 0
+    const isDsd = event.isDsd ? 1 : 0
+    const audioMode = event.audioMode || 'webaudio'
+
+    let insertedId = 0
+    try {
+      this.stmtRecordPlayEvent?.run(
+        event.filePath,
+        event.title || '',
+        event.artist || '',
+        event.album || '',
+        event.genre || '',
+        event.format || '',
+        event.sampleRate || 0,
+        event.bitDepth || 0,
+        isLossless,
+        isDsd,
+        audioMode,
+        durationSec,
+        playedAt
+      )
+      insertedId = this.db.lastInsertRowid()
+    } catch (err) {
+      console.error('[SqliteStorage] Error recording play event:', err)
+    }
+
+    // Luôn đồng bộ với play_stats
+    this.incrementPlayStat(event.filePath, durationSec)
+    return insertedId
+  }
+
+  public updatePlayEventDuration(eventId: number, durationSec: number, filePath?: string): void {
+    if (!this.db || !eventId || eventId <= 0) return
+    const dur = typeof durationSec === 'number' && !isNaN(durationSec) ? Math.max(0, durationSec) : 0
+    try {
+      let prevDur = 0
+      let fPath = filePath
+      const row = this.stmtGetPlayEventById?.get<{ id: number; file_path: string; duration_sec: number }>(eventId)
+      if (row) {
+        prevDur = typeof row.duration_sec === 'number' && !isNaN(row.duration_sec) ? row.duration_sec : 0
+        if (!fPath) fPath = row.file_path
+      }
+
+      this.stmtUpdatePlayEventDuration?.run(dur, eventId)
+
+      if (fPath) {
+        const delta = dur - prevDur
+        if (delta !== 0) {
+          this.stmtUpdatePlayStatDuration?.run(delta, Date.now(), fPath)
+        }
+      }
+    } catch (err) {
+      console.error('[SqliteStorage] Error updating play event duration:', err)
+    }
+  }
+
+  public incrementPlayStat(filePath: string, durationSec: number = 0): void {
+    if (!this.db || !filePath) return
+    const now = Date.now()
+    const dur = typeof durationSec === 'number' && !isNaN(durationSec) ? durationSec : 0
+    try {
+      this.stmtIncrementPlayStat?.run(filePath, dur, now)
+    } catch (err) {
+      console.error('[SqliteStorage] Error incrementing play stat:', err)
+    }
+  }
+
+  public getAdvancedListeningStats(rangeDays?: number): AdvancedListeningStats {
+    const emptyStats: AdvancedListeningStats = {
+      overview: {
+        totalPlays: 0,
+        totalListenSeconds: 0,
+        uniqueTracks: 0,
+        uniqueArtists: 0,
+        uniqueAlbums: 0,
+        losslessRatio: 0,
+        hiResRatio: 0,
+        dsdPlays: 0,
+        bitPerfectRatio: 0
+      },
+      hourlyDistribution: new Array(24).fill(0),
+      weekdayDistribution: new Array(7).fill(0),
+      dailyActivity: [],
+      topArtists: [],
+      topAlbums: [],
+      topGenres: [],
+      formatBreakdown: [],
+      topTracks: []
+    }
+
+    if (!this.db) return emptyStats
+
+    try {
+      const isFiltered = typeof rangeDays === 'number' && rangeDays > 0
+      const sinceTime = isFiltered ? Date.now() - rangeDays * 86400 * 1000 : 0
+
+      let rows: any[] = []
+      if (isFiltered) {
+        const stmt = this.db.prepare(`
+          SELECT file_path, title, artist, album, genre, format,
+                 sample_rate, bit_depth, is_lossless, is_dsd, audio_mode, duration_sec, played_at
+          FROM play_events
+          WHERE played_at >= ?
+          ORDER BY played_at ASC;
+        `)
+        try {
+          rows = stmt.all(sinceTime)
+        } finally {
+          stmt.finalize()
+        }
+      } else {
+        const stmt = this.db.prepare(`
+          SELECT file_path, title, artist, album, genre, format,
+                 sample_rate, bit_depth, is_lossless, is_dsd, audio_mode, duration_sec, played_at
+          FROM play_events
+          ORDER BY played_at ASC;
+        `)
+        try {
+          rows = stmt.all()
+        } finally {
+          stmt.finalize()
+        }
+      }
+
+      // Fallback: Nếu play_events rỗng (do mới tạo bảng hoặc chưa nghe), kết hợp play_stats + library_tracks
+      if (rows.length === 0) {
+        const fallbackQuery = `
+          SELECT ps.file_path, ps.play_count, ps.total_duration as duration_sec, ps.last_played as played_at,
+                 lt.title, lt.artist, lt.album, lt.genre, lt.format, lt.sample_rate, lt.bit_depth, lt.is_dsd, lt.is_hi_res
+          FROM play_stats ps
+          LEFT JOIN library_tracks lt ON ps.file_path = lt.file_path
+          ${isFiltered ? 'WHERE ps.last_played >= ?' : ''}
+          ORDER BY ps.play_count DESC;
+        `
+        const fallbackStmt = this.db.prepare(fallbackQuery)
+        let fallbackRows: any[] = []
+        try {
+          fallbackRows = isFiltered
+            ? fallbackStmt.all(sinceTime)
+            : fallbackStmt.all()
+        } finally {
+          fallbackStmt.finalize()
+        }
+
+        if (fallbackRows && fallbackRows.length > 0) {
+          return this.aggregateFallbackStats(fallbackRows, rangeDays)
+        } else {
+          return {
+            ...emptyStats,
+            dailyActivity: this.generateEmptyDailyActivity(rangeDays)
+          }
+        }
+      }
+
+      return this.aggregatePlayEventsStats(rows, rangeDays)
+    } catch (err) {
+      console.error('[SqliteStorage] Error getting advanced listening stats:', err)
+      return emptyStats
+    }
+  }
+
+  private aggregatePlayEventsStats(rows: any[], rangeDays?: number): AdvancedListeningStats {
+    const totalPlays = rows.length
+    let totalListenSeconds = 0
+    let losslessCount = 0
+    let hiResCount = 0
+    let dsdPlays = 0
+    let bitPerfectCount = 0
+
+    const uniqueTracksSet = new Set<string>()
+    const uniqueArtistsSet = new Set<string>()
+    const uniqueAlbumsSet = new Set<string>()
+
+    const hourlyDistribution = new Array(24).fill(0)
+    const weekdayDistribution = new Array(7).fill(0)
+    const dailyMap = this.createDailyMap(rangeDays)
+
+    const artistMap = new Map<string, { plays: number; totalSeconds: number }>()
+    const albumMap = new Map<string, { name: string; artist: string; plays: number; totalSeconds: number }>()
+    const genreMap = new Map<string, number>()
+    let totalGenrePlays = 0
+    const formatMap = new Map<string, number>()
+    const trackMap = new Map<string, {
+      filePath: string
+      title: string
+      artist: string
+      album: string
+      format: string
+      plays: number
+      totalSeconds: number
+      lastPlayed: number
+    }>()
+
+    for (const r of rows) {
+      const dur = typeof r.duration_sec === 'number' && !isNaN(r.duration_sec) ? r.duration_sec : 0
+      totalListenSeconds += dur
+
+      const playedAt = r.played_at || Date.now()
+      const d = new Date(playedAt)
+
+      const hr = d.getHours()
+      if (hr >= 0 && hr < 24) hourlyDistribution[hr]++
+
+      const wDay = d.getDay()
+      if (wDay >= 0 && wDay < 7) weekdayDistribution[wDay]++
+
+      const dateKey = this.formatDateKey(d)
+      if (dailyMap.has(dateKey)) {
+        const item = dailyMap.get(dateKey)!
+        item.plays++
+        item.seconds += dur
+      }
+
+      if (r.file_path) uniqueTracksSet.add(r.file_path)
+      const cleanArtist = (r.artist || '').trim()
+      if (cleanArtist && cleanArtist.toLowerCase() !== 'unknown artist' && cleanArtist.toLowerCase() !== 'unknown') {
+        uniqueArtistsSet.add(cleanArtist)
+      }
+      const cleanAlbum = (r.album || '').trim()
+      if (cleanAlbum && cleanAlbum.toLowerCase() !== 'unknown album' && cleanAlbum.toLowerCase() !== 'unknown') {
+        uniqueAlbumsSet.add(`${cleanArtist}:::${cleanAlbum}`)
+      }
+
+      const fmt = this.normalizeFormat(r.format, r.is_dsd, r.file_path)
+      formatMap.set(fmt, (formatMap.get(fmt) || 0) + 1)
+
+      const isDsd = Boolean(r.is_dsd || ['DSF', 'DFF', 'DSD'].includes((r.format || '').toUpperCase()))
+      if (isDsd) dsdPlays++
+
+      const isLossless = Boolean(
+        r.is_lossless ||
+        isDsd ||
+        ['FLAC', 'WAV', 'AIFF', 'APE', 'WV', 'ALAC'].includes((r.format || '').toUpperCase())
+      )
+      if (isLossless) losslessCount++
+
+      const isHiRes = Boolean(
+        isDsd ||
+        (r.sample_rate && r.sample_rate > 48000) ||
+        (r.bit_depth && r.bit_depth > 16)
+      )
+      if (isHiRes) hiResCount++
+
+      const isBitPerfect = Boolean(
+        r.audio_mode && (r.audio_mode === 'bitperfect' || r.audio_mode === 'wasapi' || r.audio_mode === 'asio' || r.audio_mode === 'bass')
+      )
+      if (isBitPerfect) bitPerfectCount++
+
+      if (cleanArtist && cleanArtist.toLowerCase() !== 'unknown artist' && cleanArtist.toLowerCase() !== 'unknown') {
+        const item = artistMap.get(cleanArtist) || { plays: 0, totalSeconds: 0 }
+        item.plays++
+        item.totalSeconds += dur
+        artistMap.set(cleanArtist, item)
+      }
+
+      if (cleanAlbum && cleanAlbum.toLowerCase() !== 'unknown album' && cleanAlbum.toLowerCase() !== 'unknown') {
+        const albumKey = `${cleanArtist}:::${cleanAlbum}`
+        const item = albumMap.get(albumKey) || { name: cleanAlbum, artist: cleanArtist || 'Unknown Artist', plays: 0, totalSeconds: 0 }
+        item.plays++
+        item.totalSeconds += dur
+        albumMap.set(albumKey, item)
+      }
+
+      const cleanGenre = (r.genre || '').trim()
+      if (cleanGenre && cleanGenre.toLowerCase() !== 'unknown' && cleanGenre.toLowerCase() !== 'không rõ') {
+        genreMap.set(cleanGenre, (genreMap.get(cleanGenre) || 0) + 1)
+        totalGenrePlays++
+      }
+
+      const trackKey = r.file_path || `${r.title || ''}-${cleanArtist}`
+      if (trackMap.has(trackKey)) {
+        const trk = trackMap.get(trackKey)!
+        trk.plays++
+        trk.totalSeconds += dur
+        if (playedAt > trk.lastPlayed) trk.lastPlayed = playedAt
+      } else {
+        trackMap.set(trackKey, {
+          filePath: r.file_path,
+          title: r.title || path.basename(r.file_path || 'Unknown'),
+          artist: cleanArtist || 'Unknown Artist',
+          album: cleanAlbum || 'Unknown Album',
+          format: fmt,
+          plays: 1,
+          totalSeconds: dur,
+          lastPlayed: playedAt
+        })
+      }
+    }
+
+    const topArtists = Array.from(artistMap.entries())
+      .sort((a, b) => b[1].plays - a[1].plays || b[1].totalSeconds - a[1].totalSeconds)
+      .slice(0, 10)
+      .map(([name, data]) => ({
+        name,
+        plays: data.plays,
+        totalSeconds: Math.round(data.totalSeconds)
+      }))
+
+    const topAlbums = Array.from(albumMap.values())
+      .sort((a, b) => b.plays - a.plays || b.totalSeconds - a.totalSeconds)
+      .slice(0, 10)
+      .map((data) => ({
+        name: data.name,
+        artist: data.artist,
+        plays: data.plays,
+        totalSeconds: Math.round(data.totalSeconds)
+      }))
+
+    const topGenres = Array.from(genreMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name, plays]) => ({
+        name,
+        plays,
+        percentage: totalGenrePlays > 0 ? Math.round((plays / totalGenrePlays) * 1000) / 10 : 0
+      }))
+
+    const formatBreakdown = Array.from(formatMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([format, count]) => ({
+        format,
+        count,
+        percentage: totalPlays > 0 ? Math.round((count / totalPlays) * 1000) / 10 : 0
+      }))
+
+    const topTracks = Array.from(trackMap.values())
+      .sort((a, b) => b.plays - a.plays || b.totalSeconds - a.totalSeconds)
+      .slice(0, 15)
+      .map((t) => ({ ...t, totalSeconds: Math.round(t.totalSeconds) }))
+
+    const dailyActivity = Array.from(dailyMap.entries()).map(([date, val]) => ({
+      date,
+      plays: val.plays,
+      minutes: Math.round((val.seconds / 60) * 10) / 10
+    }))
+
+    return {
+      overview: {
+        totalPlays,
+        totalListenSeconds: Math.round(totalListenSeconds),
+        uniqueTracks: uniqueTracksSet.size,
+        uniqueArtists: uniqueArtistsSet.size,
+        uniqueAlbums: uniqueAlbumsSet.size,
+        losslessRatio: totalPlays > 0 ? Number((losslessCount / totalPlays).toFixed(3)) : 0,
+        hiResRatio: totalPlays > 0 ? Number((hiResCount / totalPlays).toFixed(3)) : 0,
+        dsdPlays,
+        bitPerfectRatio: totalPlays > 0 ? Number((bitPerfectCount / totalPlays).toFixed(3)) : 0
+      },
+      hourlyDistribution,
+      weekdayDistribution,
+      dailyActivity,
+      topArtists,
+      topAlbums,
+      topGenres,
+      formatBreakdown,
+      topTracks
+    }
+  }
+
+  private aggregateFallbackStats(rows: any[], rangeDays?: number): AdvancedListeningStats {
+    let totalPlays = 0
+    let totalListenSeconds = 0
+    let losslessCount = 0
+    let hiResCount = 0
+    let dsdPlays = 0
+    let bitPerfectCount = 0
+
+    const uniqueTracksSet = new Set<string>()
+    const uniqueArtistsSet = new Set<string>()
+    const uniqueAlbumsSet = new Set<string>()
+
+    const hourlyDistribution = new Array(24).fill(0)
+    const weekdayDistribution = new Array(7).fill(0)
+    const dailyMap = this.createDailyMap(rangeDays)
+
+    const artistMap = new Map<string, { plays: number; totalSeconds: number }>()
+    const albumMap = new Map<string, { name: string; artist: string; plays: number; totalSeconds: number }>()
+    const genreMap = new Map<string, number>()
+    let totalGenrePlays = 0
+    const formatMap = new Map<string, number>()
+    const trackMap = new Map<string, {
+      filePath: string
+      title: string
+      artist: string
+      album: string
+      format: string
+      plays: number
+      totalSeconds: number
+      lastPlayed: number
+    }>()
+
+    for (const r of rows) {
+      const p = r.play_count || 1
+      const dur = typeof r.duration_sec === 'number' && !isNaN(r.duration_sec) ? r.duration_sec : 0
+      totalPlays += p
+      totalListenSeconds += dur
+
+      const playedAt = r.played_at || 0
+      if (playedAt > 0) {
+        const d = new Date(playedAt)
+        const hr = d.getHours()
+        if (hr >= 0 && hr < 24) hourlyDistribution[hr] += p
+        const wDay = d.getDay()
+        if (wDay >= 0 && wDay < 7) weekdayDistribution[wDay] += p
+        const dateKey = this.formatDateKey(d)
+        if (dailyMap.has(dateKey)) {
+          const item = dailyMap.get(dateKey)!
+          item.plays += p
+          item.seconds += dur
+        }
+      }
+
+      if (r.file_path) uniqueTracksSet.add(r.file_path)
+      const cleanArtist = (r.artist || '').trim()
+      if (cleanArtist && cleanArtist.toLowerCase() !== 'unknown artist' && cleanArtist.toLowerCase() !== 'unknown') {
+        uniqueArtistsSet.add(cleanArtist)
+      }
+      const cleanAlbum = (r.album || '').trim()
+      if (cleanAlbum && cleanAlbum.toLowerCase() !== 'unknown album' && cleanAlbum.toLowerCase() !== 'unknown') {
+        uniqueAlbumsSet.add(`${cleanArtist}:::${cleanAlbum}`)
+      }
+
+      const fmt = this.normalizeFormat(r.format, r.is_dsd, r.file_path)
+      formatMap.set(fmt, (formatMap.get(fmt) || 0) + p)
+
+      const isDsd = Boolean(r.is_dsd || ['DSF', 'DFF', 'DSD'].includes((r.format || '').toUpperCase()))
+      if (isDsd) dsdPlays += p
+
+      const isLossless = Boolean(
+        isDsd ||
+        ['FLAC', 'WAV', 'AIFF', 'APE', 'WV', 'ALAC'].includes((r.format || '').toUpperCase())
+      )
+      if (isLossless) losslessCount += p
+
+      const isHiRes = Boolean(
+        r.is_hi_res ||
+        isDsd ||
+        (r.sample_rate && r.sample_rate > 48000) ||
+        (r.bit_depth && r.bit_depth > 16)
+      )
+      if (isHiRes) hiResCount += p
+
+      if (isDsd || isHiRes) bitPerfectCount += p
+
+      if (cleanArtist && cleanArtist.toLowerCase() !== 'unknown artist' && cleanArtist.toLowerCase() !== 'unknown') {
+        const item = artistMap.get(cleanArtist) || { plays: 0, totalSeconds: 0 }
+        item.plays += p
+        item.totalSeconds += dur
+        artistMap.set(cleanArtist, item)
+      }
+
+      if (cleanAlbum && cleanAlbum.toLowerCase() !== 'unknown album' && cleanAlbum.toLowerCase() !== 'unknown') {
+        const albumKey = `${cleanArtist}:::${cleanAlbum}`
+        const item = albumMap.get(albumKey) || { name: cleanAlbum, artist: cleanArtist || 'Unknown Artist', plays: 0, totalSeconds: 0 }
+        item.plays += p
+        item.totalSeconds += dur
+        albumMap.set(albumKey, item)
+      }
+
+      const cleanGenre = (r.genre || '').trim()
+      if (cleanGenre && cleanGenre.toLowerCase() !== 'unknown' && cleanGenre.toLowerCase() !== 'không rõ') {
+        genreMap.set(cleanGenre, (genreMap.get(cleanGenre) || 0) + p)
+        totalGenrePlays += p
+      }
+
+      const trackKey = r.file_path || `${r.title || ''}-${cleanArtist}`
+      trackMap.set(trackKey, {
+        filePath: r.file_path,
+        title: r.title || path.basename(r.file_path || 'Unknown'),
+        artist: cleanArtist || 'Unknown Artist',
+        album: cleanAlbum || 'Unknown Album',
+        format: fmt,
+        plays: p,
+        totalSeconds: dur,
+        lastPlayed: playedAt
+      })
+    }
+
+    const topArtists = Array.from(artistMap.entries())
+      .sort((a, b) => b[1].plays - a[1].plays || b[1].totalSeconds - a[1].totalSeconds)
+      .slice(0, 10)
+      .map(([name, data]) => ({
+        name,
+        plays: data.plays,
+        totalSeconds: Math.round(data.totalSeconds)
+      }))
+
+    const topAlbums = Array.from(albumMap.values())
+      .sort((a, b) => b.plays - a.plays || b.totalSeconds - a.totalSeconds)
+      .slice(0, 10)
+      .map((data) => ({
+        name: data.name,
+        artist: data.artist,
+        plays: data.plays,
+        totalSeconds: Math.round(data.totalSeconds)
+      }))
+
+    const topGenres = Array.from(genreMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([name, plays]) => ({
+        name,
+        plays,
+        percentage: totalGenrePlays > 0 ? Math.round((plays / totalGenrePlays) * 1000) / 10 : 0
+      }))
+
+    const formatBreakdown = Array.from(formatMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([format, count]) => ({
+        format,
+        count,
+        percentage: totalPlays > 0 ? Math.round((count / totalPlays) * 1000) / 10 : 0
+      }))
+
+    const topTracks = Array.from(trackMap.values())
+      .sort((a, b) => b.plays - a.plays || b.totalSeconds - a.totalSeconds)
+      .slice(0, 15)
+      .map((t) => ({ ...t, totalSeconds: Math.round(t.totalSeconds) }))
+
+    const dailyActivity = Array.from(dailyMap.entries()).map(([date, val]) => ({
+      date,
+      plays: val.plays,
+      minutes: Math.round((val.seconds / 60) * 10) / 10
+    }))
+
+    return {
+      overview: {
+        totalPlays,
+        totalListenSeconds: Math.round(totalListenSeconds),
+        uniqueTracks: uniqueTracksSet.size,
+        uniqueArtists: uniqueArtistsSet.size,
+        uniqueAlbums: uniqueAlbumsSet.size,
+        losslessRatio: totalPlays > 0 ? Number((losslessCount / totalPlays).toFixed(3)) : 0,
+        hiResRatio: totalPlays > 0 ? Number((hiResCount / totalPlays).toFixed(3)) : 0,
+        dsdPlays,
+        bitPerfectRatio: totalPlays > 0 ? Number((bitPerfectCount / totalPlays).toFixed(3)) : 0
+      },
+      hourlyDistribution,
+      weekdayDistribution,
+      dailyActivity,
+      topArtists,
+      topAlbums,
+      topGenres,
+      formatBreakdown,
+      topTracks
+    }
+  }
+
+  private formatDateKey(d: Date): string {
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  private createDailyMap(rangeDays?: number): Map<string, { plays: number; seconds: number }> {
+    const numDays = typeof rangeDays === 'number' && rangeDays > 0 ? Math.min(rangeDays, 30) : 30
+    const map = new Map<string, { plays: number; seconds: number }>()
+    const now = new Date()
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+      map.set(this.formatDateKey(d), { plays: 0, seconds: 0 })
+    }
+    return map
+  }
+
+  private generateEmptyDailyActivity(rangeDays?: number): { date: string; plays: number; minutes: number }[] {
+    const map = this.createDailyMap(rangeDays)
+    return Array.from(map.entries()).map(([date]) => ({ date, plays: 0, minutes: 0 }))
+  }
+
+  private normalizeFormat(fmt?: string, isDsd?: boolean | number, filePath?: string): string {
+    if (isDsd) return 'DSD/DSF'
+    const f = (fmt || '').toUpperCase().trim()
+    const ext = filePath ? path.extname(filePath).replace('.', '').toUpperCase().trim() : ''
+    const target = f || ext
+    if (['DSF', 'DFF', 'DSD'].includes(target)) return 'DSD/DSF'
+    if (target === 'FLAC') return 'FLAC'
+    if (target === 'MP3') return 'MP3'
+    if (target === 'WAV') return 'WAV'
+    if (['M4A', 'AAC', 'ALAC', 'MP4'].includes(target)) return 'M4A/AAC'
+    if (['OGG', 'OPUS'].includes(target)) return 'OGG/Opus'
+    if (['APE', 'WV', 'AIFF', 'AIF'].includes(target)) return 'Hi-Res Lossless'
+    if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) return 'Online Stream'
+    return target || 'Other'
+  }
+
   public close(): void {
     if (this.db) {
       try {
@@ -1894,6 +2689,12 @@ export class SqliteStorage {
         this.stmtGetOnlineLyric?.finalize()
         this.stmtSetOnlineLyric?.finalize()
         this.stmtClearOnlineLyrics?.finalize()
+
+        this.stmtRecordPlayEvent?.finalize()
+        this.stmtUpdatePlayEventDuration?.finalize()
+        this.stmtGetPlayEventById?.finalize()
+        this.stmtIncrementPlayStat?.finalize()
+        this.stmtUpdatePlayStatDuration?.finalize()
 
         this.db.close()
       } catch { /* ignore */ }
@@ -2003,4 +2804,42 @@ export function setOnlineLyric(
 
 export function clearOnlineLyrics(): void {
   activeSqliteStorage?.clearOnlineLyrics()
+}
+
+export function recordPlayEvent(event: PlayEventInput): number {
+  return activeSqliteStorage ? activeSqliteStorage.recordPlayEvent(event) : 0
+}
+
+export function updatePlayEventDuration(eventId: number, durationSec: number, filePath?: string): void {
+  activeSqliteStorage?.updatePlayEventDuration(eventId, durationSec, filePath)
+}
+
+export function incrementPlayStat(filePath: string, durationSec?: number): void {
+  activeSqliteStorage?.incrementPlayStat(filePath, durationSec)
+}
+
+export function getAdvancedListeningStats(rangeDays?: number): AdvancedListeningStats {
+  return activeSqliteStorage
+    ? activeSqliteStorage.getAdvancedListeningStats(rangeDays)
+    : {
+        overview: {
+          totalPlays: 0,
+          totalListenSeconds: 0,
+          uniqueTracks: 0,
+          uniqueArtists: 0,
+          uniqueAlbums: 0,
+          losslessRatio: 0,
+          hiResRatio: 0,
+          dsdPlays: 0,
+          bitPerfectRatio: 0
+        },
+        hourlyDistribution: new Array(24).fill(0),
+        weekdayDistribution: new Array(7).fill(0),
+        dailyActivity: [],
+        topArtists: [],
+        topAlbums: [],
+        topGenres: [],
+        formatBreakdown: [],
+        topTracks: []
+      }
 }

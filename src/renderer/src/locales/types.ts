@@ -39,6 +39,7 @@ export interface TranslationDictionary {
     genres: string
     userPlaylists: string
     downloads: string
+    analytics: string
     cloudConnection: string
     googleDrive: string
     settings: string
@@ -834,6 +835,38 @@ export interface TranslationDictionary {
     ruleOperator: string
     ruleValue: string
     addRule: string
+  }
+  analytics: {
+    title: string
+    subtitle: string
+    range7d: string
+    range30d: string
+    range90d: string
+    rangeAll: string
+    refresh: string
+    totalListeningTime: string
+    totalPlays: string
+    uniqueTracks: string
+    uniqueArtists: string
+    uniqueAlbums: string
+    audiophileQuality: string
+    bitPerfectRatio: string
+    lossless: string
+    hiRes: string
+    dsdTracks: string
+    hourlyRhythm: string
+    hourlySubtitle: string
+    peakHour: string
+    weekdayActivity: string
+    formatBreakdown: string
+    dailyTrend: string
+    topArtists: string
+    topAlbums: string
+    topGenres: string
+    mostPlayedTracks: string
+    noData: string
+    noDataDesc: string
+    playsCount: string
   }
 }
 

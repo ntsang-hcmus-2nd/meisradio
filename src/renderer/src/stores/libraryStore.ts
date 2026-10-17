@@ -113,7 +113,9 @@ const resolveVal = <T>(valOrFn: T | ((prev: T) => T), prev: T): T => {
 const getInitialRecentlyPlayed = (): any[] => {
   try {
     const saved = localStorage.getItem('meis_recent_played')
-    return saved ? JSON.parse(saved) : []
+    if (!saved) return []
+    const parsed = JSON.parse(saved)
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
@@ -122,7 +124,9 @@ const getInitialRecentlyPlayed = (): any[] => {
 const getInitialFavoriteTrackIds = (): string[] => {
   try {
     const saved = localStorage.getItem('meis_favorite_track_ids')
-    return saved ? JSON.parse(saved) : []
+    if (!saved) return []
+    const parsed = JSON.parse(saved)
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
@@ -131,7 +135,9 @@ const getInitialFavoriteTrackIds = (): string[] => {
 const getInitialSmartPlaylists = (): any[] => {
   try {
     const saved = localStorage.getItem('meis_smart_playlists')
-    return saved ? JSON.parse(saved) : []
+    if (!saved) return []
+    const parsed = JSON.parse(saved)
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
@@ -198,8 +204,9 @@ export const useLibraryStore = create<LibraryState>((set) => ({
   setSearchInput: (valOrFn) => set((s) => ({ searchInput: resolveVal(valOrFn, s.searchInput) })),
   setRecentlyPlayed: (valOrFn) => set((s) => {
     const next = resolveVal(valOrFn, s.recentlyPlayed)
-    try { localStorage.setItem('meis_recent_played', JSON.stringify(next.slice(0, 50))) } catch {}
-    return { recentlyPlayed: next }
+    const safeNext = Array.isArray(next) ? next : []
+    try { localStorage.setItem('meis_recent_played', JSON.stringify(safeNext.slice(0, 50))) } catch {}
+    return { recentlyPlayed: safeNext }
   }),
   setPreAggregatedData: (valOrFn) => set((s) => ({ preAggregatedData: resolveVal(valOrFn, s.preAggregatedData) })),
 

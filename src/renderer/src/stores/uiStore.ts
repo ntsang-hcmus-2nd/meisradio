@@ -11,6 +11,7 @@ export type ActiveViewType =
   | 'genres' 
   | 'user-playlists' 
   | 'downloads'
+  | 'analytics'
   | 'settings' 
   | 'drive'
 

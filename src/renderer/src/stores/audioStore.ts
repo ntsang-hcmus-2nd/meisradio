@@ -53,7 +53,16 @@ export const useAudioStore = create<AudioState>((set) => ({
   preampGain: 0,
 
   setIsEqEnabled: (valOrFn) => set((s) => ({ isEqEnabled: resolveVal(valOrFn, s.isEqEnabled) })),
-  setAvailableAudioDevices: (valOrFn) => set((s) => ({ availableAudioDevices: resolveVal(valOrFn, s.availableAudioDevices) })),
+  setAvailableAudioDevices: (valOrFn) =>
+    set((s) => {
+      const resolved = resolveVal(valOrFn, s.availableAudioDevices)
+      const safeArray = Array.isArray(resolved)
+        ? resolved
+        : Array.isArray((resolved as any)?.devices)
+          ? (resolved as any).devices
+          : []
+      return { availableAudioDevices: safeArray }
+    }),
   setSelectedDeviceId: (valOrFn) => set((s) => ({ selectedDeviceId: resolveVal(valOrFn, s.selectedDeviceId) })),
   setBitPerfectType: (valOrFn) => set((s) => ({ bitPerfectType: resolveVal(valOrFn, s.bitPerfectType) })),
   setEqBands: (valOrFn) => set((s) => ({ eqBands: resolveVal(valOrFn, s.eqBands) })),

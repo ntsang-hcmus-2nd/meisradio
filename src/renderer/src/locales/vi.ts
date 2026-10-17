@@ -39,6 +39,7 @@ export const vi: TranslationDictionary = {
     genres: 'Thể loại',
     userPlaylists: 'Danh sách phát của tôi',
     downloads: 'Tải xuống',
+    analytics: 'Thống kê chuyên sâu',
     cloudConnection: 'Liên kết đám mây',
     googleDrive: 'Google Drive',
     settings: 'Cài đặt'
@@ -859,6 +860,38 @@ export const vi: TranslationDictionary = {
     ruleOperator: 'Điều kiện',
     ruleValue: 'Giá trị',
     addRule: 'Thêm điều kiện'
+  },
+  analytics: {
+    title: 'Thống Kê Nghe Nhạc Chuyên Sâu',
+    subtitle: 'Phân tích nhịp điệu, thói quen và chất lượng trải nghiệm âm thanh Audiophile',
+    range7d: '7 Ngày',
+    range30d: '30 Ngày',
+    range90d: '90 Ngày',
+    rangeAll: 'Toàn Thời Gian',
+    refresh: 'Làm mới',
+    totalListeningTime: 'Tổng Thời Gian Nghe',
+    totalPlays: 'Tổng Lượt Phát',
+    uniqueTracks: 'Bài hát độc nhất',
+    uniqueArtists: 'Nghệ sĩ',
+    uniqueAlbums: 'Album',
+    audiophileQuality: 'Chất Lượng Audiophile',
+    bitPerfectRatio: 'Tỷ Lệ Bit-Perfect',
+    lossless: 'Lossless',
+    hiRes: 'Hi-Res Studio',
+    dsdTracks: 'bài DSD',
+    hourlyRhythm: 'Nhịp Điệu Nghe Nhạc 24 Giờ',
+    hourlySubtitle: 'Phân bố lượt nghe theo các khung giờ trong ngày',
+    peakHour: 'Đỉnh điểm lúc',
+    weekdayActivity: 'Hoạt Động Theo Ngày Trong Tuần',
+    formatBreakdown: 'Phân Bố Định Dạng & Độ Phân Giải',
+    dailyTrend: 'Xu Hướng Nghe Gần Đây',
+    topArtists: 'Top Nghệ Sĩ Nghe Nhiều Nhất',
+    topAlbums: 'Top Album Nổi Bật',
+    topGenres: 'Top Thể Loại Yêu Thích',
+    mostPlayedTracks: 'Bảng Xếp Hạng Bài Hát Nghe Nhiều Nhất',
+    noData: 'Chưa có dữ liệu nghe nhạc',
+    noDataDesc: 'Hãy thưởng thức một vài bản nhạc yêu thích để hệ thống ghi nhận thống kê chuyên sâu!',
+    playsCount: 'lượt phát'
   }
 }
 

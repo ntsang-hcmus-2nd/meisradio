@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { PRESERVED_ARTIST_NAMES } from './fastAudioParser'
 
 export interface CueTrackInfo {
   id: string // e.g. `${cueFilePath}#track-${trackNo}`
@@ -60,10 +61,41 @@ export function splitArtistNames(raw: string): string[] {
     return []
   }
 
-  // Split on common delimiters: semicolon, slash, feat., ft., &, comma
-  const parts = trimmed
-    .split(/\s*(?:;\s*|\/\s*|\\s*|\s+feat\.?\s+|\s+ft\.?\s+|\s+&\s+|\s*,\s*)\s*/i)
+  let working = trimmed
+  const placeholders: { token: string; original: string }[] = []
+  let tokenCounter = 0
+
+  const sortedPreserved = [...PRESERVED_ARTIST_NAMES].sort((a, b) => b.length - a.length)
+  for (const name of sortedPreserved) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escaped, 'gi')
+    working = working.replace(regex, (matched) => {
+      const token = `__PRESERVED_ARTIST_${tokenCounter++}__`
+      placeholders.push({ token, original: matched })
+      return token
+    })
+  }
+
+  // Split on common delimiters: semicolon, slash, backslash, feat., ft., &, comma
+  const DELIMITERS = [';', '/', '\\', '&', ',']
+  const delimPattern = DELIMITERS.map(
+    (sep) => '\\s*' + sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'
+  ).join('|')
+  const splitRegex = new RegExp(`(?:${delimPattern}|\\s+(?:feat\\.?|ft\\.?)\\s+)`, 'i')
+
+  const rawParts = working
+    .split(splitRegex)
     .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+
+  const parts = rawParts
+    .map((part) => {
+      let restored = part
+      for (const p of placeholders) {
+        restored = restored.replaceAll(p.token, p.original)
+      }
+      return restored.trim()
+    })
     .filter((s) => s.length > 0)
 
   return parts.length > 0 ? parts : [trimmed]
@@ -446,6 +478,8 @@ export function parseCueFile(cueFilePath: string): CueSheetResult | null {
     return null
   }
 }
+
+export const parseCueSheet = parseCueFile
 
 /**
  * Helper to resolve undefined endTimes and durations for the final tracks

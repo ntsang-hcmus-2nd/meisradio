@@ -2,6 +2,7 @@ import React from 'react'
 import { Volume2, VolumeX } from 'lucide-react'
 import { usePlayerStore } from '../stores/playerStore'
 import { sliderToGain } from '../utils/audioUtils'
+import { isDsdTrack } from '../utils/formatUtils'
 
 interface VolumeSliderProps {
   volume?: number
@@ -19,10 +20,12 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
   const storeVolume = usePlayerStore((s) => s.volume)
   const storeSetVolume = usePlayerStore((s) => s.setVolume)
   const storeBitPerfect = usePlayerStore((s) => s.bitPerfectEnabled)
+  const currentTrack = usePlayerStore((s) => s.currentTrack)
 
   const volume = propVolume !== undefined ? propVolume : storeVolume
   const setVolume = propSetVolume || storeSetVolume
   const bitPerfectEnabled = propBitPerfect !== undefined ? propBitPerfect : storeBitPerfect
+  const useBass = Boolean(bitPerfectEnabled || isDsdTrack(currentTrack))
   const setHardwareVolume = (v: number) => {
     if ((window as any).api?.bassSetVolume) {
       (window as any).api.bassSetVolume(v)
@@ -35,14 +38,14 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
       setVolume(prev)
       const gain = sliderToGain(prev)
       if (audioRef.current) audioRef.current.volume = gain
-      if (bitPerfectEnabled) {
+      if (useBass) {
         setHardwareVolume(gain)
       }
     } else {
       localStorage.setItem('player_volume_prev', volume.toString())
       setVolume(0)
       if (audioRef.current) audioRef.current.volume = 0
-      if (bitPerfectEnabled) {
+      if (useBass) {
         setHardwareVolume(0)
       }
     }
@@ -56,7 +59,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
     setVolume(newVol)
     const gain = sliderToGain(newVol)
     if (audioRef.current) audioRef.current.volume = gain
-    if (bitPerfectEnabled) {
+    if (useBass) {
       setHardwareVolume(gain)
     }
   }
@@ -77,7 +80,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
           setVolume(val)
           const gain = sliderToGain(val)
           if (audioRef.current) audioRef.current.volume = gain
-          if (bitPerfectEnabled) {
+          if (useBass) {
             setHardwareVolume(gain)
           }
         }}

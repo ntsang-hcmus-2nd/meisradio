@@ -2,6 +2,13 @@ import fs from 'fs'
 import path from 'path'
 import * as mm from 'music-metadata'
 
+declare module 'music-metadata' {
+  interface ICommonTagsResult {
+    replayGainTrack?: number
+    replayGainAlbum?: number
+  }
+}
+
 export interface ExtractedCover {
   data: Buffer
   format: string
@@ -33,6 +40,13 @@ export interface FastAudioMetadata {
   container?: string
   cover?: ExtractedCover | null
   rawTags?: Record<string, string | string[]>
+  replayGainTrack?: number
+  replayGainAlbum?: number
+  common?: {
+    replayGainTrack?: number
+    replayGainAlbum?: number
+    [key: string]: any
+  }
 }
 
 /**
@@ -76,6 +90,46 @@ export function resolveGenreString(rawGenre: string | undefined): string | undef
 }
 
 /**
+ * Preserved artist names that should not be split on internal delimiters like '/', '&', ','
+ */
+export const PRESERVED_ARTIST_NAMES = [
+  'AC/DC',
+  'Tyler, The Creator',
+  'Earth, Wind & Fire',
+  'Earth Wind & Fire',
+  'Simon & Garfunkel',
+  'Hall & Oates',
+  'Daryl Hall & John Oates',
+  'Crosby, Stills, Nash & Young',
+  'Crosby, Stills & Nash',
+  'Emerson, Lake & Palmer',
+  'Blood, Sweat & Tears',
+  'Brooks & Dunn',
+  'Bell, Book & Candle',
+  'K/DA',
+  'Panic! At The Disco',
+  'Florence + The Machine',
+  'Florence and the Machine',
+  'Tom Petty and the Heartbreakers',
+  'KC & The Sunshine Band',
+  'K-Ci & JoJo',
+  'Meg & Dia',
+  'Katrina and the Waves',
+  'Huey Lewis & The News',
+  'Joan Jett & the Blackhearts',
+  'Bob Marley & The Wailers',
+  'Marina & The Diamonds',
+  'Of Monsters and Men',
+  'Above & Beyond',
+  'Arms and Sleepers',
+  'Me & My',
+  'Jack & Jack',
+  'Dan + Shay',
+  'King & Prince',
+  'Sunstroke Project & Olia Tira'
+]
+
+/**
  * Splits an artist string into an array of distinct artist names.
  */
 export function splitArtistNames(raw: string): string[] {
@@ -84,10 +138,44 @@ export function splitArtistNames(raw: string): string[] {
   if (!trimmed || trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'unknown artist') {
     return []
   }
-  const parts = trimmed
-    .split(/\s*(?:;\s*|\/\s*|\\s*|\s+feat\.?\s+|\s+ft\.?\s+|\s+&\s+|\s*,\s*)\s*/i)
+
+  let working = trimmed
+  const placeholders: { token: string; original: string }[] = []
+  let tokenCounter = 0
+
+  const sortedPreserved = [...PRESERVED_ARTIST_NAMES].sort((a, b) => b.length - a.length)
+  for (const name of sortedPreserved) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escaped, 'gi')
+    working = working.replace(regex, (matched) => {
+      const token = `__PRESERVED_ARTIST_${tokenCounter++}__`
+      placeholders.push({ token, original: matched })
+      return token
+    })
+  }
+
+  // Split on common delimiters: semicolon, slash, backslash, feat., ft., &, comma
+  const DELIMITERS = [';', '/', '\\', '&', ',']
+  const delimPattern = DELIMITERS.map(
+    (sep) => '\\s*' + sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'
+  ).join('|')
+  const splitRegex = new RegExp(`(?:${delimPattern}|\\s+(?:feat\\.?|ft\\.?)\\s+)`, 'i')
+
+  const rawParts = working
+    .split(splitRegex)
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
+
+  const parts = rawParts
+    .map((part) => {
+      let restored = part
+      for (const p of placeholders) {
+        restored = restored.replaceAll(p.token, p.original)
+      }
+      return restored.trim()
+    })
+    .filter((s) => s.length > 0)
+
   return parts.length > 0 ? parts : [trimmed]
 }
 
@@ -134,6 +222,26 @@ export function parseVorbisCommentBuffer(commentBuffer: Buffer): {
   } catch {
     return { tags: result, vendor: '' }
   }
+}
+
+/**
+ * Alias for parseVorbisCommentBuffer
+ */
+export const parseVorbisComment = parseVorbisCommentBuffer
+
+/**
+ * Parses a ReplayGain string like "-6.42 dB", "+1.20 dB", or "-6.42" to float number
+ */
+export function parseReplayGainValue(raw: any): number | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (typeof raw === 'number') return isNaN(raw) ? undefined : raw
+  const str = String(raw).trim()
+  const match = str.replace(',', '.').match(/^[+-]?\d+(?:\.\d+)?/)
+  if (match) {
+    const val = parseFloat(match[0])
+    return isNaN(val) ? undefined : val
+  }
+  return undefined
 }
 
 /**
@@ -219,6 +327,48 @@ export function parseId3v2FrameBuffer(id3Buffer: Buffer): {
         if (!tags[frameId]) tags[frameId] = []
         tags[frameId].push(text)
       }
+    } else if (frameId === 'TXXX' && frameData.length > 2) {
+      try {
+        const encoding = frameData[0]
+        let p = 1
+        let desc = ''
+        let val = ''
+        if (encoding === 0 || encoding === 3) {
+          while (p < frameData.length && frameData[p] !== 0) p++
+          desc = frameData.toString(encoding === 0 ? 'latin1' : 'utf-8', 1, p)
+          p++
+          if (p <= frameData.length) {
+            val = frameData.toString(encoding === 0 ? 'latin1' : 'utf-8', p)
+          }
+        } else if (encoding === 1 || encoding === 2) {
+          let buf = frameData
+          if (encoding === 2) {
+            buf = Buffer.from(frameData)
+            for (let b = 1; b < buf.length - 1; b += 2) {
+              const tmp = buf[b]
+              buf[b] = buf[b + 1]
+              buf[b + 1] = tmp
+            }
+          }
+          while (p + 1 < buf.length && !(buf[p] === 0 && buf[p + 1] === 0)) p += 2
+          desc = buf.toString('utf16le', 1, p)
+          p += 2
+          if (p <= buf.length) {
+            val = buf.toString('utf16le', p)
+          }
+        }
+        desc = desc.replace(/\0+$/, '').trim().toUpperCase()
+        val = val.replace(/\0+$/, '').trim()
+        if (desc && val) {
+          const txxxKey = `TXXX:${desc}`
+          if (!tags[txxxKey]) tags[txxxKey] = []
+          tags[txxxKey].push(val)
+          if (desc.startsWith('REPLAYGAIN')) {
+            if (!tags[desc]) tags[desc] = []
+            tags[desc].push(val)
+          }
+        }
+      } catch {}
     } else if (frameId === 'APIC' && frameData.length > 10) {
       try {
         const encoding = frameData[0]
@@ -252,6 +402,11 @@ export function parseId3v2FrameBuffer(id3Buffer: Buffer): {
 
   return { tags, pictures }
 }
+
+/**
+ * Alias for parseId3v2FrameBuffer
+ */
+export const parseId3v2 = parseId3v2FrameBuffer
 
 /**
  * 1. FLAC PICTURE Block Direct Extractor
@@ -752,6 +907,49 @@ function enrichCommonMetadata(metadata: mm.IAudioMetadata): void {
       if (common.track && common.track.no !== null && common.track.no !== undefined) break
     }
   }
+
+  // 5. ReplayGain enrichment (REPLAYGAIN_TRACK_GAIN, REPLAYGAIN_ALBUM_GAIN)
+  if (common.replayGainTrack === undefined || common.replayGainAlbum === undefined) {
+    for (const tagFormat of Object.keys(native)) {
+      const tagList = native[tagFormat]
+      if (Array.isArray(tagList)) {
+        for (const t of tagList) {
+          const tid = String(t.id).toUpperCase()
+          const valObj = t.value
+          const valStr =
+            typeof valObj === 'object' && valObj !== null && 'text' in valObj
+              ? String((valObj as any).text)
+              : String(valObj ?? '')
+          const descStr =
+            typeof valObj === 'object' && valObj !== null && 'description' in valObj
+              ? String((valObj as any).description).toUpperCase()
+              : ''
+
+          if (
+            tid === 'REPLAYGAIN_TRACK_GAIN' ||
+            tid === 'TXXX:REPLAYGAIN_TRACK_GAIN' ||
+            descStr === 'REPLAYGAIN_TRACK_GAIN' ||
+            tid === 'RVA2:TRACK'
+          ) {
+            if (common.replayGainTrack === undefined) {
+              const parsed = parseReplayGainValue(valStr)
+              if (parsed !== undefined) common.replayGainTrack = parsed
+            }
+          } else if (
+            tid === 'REPLAYGAIN_ALBUM_GAIN' ||
+            tid === 'TXXX:REPLAYGAIN_ALBUM_GAIN' ||
+            descStr === 'REPLAYGAIN_ALBUM_GAIN' ||
+            tid === 'RVA2:ALBUM'
+          ) {
+            if (common.replayGainAlbum === undefined) {
+              const parsed = parseReplayGainValue(valStr)
+              if (parsed !== undefined) common.replayGainAlbum = parsed
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -849,6 +1047,7 @@ export async function fastReadMetadata(
           let isLast = false
           const blockHeader = Buffer.alloc(4)
           const blocksToKeep: { offset: number; length: number; type: number }[] = []
+          let skippedPictureBlock = false
 
           while (!isLast) {
             const readRes = await fd.read(blockHeader, 0, 4, offset)
@@ -861,7 +1060,12 @@ export async function fastReadMetadata(
 
             if (blockLength < 0 || blockLength > 30 * 1024 * 1024) break
 
-            const shouldKeep = !(options?.skipCovers && blockType === 6)
+            const isPictureBlock = blockType === 6
+            if (isPictureBlock && options?.skipCovers) {
+              skippedPictureBlock = true
+            }
+
+            const shouldKeep = !(options?.skipCovers && isPictureBlock)
             if (shouldKeep) {
               blocksToKeep.push({ offset, length: blockLength, type: blockType })
             }
@@ -871,8 +1075,7 @@ export async function fastReadMetadata(
           }
 
           if (blocksToKeep.length > 0) {
-            const hasSkippedPicture =
-              blocksToKeep.length < (isLast ? blocksToKeep.length : 0) || options?.skipCovers
+            const hasSkippedPicture = skippedPictureBlock
             let meta: mm.IAudioMetadata
             if (!hasSkippedPicture) {
               const metaBuf = Buffer.alloc(offset)
@@ -1090,8 +1293,13 @@ export async function parseFastAudioMetadata(
     lossless: fmt.lossless || isDsd,
     format: fmt.container || ext.replace('.', '').toUpperCase(),
     codec: fmt.codec,
-    container: fmt.container,
-    cover
+    cover,
+    replayGainTrack: common.replayGainTrack,
+    replayGainAlbum: common.replayGainAlbum,
+    common: {
+      replayGainTrack: common.replayGainTrack,
+      replayGainAlbum: common.replayGainAlbum
+    }
   }
 }
 

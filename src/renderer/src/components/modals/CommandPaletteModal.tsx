@@ -1108,7 +1108,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         }))
         return recentItems.length > 0
           ? recentItems
-          : libraryTracks.slice(0, 20).map((trk) => ({
+          : (libraryTracks || []).slice(0, 20).map((trk) => ({
               id: `track-${trk.id || trk.filePath}`,
               title: trk.title || 'Unknown Title',
               subtitle: `${trk.artist || 'Unknown Artist'} • ${trk.album || ''} • ${formatDuration(trk.duration)}`,
@@ -1127,7 +1127,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       }
 
       if (effectiveTab === 'artists') {
-        return allArtists.slice(0, 25).map((a) => ({
+        return (allArtists || []).slice(0, 25).map((a) => ({
           id: `artist-${a.name}`,
           title: a.name,
           subtitle: t('spotlight.tracksCount', { count: a.trackCount || 0 }),
@@ -1139,7 +1139,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       }
 
       if (effectiveTab === 'albums') {
-        return allAlbums.slice(0, 25).map((alb) => ({
+        return (allAlbums || []).slice(0, 25).map((alb) => ({
           id: `album-${alb.title}-${alb.artist}`,
           title: alb.title,
           subtitle: `${alb.artist} • ${t('spotlight.tracksCount', { count: alb.trackCount || 0 })}`,
@@ -1200,7 +1200,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         secondaryActionLabel: t('spotlight.actionAddToQueue')
       }))
 
-      const topCommands = builtInCommands.slice(0, 10)
+      const topCommands = (builtInCommands || []).slice(0, 10)
       return [...recentTracks, ...topCommands]
     }
 

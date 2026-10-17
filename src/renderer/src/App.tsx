@@ -1,124 +1,18 @@
-// @ts-nocheck
 import React, { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue } from 'react'
 import {
-  Play,
-  Pause,
-  SkipForward,
-  SkipBack,
-  Shuffle,
-  Repeat,
-  Repeat1,
-  Volume2,
-  VolumeX,
-  Sliders,
-  Cloud,
-  HardDrive,
-  Search,
-  Library,
-  ListMusic,
-  Settings,
-  FolderPlus,
-  Download,
-  Wifi,
-  Link,
-  Edit2,
-  Image as ImageIcon,
-  Sparkles,
-  Plus,
-  Trash2,
-  RotateCcw,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  Mic2,
-  Maximize2,
-  Minimize2,
-  List,
-  X,
-  Activity,
-  RefreshCw,
-  PictureInPicture2,
-  Home,
   ArrowLeft,
-  Radio,
-  BarChart2,
+  Search,
+  X,
   LayoutGrid,
   Rows3,
-  Disc,
-  Tag,
-  Music,
-  Folder,
-  FolderOpen,
-  MoreVertical,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  Layers,
-  ListPlus,
-  Leaf,
-  Cpu,
-  Zap,
-  BatteryCharging,
-  History,
-  Compass,
-  Timer,
-  Clock,
-  Info,
-  Palette,
-  Check,
-  Languages,
-  AppWindow,
-  Database,
-  Upload,
-  SlidersHorizontal,
-  LayoutTemplate,
-  Flame,
-  Heart,
-  CheckSquare,
-  Square
+  List,
+  Sparkles,
+  Cloud
 } from 'lucide-react'
-import {
-  TableVirtuoso,
-  Virtuoso,
-  VirtuosoGrid,
-  GroupedVirtuoso,
-  GroupedVirtuosoHandle
-} from 'react-virtuoso'
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors
-} from '@dnd-kit/core'
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import thumbnailHolder from '../../../resources/HoT_Chibi_Emoji.png'
-import meiSingingPlaceholder from '../../../resources/Mei singing.webp'
-import { CustomNumberInput } from './components/CustomNumberInput'
-import { CustomSelect } from './components/CustomSelect'
-import { CustomDialogModal, DialogOptions } from './components/modals/CustomDialogModal'
-import { PlayerProgressBar } from './components/PlayerProgressBar'
-import { Sidebar } from './components/Sidebar'
-import { EQPanel } from './components/EQPanel'
-import { VolumeSlider } from './components/VolumeSlider'
-import { PlayerToolsMenu } from './components/PlayerToolsMenu'
-import { ContextMenu, ContextMenuItem } from './components/ContextMenu'
-import { DragDropOverlay } from './components/DragDropOverlay'
-import { ErrorBoundary } from './components/ErrorBoundary'
 
-// TỐI ƯU HÓA: Nạp lười (Code Splitting) các modal và màn hình phụ để giảm kích thước bundle và tăng tốc mở app
+// Modals & Panels (Lazy loaded for optimized bundle size & fast startup)
 const PlaylistRenameModal = React.lazy(() =>
-  import('./components/modals/PlaylistRenameModal').then((m) => ({
-    default: m.PlaylistRenameModal
-  }))
+  import('./components/modals/PlaylistRenameModal').then((m) => ({ default: m.PlaylistRenameModal }))
 )
 const EditPlaylistModal = React.lazy(() =>
   import('./components/modals/EditPlaylistModal').then((m) => ({ default: m.EditPlaylistModal }))
@@ -133,9 +27,7 @@ const TrackInfoModal = React.lazy(() =>
   import('./components/modals/TrackInfoModal').then((m) => ({ default: m.TrackInfoModal }))
 )
 const CreatePlaylistModal = React.lazy(() =>
-  import('./components/modals/CreatePlaylistModal').then((m) => ({
-    default: m.CreatePlaylistModal
-  }))
+  import('./components/modals/CreatePlaylistModal').then((m) => ({ default: m.CreatePlaylistModal }))
 )
 const AddSongsModal = React.lazy(() =>
   import('./components/modals/AddSongsModal').then((m) => ({ default: m.AddSongsModal }))
@@ -144,9 +36,7 @@ const SpectrogramModal = React.lazy(() =>
   import('./components/SpectrogramModal').then((m) => ({ default: m.SpectrogramModal }))
 )
 const CommandPaletteModal = React.lazy(() =>
-  import('./components/modals/CommandPaletteModal').then((m) => ({
-    default: m.CommandPaletteModal
-  }))
+  import('./components/modals/CommandPaletteModal').then((m) => ({ default: m.CommandPaletteModal }))
 )
 const MusicInsightsModal = React.lazy(() =>
   import('./components/modals/MusicInsightsModal').then((m) => ({ default: m.MusicInsightsModal }))
@@ -154,1091 +44,119 @@ const MusicInsightsModal = React.lazy(() =>
 const BackupModal = React.lazy(() =>
   import('./components/modals/BackupModal').then((m) => ({ default: m.BackupModal }))
 )
-const DownloadsView = React.lazy(() =>
-  import('./components/DownloadsView').then((m) => ({ default: m.DownloadsView }))
-)
 const DuplicateFinderModal = React.lazy(() =>
-  import('./components/modals/DuplicateFinderModal').then((m) => ({
-    default: m.DuplicateFinderModal
-  }))
+  import('./components/modals/DuplicateFinderModal').then((m) => ({ default: m.DuplicateFinderModal }))
 )
 const SmartPlaylistModal = React.lazy(() =>
-  import('./components/modals/SmartPlaylistModal').then((m) => ({
-    default: m.SmartPlaylistModal
-  }))
+  import('./components/modals/SmartPlaylistModal').then((m) => ({ default: m.SmartPlaylistModal }))
 )
-import { QuickFilterChips } from './components/QuickFilterChips'
+const EQPanel = React.lazy(() =>
+  import('./components/EQPanel').then((m) => ({ default: m.EQPanel }))
+)
+
+// Views
+import {
+  HomeView,
+  YtmHomeView,
+  SoundCloudView,
+  SongsView,
+  ArtistsView,
+  GenresView,
+  UserPlaylistsView,
+  FolderPlaylistsView,
+  SettingsView,
+  DriveView,
+  DownloadsView,
+  AnalyticsView
+} from './views'
+
+// Components
+import { Sidebar } from './components/Sidebar'
 import { BatchActionBar } from './components/BatchActionBar'
+import { DownloadProgressToast } from './components/TrackListComponents'
+import { DragDropOverlay } from './components/DragDropOverlay'
+import { ContextMenu } from './components/ContextMenu'
+import { CustomDialogModal } from './components/modals/CustomDialogModal'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { MiniPlayerView } from './components/MiniPlayerView'
+import { QueuePanel } from './components/QueuePanel'
+import { SideLyricsPanel } from './components/SideLyricsPanel'
+import { FullscreenLyrics } from './components/FullscreenLyrics'
+import { PlayerBar } from './components/PlayerBar'
 
-import { extractThemeColors, initThemeColorCache, generateThemeFromColor } from './utils/colorUtils'
+// Custom Hooks
+import {
+  useNavigationHistory,
+  useMemoryOptimization,
+  useTheming,
+  useLyrics,
+  useSleepTimer,
+  useMediaSession,
+  useAppShortcuts,
+  useAudioEngine,
+  useLibraryOperations,
+  useDiscordRpc,
+  useListeningTracker
+} from './hooks'
 
-const PRESET_ACCENT_COLORS = [
-  { name: 'Emerald', color: '#10b981' },
-  { name: 'Cyan', color: '#06b6d4' },
-  { name: 'Blue', color: '#3b82f6' },
-  { name: 'Purple', color: '#8b5cf6' },
-  { name: 'Pink', color: '#ec4899' },
-  { name: 'Rose', color: '#f43f5e' },
-  { name: 'Amber', color: '#f59e0b' },
-  { name: 'Orange', color: '#f97316' }
-]
-import { DynamicCoverArt, setGlobalStreamPort } from './components/DynamicCoverArt'
-import { removeAccents, matchesQuery, matchesTrackQuery } from './utils/textUtils'
-import { fisherYatesShuffle } from './utils/arrayUtils'
-import { formatAudioSource, formatImageSource } from './utils/urlUtils'
-import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate } from './utils/formatUtils'
-import { sliderToGain } from './utils/audioUtils'
+// Stores, Locales & Utils
 import {
   usePlayerStore,
   useUIStore,
   useLibraryStore,
   useSettingsStore,
   useAudioStore,
-  useLyricsStore,
   loadPlaybackSession,
-  savePlaybackSession,
   scheduleSavePlaybackSession
 } from './stores'
+import { useTranslation, useLanguage } from './locales'
+import { formatAudioSource } from './utils/urlUtils'
+import { sliderToGain } from './utils/audioUtils'
+import { isDsdTrack, formatDuration } from './utils/formatUtils'
+import { splitArtistString, removeAccents, matchesQuery, PRESERVED_ARTIST_NAMES } from './utils/textUtils'
+import { filterTracksByQuickFilter, getFilteredTracks, getSortedTracks } from './utils/trackFilterUtils'
 
-// --- HELPER FUNCTIONS & INTERFACES (OUTSIDE COMPONENT) ---
-const formatDuration = (seconds: number) => {
-  if (!seconds || isNaN(seconds)) return '0:00'
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`
-}
-
-const getBrowserSinkId = (deviceId: string | null | undefined): string => {
-  if (
-    !deviceId ||
-    deviceId === 'auto' ||
-    deviceId === 'default' ||
-    deviceId.startsWith('wasapi/') ||
-    /^\d+$/.test(deviceId)
-  )
-    return ''
-  return deviceId
-}
-import { PRESERVED_ARTIST_NAMES, splitArtistString } from './utils/textUtils'
 export { PRESERVED_ARTIST_NAMES, splitArtistString }
-
-import { WebGLVisualizer } from './components/visualizers/WebGLVisualizer'
-import { WebGLSpectrogram } from './components/visualizers/WebGLSpectrogram'
-import { useTranslation } from './locales'
 
 export interface EQBand {
   id: string
-  frequency: number // Tần số (Hz): 20Hz - 20000Hz
-  gain: number // Độ khuếch đại (dB): -20dB đến +20dB
-  type: BiquadFilterType // 'peaking' | 'lowshelf' | 'highshelf' | 'lowpass' | 'highpass'
-  q?: number // Hệ số Q (Bandwidth)
+  frequency: number
+  gain: number
+  type: BiquadFilterType
+  q?: number
 }
-
-interface LyricLine {
-  time: number // Thời gian tính theo giây
-  text: string
-  unsynced?: boolean // true: lời thô không có mốc thời gian (không highlight / không tua)
-}
-
-// Chuẩn hóa đường dẫn hình ảnh cho Background (Hỗ trợ webSecurity: true và ký tự đặc biệt #, ?, %)
-const normalizeImagePath = (input: string): string => {
-  return formatImageSource(input)
-}
-
-// Bộ nhớ đệm màu chủ đạo trong RAM (LRU Cache tối đa 50 bài hát gần nhất)
-const MAX_DOMINANT_CACHE = 50
-const dominantColorCache = new Map<string, string>()
-
-const saveDominantColorToCache = (key: string, val: string) => {
-  if (dominantColorCache.size >= MAX_DOMINANT_CACHE) {
-    const oldestKey = dominantColorCache.keys().next().value
-    if (oldestKey) dominantColorCache.delete(oldestKey)
-  }
-  dominantColorCache.set(key, val)
-}
-
-// Hàm phân tích màu chủ đạo bằng Canvas (Tối ưu Cache)
-const getDominantColor = (imageSrc: string, callback: (color: string) => void) => {
-  if (!imageSrc) return
-  if (dominantColorCache.has(imageSrc)) {
-    const cached = dominantColorCache.get(imageSrc)!
-    dominantColorCache.delete(imageSrc)
-    dominantColorCache.set(imageSrc, cached) // Đưa lên đầu danh sách LRU
-    callback(cached)
-    return
-  }
-  const img = new Image()
-  const safeSrc = formatImageSource(imageSrc)
-  const targetSrc = safeSrc || imageSrc
-  if (targetSrc.startsWith('http://') || targetSrc.startsWith('https://')) {
-    img.crossOrigin = 'Anonymous'
-  }
-  img.onload = () => {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    if (!ctx) return
-
-    // Tối ưu CPU/RAM: Thu nhỏ ảnh xuống 64x64 để quét siêu tốc
-    canvas.width = 64
-    canvas.height = 64
-    ctx.drawImage(img, 0, 0, 64, 64)
-
-    const data = ctx.getImageData(0, 0, 64, 64).data
-    let r = 0,
-      g = 0,
-      b = 0,
-      count = 0
-    for (let i = 0; i < data.length; i += 16) {
-      r += data[i]
-      g += data[i + 1]
-      b += data[i + 2]
-      count++
-    }
-    if (count === 0) count = 1
-    r = Math.floor(r / count)
-    g = Math.floor(g / count)
-    b = Math.floor(b / count)
-    const colorStr = `rgba(${Math.max(r - 30, 0)}, ${Math.max(g - 30, 0)}, ${Math.max(b - 30, 0)}, 0.4)`
-    saveDominantColorToCache(imageSrc, colorStr)
-    callback(colorStr)
-  }
-  img.src = targetSrc
-}
-
-const VirtuosoComponents = {
-  Table: ({ style, ...props }: any) => (
-    <table
-      {...props}
-      className="w-full text-left text-sm table-fixed"
-      style={{ ...style, borderCollapse: 'collapse' }}
-    />
-  ),
-  TableHead: React.forwardRef((props: any, ref: any) => <thead {...props} ref={ref} />),
-  TableRow: (props: any) => (
-    <tr
-      {...props}
-      className="group border-b border-theme-30/20 transition-colors cursor-pointer hover:bg-white/5"
-    />
-  )
-}
-
-// Thành phần hiển thị danh sách nghệ sĩ có thể nhấp để điều hướng
-export const ArtistLinks = React.memo(
-  ({
-    artists,
-    fallbackArtist,
-    onArtistClick,
-    className = '',
-    itemClassName = '',
-    separator = ', '
-  }: {
-    artists?: string[] | null
-    fallbackArtist?: string | null
-    onArtistClick?: (artistName: string) => void
-    className?: string
-    itemClassName?: string
-    separator?: string
-  }) => {
-    const list = useMemo(() => {
-      if (Array.isArray(artists) && artists.length > 0) {
-        return artists.map((a) => a?.trim()).filter(Boolean)
-      }
-      if (fallbackArtist) {
-        return splitArtistString(fallbackArtist)
-      }
-      return []
-    }, [artists, fallbackArtist])
-
-    if (list.length === 0) {
-      return <span className={className}>{fallbackArtist || 'Unknown Artist'}</span>
-    }
-
-    return (
-      <span className={className}>
-        {list.map((artist, idx) => {
-          const isClickable = !!onArtistClick
-          return (
-            <React.Fragment key={`${artist}-${idx}`}>
-              {isClickable ? (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onArtistClick(artist)
-                  }}
-                  className={`hover:text-theme-10 hover:underline transition-colors cursor-pointer ${itemClassName}`}
-                  title={artist}
-                >
-                  {artist}
-                </span>
-              ) : (
-                <span className={itemClassName}>{artist}</span>
-              )}
-              {idx < list.length - 1 && (
-                <span className="text-zinc-500 pointer-events-none select-none">{separator}</span>
-              )}
-            </React.Fragment>
-          )
-        })}
-      </span>
-    )
-  }
-)
-
-// TỐI ƯU HÓA: Ghi nhớ từng dòng bài hát, ngăn React vẽ lại toàn bộ bảng khi thao tác
-const TrackRow = React.memo(
-  ({
-    track,
-    index,
-    isThisTrackPlaying,
-    isPlaying,
-    isLite,
-    handleRowClick,
-    tracks,
-    openTrackInfo,
-    onContextMenu,
-    onArtistClick
-  }: any) => {
-    const { t } = useTranslation()
-    const selectedTrackIds = useLibraryStore((s) => s.selectedTrackIds)
-    const toggleSelectTrackId = useLibraryStore((s) => s.toggleSelectTrackId)
-    const trackKey = track.id || track.filePath
-    const isSelected = !!trackKey && selectedTrackIds.includes(trackKey)
-
-    const handleRowSelectOrPlay = (e: React.MouseEvent) => {
-      if (e.ctrlKey || e.metaKey || e.shiftKey) {
-        e.preventDefault()
-        e.stopPropagation()
-        if (trackKey) toggleSelectTrackId(trackKey)
-        return
-      }
-      handleRowClick(track, tracks)
-    }
-
-    return (
-      <>
-        <td
-          onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={handleRowSelectOrPlay}
-          className={`py-3 text-center text-zinc-500 group-hover:text-white w-10 sm:w-12 text-xs font-mono transition-colors select-none ${
-            isSelected ? 'bg-theme-10/20 text-theme-10 font-bold' : ''
-          }`}
-        >
-          <div
-            className="inline-flex items-center justify-center cursor-pointer w-6 h-6 rounded hover:bg-white/10 mx-auto"
-            onClick={(e) => {
-              e.stopPropagation()
-              if (trackKey) toggleSelectTrackId(trackKey)
-            }}
-            title={isSelected ? t('common.deselect') || 'Deselect' : t('common.select') || 'Select'}
-          >
-            {isSelected ? (
-              <CheckSquare size={14} className="text-theme-10" />
-            ) : isThisTrackPlaying && isPlaying ? (
-              <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" />
-            ) : (
-              <>
-                <span className={selectedTrackIds.length > 0 ? 'hidden' : 'group-hover:hidden'}>
-                  {index + 1}
-                </span>
-                <Square
-                  size={14}
-                  className={`${selectedTrackIds.length > 0 ? 'inline' : 'hidden group-hover:inline'} text-zinc-500 hover:text-zinc-300`}
-                />
-              </>
-            )}
-          </div>
-        </td>
-        <td
-          onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={handleRowSelectOrPlay}
-          className={`py-3 pr-4 min-w-0 transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
-        >
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-10 h-10 bg-theme-30 rounded-md overflow-hidden flex-shrink-0 relative flex items-center justify-center shadow-sm">
-              {/* TỐI ƯU HÓA: Xóa bỏ loading="lazy" vì Virtuoso đã tự động Lazy Load, kết hợp cả 2 sẽ gây spike CPU */}
-              <DynamicCoverArt
-                track={track}
-                tier="sm"
-                isLite={isLite}
-                fallbackImageSrc={thumbnailHolder}
-                className="w-full h-full"
-              />
-              {track.isCloud && (
-                <div className="absolute top-0 right-0 bg-theme-10/80 p-0.5 rounded-bl-md z-10">
-                  <Cloud size={10} className="text-white" />
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p
-                className={`font-semibold text-sm transition-colors truncate ${isThisTrackPlaying ? 'text-theme-10' : isSelected ? 'text-theme-10 font-bold' : 'text-white group-hover:text-theme-10'}`}
-              >
-                {track.title}
-              </p>
-              <ArtistLinks
-                artists={track.artists}
-                fallbackArtist={track.artist}
-                onArtistClick={onArtistClick}
-                className="text-xs text-zinc-400 block truncate"
-              />
-            </div>
-          </div>
-        </td>
-        <td
-          onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={handleRowSelectOrPlay}
-          className={`py-3 pr-4 text-zinc-400 truncate text-xs hidden md:table-cell transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
-          title={track.album || 'Unknown'}
-        >
-          {track.album || 'Unknown'}
-        </td>
-        <td
-          onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={handleRowSelectOrPlay}
-          className={`py-3 w-28 sm:w-32 text-center whitespace-nowrap transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
-        >
-          {(() => {
-            const isDsd = isDsdTrack(track)
-            if (isDsd) {
-              const dsdRate = getDsdRateLabel(track.sampleRate)
-              return (
-                <span
-                  className="px-2.5 py-0.5 bg-amber-500/15 border border-amber-500/30 rounded text-xs text-amber-300 font-semibold tracking-wide whitespace-nowrap inline-flex items-center gap-1 shadow-sm"
-                  title={`Direct Stream Digital 1-bit • ${formatAudioSampleRate(track.sampleRate) || '2.82 MHz'}`}
-                >
-                  <span>{dsdRate}</span>
-                  <span className="text-[10px] text-amber-400/80 font-normal">1-BIT</span>
-                </span>
-              )
-            }
-            return (
-              <span className="px-2.5 py-0.5 bg-theme-30 rounded text-xs text-zinc-300 font-medium uppercase tracking-wide whitespace-nowrap inline-flex items-center justify-center">
-                {track.format || 'MP3'}
-                {track.bitDepth ? ` • ${track.bitDepth}-BIT` : ''}
-              </span>
-            )
-          })()}
-        </td>
-        <td
-          onContextMenu={(e) => onContextMenu?.(track, e)}
-          onClick={handleRowSelectOrPlay}
-          className={`py-3 text-right pr-4 text-zinc-400 font-mono text-xs w-16 sm:w-20 whitespace-nowrap transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
-        >
-          {formatDuration(track.duration)}
-        </td>
-        <td
-          onContextMenu={(e) => onContextMenu?.(track, e)}
-          className={`py-3 text-center w-10 sm:w-11 transition-colors ${isSelected ? 'bg-theme-10/10' : ''}`}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              openTrackInfo?.(track, e)
-            }}
-            title={t('trackTable.viewInfo')}
-            className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1 cursor-pointer mx-auto flex items-center justify-center"
-          >
-            <Info size={15} />
-          </button>
-        </td>
-      </>
-    )
-  }
-)
-
-// Thẻ bài hát dạng Lưới (Grid Item)
-const TrackGridItem = React.memo(
-  ({
-    track,
-    index,
-    isThisTrackPlaying,
-    isPlaying,
-    isLite,
-    handleRowClick,
-    tracks,
-    onContextMenu,
-    onArtistClick
-  }: any) => {
-    return (
-      <div
-        key={track.id || index}
-        onClick={() => handleRowClick(track, tracks)}
-        onContextMenu={(e) => onContextMenu?.(track, e)}
-        className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between track-card-optimized h-full"
-      >
-        <div className="aspect-square bg-theme-30/80 rounded-lg mb-3 overflow-hidden relative shadow-md">
-          <DynamicCoverArt
-            track={track}
-            tier="md"
-            isLite={isLite}
-            smartAspect={true}
-            fallbackIcon={<Music size={32} />}
-            className="w-full h-full group-hover:scale-105 transition duration-300"
-          />
-          <div
-            className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${isThisTrackPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-          >
-            <div className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition">
-              {isThisTrackPlaying && isPlaying ? (
-                <Pause size={18} />
-              ) : (
-                <Play size={18} className="ml-0.5" />
-              )}
-            </div>
-          </div>
-          {(() => {
-            const isDsd = isDsdTrack(track)
-            if (isDsd) {
-              return (
-                <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/80 backdrop-blur-md text-amber-950 uppercase shadow-sm">
-                  {getDsdRateLabel(track.sampleRate)}
-                </span>
-              )
-            }
-            return track.format ? (
-              <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-black/60 backdrop-blur-md text-zinc-300 uppercase">
-                {track.format}
-              </span>
-            ) : null
-          })()}
-        </div>
-        <div className="min-w-0">
-          <h4
-            className={`font-semibold text-sm truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'} transition-colors`}
-          >
-            {track.title}
-          </h4>
-          <ArtistLinks
-            artists={track.artists}
-            fallbackArtist={track.artist}
-            onArtistClick={onArtistClick}
-            className="text-xs text-zinc-400 block truncate mt-0.5"
-          />
-          <div className="flex items-center justify-between text-[11px] text-zinc-500 mt-2 pt-2 border-t border-theme-30/30">
-            <span className="truncate max-w-[90px]">{track.album || 'Unknown'}</span>
-            <span>{formatDuration(track.duration)}</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-)
-
-// Chế độ xem Lưới thẻ bìa (Grid View - Ảo hóa với VirtuosoGrid)
-const TrackGrid = React.memo(
-  ({
-    tracks,
-    currentTrack,
-    isPlaying,
-    isLite,
-    handleRowClick,
-    onContextMenu,
-    openTagEditor,
-    onArtistClick
-  }: any) => {
-    return (
-      <div className="flex-1 min-h-[300px] h-full w-full overflow-hidden">
-        <VirtuosoGrid
-          style={{ height: '100%', width: '100%' }}
-          data={tracks}
-          listClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 p-1"
-          itemClassName="h-full"
-          increaseViewportBy={{ top: 60, bottom: 60 }}
-          itemContent={(index, track) => (
-            <TrackGridItem
-              track={track}
-              index={index}
-              isThisTrackPlaying={currentTrack?.id === track.id}
-              isPlaying={isPlaying}
-              isLite={isLite}
-              handleRowClick={handleRowClick}
-              tracks={tracks}
-              onContextMenu={onContextMenu}
-              onArtistClick={onArtistClick}
-            />
-          )}
-        />
-      </div>
-    )
-  }
-)
-
-// Hàng bài hát dạng Thu gọn (Compact Row Item)
-const TrackCompactItem = React.memo(
-  ({
-    track,
-    index,
-    isThisTrackPlaying,
-    isPlaying,
-    isLite,
-    handleRowClick,
-    tracks,
-    onContextMenu,
-    openTrackInfo,
-    onArtistClick
-  }: any) => {
-    const { t } = useTranslation()
-    return (
-      <div
-        onClick={() => handleRowClick(track, tracks)}
-        onContextMenu={(e) => onContextMenu?.(track, e)}
-        className={`flex items-center gap-3 px-3 py-2 text-xs transition cursor-pointer group track-row-optimized ${isThisTrackPlaying ? 'bg-theme-10/15' : 'hover:bg-white/5'}`}
-      >
-        <span className="w-6 text-center text-zinc-500 font-mono text-[11px] group-hover:text-white">
-          {isThisTrackPlaying && isPlaying ? (
-            <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" />
-          ) : (
-            index + 1
-          )}
-        </span>
-        <div className="w-7 h-7 bg-theme-30 rounded overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-          <DynamicCoverArt
-            track={track}
-            tier="sm"
-            isLite={isLite}
-            fallbackIcon={<Music size={12} className="text-zinc-500" />}
-            className="w-full h-full"
-          />
-        </div>
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <span
-            className={`font-medium truncate ${isThisTrackPlaying ? 'text-theme-10' : 'text-white group-hover:text-theme-10'}`}
-          >
-            {track.title}
-          </span>
-          <span className="text-zinc-500 text-[11px] shrink-0">•</span>
-          <ArtistLinks
-            artists={track.artists}
-            fallbackArtist={track.artist}
-            onArtistClick={onArtistClick}
-            className="text-zinc-400 truncate text-[11px]"
-          />
-        </div>
-        <span className="text-zinc-500 truncate max-w-[160px] lg:max-w-[220px] hidden md:block">
-          {track.album || ''}
-        </span>
-        {(() => {
-          const isDsd = isDsdTrack(track)
-          if (isDsd) {
-            return (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase font-bold whitespace-nowrap">
-                {getDsdRateLabel(track.sampleRate)}
-              </span>
-            )
-          }
-          return (
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-theme-30/80 text-zinc-300 uppercase whitespace-nowrap">
-              {track.format || 'MP3'}
-            </span>
-          )
-        })()}
-        <span className="w-12 text-right text-zinc-400 font-mono text-[11px]">
-          {formatDuration(track.duration)}
-        </span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            openTrackInfo?.(track, e)
-          }}
-          title={t('trackTable.viewInfo')}
-          className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-theme-10 p-1 transition cursor-pointer"
-        >
-          <Info size={13} />
-        </button>
-      </div>
-    )
-  }
-)
-
-// Chế độ xem Danh sách thu gọn (Compact View - Ảo hóa với Virtuoso)
-const TrackCompactList = React.memo(
-  ({
-    tracks,
-    currentTrack,
-    isPlaying,
-    isLite,
-    handleRowClick,
-    onContextMenu,
-    openTrackInfo,
-    onArtistClick
-  }: any) => {
-    return (
-      <div className="flex-1 min-h-[300px] h-full w-full bg-theme-60/20 rounded-lg border border-theme-30/50 overflow-hidden">
-        <Virtuoso
-          style={{ height: '100%', width: '100%' }}
-          data={tracks}
-          increaseViewportBy={{ top: 200, bottom: 200 }}
-          itemContent={(index, track) => (
-            <TrackCompactItem
-              track={track}
-              index={index}
-              isThisTrackPlaying={currentTrack?.id === track.id}
-              isPlaying={isPlaying}
-              isLite={isLite}
-              handleRowClick={handleRowClick}
-              tracks={tracks}
-              onContextMenu={onContextMenu}
-              openTrackInfo={openTrackInfo}
-              onArtistClick={onArtistClick}
-            />
-          )}
-        />
-      </div>
-    )
-  }
-)
-
-// Item Playlist dạng Thẻ Lưới (Grid Card)
-const PlaylistItemCard = React.memo(
-  ({ pl, isLite, onOpen, onContextMenu, onChangeImage, onExtractImage, onRename, t }: any) => {
-    return (
-      <div
-        className="bg-theme-60/40 p-4 rounded-xl border border-theme-30/50 hover:bg-theme-30/50 transition group cursor-pointer track-card-optimized"
-        onClick={() => onOpen(pl)}
-        onContextMenu={(e) => onContextMenu(pl, e)}
-      >
-        <div className="aspect-square bg-theme-30 rounded-lg mb-4 overflow-hidden relative shadow-md">
-          <DynamicCoverArt
-            src={pl.thumbnail}
-            trackPath={pl.path}
-            tier="md"
-            isLite={isLite}
-            fallbackIcon={<FolderPlus size={40} className="text-zinc-600" />}
-            className="w-full h-full"
-            imageClassName="group-hover:scale-105 transition duration-300"
-          />
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onChangeImage(pl.name)
-            }}
-            className="absolute bottom-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition cursor-pointer"
-            title={t('playlistsView.chooseCover')}
-          >
-            <ImageIcon size={16} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onExtractImage(pl.name)
-            }}
-            className="absolute bottom-2 right-10 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition cursor-pointer"
-            title={t('playlistsView.extractCover')}
-          >
-            <Sparkles size={16} />
-          </button>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="min-w-0 flex-1 pr-2">
-            <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">
-              {pl.name}
-            </h3>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              {pl.tracks?.length || 0} {t('common.songs')}
-            </p>
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onRename(pl.name)
-            }}
-            className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1 cursor-pointer"
-            title={t('modals.playlistRename.title')}
-          >
-            <Edit2 size={14} />
-          </button>
-        </div>
-      </div>
-    )
-  }
-)
-
-// Item Playlist dạng Bảng Hàng (Table Row)
-const PlaylistItemRow = React.memo(
-  ({ pl, idx, isLite, onOpen, onPlay, onContextMenu, onChangeImage, onRename, t }: any) => {
-    return (
-      <div
-        onClick={() => onOpen(pl)}
-        onContextMenu={(e) => onContextMenu(pl, e)}
-        className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
-      >
-        <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
-          {idx + 1}
-        </div>
-        <div className="col-span-7 flex items-center gap-3.5 min-w-0">
-          <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-            <DynamicCoverArt
-              src={pl.thumbnail}
-              trackPath={pl.path}
-              tier="sm"
-              isLite={isLite}
-              fallbackIcon={<FolderPlus size={20} className="text-zinc-600" />}
-              className="w-full h-full"
-            />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (pl.tracks && pl.tracks.length > 0) onPlay(pl.tracks)
-                }}
-                className="text-white hover:scale-110 transition cursor-pointer"
-              >
-                <Play size={16} className="fill-current" />
-              </button>
-            </div>
-          </div>
-          <div className="min-w-0">
-            <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">
-              {pl.name}
-            </h4>
-            <p className="text-xs text-zinc-500 truncate mt-0.5">{t('sidebar.myPlaylists')}</p>
-          </div>
-        </div>
-        <div className="col-span-2 text-center">
-          <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
-            {pl.tracks?.length || 0} {t('common.songs')}
-          </span>
-        </div>
-        <div className="col-span-2 flex items-center justify-end gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onChangeImage(pl.name)
-            }}
-            className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100 cursor-pointer"
-            title={t('playlistsView.chooseCover')}
-          >
-            <ImageIcon size={15} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onRename(pl.name)
-            }}
-            className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100 cursor-pointer"
-            title={t('modals.playlistRename.title')}
-          >
-            <Edit2 size={15} />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onContextMenu(pl, e)
-            }}
-            className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition cursor-pointer"
-          >
-            <MoreVertical size={15} />
-          </button>
-        </div>
-      </div>
-    )
-  }
-)
-
-// Item Playlist dạng Thu gọn (Compact Item)
-const PlaylistItemCompact = React.memo(
-  ({ pl, idx, isLite, onOpen, onPlay, onContextMenu, t }: any) => {
-    return (
-      <div
-        onClick={() => onOpen(pl)}
-        onContextMenu={(e) => onContextMenu(pl, e)}
-        className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
-      >
-        <div className="flex items-center gap-3.5 min-w-0 flex-1">
-          <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">
-            {idx + 1}
-          </span>
-          <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-            <DynamicCoverArt
-              src={pl.thumbnail}
-              trackPath={pl.path}
-              tier="sm"
-              isLite={isLite}
-              fallbackIcon={<FolderPlus size={16} className="text-zinc-600" />}
-              className="w-full h-full"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">
-              {pl.name}
-            </h4>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 shrink-0">
-          <span className="text-xs text-zinc-400 font-mono">
-            {pl.tracks?.length || 0} {t('common.songs')}
-          </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              if (pl.tracks && pl.tracks.length > 0) onPlay(pl.tracks)
-            }}
-            className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100 cursor-pointer"
-            title={t('artistsView.playAll')}
-          >
-            <Play size={13} className="ml-0.5 fill-current" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onContextMenu(pl, e)
-            }}
-            className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100 cursor-pointer"
-          >
-            <MoreVertical size={14} />
-          </button>
-        </div>
-      </div>
-    )
-  }
-)
-
-const SortableQueueItem = React.memo(
-  ({ id, track, isActive, isPlaying, isLite, onPlay, onContextMenu, onArtistClick }: any) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id })
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition
-    }
-
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        {...attributes}
-        {...listeners}
-        onClick={() => onPlay(track)}
-        onContextMenu={(e) => onContextMenu?.(track, e)}
-        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${isActive ? 'bg-theme-10/20 border border-theme-10/30' : 'hover:bg-theme-30/50 border border-transparent'}`}
-      >
-        <div className="w-10 h-10 bg-theme-30 rounded flex-shrink-0 overflow-hidden relative flex items-center justify-center">
-          <DynamicCoverArt
-            track={track}
-            tier="sm"
-            isLite={isLite}
-            fallbackIcon={<ListMusic size={16} className="text-zinc-500" />}
-            className="w-full h-full pointer-events-none"
-          />
-          {isActive && isPlaying && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-              <div className="w-3 h-3 bg-theme-10 rounded-full animate-pulse" />
-            </div>
-          )}
-        </div>
-        <div className="truncate flex-1">
-          <p
-            className={`text-sm font-semibold truncate ${isActive ? 'text-theme-10' : 'text-white'}`}
-          >
-            {track.title}
-          </p>
-          <ArtistLinks
-            artists={track.artists}
-            fallbackArtist={track.artist}
-            onArtistClick={onArtistClick}
-            className="text-xs text-zinc-500 block truncate"
-          />
-        </div>
-      </div>
-    )
-  },
-  (prev, next) =>
-    prev.isActive === next.isActive &&
-    prev.isPlaying === next.isPlaying &&
-    prev.isLite === next.isLite &&
-    prev.track.id === next.track.id
-)
-
-const SC_GENRES = [
-  { id: 'all-music', key: 'all' },
-  { id: 'electronic', key: 'electronic' },
-  { id: 'hiphoprap', key: 'hiphoprap' },
-  { id: 'pop', key: 'pop' },
-  { id: 'chill', key: 'chill' },
-  { id: 'rock', key: 'rock' },
-  { id: 'ambient', key: 'ambient' },
-  { id: 'danceedm', key: 'danceedm' }
-]
-
-// ==========================================
-// TỐI ƯU HÓA RENDER: CÔ LẬP CÁC THÀNH PHẦN CẬP NHẬT TẦN SUẤT CAO
-// Giúp App không bị re-render toàn diện mỗi giây (SleepTimer) hoặc mỗi câu lời (Lyrics) hoặc mỗi chunk (Download)
-// ==========================================
-const DownloadProgressToast: React.FC<{ t: (key: string, params?: any) => string }> = React.memo(
-  ({ t }) => {
-    const isDownloading = useSettingsStore((s) => s.isDownloading)
-    const downloadProgress = useSettingsStore((s) => s.downloadProgress)
-
-    if (!isDownloading || !downloadProgress) return null
-
-    return (
-      <div className="fixed bottom-28 right-8 z-[90] bg-theme-60/95 backdrop-blur-md border border-zinc-700/80 rounded-xl p-5 w-80 shadow-2xl flex flex-col animate-fade-in pointer-events-none">
-        <div className="flex items-center gap-3 mb-2">
-          <Cloud size={20} className="text-theme-10 animate-pulse" />
-          <h3 className="text-sm font-bold text-white">{t('toasts.downloadProgress')}</h3>
-        </div>
-
-        <p className="text-xs text-zinc-400 mb-4 truncate w-full" title={downloadProgress.fileName}>
-          {downloadProgress.fileName}
-        </p>
-
-        <div className="w-full bg-zinc-950 rounded-full h-1.5 mb-2 overflow-hidden border border-theme-30">
-          <div
-            className="bg-theme-10 h-full transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-            style={{ width: `${(downloadProgress.current / downloadProgress.total) * 100}%` }}
-          />
-        </div>
-
-        <div className="flex items-center justify-between w-full text-[10px] font-medium">
-          <span className="text-theme-10">
-            {Math.round((downloadProgress.current / downloadProgress.total) * 100)}%
-          </span>
-          <span className="text-zinc-500">
-            {downloadProgress.current} / {downloadProgress.total} {t('common.files')}
-          </span>
-        </div>
-      </div>
-    )
-  }
-)
-
-const SyncedLyricsList: React.FC<{
-  lyrics: any[]
-  audioRef: React.RefObject<HTMLAudioElement | null>
-  isVinyl?: boolean
-  noLyricsText: string
-}> = React.memo(({ lyrics, audioRef, isVinyl = false, noLyricsText }) => {
-  const currentLyricIndex = useLyricsStore((s) => s.currentLyricIndex)
-  const activeLyricRef = useRef<HTMLParagraphElement | null>(null)
-
-  useEffect(() => {
-    if (activeLyricRef.current) {
-      activeLyricRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }, [currentLyricIndex])
-
-  if (lyrics.length === 0) {
-    return (
-      <p className={`text-zinc-500 italic ${isVinyl ? 'mt-32 text-xl' : 'mt-10'}`}>
-        {noLyricsText}
-      </p>
-    )
-  }
-
-  return (
-    <>
-      {lyrics.map((line, index) => {
-        const isActive = index === currentLyricIndex
-        return (
-          <p
-            key={index}
-            ref={isActive ? activeLyricRef : null}
-            onClick={() => {
-              if (!line.unsynced && audioRef.current) {
-                audioRef.current.currentTime = line.time
-              }
-            }}
-            className={`transition-all duration-300 font-bold ${
-              line.unsynced
-                ? `text-zinc-300 ${isVinyl ? 'text-xl min-h-[1.75rem]' : 'text-sm min-h-[1.25rem]'}`
-                : `cursor-pointer ${
-                    isActive
-                      ? `text-theme-10 ${isVinyl ? 'text-3xl scale-105' : 'text-xl'}`
-                      : `text-zinc-500 ${isVinyl ? 'text-xl opacity-50' : 'text-sm'} hover:text-zinc-300`
-                  }`
-            }`}
-          >
-            {line.text}
-          </p>
-        )
-      })}
-    </>
-  )
-})
 
 export default function App() {
-  const { t, language, setLanguage } = useTranslation()
+  const { t } = useTranslation()
+  const { language } = useLanguage()
 
-  // ==========================================
-  // 1. REFS
-  // ==========================================
-  const audioRef = useRef<HTMLAudioElement>(null)
+  // 1. ZUSTAND STORES
+  const currentTrack = usePlayerStore((s) => s.currentTrack)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const bitPerfectEnabled = usePlayerStore((s) => s.bitPerfectEnabled)
+  const setPlayQueue = usePlayerStore((s) => s.setPlayQueue)
+  const setOriginalQueue = usePlayerStore((s) => s.setOriginalQueue)
+  const volume = usePlayerStore((s) => s.volume)
+  const setVolume = usePlayerStore((s) => s.setVolume)
+  const crossfadeEnabled = usePlayerStore((s) => s.crossfadeEnabled)
+  const crossfadeDuration = usePlayerStore((s) => s.crossfadeDuration)
+  const setCrossfadeEnabled = usePlayerStore((s) => s.setCrossfadeEnabled)
+  const setCrossfadeDuration = usePlayerStore((s) => s.setCrossfadeDuration)
+  const setBitPerfectEnabled = usePlayerStore((s) => s.setBitPerfectEnabled)
+  const setIsShuffle = usePlayerStore((s) => s.setIsShuffle)
 
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
-  const preampNodeRef = useRef<GainNode | null>(null)
-  const filterNodesRef = useRef<BiquadFilterNode[]>([])
-  const analyserNodeRef = useRef<AnalyserNode | null>(null)
-  const compressorNodeRef = useRef<DynamicsCompressorNode | null>(null)
-  const visualizerCanvasRef = useRef<HTMLCanvasElement>(null)
-  const eqCanvasRef = useRef<HTMLCanvasElement>(null)
-  const reqAnimRef = useRef<number>(0)
-
-  // ==========================================
-  // 2. ZUSTAND STORES & HOOKS
-  // ==========================================
-
-  // Player Store
-  const {
-    currentTrack,
-    setCurrentTrack,
-    isPlaying,
-    setIsPlaying,
-    isShuffle,
-    setIsShuffle,
-    originalQueue,
-    setOriginalQueue,
-    playQueue,
-    setPlayQueue,
-    repeatMode,
-    setRepeatMode,
-    volume,
-    setVolume,
-    prevVolume,
-    setPrevVolume,
-    bitPerfectEnabled,
-    setBitPerfectEnabled,
-    crossfadeEnabled,
-    setCrossfadeEnabled,
-    crossfadeDuration,
-    setCrossfadeDuration,
-    bassOutParams,
-    setBassOutParams,
-    smartAutoplay,
-    setSmartAutoplay,
-    lyricOffset,
-    setLyricOffset,
-    sleepTimerMode,
-    setSleepTimerMode,
-    setSleepTimerRemaining,
-    setShowSleepTimerMenu,
-    currentTime,
-    setCurrentTime
-  } = usePlayerStore()
-
-  // UI Store
   const {
     activeView,
     setActiveView,
     viewMode,
     setViewMode,
     themeColor,
-    setThemeColor,
     toast,
-    setToast,
-    showToast: storeShowToast,
     hideToast,
     customDialog,
     setCustomDialog,
     showQueuePanel,
     setShowQueuePanel,
-    showEQ,
-    setShowEQ,
-    showVisualizer,
-    setShowVisualizer,
-    showSpectrogramModal,
-    setShowSpectrogramModal,
     showLyricsPanel,
     setShowLyricsPanel,
     isLyricsMaximized,
@@ -1259,26 +177,24 @@ export default function App() {
     setShowAddSongsModal,
     playlistRename,
     setPlaylistRename,
-    showCommandPalette,
-    setShowCommandPalette,
-    showInsightsModal,
+    showEQ,
+    setShowEQ,
+    showSpectrogramModal,
+    setShowSpectrogramModal,
+    setShowBackupModal,
     setShowInsightsModal,
-    showBackupModal,
-    setShowBackupModal
+    showToast,
+    showVisualizer,
+    setShowVisualizer
   } = useUIStore()
 
-  // Library Store
   const {
     libraryPath,
-    setLibraryPath,
-    libraryPaths,
-    setLibraryPaths,
     libraryTracks,
-    setLibraryTracks,
     playlists,
-    setPlaylists,
     userPlaylists,
-    setUserPlaylists,
+    favoriteTrackIds,
+    setFavoriteTrackIds,
     activeAlbum,
     setActiveAlbum,
     activeArtist,
@@ -1289,20 +205,16 @@ export default function App() {
     setActivePlaylist,
     activeUserPlaylist,
     setActiveUserPlaylist,
-    playlistsRenderLimit,
-    setPlaylistsRenderLimit,
-    collapsedArtistLetters,
-    setCollapsedArtistLetters,
-    sortField,
-    setSortField,
-    sortOrder,
-    setSortOrder,
     searchQuery,
     setSearchQuery,
     searchInput,
     setSearchInput,
-    recentlyPlayed,
-    setRecentlyPlayed,
+    quickFilter,
+    sortField,
+    sortOrder,
+    playlistsRenderLimit,
+    setPlaylistsRenderLimit,
+    preAggregatedData,
     dashboardData,
     setDashboardData,
     isAlbumLoading,
@@ -1317,25 +229,11 @@ export default function App() {
     setSelectedScGenre,
     isYtmLoggedIn,
     setIsYtmLoggedIn,
-    preAggregatedData,
-    setPreAggregatedData,
-    favoriteTrackIds,
-    setFavoriteTrackIds,
-    toggleFavoriteId,
-    quickFilter,
-    setQuickFilter,
-    selectedTrackIds,
-    setSelectedTrackIds,
-    toggleSelectTrackId,
     clearSelectedTracks,
-    smartPlaylists,
-    setSmartPlaylists,
-    trackLyricOffsets,
     setTrackLyricOffsets,
-    updateTrackLyricOffset
+    setSmartPlaylists
   } = useLibraryStore()
 
-  // Settings Store
   const {
     appMode,
     setAppMode,
@@ -1343,470 +241,233 @@ export default function App() {
     setUiStyle,
     customBgImage,
     setCustomBgImage,
+    customBgOpacity,
+    setCustomBgOpacity,
+    customBgBlur,
+    setCustomBgBlur,
     useTrackCoverAsBg,
     setUseTrackCoverAsBg,
     accentColorMode,
     setAccentColorMode,
     customAccentColor,
     setCustomAccentColor,
-    bgImageInput,
-    setBgImageInput,
-    customBgOpacity,
-    setCustomBgOpacity,
-    customBgBlur,
-    setCustomBgBlur,
-    isReloading,
-    setIsReloading,
-    isConfigLoaded,
-    setIsConfigLoaded,
     streamPort,
     setStreamPort,
-    minimizeToTray,
-    setMinimizeToTray,
-    closeToTray,
-    setCloseToTray,
-    discordRpcEnabled,
-    setDiscordRpcEnabled,
-    discordClientId,
-    setDiscordClientId,
-    discordShowDetails,
-    setDiscordShowDetails,
-    discordShowTime,
-    setDiscordShowTime,
-    discordShowCover,
-    setDiscordShowCover,
-    discordShowQuality,
-    setDiscordShowQuality,
-    discordShowButtons,
-    setDiscordShowButtons,
-    discordShowIdle,
-    setDiscordShowIdle,
-    discordConnected,
-    setDiscordConnected,
-    googleDriveApiKey,
-    setGoogleDriveApiKey,
-    driveLink,
-    setDriveLink,
-    isFetchingDrive,
-    setIsFetchingDrive,
-    driveFiles,
-    setDriveFiles,
     cloudActionTrack,
     setCloudActionTrack,
     isDownloading,
     setIsDownloading,
     setDownloadProgress,
-    loudnessNormalization,
-    setLoudnessNormalization,
-    gaplessEnabled,
-    setGaplessEnabled,
-    waveformSeekbarEnabled,
-    setWaveformSeekbarEnabled
+    googleDriveApiKey,
+    setGoogleDriveApiKey,
+    driveLink,
+    setDriveLink,
+    minimizeToTray,
+    setMinimizeToTray,
+    closeToTray,
+    setCloseToTray,
+    setDiscordRpcEnabled,
+    setDiscordClientId,
+    setDiscordShowDetails,
+    setDiscordShowTime,
+    setDiscordShowCover,
+    setDiscordShowQuality,
+    setDiscordShowButtons,
+    setDiscordShowIdle
   } = useSettingsStore()
 
-  // Audio & EQ Store
   const {
     isEqEnabled,
     setIsEqEnabled,
-    availableAudioDevices,
-    setAvailableAudioDevices,
-    selectedDeviceId,
-    setSelectedDeviceId,
     eqBands,
     setEqBands,
     preampGain,
     setPreampGain,
-    bitPerfectType,
+    selectedDeviceId,
+    setSelectedDeviceId,
     setBitPerfectType
   } = useAudioStore()
 
-  // Lyrics Store
-  const { lyrics, setLyrics, setCurrentLyricIndex, originalCover, setOriginalCover } =
-    useLyricsStore()
-
-  // Computed & Local Refs
-  const isLite = appMode === 'lite' || appMode === 'core'
-  const isCore = appMode === 'core'
   const deferredSearchQuery = useDeferredValue(searchQuery)
 
-  const preloadedRef = useRef<string | null>(null)
-  const playlistsLoadMoreRef = useRef<HTMLDivElement>(null)
-  const sleepTimerOriginalVolRef = useRef<number | null>(null)
-  const hasTriggeredCrossfadeRef = useRef(false)
-  const isSwitchingTrackRef = useRef(false)
-  const isGaplessTransitioningRef = useRef(false)
-  const [isDraggingFile, setIsDraggingFile] = useState(false)
-  const dragCounterRef = useRef(0)
-
-  // DnD Sensors (Móc Hook ở cấp cao nhất để tránh lỗi Rules of Hooks)
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-
-  const selectedDeviceRef = useRef<string>('auto')
-  const pendingSeekTimeRef = useRef<number | null>(null)
-  useEffect(() => {
-    selectedDeviceRef.current = selectedDeviceId
-  }, [selectedDeviceId])
-
-  const [audioRemountCount, setAudioRemountCount] = useState(0)
-  const [queueRenderLimit, setQueueRenderLimit] = useState(60)
-  const prevTrackModeRef = useRef<'bass' | 'webaudio'>('webaudio')
-
-  const resetWebAudioPipeline = useCallback(async () => {
-    if (audioCtxRef.current) {
-      try {
-        await audioCtxRef.current.close()
-      } catch (e) {}
-      audioCtxRef.current = null
-    }
-    sourceNodeRef.current = null
-    analyserNodeRef.current = null
-    preampNodeRef.current = null
-    compressorNodeRef.current = null
-    filterNodesRef.current = []
-    setAudioRemountCount((c) => c + 1)
-  }, [])
-
-  // Tag Editor & Track Info States
-  const [editingTrack, setEditingTrack] = useState<any | null>(null)
-  const [infoTrack, setInfoTrack] = useState<any | null>(null)
-  const [editTags, setEditTags] = useState<{
-    title: string
-    artist: string
-    album: string
-    albumArtist?: string
-    genre?: string
-    year?: string | number
-    trackNumber?: string | number
-    discNumber?: string | number
-    lyrics: string
-    [key: string]: any
-  }>({
-    title: '',
-    artist: '',
-    album: '',
-    albumArtist: '',
-    genre: '',
-    year: '',
-    trackNumber: '',
-    discNumber: '',
-    lyrics: ''
-  })
-  const [editImagePath, setEditImagePath] = useState<string | null>(null)
+  // Local State
   const [showDuplicateFinder, setShowDuplicateFinder] = useState(false)
   const [showSmartPlaylists, setShowSmartPlaylists] = useState(false)
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false)
+  const [updaterStatus, setUpdaterStatus] = useState<any>(null)
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-mode', appMode)
-  }, [appMode])
+  // 2. HEADLESS HOOKS
+  const audioEngine = useAudioEngine()
 
-  useEffect(() => {
-    window.api?.getStreamPort?.().then((port: number) => {
-      if (port) {
-        setStreamPort(port)
-        setGlobalStreamPort(port)
-      }
-    })
-  }, [])
-
-  const showConfirm = (options: {
-    title?: string
-    message: string | React.ReactNode
-    confirmText?: string
-    cancelText?: string
-    danger?: boolean
-    onConfirm: () => void
-    onCancel?: () => void
-  }) => {
-    setCustomDialog({
-      isOpen: true,
-      type: options.danger ? 'danger' : 'confirm',
-      title: options.title,
-      message: options.message,
-      confirmText: options.confirmText,
-      cancelText: options.cancelText,
-      onConfirm: () => {
-        setCustomDialog(null)
-        options.onConfirm()
-      },
-      onCancel: () => {
-        setCustomDialog(null)
-        options.onCancel?.()
-      }
-    })
-  }
-
-  const showAlert = (options: {
-    title?: string
-    message: string | React.ReactNode
-    confirmText?: string
-    onConfirm?: () => void
-  }) => {
-    setCustomDialog({
-      isOpen: true,
-      type: 'alert',
-      title: options.title,
-      message: options.message,
-      confirmText: options.confirmText || 'OK',
-      onConfirm: () => {
-        setCustomDialog(null)
-        options.onConfirm?.()
-      },
-      onCancel: () => {
-        setCustomDialog(null)
-      }
-    })
-  }
-
-  // Navigation History Stack (Quản lý nút chuột 4/5 và điều hướng lùi/tiến)
-  const navHistoryRef = useRef<any[]>([])
-  const navForwardRef = useRef<any[]>([])
-  const isNavigatingRef = useRef(false)
-
-  const captureNavState = () => ({
-    activeView,
-    activeAlbum,
-    activeArtist,
-    activeGenre,
-    activePlaylist,
-    activeUserPlaylist,
-    searchQuery,
-    searchInput
+  const libraryOps = useLibraryOperations({
+    handleRowClick: audioEngine.handleRowClick,
+    handleStartRadio: audioEngine.handleStartRadio
   })
 
-  useEffect(() => {
-    if (isNavigatingRef.current) {
-      isNavigatingRef.current = false
-      return
-    }
-    const current = captureNavState()
-    const last = navHistoryRef.current[navHistoryRef.current.length - 1]
-    if (
-      !last ||
-      last.activeView !== current.activeView ||
-      last.activeAlbum !== current.activeAlbum ||
-      last.activeArtist !== current.activeArtist ||
-      last.activeGenre !== current.activeGenre ||
-      last.activePlaylist !== current.activePlaylist ||
-      last.activeUserPlaylist !== current.activeUserPlaylist ||
-      last.searchQuery !== current.searchQuery
-    ) {
-      navHistoryRef.current.push(current)
-      navForwardRef.current = []
-      if (navHistoryRef.current.length > 50) {
-        navHistoryRef.current.shift()
-      }
-    }
-  }, [
-    activeView,
-    activeAlbum,
-    activeArtist,
-    activeGenre,
-    activePlaylist,
-    activeUserPlaylist,
-    searchQuery
-  ])
+  const theming = useTheming()
+  const lyricsData = useLyrics()
+  const sleepTimer = useSleepTimer({ audioRef: audioEngine.audioRef })
 
-  const handleNavBack = () => {
-    if (activeAlbum) {
-      setActiveAlbum(null)
-      return
-    }
-    if (activeArtist) {
-      setActiveArtist(null)
-      return
-    }
-    if (activeGenre) {
-      setActiveGenre(null)
-      return
-    }
-    if (activePlaylist) {
-      setActivePlaylist(null)
-      return
-    }
-    if (activeUserPlaylist) {
-      setActiveUserPlaylist(null)
-      return
-    }
-    if (
-      (activeView === 'home' || activeView === 'home-ytm' || activeView === 'home-soundcloud') &&
-      (searchQuery || searchInput)
-    ) {
-      setSearchInput('')
-      setSearchQuery('')
-      if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard()
-      if (activeView === 'home-soundcloud') fetchScDashboard()
-      return
-    }
+  useMediaSession({
+    audioRef: audioEngine.audioRef,
+    handlePlayPause: audioEngine.handlePlayPause,
+    handlePrev: audioEngine.handlePrev,
+    handleNext: audioEngine.handleNext
+  })
 
-    if (navHistoryRef.current.length > 1) {
-      const currentState = navHistoryRef.current.pop()
-      if (currentState) {
-        navForwardRef.current.push(currentState)
-      }
-      const prevState = navHistoryRef.current[navHistoryRef.current.length - 1]
-      if (prevState) {
-        isNavigatingRef.current = true
-        setActiveView(prevState.activeView)
-        setActiveAlbum(prevState.activeAlbum)
-        setActiveArtist(prevState.activeArtist)
-        setActiveGenre(prevState.activeGenre)
-        setActivePlaylist(prevState.activePlaylist)
-        setActiveUserPlaylist(prevState.activeUserPlaylist)
-        setSearchQuery(prevState.searchQuery)
-        setSearchInput(prevState.searchInput)
-      }
-    }
-  }
+  useMemoryOptimization()
+  useListeningTracker()
 
-  const handleNavForward = () => {
-    if (navForwardRef.current.length > 0) {
-      const nextState = navForwardRef.current.pop()
-      if (nextState) {
-        isNavigatingRef.current = true
-        navHistoryRef.current.push(nextState)
-        setActiveView(nextState.activeView)
-        setActiveAlbum(nextState.activeAlbum)
-        setActiveArtist(nextState.activeArtist)
-        setActiveGenre(nextState.activeGenre)
-        setActivePlaylist(nextState.activePlaylist)
-        setActiveUserPlaylist(nextState.activeUserPlaylist)
-        setSearchQuery(nextState.searchQuery)
-        setSearchInput(nextState.searchInput)
-      }
-    }
-  }
-
-  useEffect(() => {
-    const handleMouseUp = (e: MouseEvent) => {
-      if (e.button === 3) {
-        e.preventDefault()
-        e.stopPropagation()
-        handleNavBack()
-      } else if (e.button === 4) {
-        e.preventDefault()
-        e.stopPropagation()
-        handleNavForward()
-      }
-    }
-
-    window.addEventListener('mouseup', handleMouseUp)
-    window.addEventListener('auxclick', handleMouseUp)
-
+  // 3. ONLINE SERVICES & DASHBOARD HANDLERS
+  const fetchDashboard = useCallback(async () => {
     // @ts-ignore
-    let unlistenBack = window.api?.onNavBack?.(handleNavBack)
-    // @ts-ignore
-    let unlistenForward = window.api?.onNavForward?.(handleNavForward)
-
-    return () => {
-      window.removeEventListener('mouseup', handleMouseUp)
-      window.removeEventListener('auxclick', handleMouseUp)
-      if (typeof unlistenBack === 'function') unlistenBack()
-      if (typeof unlistenForward === 'function') unlistenForward()
-    }
-  }, [
-    activeAlbum,
-    activeArtist,
-    activeGenre,
-    activePlaylist,
-    activeUserPlaylist,
-    searchQuery,
-    searchInput,
-    activeView
-  ])
-
-  // ==========================================
-  // 3. UTILITIES & HANDLERS
-  // ==========================================
-
-  // --- Dashboard & Online Music ---
-  const fetchDashboard = async () => {
-    // @ts-ignore
-    const res = await window.api.getHomeDashboard()
-    if (res.success) {
+    const res = await window.api?.getHomeDashboard?.()
+    if (res?.success) {
       setDashboardData(res.data)
       setIsYtmLoggedIn(true)
     } else {
       setIsYtmLoggedIn(false)
-      if (res.error && res.error !== 'Chưa đăng nhập') {
+      if (res?.error && res.error !== 'Chưa đăng nhập') {
         console.warn('Lỗi Dashboard YTM:', res.error)
       }
     }
-  }
+  }, [setDashboardData, setIsYtmLoggedIn])
 
-  const handleYtmLogin = async () => {
+  const handleYtmLogin = useCallback(async () => {
     // @ts-ignore
-    const res = await window.api.ytmLogin()
-    if (res.success) {
+    const res = await window.api?.ytmLogin?.()
+    if (res?.success) {
       setIsYtmLoggedIn(true)
       showToast(t('toasts.ytmLoginSuccess'), 'success')
       fetchDashboard()
-    } else {
-      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
+    } else if (res?.error) {
+      libraryOps.showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
     }
-  }
+  }, [t, showToast, fetchDashboard, setIsYtmLoggedIn, libraryOps])
 
-  const handleYtmLogout = async () => {
+  const handleYtmLogout = useCallback(async () => {
     // @ts-ignore
-    const res = await window.api.ytmLogout()
-    if (res.success) {
+    const res = await window.api?.ytmLogout?.()
+    if (res?.success) {
       setIsYtmLoggedIn(false)
       setDashboardData([])
       showToast(t('toasts.ytmLogout'), 'info')
     }
-  }
+  }, [t, showToast, setIsYtmLoggedIn, setDashboardData])
 
-  const fetchScDashboard = async (genre?: string) => {
+  const fetchScDashboard = useCallback(async (genre?: string) => {
     setIsScLoading(true)
     const targetGenre = genre || selectedScGenre
     // @ts-ignore
-    const res = await window.api.getScDashboard(targetGenre)
-    if (res && res.success) {
+    const res = await window.api?.getScDashboard?.(targetGenre)
+    if (res?.success) {
       setScDashboardData(res.data)
     }
     // @ts-ignore
-    const userRes = await window.api.getScUser()
-    if (userRes && userRes.success) {
+    const userRes = await window.api?.getScUser?.()
+    if (userRes?.success) {
       setScUser(userRes.user)
     } else {
       setScUser(null)
     }
     setIsScLoading(false)
-  }
+  }, [selectedScGenre, setIsScLoading, setScDashboardData, setScUser])
 
-  const handleScLogin = async () => {
+  const handleScLogin = useCallback(async () => {
     // @ts-ignore
-    const res = await window.api.scLogin()
-    if (res.success) {
+    const res = await window.api?.scLogin?.()
+    if (res?.success) {
       showToast(t('toasts.scLoginSuccess'), 'success')
       if (res.user) setScUser(res.user)
       fetchScDashboard()
-    } else {
-      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
+    } else if (res?.error) {
+      libraryOps.showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
     }
-  }
+  }, [t, showToast, fetchScDashboard, setScUser, libraryOps])
 
-  const handleScLogout = async () => {
+  const handleScLogout = useCallback(async () => {
     // @ts-ignore
-    const res = await window.api.scLogout()
-    if (res.success) {
+    const res = await window.api?.scLogout?.()
+    if (res?.success) {
       setScUser(null)
       showToast(t('toasts.scLogout'), 'info')
       fetchScDashboard()
     }
-  }
+  }, [t, showToast, fetchScDashboard, setScUser])
 
-  const handleScItemClick = async (item: any) => {
+  const playAndGenerateRadio = useCallback((track: any) => {
+    setOriginalQueue([track])
+    setPlayQueue([track])
+    audioEngine.handlePlayTrack(track)
+
+    if (track.platform === 'youtube' || (!track.platform && !String(track.id).startsWith('sc-'))) {
+      // @ts-ignore
+      window.api?.getUpNext?.(track.originalId)
+        ?.then((res: any) => {
+          if (res?.success && res.tracks && res.tracks.length > 0) {
+            const nextTracks = res.tracks.filter((trk: any) => trk.originalId !== track.originalId)
+            setPlayQueue((prev) => {
+              const currentIds = new Set(prev.map((p) => p.originalId || p.id))
+              const unique = nextTracks.filter((t: any) => !currentIds.has(t.originalId || t.id))
+              return [...prev, ...unique]
+            })
+          }
+        })
+        ?.catch(() => {})
+    }
+  }, [setOriginalQueue, setPlayQueue, audioEngine])
+
+  const handleDashboardItemClick = useCallback(async (item: any) => {
+    if (item.videoId && !item.isArtist) {
+      const track = {
+        id: `yt-${item.videoId}`,
+        originalId: item.videoId,
+        title: item.title,
+        artist: item.subtitle,
+        album: 'YouTube Music',
+        duration: 0,
+        format: 'STREAM',
+        isCloud: true,
+        isOnline: true,
+        platform: 'youtube',
+        coverArt: item.thumbnails?.[0]?.url || null,
+        coverArtHighRes: item.coverArtHighRes || null
+      }
+      playAndGenerateRadio(track)
+    } else if (item.isArtist) {
+      setActiveAlbum({ title: item.title, tracks: [] })
+      setIsAlbumLoading(true)
+      // @ts-ignore
+      const res = await window.api?.getYtmArtist?.(item.playlistId)
+      if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
+      else {
+        libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
+        setActiveAlbum(null)
+      }
+      setIsAlbumLoading(false)
+    } else if (item.playlistId) {
+      setActiveAlbum({ title: item.title, tracks: [] })
+      setIsAlbumLoading(true)
+      // @ts-ignore
+      const res = await window.api?.getYtmPlaylist?.(item.playlistId)
+      if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
+      else {
+        libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
+        setActiveAlbum(null)
+      }
+      setIsAlbumLoading(false)
+    }
+  }, [playAndGenerateRadio, setActiveAlbum, setIsAlbumLoading, libraryOps, t])
+
+  const handleScItemClick = useCallback(async (item: any) => {
     if (item.isPlaylist || item.playlistId) {
       setActiveAlbum({ title: item.title, tracks: [] })
       setIsAlbumLoading(true)
       // @ts-ignore
-      const res = await window.api.getScPlaylist(item.playlistId)
-      if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
+      const res = await window.api?.getScPlaylist?.(item.playlistId)
+      if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
       else {
-        showAlert({ title: t('common.error'), message: res.error })
+        libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
         setActiveAlbum(null)
       }
       setIsAlbumLoading(false)
@@ -1823,102 +484,15 @@ export default function App() {
         isOnline: true,
         platform: 'soundcloud',
         permalinkUrl: item.permalinkUrl,
-        coverArt:
-          item.coverArt ||
-          (item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : null),
+        coverArt: item.coverArt || item.thumbnails?.[0]?.url || null,
         coverArtHighRes: item.coverArtHighRes || null
       }
       playAndGenerateRadio(track)
     }
-  }
+  }, [setActiveAlbum, setIsAlbumLoading, playAndGenerateRadio, libraryOps, t])
 
-  const handleDashboardItemClick = async (item: any) => {
-    if (item.videoId && !item.isArtist) {
-      // XỬ LÝ PHÁT NHẠC
-      const track = {
-        id: `yt-${item.videoId}`,
-        originalId: item.videoId,
-        title: item.title,
-        artist: item.subtitle,
-        album: 'YouTube Music',
-        duration: 0,
-        format: 'STREAM',
-        isCloud: true,
-        isOnline: true,
-        platform: 'youtube',
-        coverArt: item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : null,
-        coverArtHighRes: item.coverArtHighRes || null
-      }
-      playAndGenerateRadio(track)
-    } else if (item.isArtist) {
-      // XỬ LÝ MỞ TRANG NGHỆ SĨ
-      setActiveAlbum({ title: item.title, tracks: [] })
-      setIsAlbumLoading(true)
-      // @ts-ignore
-      const res = await window.api.getYtmArtist(item.playlistId)
-      if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
-      else {
-        showAlert({ title: t('common.error'), message: res.error })
-        setActiveAlbum(null)
-      }
-      setIsAlbumLoading(false)
-    } else if (item.playlistId) {
-      // XỬ LÝ MỞ ALBUM/PLAYLIST
-      setActiveAlbum({ title: item.title, tracks: [] })
-      setIsAlbumLoading(true)
-      // @ts-ignore
-      const res = await window.api.getYtmPlaylist(item.playlistId)
-      if (res.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
-      else {
-        showAlert({ title: t('common.error'), message: res.error })
-        setActiveAlbum(null)
-      }
-      setIsAlbumLoading(false)
-    }
-  }
-
-  // Hàm mới: Bắt đầu phát 1 bài hát Online đơn lẻ và tự động gọi API lấy danh sách gợi ý
-  const playAndGenerateRadio = (track: any) => {
-    // 1. Đặt bài hát hiện tại vào hàng đợi
-    setOriginalQueue([track])
-    setPlayQueue([track])
-
-    // 2. Phát nhạc ngay lập tức
-    handlePlayTrack(track)
-
-    // 3. Nếu là bài hát YouTube thì gọi ngầm API lấy danh sách "Tiếp theo"
-    if (track.platform === 'youtube' || (!track.platform && !String(track.id).startsWith('sc-'))) {
-      // @ts-ignore
-      window.api
-        .getUpNext(track.originalId)
-        .then((res: any) => {
-          if (res && res.success && res.tracks && res.tracks.length > 0) {
-            // Lọc bỏ bài hát đầu tiên nếu nó trùng với bài đang phát
-            const nextTracks = res.tracks.filter((t: any) => t.originalId !== track.originalId)
-
-            // Bơm nhạc vào Hàng đợi một cách an toàn
-            setPlayQueue((prev) => {
-              if (prev.length === 1 && prev[0].originalId === track.originalId) {
-                return [...prev, ...nextTracks]
-              }
-              return prev
-            })
-
-            setOriginalQueue((prev) => {
-              if (prev.length === 1 && prev[0].originalId === track.originalId) {
-                return [...prev, ...nextTracks]
-              }
-              return prev
-            })
-          }
-        })
-        .catch(() => {})
-    }
-  }
-
-  const handleDashboardItemDownload = async (item: any) => {
+  const handleDashboardItemDownload = useCallback(async (item: any) => {
     if (item.videoId || item.platform === 'soundcloud' || (item.originalId && !item.isPlaylist)) {
-      // 1. TẢI 1 BÀI HÁT ĐƠN LẺ
       const track = {
         originalId: item.originalId || item.videoId,
         title: item.title,
@@ -1936,960 +510,74 @@ export default function App() {
       })
 
       // @ts-ignore
-      const res = await window.api.downloadOnline(track)
-
+      const res = await window.api?.downloadOnline?.(track)
       setIsDownloading(false)
       setDownloadProgress(null)
 
-      if (res.success) {
+      if (res?.success) {
         showToast(t('toasts.downloadFinished', { title: item.title }), 'success')
-        loadLibrary()
-      } else if (!res.canceled) {
-        showAlert({ title: t('common.error'), message: 'Download Error: ' + res.error })
+        libraryOps.loadLibrary()
+      } else if (!res?.canceled) {
+        libraryOps.showAlert({ title: t('common.error'), message: 'Download Error: ' + res?.error })
       }
-    } else if (item.playlistId) {
-      // 2. TẢI TOÀN BỘ ALBUM / PLAYLIST
-      showConfirm({
-        title: t('common.confirm'),
-        message: `Do you want to download all tracks from "${item.title}"? (This might take a while)`,
-        onConfirm: async () => {
-          setIsDownloading(true)
-          setDownloadProgress({ current: 0, total: 0, fileName: t('common.loading') })
-
-          // Lấy danh sách track trong Album
-          // @ts-ignore
-          const res =
-            item.platform === 'soundcloud'
-              ? await window.api.getScPlaylist(item.playlistId)
-              : await window.api.getYtmPlaylist(item.playlistId)
-
-          if (res.success && res.tracks) {
-            const tracks = res.tracks
-            let successCount = 0
-
-            for (let i = 0; i < tracks.length; i++) {
-              setDownloadProgress({
-                current: i + 1,
-                total: tracks.length,
-                fileName: tracks[i].title
-              })
-
-              // Ép tên Album cho bài hát để gom chung vào 1 thư mục
-              const trackToDl = {
-                ...tracks[i],
-                album: item.title,
-                platform: item.platform || 'youtube'
-              }
-
-              // @ts-ignore
-              const dlRes = await window.api.downloadOnline(trackToDl)
-              if (dlRes.success) successCount++
-            }
-
-            showToast(
-              t('toasts.albumDownloadFinished', { count: successCount, total: tracks.length }),
-              'success'
-            )
-            loadLibrary()
-          } else {
-            showAlert({
-              title: t('common.error'),
-              message: 'Error getting album tracks: ' + res.error
-            })
-          }
-
-          setIsDownloading(false)
-          setDownloadProgress(null)
-        }
-      })
     }
-  }
+  }, [t, setIsDownloading, setDownloadProgress, showToast, libraryOps])
 
-  // --- UI Utilities ---
-  const showToast = useCallback(
-    (message: string, type: 'success' | 'error' | 'info' = 'success', duration?: number) => {
-      storeShowToast(message, type, duration)
-    },
-    [storeShowToast]
-  )
-
-  // --- Playlists Management ---
-  const handleCreatePlaylistSubmit = async (name: string) => {
-    // @ts-ignore
-    const res = await window.api.createPlaylist(name)
-    if (res.success) {
-      showToast(t('toasts.playlistCreated'), 'success')
-      setShowCreateModal(false)
-      loadLibrary()
+  const handleCloudAction = useCallback(async (action: 'stream' | 'download') => {
+    if (!cloudActionTrack) return
+    if (action === 'stream') {
+      audioEngine.handlePlayTrack(cloudActionTrack)
+      setCloudActionTrack(null)
     } else {
-      showAlert({ title: t('common.error'), message: 'Error: ' + res.error })
-    }
-  }
-
-  const handleAddTracksToActivePlaylist = async (tracksToAdd: any[]) => {
-    if (!activePlaylist) return
-    for (const track of tracksToAdd) {
-      // Lấy chính xác đường dẫn gốc thực tế của bài hát (loại bỏ tiền tố file:// nếu có)
-      const rawTrackPath = track.id || track.filePath
-      if (rawTrackPath) {
-        // @ts-ignore
-        await window.api.addTrackToPlaylist(activePlaylist.name, rawTrackPath)
-      }
-    }
-    showToast(t('toasts.tracksAddedToPlaylist', { count: tracksToAdd.length }), 'success')
-    setShowAddSongsModal(false)
-    loadLibrary()
-  }
-
-  // --- Library Management ---
-  const loadLibrary = async (forceRefresh: boolean = false, hardRescan: boolean = false) => {
-    // @ts-ignore
-    const res = await window.api.getLibrary(forceRefresh, hardRescan)
-    if (res.success) {
-      setLibraryPath(res.libraryPath)
-      setLibraryPaths(res.libraryPaths || (res.libraryPath ? [res.libraryPath] : []))
-      setLibraryTracks(res.tracks || [])
-      setPlaylists(res.playlists || [])
-      setUserPlaylists(res.userPlaylists || [])
-      if (res.preAggregated) {
-        setPreAggregatedData(res.preAggregated)
-      }
-    }
-  }
-
-  // Tự động đồng bộ Active Playlist mỗi khi thêm/xóa bài hát trong thư viện
-  useEffect(() => {
-    if (activePlaylist) {
-      const updated = playlists.find((p) => p.name === activePlaylist.name)
-      if (updated && updated.tracks.length !== activePlaylist.tracks.length) {
-        setActivePlaylist(updated)
-      }
-    }
-  }, [playlists])
-
-  // Tự động đồng bộ Active User Playlist
-  useEffect(() => {
-    if (activeUserPlaylist) {
-      const updated = userPlaylists.find((p) => p.id === activeUserPlaylist.id)
-      if (updated) {
-        setActiveUserPlaylist(updated)
-      }
-    }
-  }, [userPlaylists])
-
-  const handleReloadLibrary = async (hardRescan?: boolean | any) => {
-    const isHard = typeof hardRescan === 'boolean' ? hardRescan : false
-    setIsReloading(true)
-    try {
-      await loadLibrary(true, isHard)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setTimeout(() => setIsReloading(false), 500)
-    }
-  }
-
-  const handleSelectLibrary = async () => {
-    // @ts-ignore
-    const res = await window.api.setLibraryFolder()
-    if (res.success) {
-      showToast(t('toasts.librarySavedSuccess'), 'success')
-      loadLibrary(true)
-    }
-  }
-
-  const handleAddLibraryFolder = async () => {
-    // @ts-ignore
-    const res = await window.api.addLibraryFolder()
-    if (res && res.success) {
-      setLibraryPaths(res.libraryPaths)
-      showToast(t('toasts.librarySavedSuccess'), 'success')
-      loadLibrary(true)
-    }
-  }
-
-  const handleRemoveLibraryFolder = async (folderPath: string) => {
-    if (libraryPaths.length <= 1) {
-      showConfirm({
-        title: t('common.warning'),
-        message: t('settings.library.removeFolder') + '?',
-        danger: true,
-        onConfirm: async () => {
-          // @ts-ignore
-          const res = await window.api.removeLibraryFolder(folderPath)
-          if (res && res.success) {
-            setLibraryPaths(res.libraryPaths)
-            showToast(t('toasts.removedFromPlaylist'), 'success')
-            loadLibrary(true)
-          }
-        }
-      })
-      return
-    }
-    // @ts-ignore
-    const res = await window.api.removeLibraryFolder(folderPath)
-    if (res && res.success) {
-      setLibraryPaths(res.libraryPaths)
-      showToast(t('toasts.removedFromPlaylist'), 'success')
-      loadLibrary(true)
-    }
-  }
-
-  const handleUpdateLibraryFolder = async (oldPath: string) => {
-    // @ts-ignore
-    const res = await window.api.updateLibraryFolder(oldPath)
-    if (res && res.success) {
-      setLibraryPaths(res.libraryPaths)
-      showToast(t('toasts.librarySavedSuccess'), 'success')
-      loadLibrary(true)
-    }
-  }
-
-  // --- Virtual User Playlists Handlers ---
-  const handleCreateUserPlaylist = async (name: string) => {
-    // @ts-ignore
-    const res = await window.api.createUserPlaylist(name)
-    if (res && res.success) {
-      setUserPlaylists(res.playlists)
-      setShowCreateUserPlaylistModal(false)
-      showToast(t('toasts.playlistCreatedSuccess', { name }), 'success')
-      setActiveUserPlaylist(res.playlist)
-      setActiveView('user-playlists')
-    } else if (res && res.error) {
-      showAlert({ title: t('common.error'), message: res.error })
-    }
-  }
-
-  const handleDeleteUserPlaylist = async (playlist: any) => {
-    showConfirm({
-      title: t('userPlaylistsView.deletePlaylist'),
-      message: t('userPlaylistsView.confirmDelete', { name: playlist.name }),
-      danger: true,
-      onConfirm: async () => {
-        // @ts-ignore
-        const res = await window.api.deleteUserPlaylist(playlist.id)
-        if (res && res.success) {
-          setUserPlaylists(res.playlists)
-          if (activeUserPlaylist?.id === playlist.id) {
-            setActiveUserPlaylist(null)
-          }
-          showToast(t('toasts.playlistDeleted', { name: playlist.name }), 'success')
-        }
-      }
-    })
-  }
-
-  const handleChangeUserPlaylistCover = async (playlistId: string) => {
-    // @ts-ignore
-    const res = await window.api.setUserPlaylistThumbnail(playlistId)
-    if (res && res.success) {
-      setUserPlaylists(res.playlists)
-      if (activeUserPlaylist && activeUserPlaylist.id === playlistId && res.playlist) {
-        setActiveUserPlaylist(res.playlist)
-      }
-      showToast(t('toasts.coverChangedSuccess'), 'success')
-    }
-  }
-
-  const handleSaveEditUserPlaylist = async (
-    playlistId: string,
-    updates: {
-      name: string
-      description: string
-      thumbnail?: string | null
-      customImagePath?: string
-    }
-  ) => {
-    // @ts-ignore
-    const res = await window.api.updateUserPlaylist(playlistId, updates)
-    if (res && res.success) {
-      setUserPlaylists(res.playlists)
-      if (activeUserPlaylist && activeUserPlaylist.id === playlistId) {
-        setActiveUserPlaylist(res.playlist)
-      }
-      showToast(t('toasts.playlistUpdatedSuccess'), 'success')
-    } else {
-      showAlert({
-        title: t('common.error'),
-        message: res?.error || t('toasts.deletePlaylistError')
-      })
-    }
-  }
-
-  const handleAddSongsToUserPlaylist = async (selectedTracks: any[]) => {
-    if (!activeUserPlaylist) return
-    const trackPaths = selectedTracks.map((t) => t.id || t.filePath)
-    // @ts-ignore
-    const res = await window.api.addTracksToUserPlaylist(activeUserPlaylist.id, trackPaths)
-    if (res && res.success) {
-      setUserPlaylists(res.playlists)
-      setShowAddSongsToUserPlaylistModal(false)
-      showToast(t('toasts.tracksAddedToPlaylist', { count: selectedTracks.length }), 'success')
-    }
-  }
-
-  const handleAutoGeneratePlaylists = async () => {
-    showConfirm({
-      title: t('settings.library.autoCategorize'),
-      message: t('toasts.autoCategorizeConfirm'),
-      onConfirm: async () => {
-        // @ts-ignore
-        const res = await window.api.autoGeneratePlaylists()
-        if (res.success) {
-          showToast(t('toasts.autoCategorizeSuccess', { count: res.movedCount }), 'success')
-          loadLibrary()
-        }
-      }
-    })
-  }
-
-  const handleImportFiles = async () => {
-    const targetFolder =
-      activeView === 'playlists' && activePlaylist ? activePlaylist.name : undefined
-    // @ts-ignore
-    const res = await window.api.importLocalFiles(targetFolder, libraryTracks)
-    if (res && res.success) {
-      if (res.tracks.length > 0) {
-        showToast(t('toasts.tracksAddedToPlaylist', { count: res.tracks.length }), 'success')
-        loadLibrary()
-      }
-    } else if (res && res.error) {
-      showAlert({ title: t('common.error'), message: res.error })
-    }
-  }
-
-  const handleRenameSubmit = async () => {
-    const cleanNewName = playlistRename.newName
-      .trim()
-      .replace(/[\s.]+$/, '')
-      .trim()
-    if (!cleanNewName || cleanNewName === playlistRename.oldName) {
-      setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
-      return
-    }
-    if (playlistRename.id) {
-      // @ts-ignore
-      const res = await window.api.renameUserPlaylist(playlistRename.id, cleanNewName)
-      if (res && res.success) {
-        setUserPlaylists(res.playlists)
-        setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
-        showToast(t('toasts.playlistRenamedSuccess'), 'success')
-      } else {
-        showAlert({ title: t('common.error'), message: res?.error || 'Error renaming playlist' })
-      }
-    } else {
-      // @ts-ignore
-      const res = await window.api.renamePlaylist(playlistRename.oldName, cleanNewName)
-      if (res.success) {
-        setPlaylistRename({ isOpen: false, oldName: '', newName: '', id: undefined })
-        loadLibrary()
-      } else {
-        showAlert({ title: t('common.error'), message: 'Error renaming playlist: ' + res.error })
-      }
-    }
-  }
-
-  const handleExtractPlaylistImage = async (playlistName: string) => {
-    // @ts-ignore
-    const res = await window.api.extractPlaylistThumbnail(playlistName)
-    if (res.success) {
-      showToast(t('toasts.coverUpdatedSuccess'), 'success')
-      loadLibrary()
-    } else {
-      showAlert({ title: t('common.error'), message: res.error })
-    }
-  }
-
-  const handleChangePlaylistImage = async (playlistName: string) => {
-    // @ts-ignore
-    const res = await window.api.setPlaylistThumbnail(playlistName)
-    if (res.success) {
-      showToast(t('toasts.coverChangeSuccess'), 'success')
-      loadLibrary()
-    }
-  }
-
-  // --- Sorting & Filtering ---
-  const handleSort = (field: string) => {
-    if (sortField === field) {
-      if (sortOrder === 'asc') {
-        setSortOrder('desc')
-      } else {
-        setSortField(null)
-        setSortOrder('asc')
-      }
-    } else {
-      setSortField(field)
-      setSortOrder('asc')
-    }
-  }
-
-  const getSortedTracks = (tracks: any[]) => {
-    if (!sortField || !tracks || tracks.length <= 1) return tracks
-    const isAsc = sortOrder === 'asc'
-    const field = sortField
-    // TỐI ƯU HÓA: Schwartzian Transform chuẩn hóa giá trị 1 lần duy nhất thay vì gọi .toLowerCase() 560.000 lần
-    const mapped = tracks.map((t, idx) => {
-      const raw = t[field]
-      const val = typeof raw === 'string' ? raw.toLowerCase() : (raw ?? '')
-      return { idx, val }
-    })
-    mapped.sort((a, b) => {
-      if (a.val < b.val) return isAsc ? -1 : 1
-      if (a.val > b.val) return isAsc ? 1 : -1
-      return 0
-    })
-    return mapped.map((m) => tracks[m.idx])
-  }
-
-  const getFilteredTracks = (tracks: any[]) => {
-    const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
-    if (!rawQuery || !tracks || tracks.length === 0) return tracks
-    const normalizedQuery = removeAccents(rawQuery)
-    // TỐI ƯU HÓA: So khớp qua chỉ mục _searchKey chuẩn hóa sẵn, giảm 98% phân rã ký tự Unicode NFD và Regex
-    return tracks.filter((t) => matchesTrackQuery(t, normalizedQuery))
-  }
-
-  // --- Player Controls ---
-  const handlePlayTrack = async (track: any) => {
-    isSwitchingTrackRef.current = true
-    hasTriggeredCrossfadeRef.current = false
-    if (crossfadeEnabled && isPlaying && audioRef.current && currentTrack && !bitPerfectEnabled) {
+      setIsDownloading(true)
       try {
-        const fadeAudio = new Audio(audioRef.current.src)
-        fadeAudio.currentTime = audioRef.current.currentTime
-        const curVol = Math.max(0, Math.min(1, sliderToGain(volume)))
-        fadeAudio.volume = curVol
-        fadeAudio.play().catch(() => {})
-
-        const steps = Math.max(1, crossfadeDuration * 20)
-        const step = curVol / steps
-        const fadeInterval = setInterval(() => {
-          const nextVol = fadeAudio.volume - step
-          if (nextVol > 0.01) {
-            fadeAudio.volume = Math.max(0, Math.min(1, nextVol))
-          } else {
-            clearInterval(fadeInterval)
-            fadeAudio.pause()
-            fadeAudio.removeAttribute('src')
-            fadeAudio.src = ''
-            fadeAudio.load()
-          }
-        }, 50)
-      } catch (e) {}
-    }
-
-    let trackToPlay = { ...track }
-
-    // TỰ ĐỘNG: Phân giải URL cho nhạc Online nếu chưa có
-    const isOnlineTrack =
-      trackToPlay.isOnline ||
-      trackToPlay.isCloud ||
-      trackToPlay.platform === 'youtube' ||
-      trackToPlay.platform === 'soundcloud' ||
-      String(trackToPlay.id).startsWith('sc-') ||
-      String(trackToPlay.id).startsWith('yt-')
-    if (
-      isOnlineTrack &&
-      (!trackToPlay.filePath || !trackToPlay.filePath.startsWith('http://127.0.0.1'))
-    ) {
-      showToast(t('toasts.connectingStream'), 'info')
-      // @ts-ignore
-      const res = await window.api.getStreamUrl(trackToPlay)
-      if (res.success && res.url) {
-        trackToPlay.filePath = res.url
+        const ext = cloudActionTrack.format ? cloudActionTrack.format.toLowerCase() : 'mp3'
         // @ts-ignore
-        if (window.api.logWatchHistory && trackToPlay.platform === 'youtube')
-          window.api.logWatchHistory(trackToPlay.originalId)
-      } else {
-        showAlert({
-          title: t('common.error'),
-          message: 'Stream error: ' + (res.error || 'Unknown')
-        })
-        return
-      }
-    }
-
-    const nextMode = bitPerfectEnabled || isDsdTrack(trackToPlay) ? 'bass' : 'webaudio'
-    if (prevTrackModeRef.current === 'bass' && nextMode === 'webaudio') {
-      await window.api.bassStop().catch(() => {})
-      await resetWebAudioPipeline()
-    } else if (nextMode === 'webaudio') {
-      window.api.bassStop().catch(() => {})
-      if (
-        !audioCtxRef.current ||
-        audioCtxRef.current.state === 'closed' ||
-        (audioCtxRef.current.state as string) === 'interrupted'
-      ) {
-        await resetWebAudioPipeline()
-      }
-    }
-    prevTrackModeRef.current = nextMode
-    if (audioRef.current && nextMode === 'webaudio') {
-      audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
-      // CUE Sheet cùng file: trình duyệt không đổi src nên onLoadedMetadata không bắn, cập nhật vị trí và phát ngay
-      if (currentTrack && currentTrack.filePath === trackToPlay.filePath) {
-        audioRef.current.currentTime = trackToPlay.startTime || 0
-        audioRef.current.play().catch(() => {})
-      }
-    }
-
-    setCurrentTrack(trackToPlay)
-    setIsPlaying(true)
-    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-      await audioCtxRef.current.resume().catch(() => {})
-    }
-
-    // Ghi nhận vào Lịch sử nghe gần đây (Recently Played)
-    setRecentlyPlayed((prev) => {
-      const trackId = trackToPlay.id || trackToPlay.filePath
-      const filtered = prev.filter((t) => (t.id || t.filePath) !== trackId)
-      const updated = [
-        {
-          id: trackId,
-          title: trackToPlay.title || 'Unknown Title',
-          artist: trackToPlay.artist || 'Unknown Artist',
-          album: trackToPlay.album || 'Unknown Album',
-          duration: trackToPlay.duration || 0,
-          filePath: trackToPlay.filePath,
-          coverArt: trackToPlay.coverArt,
-          genre: trackToPlay.genre,
-          isOnline: trackToPlay.isOnline,
-          platform: trackToPlay.platform,
-          playedAt: Date.now()
-        },
-        ...filtered
-      ].slice(0, 50)
-      try {
-        localStorage.setItem('meis_recent_played', JSON.stringify(updated))
-      } catch (e) {}
-      return updated
-    })
-    setTimeout(() => {
-      isSwitchingTrackRef.current = false
-    }, 500)
-  }
-
-  // --- THUẬT TOÁN GỢI Ý BÀI HÁT CHO DASHBOARD TỪ THƯ MỤC NHẠC ---
-  const dashboardRecommendations = useMemo(() => {
-    if (!libraryTracks || libraryTracks.length === 0) return []
-
-    // 1. Thu thập các nghệ sĩ và thể loại từ các bài hát nghe gần đây
-    const recentArtists = new Map<string, number>()
-    const recentGenres = new Map<string, number>()
-
-    const recentSample = recentlyPlayed.slice(0, 20)
-    recentSample.forEach((t, idx) => {
-      const weight = 20 - idx
-      const a = (t.artist || '').toString().toLowerCase().trim()
-      if (a && a !== 'unknown' && a !== 'various artists' && a !== 'không rõ') {
-        recentArtists.set(a, (recentArtists.get(a) || 0) + weight)
-      }
-      const g = (t.genre || '').toString().toLowerCase().trim()
-      if (g && g !== 'unknown' && g !== 'không rõ') {
-        recentGenres.set(g, (recentGenres.get(g) || 0) + weight)
-      }
-    })
-
-    const topArtists = Array.from(recentArtists.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map((e) => e[0])
-    const topGenres = Array.from(recentGenres.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map((e) => e[0])
-    const recentIds = new Set(recentSample.map((t) => t.id || t.filePath))
-
-    if (topArtists.length === 0 && topGenres.length === 0) {
-      // Nếu chưa có lịch sử nghe, gợi ý các bài hát phong phú từ thư viện
-      return [...libraryTracks].slice(0, 20)
-    }
-
-    const scoredTracks = libraryTracks.map((t) => {
-      let score = 0
-      const tArtist = (t.artist || '').toString().toLowerCase().trim()
-      const tGenre = (t.genre || '').toString().toLowerCase().trim()
-      const tId = t.id || t.filePath
-
-      // Khớp nghệ sĩ hàng đầu
-      topArtists.forEach((a, idx) => {
-        if (tArtist && (tArtist.includes(a) || a.includes(tArtist))) {
-          score += (topArtists.length - idx) * 12
-        }
-      })
-
-      // Khớp thể loại hàng đầu
-      topGenres.forEach((g, idx) => {
-        if (tGenre && (tGenre.includes(g) || g.includes(tGenre))) {
-          score += (topGenres.length - idx) * 8
-        }
-      })
-
-      // Trừ điểm nhẹ cho bài vừa nghe để ưu tiên khám phá thêm bài mới trong thư mục
-      if (recentIds.has(tId)) {
-        score -= 5
-      }
-
-      return { track: t, score }
-    })
-
-    scoredTracks.sort((a, b) => b.score - a.score)
-    return scoredTracks
-      .filter((st) => st.score > 0)
-      .slice(0, 24)
-      .map((st) => st.track)
-  }, [libraryTracks, recentlyPlayed])
-
-  // Tuyển tập ngẫu nhiên "Khám phá từ thư mục nhạc"
-  const randomDiscoverTracks = useMemo(() => {
-    if (!libraryTracks || libraryTracks.length === 0) return []
-    return fisherYatesShuffle(libraryTracks).slice(0, 12)
-  }, [libraryTracks])
-
-  // Thuật toán tìm bài hát gợi ý thông minh dựa trên Thể loại / Nghệ sĩ
-  const findRecommendedTrack = (current: any, queue: any[], allTracks: any[]) => {
-    if (!current || !allTracks || allTracks.length === 0) return null
-
-    const queueIds = new Set(queue.map((t) => t.id || t.filePath))
-    let pool = allTracks.filter(
-      (t) =>
-        (t.id || t.filePath) !== (current.id || current.filePath) &&
-        !queueIds.has(t.id || t.filePath)
-    )
-    if (pool.length === 0) {
-      pool = allTracks.filter((t) => (t.id || t.filePath) !== (current.id || current.filePath))
-    }
-    if (pool.length === 0) return null
-
-    const currentGenre = (current.genre || '').toString().toLowerCase().trim()
-    const currentArtist = (current.artist || '').toString().toLowerCase().trim()
-
-    // 1. Khớp thể loại (Genre)
-    if (currentGenre && currentGenre !== 'unknown') {
-      const genreMatches = pool.filter((t) => {
-        const g = (t.genre || '').toString().toLowerCase().trim()
-        return g && g !== 'unknown' && (g.includes(currentGenre) || currentGenre.includes(g))
-      })
-      if (genreMatches.length > 0) {
-        return genreMatches[Math.floor(Math.random() * genreMatches.length)]
-      }
-    }
-
-    // 2. Khớp nghệ sĩ (Artist)
-    const currentArtists =
-      Array.isArray(current.artists) && current.artists.length > 0
-        ? current.artists.map((a: string) => a.toLowerCase().trim())
-        : splitArtistString(current.artist || '').map((a) => a.toLowerCase().trim())
-
-    const validCurrentArtists = currentArtists.filter(
-      (a) => a && a !== 'unknown' && a !== 'various artists' && a !== 'không rõ'
-    )
-
-    if (validCurrentArtists.length > 0) {
-      const artistMatches = pool.filter((t) => {
-        const tArtists =
-          Array.isArray(t.artists) && t.artists.length > 0
-            ? t.artists.map((a: string) => a.toLowerCase().trim())
-            : splitArtistString(t.artist || '').map((a) => a.toLowerCase().trim())
-        return tArtists.some((ta) =>
-          validCurrentArtists.some((ca) => ta.includes(ca) || ca.includes(ta))
+        const result = await window.api?.downloadCloudFile?.(
+          cloudActionTrack.url,
+          `${cloudActionTrack.title}.${ext}`,
+          libraryTracks
         )
-      })
-      if (artistMatches.length > 0) {
-        return artistMatches[Math.floor(Math.random() * artistMatches.length)]
-      }
-    }
-
-    // 3. Ngẫu nhiên từ kho nhạc
-    return pool[Math.floor(Math.random() * pool.length)]
-  }
-
-  // --- TÍNH NĂNG 6: SMART RADIO (TẠO HÀNG ĐỢI GỢI Ý THÔNG MINH DỰA TRÊN SEED TRACK) ---
-  const handleStartRadio = (seedTrack?: any) => {
-    const seed = seedTrack || currentTrack || (libraryTracks.length > 0 ? libraryTracks[0] : null)
-    if (!seed) {
-      showToast(
-        language === 'vi' ? 'Không có bài hát để tạo Radio' : 'No track available to start Radio',
-        'error'
-      )
-      return
-    }
-
-    const seedGenre = (seed.genre || '').toString().toLowerCase().trim()
-    const seedArtists = (
-      Array.isArray(seed.artists) && seed.artists.length > 0
-        ? seed.artists
-        : splitArtistString(seed.artist || '')
-    )
-      .map((a: string) => a.toLowerCase().trim())
-      .filter((a: string) => a && a !== 'unknown')
-
-    const otherTracks = libraryTracks.filter(
-      (t) => (t.id || t.filePath) !== (seed.id || seed.filePath)
-    )
-
-    const scoredTracks = otherTracks.map((track) => {
-      let score = 0
-      const tGenre = (track.genre || '').toString().toLowerCase().trim()
-      if (seedGenre && tGenre && (seedGenre.includes(tGenre) || tGenre.includes(seedGenre))) {
-        score += 3
-      }
-      const tArtists = (
-        Array.isArray(track.artists) && track.artists.length > 0
-          ? track.artists
-          : splitArtistString(track.artist || '')
-      ).map((a: string) => a.toLowerCase().trim())
-      if (tArtists.some((ta) => seedArtists.some((sa) => ta.includes(sa) || sa.includes(ta)))) {
-        score += 5
-      }
-      if (track.album && seed.album && track.album.toLowerCase() === seed.album.toLowerCase()) {
-        score += 2
-      }
-      return { track, score }
-    })
-
-    const matching = scoredTracks
-      .filter((s) => s.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map((s) => s.track)
-    const nonMatching = scoredTracks.filter((s) => s.score === 0).map((s) => s.track)
-
-    const radioQueue = [
-      seed,
-      ...fisherYatesShuffle(matching),
-      ...fisherYatesShuffle(nonMatching)
-    ].slice(0, 50)
-
-    setPlayQueue(radioQueue)
-    setOriginalQueue(radioQueue)
-    handlePlayTrack(seed)
-    showToast(
-      language === 'vi'
-        ? `Đã khởi tạo Smart Radio dựa trên "${seed.title || 'bài hát'}" (${radioQueue.length} bài)`
-        : `Started Smart Radio based on "${seed.title || 'track'}" (${radioQueue.length} tracks)`,
-      'success'
-    )
-  }
-
-  const handleNext = () => {
-    if (isSwitchingTrackRef.current) return
-    isSwitchingTrackRef.current = true
-    setTimeout(() => {
-      isSwitchingTrackRef.current = false
-    }, 500)
-    if (audioRef.current && !crossfadeEnabled) audioRef.current.currentTime = 0
-    if (!currentTrack) return
-    if (!playQueue || playQueue.length === 0) return
-
-    if (repeatMode === 2) {
-      handlePlayTrack(currentTrack)
-      return
-    }
-
-    const currentIndex = playQueue.findIndex((t) => t.id === currentTrack.id)
-    let nextIndex = currentIndex + 1
-
-    if (nextIndex >= playQueue.length) {
-      if (repeatMode === 1) {
-        nextIndex = 0
-      } else if (smartAutoplay) {
-        const candidate = findRecommendedTrack(currentTrack, playQueue, libraryTracks)
-        if (candidate) {
-          const newQueue = [...playQueue, candidate]
-          setPlayQueue(newQueue)
-          setOriginalQueue((prev) => [...prev, candidate])
-          handlePlayTrack(candidate)
-          showToast(
-            t('player.smartAutoplayPlaying', {
-              title: candidate.title,
-              artist: candidate.artist || t('player.unknownArtist')
-            }),
-            'info'
-          )
-          return
-        } else {
-          setIsPlaying(false)
-          if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassStop().catch(() => {})
-          return
+        if (result?.success) {
+          libraryOps.showAlert({
+            title: t('common.notice'),
+            message:
+              language === 'vi'
+                ? 'Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.'
+                : 'Download complete! Playback will begin from your computer.'
+          })
+          audioEngine.handlePlayTrack({ ...cloudActionTrack, filePath: result.localPath, isCloud: false })
+          libraryOps.loadLibrary()
+        } else if (!result?.canceled) {
+          libraryOps.showAlert({
+            title: t('common.error'),
+            message: (language === 'vi' ? 'Lỗi tải tệp: ' : 'File download error: ') + result?.error
+          })
         }
-      } else {
-        setIsPlaying(false)
-        if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassStop().catch(() => {})
-        return
+      } catch (e) {
+        console.error('Lỗi tải tệp cloud:', e)
       }
+      setIsDownloading(false)
+      setCloudActionTrack(null)
     }
-    handlePlayTrack(playQueue[nextIndex])
-  }
+  }, [cloudActionTrack, libraryTracks, language, t, audioEngine, libraryOps, setIsDownloading, setCloudActionTrack])
 
-  const handlePrev = () => {
-    if (isSwitchingTrackRef.current) return
-    isSwitchingTrackRef.current = true
-    setTimeout(() => {
-      isSwitchingTrackRef.current = false
-    }, 500)
-    if (!currentTrack) return
-    const isDsd = isDsdTrack(currentTrack)
-    const useBass = bitPerfectEnabled || isDsd
-    const curTime = useBass
-      ? (audioRef.current as any)?._currentTime || 0
-      : audioRef.current?.currentTime || 0
-    const trackStart = currentTrack.startTime || 0
-    const relTime = useBass ? curTime : Math.max(0, curTime - trackStart)
+  // 4. NAVIGATION & TOGGLES
+  const nav = useNavigationHistory({
+    fetchDashboard: () => fetchDashboard(),
+    fetchScDashboard: () => fetchScDashboard()
+  })
 
-    if (relTime > 3) {
-      if (useBass) {
-        window.api.bassSeek(0, 'absolute')
-      } else if (audioRef.current) {
-        audioRef.current.currentTime = trackStart
-      }
-      return
-    }
-    if (!playQueue || playQueue.length === 0) return
+  useDiscordRpc({ audioRef: audioEngine.audioRef, isConfigLoaded })
 
-    const currentIndex = playQueue.findIndex((t) => t.id === currentTrack.id)
-    let prevIndex = currentIndex - 1
-
-    if (prevIndex < 0) {
-      if (repeatMode === 1 || repeatMode === 2) prevIndex = playQueue.length - 1
-      else prevIndex = 0
-    }
-    handlePlayTrack(playQueue[prevIndex])
-  }
-
-  const handlePlayPause = () => {
-    if (!currentTrack) {
-      if (libraryTracks.length > 0) {
-        handleRowClick(libraryTracks[0], libraryTracks)
-      }
-      return
-    }
-
-    const isDsd = isDsdTrack(currentTrack)
-    const useBass = bitPerfectEnabled || isDsd
-    if (useBass) {
-      if (isPlaying) {
-        window.api.bassPause()
-        setIsPlaying(false)
-      } else {
-        window.api.bassResume()
-        setIsPlaying(true)
-      }
-    } else if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause()
-        setIsPlaying(false)
-      } else {
-        if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-          audioCtxRef.current.resume().catch(() => {})
-        }
-        audioRef.current.play().catch(console.warn)
-        setIsPlaying(true)
-      }
-    }
-  }
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value)
-    setVolume(val)
-    const gain = sliderToGain(val)
-    if (audioRef.current) audioRef.current.volume = gain
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(gain)
-  }
-
-  const handleVolumeUp = () => {
-    setVolume((prev) => {
-      const newVol = Math.min(1, Math.round((prev + 0.05) * 100) / 100)
-      const gain = sliderToGain(newVol)
-      if (audioRef.current) audioRef.current.volume = gain
-      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(gain)
-      return newVol
-    })
-  }
-
-  const handleVolumeDown = () => {
-    setVolume((prev) => {
-      const newVol = Math.max(0, Math.round((prev - 0.05) * 100) / 100)
-      const gain = sliderToGain(newVol)
-      if (audioRef.current) audioRef.current.volume = gain
-      if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api.bassSetVolume(gain)
-      return newVol
-    })
-  }
-
-  const toggleMute = () => {
-    const isBass = bitPerfectEnabled || isDsdTrack(currentTrack)
-    if (volume > 0) {
-      setPrevVolume(volume)
-      setVolume(0)
-      if (audioRef.current) audioRef.current.volume = 0
-      if (isBass) window.api.bassSetVolume(0)
-    } else {
-      const newVol = prevVolume > 0 ? prevVolume : 1
-      setVolume(newVol)
-      const gain = sliderToGain(newVol)
-      if (audioRef.current) audioRef.current.volume = gain
-      if (isBass) window.api.bassSetVolume(gain)
-    }
-  }
-
-  const toggleShuffle = () => {
-    if (!isShuffle) {
-      setPlayQueue(fisherYatesShuffle(originalQueue))
-    } else {
-      setPlayQueue(originalQueue)
-    }
-    setIsShuffle(!isShuffle)
-  }
-
-  const toggleRepeat = () => {
-    setRepeatMode((prev) => ((prev + 1) % 3) as 0 | 1 | 2)
-  }
-
-  const handleSeekForward = (seconds: number = 10) => {
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-      window.api.bassSeek(seconds, 'relative')
-    } else if (audioRef.current && currentTrack) {
-      audioRef.current.currentTime = Math.min(
-        audioRef.current.duration || 9999,
-        audioRef.current.currentTime + seconds
-      )
-    }
-  }
-
-  const handleSeekBackward = (seconds: number = 10) => {
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-      window.api.bassSeek(-seconds, 'relative')
-    } else if (audioRef.current && currentTrack) {
-      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - seconds)
-    }
-  }
-
-  const handleLoadedMetadata = () => {
-    if (audioRef.current && currentTrack) {
-      const actualDuration = audioRef.current.duration
-      if (!currentTrack.duration || currentTrack.duration === 0) {
-        setCurrentTrack({ ...currentTrack, duration: actualDuration })
-        setLibraryTracks((prevTracks) =>
-          prevTracks.map((t) => (t.id === currentTrack.id ? { ...t, duration: actualDuration } : t))
-        )
-      }
-      if (typeof currentTrack.startTime === 'number' && currentTrack.startTime > 0) {
-        audioRef.current.currentTime = currentTrack.startTime
-      } else if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
-        const seekTo = pendingSeekTimeRef.current
-        pendingSeekTimeRef.current = null
-        audioRef.current.currentTime = seekTo
-      }
-    }
-  }
-
-  const handleToggleMiniPlayer = () => {
+  const handleToggleMiniPlayer = useCallback(() => {
     const nextState = !isMiniPlayer
     setIsMiniPlayer(nextState)
     // @ts-ignore
-    window.api.toggleMiniPlayer(nextState)
-  }
+    window.api?.toggleMiniPlayer?.(nextState)
+  }, [isMiniPlayer, setIsMiniPlayer])
 
-  const handleToggleLyrics = () => {
+  const handleToggleLyrics = useCallback(() => {
     if (showLyricsPanel) {
       setShowLyricsPanel(false)
       setIsLyricsMaximized(false)
@@ -2897,9 +585,9 @@ export default function App() {
       setShowLyricsPanel(true)
       setShowQueuePanel(false)
     }
-  }
+  }, [showLyricsPanel, setShowLyricsPanel, setIsLyricsMaximized, setShowQueuePanel])
 
-  const handleToggleQueue = () => {
+  const handleToggleQueue = useCallback(() => {
     if (showQueuePanel) {
       setShowQueuePanel(false)
     } else {
@@ -2907,1010 +595,9 @@ export default function App() {
       setShowLyricsPanel(false)
       setIsLyricsMaximized(false)
     }
-  }
+  }, [showQueuePanel, setShowQueuePanel, setShowLyricsPanel, setIsLyricsMaximized])
 
-  const handlePlayTrackRef = useRef(handlePlayTrack)
-  handlePlayTrackRef.current = handlePlayTrack
-
-  const handleRowClick = useCallback(async (track: any, contextList?: any[]) => {
-    if (contextList) {
-      setOriginalQueue(contextList)
-      const shuffleState = usePlayerStore.getState().isShuffle
-      setPlayQueue(shuffleState ? fisherYatesShuffle(contextList) : contextList)
-    }
-    if (track.isCloud && !track.isOnline) {
-      setCloudActionTrack(track)
-    } else {
-      handlePlayTrackRef.current(track)
-    }
-  }, [])
-
-  // --- EQ & Audio Setup ---
-  const handleAddBand = () => {
-    const newBand: EQBand = {
-      id: Date.now().toString(),
-      frequency: 1000,
-      gain: 0,
-      type: 'peaking',
-      q: 1.4
-    }
-    setEqBands((prev) => [...prev, newBand])
-  }
-
-  const handleDeleteBand = (id: string) => {
-    setEqBands((prev) => prev.filter((b) => b.id !== id))
-  }
-
-  const handleUpdateBand = (id: string, key: keyof EQBand, value: any) => {
-    setEqBands((prev) => prev.map((band) => (band.id === id ? { ...band, [key]: value } : band)))
-  }
-
-  const handleResetEQ = () => {
-    const timestamp = Date.now()
-    setEqBands([
-      { id: `reset-${timestamp}-1`, frequency: 60, gain: 0, type: 'peaking', q: 1.4 },
-      { id: `reset-${timestamp}-2`, frequency: 230, gain: 0, type: 'peaking', q: 1.4 },
-      { id: `reset-${timestamp}-3`, frequency: 910, gain: 0, type: 'peaking', q: 1.4 },
-      { id: `reset-${timestamp}-4`, frequency: 3600, gain: 0, type: 'peaking', q: 1.4 },
-      { id: `reset-${timestamp}-5`, frequency: 14000, gain: 0, type: 'peaking', q: 1.4 }
-    ])
-    if (filterNodesRef.current) {
-      filterNodesRef.current.forEach((node) => {
-        try {
-          node.gain.value = 0
-        } catch (e) {}
-      })
-    }
-  }
-
-  // --- Lyrics ---
-  // Chuẩn hóa mọi dạng dữ liệu lời bài hát (string / object { text } / mảng) về chuỗi
-  const lyricsToText = (raw: any): string => {
-    if (!raw) return ''
-    let text = ''
-    if (typeof raw === 'string') text = raw
-    else if (Array.isArray(raw)) text = raw.map((r) => lyricsToText(r)).join('\n')
-    else if (typeof raw === 'object') text = typeof raw.text === 'string' ? raw.text : ''
-    return text.replace(/^\uFEFF/, '')
-  }
-
-  const parseLRC = (rawText: any): LyricLine[] => {
-    const lrcText = lyricsToText(rawText)
-    if (!lrcText) return []
-
-    let globalOffset = 0
-    const offsetMatch = /\[offset:\s*(-?\d+)\]/i.exec(lrcText)
-    if (offsetMatch) {
-      globalOffset = parseInt(offsetMatch[1], 10) / 1000
-    }
-
-    const lines = lrcText.split(/\r?\n/)
-    const result: LyricLine[] = []
-    const timeRegexGlobal = /\[(\d{1,}):(\d{2})(?:[.:](\d{1,3}))?\]/g
-
-    lines.forEach((line) => {
-      const matches = Array.from(line.matchAll(timeRegexGlobal))
-      if (matches.length === 0) return
-
-      // Bỏ toàn bộ thẻ thời gian dòng và thẻ thời gian theo từng từ (<mm:ss.xx>) để lấy phần chữ
-      const text = line
-        .replace(timeRegexGlobal, '')
-        .replace(/<\d+:\d{2}(?:[.:]\d{1,3})?>/g, '')
-        .trim()
-      if (!text) return
-
-      // Hỗ trợ nhiều mốc thời gian cho cùng một dòng: [00:10.00][00:50.00]Lời
-      for (const match of matches) {
-        const minutes = parseInt(match[1], 10)
-        const seconds = parseInt(match[2], 10)
-        const milliseconds = match[3] ? parseInt(match[3].padEnd(3, '0'), 10) : 0
-        let time = minutes * 60 + seconds + milliseconds / 1000 + globalOffset
-        if (time < 0) time = 0
-        result.push({ time, text })
-      }
-    })
-
-    return result.sort((a, b) => a.time - b.time)
-  }
-
-  // Lời thô (không có mốc thời gian): tách theo dòng, bỏ thẻ metadata dạng [ar:...], [ti:...]
-  const parsePlainLyrics = (rawText: any): LyricLine[] => {
-    const text = lyricsToText(rawText)
-    const lines = text
-      .split(/\r?\n/)
-      .map((l) => l.replace(/^\s*\[[a-z]{2,}:[^\]]*\]\s*$/i, '').trimEnd())
-    // Gom các dòng trống liên tiếp & bỏ dòng trống ở đầu/cuối
-    const compact: string[] = []
-    for (const l of lines) {
-      if (!l.trim()) {
-        if (compact.length > 0 && compact[compact.length - 1] !== '') compact.push('')
-      } else compact.push(l)
-    }
-    while (compact.length > 0 && compact[compact.length - 1] === '') compact.pop()
-    return compact.map((l) => ({ time: 0, text: l, unsynced: true }))
-  }
-
-  // Thử lời đồng bộ trước; nếu nguồn chỉ có lời thô thì dùng lời thô (vẫn tính là "có lời" của nguồn đó)
-  const buildLyricLines = (raw: any): LyricLine[] => {
-    const synced = parseLRC(raw)
-    if (synced.length > 0) return synced
-    return parsePlainLyrics(raw)
-  }
-
-  // --- Cloud & Google Drive ---
-  const handleDriveSubmit = async () => {
-    const match = driveLink.match(/folders\/([-\w]+)/) || driveLink.match(/id=([-\w]+)/)
-    if (!match) {
-      showAlert({
-        title: t('common.warning'),
-        message:
-          language === 'vi'
-            ? 'Vui lòng nhập liên kết thư mục Google Drive hợp lệ!'
-            : 'Please enter a valid Google Drive folder link!'
-      })
-      return
-    }
-    setIsFetchingDrive(true)
-    try {
-      const folderId = match[1]
-      // @ts-ignore
-      const result = await window.api.fetchDriveFiles(folderId)
-      if (result.success) {
-        if (result.tracks.length === 0)
-          showAlert({
-            title: t('common.notice'),
-            message:
-              language === 'vi'
-                ? 'Không tìm thấy tệp âm thanh nào. Hãy đảm bảo thư mục đã bật "Bất kỳ ai có liên kết"!'
-                : 'No audio files found. Please ensure the folder is shared with "Anyone with the link"!'
-          })
-        else setDriveFiles(result.tracks)
-      } else
-        showAlert({
-          title: t('common.error'),
-          message: (language === 'vi' ? 'Lỗi từ hệ thống: ' : 'System error: ') + result.error
-        })
-    } catch (err) {
-      showAlert({
-        title: t('common.error'),
-        message: language === 'vi' ? 'Lỗi kết nối tới hệ thống!' : 'Failed to connect to system!'
-      })
-    }
-    setIsFetchingDrive(false)
-  }
-
-  const handleDriveStream = () => {
-    setLibraryTracks((prev) => [...prev, ...driveFiles])
-    showToast(t('toasts.tracksAddedToPlaylist', { count: driveFiles.length }), 'success')
-  }
-
-  const handleDriveDownload = async () => {
-    if (!libraryPath) {
-      showToast(t('toasts.setLibraryFirst'), 'error')
-      return
-    }
-    setIsDownloading(true)
-    setDownloadProgress({ current: 0, total: driveFiles.length, fileName: t('common.loading') })
-    try {
-      // @ts-ignore
-      const result = await window.api.downloadMultipleFiles(driveFiles, processedLibraryTracks)
-      if (result.success) {
-        if (result.tracks.length > 0) {
-          showToast(t('toasts.driveDownloadFinished', { count: result.tracks.length }), 'success')
-          loadLibrary()
-        }
-      } else {
-        showToast(t('toasts.systemError') + result.error, 'error')
-      }
-    } catch (e) {
-      showToast(t('toasts.downloadError'), 'error')
-    }
-    setIsDownloading(false)
-    setDownloadProgress(null)
-  }
-
-  const handleCloudAction = async (action: 'stream' | 'download') => {
-    if (!cloudActionTrack) return
-    if (action === 'stream') {
-      // Handle stream
-    } else {
-      setIsDownloading(true)
-      try {
-        const ext = cloudActionTrack.format ? cloudActionTrack.format.toLowerCase() : 'mp3'
-        // @ts-ignore
-        const result = await window.api.downloadCloudFile(
-          cloudActionTrack.url,
-          `${cloudActionTrack.title}.${ext}`,
-          libraryTracks
-        )
-        if (result.success) {
-          showAlert({
-            title: t('common.notice'),
-            message:
-              language === 'vi'
-                ? 'Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.'
-                : 'Download complete! Playback will begin from your computer.'
-          })
-          handlePlayTrack({ ...cloudActionTrack, filePath: result.localPath, isCloud: false })
-          loadLibrary()
-        } else if (result.canceled) {
-          // Cancelled
-        } else {
-          showAlert({
-            title: t('common.error'),
-            message: (language === 'vi' ? 'Lỗi tải tệp: ' : 'File download error: ') + result.error
-          })
-        }
-      } catch (e) {}
-      setIsDownloading(false)
-      setCloudActionTrack(null)
-    }
-  }
-
-  // Nạp ảnh bìa chất lượng gốc siêu nét cho Background Theme và Lời bài hát
-  const [trackHighResCover, setTrackHighResCover] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!currentTrack || isCore) {
-      setTrackHighResCover(null)
-      return
-    }
-
-    if (currentTrack.isOnline) {
-      setTrackHighResCover(currentTrack.coverArtHighRes || currentTrack.coverArt || null)
-      return
-    }
-
-    if (!currentTrack.isCloud && (currentTrack.id || currentTrack.filePath)) {
-      let isCurrent = true
-      // @ts-ignore
-      window.api
-        .getOriginalTrackCover(currentTrack.id || currentTrack.filePath, 480)
-        .then((cover: string | null) => {
-          if (isCurrent) {
-            setTrackHighResCover(cover || currentTrack.coverArt || null)
-          }
-        })
-        .catch(() => {
-          if (isCurrent) setTrackHighResCover(currentTrack.coverArt || null)
-        })
-      return () => {
-        isCurrent = false
-      }
-    } else {
-      setTrackHighResCover(currentTrack.coverArt || null)
-    }
-  }, [
-    currentTrack?.id,
-    currentTrack?.filePath,
-    currentTrack?.coverArt,
-    currentTrack?.coverArtHighRes,
-    currentTrack?.isOnline,
-    currentTrack?.isCloud,
-    isCore
-  ])
-
-  // Determine effective background image (Tắt hoàn toàn trong Core Mode)
-  const effectiveBgImage = isCore
-    ? null
-    : useTrackCoverAsBg
-      ? trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt || null
-      : customBgImage
-
-  // Chuẩn hóa ảnh nền thành URL an toàn (hỗ trợ streamPort, #, ?, %, và webSecurity: true)
-  const resolvedBgImage = useMemo(() => {
-    return effectiveBgImage ? formatImageSource(effectiveBgImage, streamPort) : null
-  }, [effectiveBgImage, streamPort])
-
-  // Quản lý Dual-layer Background Crossfade cho chế độ Standard (Chống stutter khi chuyển bài)
-  const [bgLayerA, setBgLayerA] = useState<string | null>(null)
-  const [bgLayerB, setBgLayerB] = useState<string | null>(null)
-  const [activeBgLayer, setActiveBgLayer] = useState<'A' | 'B'>('A')
-
-  useEffect(() => {
-    if (isCore) {
-      setBgLayerA(null)
-      setBgLayerB(null)
-      return
-    }
-
-    if (!resolvedBgImage) {
-      setBgLayerA(null)
-      setBgLayerB(null)
-      return
-    }
-
-    if (isLite) {
-      // Chế độ Lite: Cập nhật trực tiếp 1 layer, không chạy animation crossfade
-      setBgLayerA(resolvedBgImage)
-      setActiveBgLayer('A')
-      return
-    }
-
-    // Chế độ Standard: Preload ảnh và Crossfade mượt mà giữa Layer A và Layer B
-    let isCancelled = false
-    const targetLayer = activeBgLayer === 'A' ? 'B' : 'A'
-
-    const applyTransition = () => {
-      if (isCancelled) return
-      if (targetLayer === 'B') {
-        setBgLayerB(resolvedBgImage)
-        setActiveBgLayer('B')
-      } else {
-        setBgLayerA(resolvedBgImage)
-        setActiveBgLayer('A')
-      }
-    }
-
-    const img = new Image()
-    if (resolvedBgImage.startsWith('http://') || resolvedBgImage.startsWith('https://')) {
-      img.crossOrigin = 'anonymous'
-    }
-    img.onload = applyTransition
-    img.onerror = applyTransition
-    img.src = resolvedBgImage
-
-    return () => {
-      isCancelled = true
-    }
-  }, [resolvedBgImage, isLite, isCore])
-
-  // Khởi tạo và nạp trước Theme Colors Cache từ JSON vào RAM
-  useEffect(() => {
-    if ((window as any).api?.getThemeColorsCache) {
-      ;(window as any).api
-        .getThemeColorsCache()
-        .then((cachedColors: any) => {
-          if (cachedColors) {
-            initThemeColorCache(cachedColors)
-          }
-        })
-        .catch(() => {})
-    }
-  }, [])
-
-  // Apply Background & Extract Theme Colors (Quy luật 60/30/10 cho Standard & Lite mode)
-  useEffect(() => {
-    if (isCore) {
-      document.documentElement.style.setProperty('--bg-image', 'none')
-      document.documentElement.style.setProperty('--theme-60', '#18181b')
-      document.documentElement.style.setProperty('--theme-30', '#27272a')
-      document.documentElement.style.setProperty('--theme-10', '#10b981')
-      return
-    }
-
-    // 1. Cập nhật ảnh nền giao diện
-    const bgUrlToUse = resolvedBgImage || effectiveBgImage
-    if (bgUrlToUse) {
-      const sanitizedUrl = bgUrlToUse.replace(/"/g, '\\"')
-      document.documentElement.style.setProperty('--bg-image', `url("${sanitizedUrl}")`)
-    } else {
-      document.documentElement.style.setProperty('--bg-image', 'none')
-    }
-
-    // 2. Chế độ Màu nền tùy chỉnh (Custom Accent Color)
-    if (accentColorMode === 'custom') {
-      const theme = generateThemeFromColor(customAccentColor)
-      document.documentElement.style.setProperty('--theme-60', theme.primary60)
-      document.documentElement.style.setProperty('--theme-30', theme.secondary30)
-      document.documentElement.style.setProperty('--theme-10', theme.accent10)
-      return
-    }
-
-    // 3. Chế độ Màu nền theo background (nếu sử dụng background được chọn thì cố định dùng màu của background đó)
-    if (accentColorMode === 'background') {
-      if (!useTrackCoverAsBg && customBgImage) {
-        const safeBg = formatImageSource(customBgImage, streamPort) || customBgImage
-        extractThemeColors(safeBg, customBgImage).then((colors) => {
-          if (colors && !isCore) {
-            document.documentElement.style.setProperty('--theme-60', colors.primary60)
-            document.documentElement.style.setProperty('--theme-30', colors.secondary30)
-            document.documentElement.style.setProperty('--theme-10', colors.accent10)
-          }
-        })
-        return
-      }
-      // Nếu là background tự động (useTrackCoverAsBg === true) hoặc chưa có customBgImage:
-      // Tiếp tục xuống bước 4 để lấy màu từ cover art của bài hát hiện tại (chính là background tự động)
-    }
-
-    // 4. Chế độ Màu nền theo track (hoặc fallback background tự động)
-    const trackKey = currentTrack?.id || currentTrack?.filePath
-
-    // Áp dụng ngay lập tức màu từ cache JSON/SQLite nếu đã có sẵn
-    if (currentTrack?.themeColors && !isCore) {
-      document.documentElement.style.setProperty('--theme-60', currentTrack.themeColors.primary60)
-      document.documentElement.style.setProperty('--theme-30', currentTrack.themeColors.secondary30)
-      document.documentElement.style.setProperty('--theme-10', currentTrack.themeColors.accent10)
-    }
-
-    const trackCover = trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt
-
-    if (trackCover) {
-      const safeTrackCover = formatImageSource(trackCover, streamPort) || trackCover
-      extractThemeColors(safeTrackCover, trackKey || safeTrackCover).then((colors) => {
-        if (colors && !isCore) {
-          document.documentElement.style.setProperty('--theme-60', colors.primary60)
-          document.documentElement.style.setProperty('--theme-30', colors.secondary30)
-          document.documentElement.style.setProperty('--theme-10', colors.accent10)
-        }
-      })
-    } else if (!currentTrack?.themeColors) {
-      // Fallback về mặc định
-      document.documentElement.style.setProperty('--theme-60', '#18181b')
-      document.documentElement.style.setProperty('--theme-30', '#27272a')
-      document.documentElement.style.setProperty('--theme-10', '#10b981')
-    }
-  }, [
-    accentColorMode,
-    customAccentColor,
-    customBgImage,
-    useTrackCoverAsBg,
-    effectiveBgImage,
-    resolvedBgImage,
-    trackHighResCover,
-    currentTrack?.id,
-    currentTrack?.filePath,
-    currentTrack?.themeColors,
-    currentTrack?.coverArt,
-    currentTrack?.coverArtHighRes,
-    streamPort,
-    isCore
-  ])
-
-  useEffect(() => {
-    document.documentElement.style.setProperty('--bg-opacity', customBgOpacity.toString())
-  }, [customBgOpacity])
-
-  useEffect(() => {
-    document.documentElement.style.setProperty('--bg-blur', `${customBgBlur}px`)
-    document.documentElement.style.setProperty(
-      '--bg-filter',
-      customBgBlur > 0 ? `blur(${customBgBlur}px)` : 'none'
-    )
-  }, [customBgBlur])
-
-  // Change Audio Device
-  useEffect(() => {
-    if (selectedDeviceId) {
-      const browserSinkId = getBrowserSinkId(selectedDeviceId)
-      if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
-        ;(audioRef.current as any).setSinkId(browserSinkId).catch(() => {})
-      }
-      if (window.api && (window.api as any).setAudioDevice) {
-        ;(window.api as any).setAudioDevice(selectedDeviceId)
-      }
-    }
-  }, [selectedDeviceId])
-
-  // --- Chức năng cài đặt ---
-  // --- Track Info Modal ---
-  const openTrackInfo = useCallback((track: any, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setInfoTrack(track)
-  }, [])
-
-  // --- Tag Editor ---
-  const openTagEditor = useCallback((track: any, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    if (!track) return
-    setEditingTrack(track)
-
-    let rawLyrics = ''
-    if (typeof track.lyrics === 'string') {
-      rawLyrics = track.lyrics
-    } else if (typeof track.lyrics === 'object' && track.lyrics !== null) {
-      rawLyrics = track.lyrics.text || ''
-    }
-
-    setEditTags({
-      title: track.title || '',
-      artist: track.artist || '',
-      album: track.album || '',
-      albumArtist: track.albumArtist || '',
-      genre:
-        track.genre && track.genre !== 'Unknown' && track.genre !== 'Chưa phân loại'
-          ? track.genre
-          : '',
-      year: track.year || '',
-      trackNumber: track.trackNumber || '',
-      discNumber: track.discNumber || '',
-      lyrics: rawLyrics
-    })
-    setEditImagePath(null)
-
-    if (!rawLyrics && (window as any).api?.readLrcFile) {
-      const targetPath = track.filePath || track.id
-      if (targetPath) {
-        ;(window as any).api
-          .readLrcFile(targetPath)
-          .then((lrc: string | null) => {
-            if (lrc) {
-              setEditTags((prev) => ({ ...prev, lyrics: lrc }))
-            }
-          })
-          .catch(() => {})
-      }
-    }
-  }, [])
-
-  const handleSelectTagImage = async () => {
-    // @ts-ignore
-    const path = await window.api.selectImageFile()
-    if (path) setEditImagePath(path)
-  }
-
-  const saveTags = async () => {
-    if (!editingTrack) return
-    const targetPath = editingTrack.filePath || editingTrack.id
-    if (!targetPath) return
-    // @ts-ignore
-    const res = await window.api.updateTags(targetPath, editTags, editImagePath)
-    if (res.success) {
-      showToast(res.note || t('toasts.tagSavedSuccess'), 'success')
-      const newCover = res.coverUrl || currentTrack?.coverArt
-      const newParsedArtists = splitArtistString(editTags.artist)
-      const effectiveArtists = newParsedArtists.length > 0 ? newParsedArtists : [editTags.artist]
-      setLibraryTracks((prev) =>
-        prev.map((t) => {
-          if (t.id === editingTrack.id || t.filePath === editingTrack.filePath) {
-            return {
-              ...t,
-              title: editTags.title,
-              artist: editTags.artist,
-              artists: effectiveArtists,
-              album: editTags.album,
-              albumArtist: editTags.albumArtist,
-              genre: editTags.genre,
-              year: editTags.year,
-              trackNumber: editTags.trackNumber,
-              discNumber: editTags.discNumber,
-              lyrics: editTags.lyrics,
-              coverArt: newCover || t.coverArt
-            }
-          }
-          return t
-        })
-      )
-      if (
-        currentTrack &&
-        (currentTrack.id === editingTrack.id || currentTrack.filePath === editingTrack.filePath)
-      ) {
-        setCurrentTrack({
-          ...currentTrack,
-          title: editTags.title,
-          artist: editTags.artist,
-          artists: effectiveArtists,
-          album: editTags.album,
-          albumArtist: editTags.albumArtist,
-          genre: editTags.genre,
-          year: editTags.year,
-          trackNumber: editTags.trackNumber,
-          discNumber: editTags.discNumber,
-          lyrics: editTags.lyrics,
-          coverArt: newCover || currentTrack.coverArt
-        })
-      }
-      setEditingTrack(null)
-      loadLibrary()
-    } else alert('Error: ' + res.error)
-  }
-
-  // --- Context Menu State & Handlers ---
-  const [contextMenu, setContextMenu] = useState<{
-    x: number
-    y: number
-    items: ContextMenuItem[]
-  } | null>(null)
-
-  const handleTrackContextMenu = (track: any, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    const isInsidePlaylist = activeView === 'playlists' && activePlaylist
-    const isInsideUserPlaylist = activeView === 'user-playlists' && activeUserPlaylist
-
-    const userPlaylistSubItems = userPlaylists.map((upl) => ({
-      id: `upl-${upl.id}`,
-      label: upl.name,
-      icon: <ListPlus size={14} />,
-      onClick: async () => {
-        const rawTrackPath = track.id || track.filePath
-        // @ts-ignore
-        const res = await window.api.addTracksToUserPlaylist(upl.id, [rawTrackPath])
-        if (res && res.success) {
-          setUserPlaylists(res.playlists)
-          showToast(t('toasts.addedToPlaylist', { name: upl.name }), 'success')
-        }
-      }
-    }))
-
-    const folderPlaylistSubItems = playlists.map((pl) => ({
-      id: `pl-${pl.name}`,
-      label: pl.name,
-      icon: <Disc size={14} />,
-      onClick: async () => {
-        const rawTrackPath = track.id || track.filePath
-        // @ts-ignore
-        await window.api.addTrackToPlaylist(pl.name, rawTrackPath)
-        showToast(t('toasts.addedToPlaylist', { name: pl.name }), 'success')
-        loadLibrary()
-      }
-    }))
-
-    const playlistSubItems = [
-      {
-        id: 'new-user-playlist',
-        label: '+ ' + t('userPlaylistsView.createPlaylist'),
-        icon: <Plus size={14} className="text-theme-10" />,
-        onClick: () => {
-          setShowCreateUserPlaylistModal(true)
-        }
-      },
-      ...(userPlaylistSubItems.length > 0
-        ? [{ id: 'div-upl', label: '', divider: true }, ...userPlaylistSubItems]
-        : []),
-      ...(folderPlaylistSubItems.length > 0
-        ? [{ id: 'div-fpl', label: '', divider: true }, ...folderPlaylistSubItems]
-        : [])
-    ]
-
-    const items: ContextMenuItem[] = [
-      {
-        id: 'play',
-        label: t('contextMenu.play'),
-        icon: <Play size={14} />,
-        onClick: () => handleRowClick(track, libraryTracks)
-      },
-      {
-        id: 'add-queue',
-        label: t('contextMenu.addQueue'),
-        icon: <ListPlus size={14} />,
-        onClick: () => {
-          setPlayQueue((prev) => [...prev, track])
-          showToast(t('toasts.addedToQueue', { title: track.title }), 'success')
-        }
-      },
-      {
-        id: 'start-radio',
-        label:
-          language === 'vi'
-            ? 'Khởi tạo Smart Radio từ bài này'
-            : 'Start Smart Radio from this track',
-        icon: <Radio size={14} />,
-        onClick: () => handleStartRadio(track)
-      },
-      {
-        id: 'add-to-playlist',
-        label: t('contextMenu.addToPlaylist'),
-        icon: <FolderPlus size={14} />,
-        subItems: playlistSubItems
-      },
-      { id: 'div-1', label: '', divider: true },
-      {
-        id: 'view-info',
-        label: t('contextMenu.viewInfo'),
-        icon: <Info size={14} />,
-        onClick: () => openTrackInfo(track, e)
-      },
-      {
-        id: 'edit-tags',
-        label: t('contextMenu.editTags'),
-        icon: <Edit2 size={14} />,
-        disabled: track.isCloud || track.isCueTrack,
-        onClick: () => openTagEditor(track, e)
-      },
-      {
-        id: 'show-in-folder',
-        label: t('contextMenu.showInFolder'),
-        icon: <FolderOpen size={14} />,
-        disabled: track.isCloud,
-        onClick: async () => {
-          const rawTrackPath = track.id || track.filePath
-          // @ts-ignore
-          await window.api.showInFolder(rawTrackPath)
-        }
-      },
-      { id: 'div-2', label: '', divider: true }
-    ]
-
-    if (isInsideUserPlaylist) {
-      items.push({
-        id: 'remove-from-user-playlist',
-        label: t('userPlaylistsView.removeFromPlaylist'),
-        icon: <Trash2 size={14} />,
-        danger: true,
-        onClick: () => {
-          showConfirm({
-            title: t('userPlaylistsView.removeFromPlaylist'),
-            message: t('userPlaylistsView.confirmRemove', { title: track.title }),
-            danger: true,
-            onConfirm: async () => {
-              const rawTrackPath = track.id || track.filePath
-              // @ts-ignore
-              const res = await window.api.removeTrackFromUserPlaylist(
-                activeUserPlaylist.id,
-                rawTrackPath
-              )
-              if (res && res.success) {
-                setUserPlaylists(res.playlists)
-                showToast(t('toasts.removedFromPlaylist'), 'success')
-              }
-            }
-          })
-        }
-      })
-    } else if (isInsidePlaylist) {
-      items.push({
-        id: 'remove-from-playlist',
-        label: t('contextMenu.removeFromPlaylist', { name: activePlaylist.name }),
-        icon: <Trash2 size={14} />,
-        danger: true,
-        onClick: () => {
-          showConfirm({
-            title: t('contextMenu.removeFromPlaylist', { name: activePlaylist.name }),
-            message: t('contextMenu.confirmRemoveFromPlaylist', {
-              title: track.title,
-              name: activePlaylist.name
-            }),
-            danger: true,
-            onConfirm: async () => {
-              const rawTrackPath = track.id || track.filePath
-              // @ts-ignore
-              await window.api.deleteTrack(rawTrackPath, false)
-              showToast(t('toasts.removedFromPlaylist'), 'success')
-              loadLibrary()
-            }
-          })
-        }
-      })
-    }
-
-    items.push({
-      id: 'delete-permanent',
-      label: t('contextMenu.deleteFile'),
-      icon: <Trash2 size={14} />,
-      danger: true,
-      disabled: track.isCloud,
-      onClick: () => {
-        showConfirm({
-          title: t('contextMenu.deleteFile'),
-          message: t('contextMenu.confirmDeleteFile', { title: track.title }),
-          danger: true,
-          onConfirm: async () => {
-            const rawTrackPath = track.id || track.filePath
-            // @ts-ignore
-            const res = await window.api.deleteTrack(rawTrackPath, true)
-            if (res && res.success) {
-              showToast(t('toasts.movedToTrash', { title: track.title }), 'success')
-              loadLibrary()
-            } else {
-              showAlert({
-                title: t('common.error'),
-                message: 'Error deleting track: ' + res?.error
-              })
-            }
-          }
-        })
-      }
-    })
-
-    setContextMenu({ x: e.clientX, y: e.clientY, items })
-  }
-
-  const handlePlaylistContextMenu = (pl: any, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    const items: ContextMenuItem[] = [
-      {
-        id: 'play-all',
-        label: t('contextMenu.playAll'),
-        icon: <Play size={14} />,
-        disabled: !pl.tracks || pl.tracks.length === 0,
-        onClick: () => {
-          if (pl.tracks && pl.tracks.length > 0) {
-            handleRowClick(pl.tracks[0], pl.tracks)
-          }
-        }
-      },
-      {
-        id: 'add-songs',
-        label: t('contextMenu.addSongs'),
-        icon: <Plus size={14} />,
-        onClick: () => {
-          setActivePlaylist(pl)
-          setShowAddSongsModal(true)
-        }
-      },
-      { id: 'div-1', label: '', divider: true },
-      {
-        id: 'rename-playlist',
-        label: t('contextMenu.renamePlaylist'),
-        icon: <Edit2 size={14} />,
-        onClick: () =>
-          setPlaylistRename({ isOpen: true, oldName: pl.name, newName: pl.name, id: undefined })
-      },
-      {
-        id: 'change-cover',
-        label: t('contextMenu.changeCover'),
-        icon: <ImageIcon size={14} />,
-        onClick: () => handleChangePlaylistImage(pl.name)
-      },
-      {
-        id: 'extract-cover',
-        label: t('contextMenu.extractCover'),
-        icon: <Sparkles size={14} />,
-        disabled: !pl.tracks || pl.tracks.length === 0,
-        onClick: () => handleExtractPlaylistImage(pl.name)
-      },
-      {
-        id: 'show-in-folder',
-        label: t('contextMenu.openPlaylistFolder'),
-        icon: <FolderOpen size={14} />,
-        onClick: async () => {
-          // @ts-ignore
-          await window.api.showInFolder(pl.path)
-        }
-      },
-      { id: 'div-2', label: '', divider: true },
-      {
-        id: 'delete-playlist',
-        label: t('contextMenu.deletePlaylist', { name: pl.name }),
-        icon: <Trash2 size={14} />,
-        danger: true,
-        onClick: () => {
-          showConfirm({
-            title: t('contextMenu.deletePlaylist', { name: pl.name }),
-            message: t('contextMenu.confirmDeletePlaylist', { name: pl.name }),
-            danger: true,
-            onConfirm: async () => {
-              // @ts-ignore
-              const res = await window.api.deletePlaylist(pl.name)
-              if (res && res.success) {
-                showToast(t('toasts.playlistDeleted', { name: pl.name }), 'success')
-                if (activePlaylist?.name === pl.name) setActivePlaylist(null)
-                loadLibrary()
-              } else {
-                showAlert({
-                  title: t('common.error'),
-                  message: 'Error deleting playlist: ' + res?.error
-                })
-              }
-            }
-          })
-        }
-      }
-    ]
-
-    setContextMenu({ x: e.clientX, y: e.clientY, items })
-  }
-
-  const handleUserPlaylistContextMenu = (upl: any, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    const resolvedTracks = getResolvedUserPlaylistTracks(upl)
-
-    const items: ContextMenuItem[] = [
-      {
-        id: 'play-all',
-        label: t('userPlaylistsView.playAll'),
-        icon: <Play size={14} />,
-        disabled: resolvedTracks.length === 0,
-        onClick: () => {
-          if (resolvedTracks.length > 0) {
-            handleRowClick(resolvedTracks[0], resolvedTracks)
-          }
-        }
-      },
-      {
-        id: 'add-songs',
-        label: t('userPlaylistsView.addSongs'),
-        icon: <Plus size={14} />,
-        onClick: () => {
-          setActiveUserPlaylist(upl)
-          setShowAddSongsToUserPlaylistModal(true)
-        }
-      },
-      { id: 'div-1', label: '', divider: true },
-      {
-        id: 'edit-playlist',
-        label: t('modals.editPlaylist.title'),
-        icon: <Edit2 size={14} />,
-        onClick: () => {
-          setEditingUserPlaylist(upl)
-          setShowEditUserPlaylistModal(true)
-        }
-      },
-      { id: 'div-2', label: '', divider: true },
-      {
-        id: 'delete-playlist',
-        label: t('userPlaylistsView.deletePlaylist'),
-        icon: <Trash2 size={14} />,
-        danger: true,
-        onClick: () => handleDeleteUserPlaylist(upl)
-      }
-    ]
-
-    setContextMenu({ x: e.clientX, y: e.clientY, items })
-  }
-
-  const handleArtistContextMenu = (artist: any, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    const items: ContextMenuItem[] = [
-      {
-        id: 'play-all',
-        label: t('artistsView.playAll'),
-        icon: <Play size={14} />,
-        disabled: !artist.tracks || artist.tracks.length === 0,
-        onClick: () => {
-          if (artist.tracks && artist.tracks.length > 0) {
-            handleRowClick(artist.tracks[0], artist.tracks)
-          }
-        }
-      },
-      {
-        id: 'add-queue',
-        label: t('contextMenu.addQueue'),
-        icon: <ListPlus size={14} />,
-        onClick: () => {
-          setPlayQueue((prev) => [...prev, ...(artist.tracks || [])])
-          showToast(t('toasts.addedToQueue', { title: artist.name }), 'success')
-        }
-      }
-    ]
-
-    setContextMenu({ x: e.clientX, y: e.clientY, items })
-  }
-
-  // ==========================================
-  // 4. MEMOS
-  // ==========================================
-  const libraryTrackMap = useMemo(() => {
-    const map = new Map<string, any>()
-    for (const t of libraryTracks) {
-      if (t.id) map.set(t.id, t)
-      if (t.filePath) map.set(t.filePath, t)
-    }
-    return map
-  }, [libraryTracks])
-
-  const getResolvedUserPlaylistTracks = useCallback(
-    (upl: any) => {
-      if (!upl || !Array.isArray(upl.trackIds)) return []
-      const resolved: any[] = []
-      for (const trackId of upl.trackIds) {
-        const found = libraryTrackMap.get(trackId)
-        if (found) {
-          resolved.push(found)
-        } else {
-          const title = trackId.split('/').pop()?.split('\\').pop() || trackId
-          resolved.push({
-            id: trackId,
-            filePath: trackId,
-            title: title.replace(/\.[^/.]+$/, ''),
-            artist: 'Unknown',
-            album: 'Unknown',
-            duration: 0,
-            isCloud: false
-          })
-        }
-      }
-      return resolved
-    },
-    [libraryTrackMap]
-  )
-
-  const activeUserPlaylistTracks = useMemo(() => {
-    if (!activeUserPlaylist) return []
-    const resolved = getResolvedUserPlaylistTracks(activeUserPlaylist)
-    const filtered = getFilteredTracks(resolved)
-    return getSortedTracks(filtered)
-  }, [activeUserPlaylist, getResolvedUserPlaylistTracks, searchQuery, sortField, sortOrder])
-
+  // 5. MEMOS: AGGREGATED ARTISTS & GENRES
   const uniqueArtistsCount = useMemo(() => {
     const set = new Set<string>()
     for (const track of libraryTracks) {
@@ -3930,22 +617,21 @@ export default function App() {
   const artistsData = useMemo(() => {
     const unknownArtistLabel = language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist'
 
-    // 1. Tận dụng preAggregatedData từ Main Process (0ms calculation): Map tracks O(1) qua libraryTrackMap
     if (preAggregatedData?.artistsList && preAggregatedData.artistsList.length > 0) {
       const artistsList = preAggregatedData.artistsList.map((a: any) => {
         const displayName =
           a.name === 'Unknown Artist' || a.name === 'Unknown' ? unknownArtistLabel : a.name
         const tracks = Array.isArray(a.trackIds)
-          ? a.trackIds.map((id: string) => libraryTrackMap.get(id)).filter(Boolean)
+          ? a.trackIds.map((id: string) => libraryOps.libraryTrackMap.get(id)).filter(Boolean)
           : a.tracks || []
         const albums = (a.albums || []).map((alb: any) => ({
           title: alb.title,
           tracks: Array.isArray(alb.trackIds)
-            ? alb.trackIds.map((id: string) => libraryTrackMap.get(id)).filter(Boolean)
+            ? alb.trackIds.map((id: string) => libraryOps.libraryTrackMap.get(id)).filter(Boolean)
             : alb.tracks || [],
           coverArt:
             alb.coverArt ||
-            (alb.trackIds?.[0] ? libraryTrackMap.get(alb.trackIds[0])?.coverArt : null) ||
+            (alb.trackIds?.[0] ? libraryOps.libraryTrackMap.get(alb.trackIds[0])?.coverArt : null) ||
             a.coverArt,
           year: alb.year
         }))
@@ -3971,7 +657,6 @@ export default function App() {
       return { artistsList, alphabetGroups }
     }
 
-    // 2. Dự phòng: Tính toán tại chỗ nếu preAggregatedData chưa sẵn sàng (với sort key tối ưu O(1))
     const artistMap = new Map<
       string,
       {
@@ -4050,10 +735,8 @@ export default function App() {
         .replace(/[\u0300-\u036f]/g, '')
     }))
 
-    // Sắp xếp nhanh toán tử < > thay cho localeCompare
     artistsList.sort((a, b) => (a._sortKey < b._sortKey ? -1 : a._sortKey > b._sortKey ? 1 : 0))
 
-    // Gom nhóm theo chữ cái đầu (A-Z, 0-9, #)
     const letterMap = new Map<string, typeof artistsList>()
     for (const artist of artistsList) {
       const trimmed = (artist.name || '').trim()
@@ -4084,23 +767,47 @@ export default function App() {
     })
 
     return { artistsList, alphabetGroups }
-  }, [preAggregatedData, libraryTracks, libraryTrackMap, language])
+  }, [preAggregatedData, libraryTracks, libraryOps.libraryTrackMap, language])
 
   const genresData = useMemo(() => {
     const unknownGenreLabel = language === 'vi' ? 'Chưa phân loại' : 'Unknown'
 
-    // 1. Tận dụng preAggregatedData từ Main Process (0ms):
     if (preAggregatedData?.genresList && preAggregatedData.genresList.length > 0) {
-      return preAggregatedData.genresList.map((g: any) => ({
-        ...g,
-        name: g.name === 'Unknown' || g.name === 'Chưa phân loại' ? unknownGenreLabel : g.name,
-        tracks: Array.isArray(g.trackIds)
-          ? g.trackIds.map((id: string) => libraryTrackMap.get(id)).filter(Boolean)
-          : g.tracks || []
-      }))
+      return preAggregatedData.genresList.map((g: any) => {
+        const tracks = Array.isArray(g.trackIds)
+          ? g.trackIds.map((id: string) => libraryOps.libraryTrackMap.get(id)).filter(Boolean)
+          : Array.isArray(g.tracks)
+            ? g.tracks
+            : []
+
+        const artists: string[] =
+          Array.isArray(g.artists) && g.artists.length > 0
+            ? g.artists
+            : Array.from(
+                new Set(
+                  tracks
+                    .map((t: any) => t?.artist)
+                    .filter((a: any) => a && a !== 'Unknown' && a !== unknownGenreLabel)
+                )
+              )
+
+        const coverArts: string[] =
+          Array.isArray(g.coverArts) && g.coverArts.length > 0
+            ? g.coverArts
+            : Array.from(new Set(tracks.map((t: any) => t?.coverArt).filter(Boolean))).slice(0, 4)
+
+        return {
+          ...g,
+          name: g.name === 'Unknown' || g.name === 'Chưa phân loại' ? unknownGenreLabel : g.name,
+          tracks,
+          artists,
+          coverArts,
+          artistCount: typeof g.artistCount === 'number' ? g.artistCount : artists.length,
+          trackCount: typeof g.trackCount === 'number' ? g.trackCount : tracks.length
+        }
+      })
     }
 
-    // 2. Dự phòng: Tính toán tại chỗ nếu preAggregatedData chưa sẵn sàng
     const genreMap = new Map<
       string,
       {
@@ -4118,35 +825,22 @@ export default function App() {
         .split(/[,;/|]+/)
         .map((g) => g.trim())
         .filter(Boolean)
-      const list = splitGenres.length > 0 ? splitGenres : ['Unknown']
 
-      for (const g of list) {
-        const normalized = g.toLowerCase() === 'unknown' ? unknownGenreLabel : g
-        if (!genreMap.has(normalized)) {
-          genreMap.set(normalized, {
-            name: normalized,
+      const effectiveGenres = splitGenres.length > 0 ? splitGenres : [unknownGenreLabel]
+      for (const g of effectiveGenres) {
+        const genreName = g.toLowerCase() === 'unknown' ? unknownGenreLabel : g
+        if (!genreMap.has(genreName)) {
+          genreMap.set(genreName, {
+            name: genreName,
             tracks: [],
             artists: new Set(),
             albums: new Set(),
             coverArts: []
           })
         }
-        const item = genreMap.get(normalized)!
+        const item = genreMap.get(genreName)!
         item.tracks.push(track)
-        const arts =
-          Array.isArray(track.artists) && track.artists.length > 0
-            ? track.artists
-            : splitArtistString(track.artist || '')
-        for (const a of arts) {
-          if (
-            a &&
-            a !== 'Unknown' &&
-            a.toLowerCase() !== 'unknown artist' &&
-            a !== 'Nghệ sĩ chưa rõ'
-          ) {
-            item.artists.add(a.trim())
-          }
-        }
+        if (track.artist && track.artist !== 'Unknown') item.artists.add(track.artist)
         if (track.album && track.album !== 'Unknown') item.albums.add(track.album)
         if (
           track.coverArt &&
@@ -4168,7 +862,6 @@ export default function App() {
       artists: Array.from(g.artists)
     }))
 
-    // Sắp xếp theo số lượng bài hát giảm dần, đưa 'Chưa phân loại'/'Unknown' về cuối
     genresList.sort((a, b) => {
       const isAUnknown = a.name === 'Unknown' || a.name === 'Chưa phân loại'
       const isBUnknown = b.name === 'Unknown' || b.name === 'Chưa phân loại'
@@ -4178,128 +871,7 @@ export default function App() {
     })
 
     return genresList
-  }, [preAggregatedData, libraryTracks, libraryTrackMap, language])
-
-  const artistVirtuosoRef = useRef<GroupedVirtuosoHandle>(null)
-
-  const chunkedAlphabetGroups = useMemo(() => {
-    let globalRowIndex = 0
-    return artistsData.alphabetGroups.map((grp, grpIdx) => {
-      const isCollapsed = Boolean(collapsedArtistLetters[grp.letter])
-      const artists = isCollapsed ? [] : grp.artists || []
-      const rows: any[][] = []
-      for (let i = 0; i < artists.length; i += 3) {
-        rows.push(artists.slice(i, i + 3))
-      }
-      const startRowIndex = globalRowIndex
-      globalRowIndex += rows.length
-      return {
-        ...grp,
-        rows,
-        startRowIndex,
-        groupIndex: grpIdx,
-        isCollapsed
-      }
-    })
-  }, [artistsData.alphabetGroups, collapsedArtistLetters])
-
-  const alphabetGroupCounts = useMemo(() => {
-    return chunkedAlphabetGroups.map((g) => g.rows.length)
-  }, [chunkedAlphabetGroups])
-
-  const processedLibraryTracks = useMemo(() => {
-    let tracks = libraryTracks
-    if (quickFilter !== 'all') {
-      const favSet = new Set(favoriteTrackIds)
-      tracks = tracks.filter((t) => {
-        const isDsd = isDsdTrack(t)
-        const fmt = (t.format || '').toUpperCase()
-        if (quickFilter === 'favorites') {
-          return favSet.has(t.id) || (t.filePath && favSet.has(t.filePath))
-        }
-        if (quickFilter === 'lossless') {
-          return isDsd || t.lossless || ['FLAC', 'WAV', 'ALAC', 'AIFF', 'APE'].includes(fmt)
-        }
-        if (quickFilter === 'hires') {
-          return (
-            isDsd ||
-            (t.sampleRate && t.sampleRate >= 88200) ||
-            (t.bitDepth && t.bitDepth >= 24)
-          )
-        }
-        if (quickFilter === 'dsd') {
-          return isDsd
-        }
-        if (quickFilter === 'cue') {
-          return t.isCueTrack || t.cueFilePath
-        }
-        return true
-      })
-    }
-    const filtered = getFilteredTracks(tracks)
-    return getSortedTracks(filtered)
-  }, [libraryTracks, quickFilter, favoriteTrackIds, deferredSearchQuery, sortField, sortOrder])
-
-  const processedPlaylistTracks = useMemo(() => {
-    if (!activePlaylist) return []
-    let tracks = activePlaylist.tracks || []
-    if (quickFilter !== 'all') {
-      const favSet = new Set(favoriteTrackIds)
-      tracks = tracks.filter((t) => {
-        const isDsd = isDsdTrack(t)
-        const fmt = (t.format || '').toUpperCase()
-        if (quickFilter === 'favorites') {
-          return favSet.has(t.id) || (t.filePath && favSet.has(t.filePath))
-        }
-        if (quickFilter === 'lossless') {
-          return isDsd || t.lossless || ['FLAC', 'WAV', 'ALAC', 'AIFF', 'APE'].includes(fmt)
-        }
-        if (quickFilter === 'hires') {
-          return (
-            isDsd ||
-            (t.sampleRate && t.sampleRate >= 88200) ||
-            (t.bitDepth && t.bitDepth >= 24)
-          )
-        }
-        if (quickFilter === 'dsd') {
-          return isDsd
-        }
-        if (quickFilter === 'cue') {
-          return t.isCueTrack || t.cueFilePath
-        }
-        return true
-      })
-    }
-    const filtered = getFilteredTracks(tracks)
-    return getSortedTracks(filtered)
-  }, [activePlaylist, quickFilter, favoriteTrackIds, deferredSearchQuery, sortField, sortOrder])
-
-  const matchedPlaylists = useMemo(() => {
-    const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
-    if (!rawQuery) return playlists
-    const normalizedQuery = removeAccents(rawQuery)
-    return playlists.filter((pl) => matchesQuery(pl.name, normalizedQuery))
-  }, [playlists, deferredSearchQuery])
-
-  const visiblePlaylists = useMemo(() => {
-    return matchedPlaylists.slice(0, playlistsRenderLimit)
-  }, [matchedPlaylists, playlistsRenderLimit])
-
-  const handleOpenPlaylist = useCallback((pl: any) => {
-    setActivePlaylist(pl)
-    setSearchQuery('')
-  }, [])
-
-  const handlePlayPlaylistTracks = useCallback(
-    (tracks: any[]) => {
-      if (tracks && tracks.length > 0) handleRowClick(tracks[0], tracks)
-    },
-    [handleRowClick]
-  )
-
-  const handleOpenPlaylistRename = useCallback((name: string) => {
-    setPlaylistRename({ isOpen: true, oldName: name, newName: name })
-  }, [])
+  }, [preAggregatedData, libraryTracks, libraryOps.libraryTrackMap, language])
 
   const navigateToArtist = useCallback(
     (artistName: string) => {
@@ -4335,53 +907,113 @@ export default function App() {
       setActivePlaylist(null)
       setActiveUserPlaylist(null)
     },
-    [artistsData.artistsList, libraryTracks]
+    [artistsData.artistsList, libraryTracks, setActiveArtist, setActiveView, setActiveAlbum, setActiveGenre, setActivePlaylist, setActiveUserPlaylist]
   )
 
-  // Lấy Sample Rate chuẩn của bài hát hiện tại (Mặc định 44100Hz nếu không rõ)
-  const currentSampleRate =
-    currentTrack?.sampleRate && currentTrack.sampleRate >= 8000 && currentTrack.sampleRate <= 384000
-      ? currentTrack.sampleRate
-      : 44100
+  // 6. MEMOS: FILTERED & SORTED TRACKS
+  const processedLibraryTracks = useMemo(() => {
+    const filteredQuick = filterTracksByQuickFilter(libraryTracks, quickFilter, favoriteTrackIds)
+    const filteredSearch = getFilteredTracks(filteredQuick, deferredSearchQuery)
+    return getSortedTracks(filteredSearch, sortField, sortOrder)
+  }, [libraryTracks, quickFilter, favoriteTrackIds, deferredSearchQuery, sortField, sortOrder])
 
-  // Log kiểm tra lệch Sample Rate
-  useEffect(() => {
-    if (audioCtxRef.current && currentTrack) {
-      const ctxRate = audioCtxRef.current.sampleRate
-      const fileRate = currentTrack.sampleRate
+  const processedPlaylistTracks = useMemo(() => {
+    if (!activePlaylist) return []
+    const tracks = activePlaylist.tracks || []
+    const filteredQuick = filterTracksByQuickFilter(tracks, quickFilter, favoriteTrackIds)
+    const filteredSearch = getFilteredTracks(filteredQuick, deferredSearchQuery)
+    return getSortedTracks(filteredSearch, sortField, sortOrder)
+  }, [activePlaylist, quickFilter, favoriteTrackIds, deferredSearchQuery, sortField, sortOrder])
 
-      console.log(
-        `[Audio Check] AudioContext Rate: ${ctxRate}Hz | File Rate: ${fileRate || 44100}Hz`
+  const matchedPlaylists = useMemo(() => {
+    const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
+    if (!rawQuery) return playlists || []
+    const normalizedQuery = removeAccents(rawQuery)
+    return (playlists || []).filter((pl) => matchesQuery(pl.name, normalizedQuery))
+  }, [playlists, deferredSearchQuery, searchQuery])
+
+  const visiblePlaylists = useMemo(() => {
+    return (matchedPlaylists || []).slice(0, playlistsRenderLimit)
+  }, [matchedPlaylists, playlistsRenderLimit])
+
+  const activeUserPlaylistTracks = useMemo(() => {
+    if (!activeUserPlaylist) return []
+    const resolved = libraryOps.getResolvedUserPlaylistTracks(activeUserPlaylist)
+    const filtered = getFilteredTracks(resolved, deferredSearchQuery)
+    return getSortedTracks(filtered, sortField, sortOrder)
+  }, [activeUserPlaylist, libraryOps, deferredSearchQuery, sortField, sortOrder])
+
+  // Drag and Drop Files
+  const handleDropFiles = useCallback(async (files: any[]) => {
+    const audioExtensions = [
+      '.mp3', '.flac', '.wav', '.m4a', '.ogg', '.opus',
+      '.aac', '.alac', '.aiff', '.wma', '.dsf', '.dff', '.dsd'
+    ]
+    const audioFiles = files.filter((file) => {
+      const name = file.path || file.name || (typeof file === 'string' ? file : '')
+      const lower = name.toLowerCase()
+      return audioExtensions.some((ext) => lower.endsWith(ext))
+    })
+
+    const droppedPaths: string[] = audioFiles
+      .map((f: any) => f.path || (window as any).api?.getFilePath?.(f) || (typeof f === 'string' ? f : ''))
+      .filter(Boolean)
+
+    if (droppedPaths.length === 0) {
+      showToast(
+        language === 'vi' ? 'Không tìm thấy tệp âm thanh hợp lệ' : 'No supported audio files found',
+        'error'
       )
-
-      // Chỉ cảnh báo nếu AudioContext đã đồng bộ với currentSampleRate mà phần cứng vẫn bị lệch
-      if (
-        fileRate &&
-        ctxRate !== fileRate &&
-        ctxRate === currentSampleRate &&
-        !bitPerfectEnabled &&
-        !isDsdTrack(currentTrack)
-      ) {
-        console.warn(`[Warning] Đang xảy ra Resampling từ ${fileRate}Hz sang ${ctxRate}Hz!`)
-      }
+      return
     }
-  }, [currentTrack, currentSampleRate, bitPerfectEnabled])
 
-  // ==========================================
-  // 5. EFFECTS
-  // ==========================================
+    await (window as any).api?.registerDroppedFiles?.(droppedPaths)
 
-  // Reset giới hạn tải playlist khi chuyển view hoặc đổi từ khóa tìm kiếm
-  useEffect(() => {
-    setPlaylistsRenderLimit(36)
-  }, [activeView, searchQuery])
+    const newTracks = droppedPaths.map((p) => {
+      const fileName = p.split(/[\\/]/).pop() || 'Unknown'
+      const title = fileName.replace(/\.[^/.]+$/, '')
+      const ext = p.split('.').pop()?.toLowerCase() || ''
+      const isDsd = ext === 'dsf' || ext === 'dff' || ext === 'dsd'
+      return {
+        id: p,
+        title,
+        artist: 'Unknown Artist',
+        album: 'Local Drops',
+        filePath: p,
+        duration: 0,
+        format: isDsd ? ext.toUpperCase() : ext.toUpperCase() || 'AUDIO',
+        bitDepth: isDsd ? 1 : undefined,
+        sampleRate: isDsd ? 2822400 : undefined,
+        lossless: isDsd || ['flac', 'wav', 'alac', 'aiff'].includes(ext)
+      }
+    })
 
-  // Tải lũy tiến (Progressive batching) cho danh sách playlist qua IntersectionObserver
+    setPlayQueue((prev) => [...prev, ...newTracks])
+    showToast(
+      language === 'vi'
+        ? `Đã thêm ${newTracks.length} bài hát vào hàng đợi`
+        : `Added ${newTracks.length} tracks to queue`,
+      'success'
+    )
+  }, [language, showToast, setPlayQueue])
+
+  const { isDraggingFile } = useAppShortcuts({
+    audioRef: audioEngine.audioRef,
+    handlePlayPause: audioEngine.handlePlayPause,
+    handleNext: audioEngine.handleNext,
+    handlePrev: audioEngine.handlePrev,
+    handleVolumeUp: audioEngine.handleVolumeUp,
+    handleVolumeDown: audioEngine.handleVolumeDown,
+    toggleMute: audioEngine.toggleMute,
+    toggleShuffle: audioEngine.toggleShuffle,
+    toggleRepeat: audioEngine.toggleRepeat,
+    onFilesDropped: handleDropFiles
+  })
+
+  // 7. EFFECTS: LIFECYCLE & STARTUP
+  const playlistsLoadMoreRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (activeView !== 'playlists' || activePlaylist) return
-    const sentinel = playlistsLoadMoreRef.current
-    if (!sentinel) return
-
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
@@ -4390,92 +1022,22 @@ export default function App() {
       },
       { rootMargin: '300px' }
     )
-
-    observer.observe(sentinel)
+    if (playlistsLoadMoreRef.current) observer.observe(playlistsLoadMoreRef.current)
     return () => observer.disconnect()
-  }, [activeView, activePlaylist, matchedPlaylists.length])
+  }, [activeView, activePlaylist, matchedPlaylists.length, setPlaylistsRenderLimit])
 
-  // Get audio output devices (BASS WASAPI/ASIO and system endpoints)
+  // Get stream port
   useEffect(() => {
-    const getDevices = async () => {
-      try {
-        if (window.api && (window.api as any).getAudioDevices) {
-          const res = await (window.api as any).getAudioDevices(bitPerfectType)
-          if (res && res.success && Array.isArray(res.devices)) {
-            setAvailableAudioDevices(res.devices)
-          }
-        }
-      } catch (err) {
-        console.error('Lỗi lấy danh sách thiết bị âm thanh:', err)
-      }
-    }
-    getDevices()
+    window.api?.getStreamPort?.()?.then((port: number) => {
+      if (port) setStreamPort(port)
+    })
+  }, [setStreamPort])
 
-    if (navigator?.mediaDevices?.addEventListener) {
-      navigator.mediaDevices.addEventListener('devicechange', getDevices)
-      return () => {
-        navigator.mediaDevices.removeEventListener('devicechange', getDevices)
-      }
-    }
-    return undefined
-  }, [bitPerfectType])
-
-  // Fetch Original High-Res Cover for Fullscreen Lyrics
-  useEffect(() => {
-    if (!isLyricsMaximized || isLite || !currentTrack) {
-      setOriginalCover(null)
-      return
-    }
-    // Tải tăng cường: Nếu là nhạc Online, nạp thẳng URL ảnh cực nét ẩn
-    if (currentTrack.isOnline) {
-      setOriginalCover(currentTrack.coverArtHighRes || currentTrack.coverArt)
-    } else if (!currentTrack.isCloud && currentTrack.coverArt?.includes('.thumbnails')) {
-      let isCurrent = true
-      // @ts-ignore
-      window.api
-        .getOriginalTrackCover(currentTrack.id || currentTrack.filePath, 800)
-        .then((cover) => {
-          if (isCurrent && cover) setOriginalCover(cover)
-        })
-      return () => {
-        isCurrent = false
-      }
-    } else {
-      setOriginalCover(currentTrack.coverArt)
-    }
-  }, [isLyricsMaximized, currentTrack?.id, isLite])
-
-  // Apply device change
-  useEffect(() => {
-    const applyDevice = async () => {
-      try {
-        const targetId = getBrowserSinkId(selectedDeviceId)
-        if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
-          await (audioRef.current as any).setSinkId(targetId).catch(() => {})
-        }
-        if (audioCtxRef.current && typeof (audioCtxRef.current as any).setSinkId === 'function') {
-          await (audioCtxRef.current as any).setSinkId(targetId).catch(() => {})
-        }
-      } catch (error) {
-        console.error('Lỗi khi chuyển đổi thiết bị âm thanh:', error)
-      }
-    }
-    applyDevice()
-  }, [selectedDeviceId])
-
-  // Download Progress Listener
-  useEffect(() => {
-    if ((window as any).api?.onDownloadProgress) {
-      ;(window as any).api.onDownloadProgress((data: any) => {
-        setDownloadProgress(data)
-      })
-    }
-  }, [])
-
-  // Load Config
+  // Startup config and library load
   useEffect(() => {
     // @ts-ignore
-    window.api.getConfig().then((cfg) => {
+    window.api?.getConfig?.()?.then((cfg: any) => {
+      if (!cfg) return
       if (cfg.volume !== undefined) setVolume(cfg.volume)
       if (cfg.crossfadeEnabled !== undefined) setCrossfadeEnabled(cfg.crossfadeEnabled)
       if (cfg.bitPerfectEnabled !== undefined) setBitPerfectEnabled(cfg.bitPerfectEnabled)
@@ -4487,18 +1049,14 @@ export default function App() {
       if (cfg.driveLink) setDriveLink(cfg.driveLink)
       if (cfg.selectedDeviceId)
         setSelectedDeviceId(cfg.selectedDeviceId === '0' ? 'auto' : cfg.selectedDeviceId)
-      if (cfg.showVisualizer !== undefined)
-        if (!cfg.bitPerfectEnabled) setShowVisualizer(cfg.showVisualizer)
+      if (cfg.showVisualizer !== undefined && !cfg.bitPerfectEnabled) setShowVisualizer(cfg.showVisualizer)
       if (cfg.appMode === 'default' || (!cfg.appMode && !cfg.liteMode)) setShowVisualizer(true)
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
       if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
-      else if (cfg.liteMode !== undefined) setAppMode(cfg.liteMode ? 'lite' : 'default') // Fallback cấu hình cũ
+      else if (cfg.liteMode !== undefined) setAppMode(cfg.liteMode ? 'lite' : 'default')
       if (cfg.uiStyle !== undefined) setUiStyle(cfg.uiStyle)
-      if (cfg.customBgImage !== undefined) {
-        setCustomBgImage(cfg.customBgImage)
-        setBgImageInput(cfg.customBgImage || '')
-      }
+      if (cfg.customBgImage !== undefined) setCustomBgImage(cfg.customBgImage)
       if (cfg.useTrackCoverAsBg !== undefined) setUseTrackCoverAsBg(cfg.useTrackCoverAsBg)
       if (cfg.accentColorMode !== undefined) setAccentColorMode(cfg.accentColorMode)
       if (cfg.customAccentColor !== undefined) setCustomAccentColor(cfg.customAccentColor)
@@ -4514,127 +1072,47 @@ export default function App() {
       if (cfg.discordRpc) {
         if (cfg.discordRpc.enabled !== undefined) setDiscordRpcEnabled(cfg.discordRpc.enabled)
         if (cfg.discordRpc.clientId !== undefined) setDiscordClientId(cfg.discordRpc.clientId)
-        if (cfg.discordRpc.showDetails !== undefined)
-          setDiscordShowDetails(cfg.discordRpc.showDetails)
+        if (cfg.discordRpc.showDetails !== undefined) setDiscordShowDetails(cfg.discordRpc.showDetails)
         if (cfg.discordRpc.showTime !== undefined) setDiscordShowTime(cfg.discordRpc.showTime)
         if (cfg.discordRpc.showCover !== undefined) setDiscordShowCover(cfg.discordRpc.showCover)
-        if (cfg.discordRpc.showQuality !== undefined)
-          setDiscordShowQuality(cfg.discordRpc.showQuality)
-        if (cfg.discordRpc.showButtons !== undefined)
-          setDiscordShowButtons(cfg.discordRpc.showButtons)
+        if (cfg.discordRpc.showQuality !== undefined) setDiscordShowQuality(cfg.discordRpc.showQuality)
+        if (cfg.discordRpc.showButtons !== undefined) setDiscordShowButtons(cfg.discordRpc.showButtons)
         if (cfg.discordRpc.showIdle !== undefined) setDiscordShowIdle(cfg.discordRpc.showIdle)
       }
       fetchScDashboard()
       setIsConfigLoaded(true)
-      loadLibrary()
+      libraryOps.loadLibrary()
 
-      // Restore playback session if no track is currently loaded
       if (!usePlayerStore.getState().currentTrack) {
         const session = loadPlaybackSession()
         if (session && session.currentTime > 0) {
-          pendingSeekTimeRef.current = session.currentTime
+          audioEngine.pendingSeekTimeRef.current = session.currentTime
         }
       }
 
-      // SQLite QoL & Library Features on startup
       if (window.api?.getFavorites) {
-        window.api
-          .getFavorites()
-          .then((favs) => {
-            if (Array.isArray(favs)) setFavoriteTrackIds(favs)
-          })
-          .catch(() => {})
+        window.api.getFavorites().then((favs: any) => {
+          if (Array.isArray(favs)) setFavoriteTrackIds(favs)
+        }).catch(() => {})
       }
       if (window.api?.getLyricOffsets) {
-        window.api
-          .getLyricOffsets()
-          .then((offsets) => {
-            if (offsets && typeof offsets === 'object') setTrackLyricOffsets(offsets)
-          })
-          .catch(() => {})
+        window.api.getLyricOffsets().then((offsets: any) => {
+          if (offsets && typeof offsets === 'object') setTrackLyricOffsets(offsets)
+        }).catch(() => {})
       }
       if (window.api?.getSmartPlaylists) {
-        window.api
-          .getSmartPlaylists()
-          .then((spls) => {
-            if (Array.isArray(spls)) setSmartPlaylists(spls)
-          })
-          .catch(() => {})
+        window.api.getSmartPlaylists().then((spls: any) => {
+          if (Array.isArray(spls)) setSmartPlaylists(spls)
+        }).catch(() => {})
       }
     })
   }, [])
 
-  // Listen for library file system changes (background library auto-update)
-  useEffect(() => {
-    if (window.api?.onLibraryFsChanged) {
-      const unFs = window.api.onLibraryFsChanged(() => {
-        loadLibrary(true, false)
-      })
-      return () => {
-        if (typeof unFs === 'function') unFs()
-      }
-    }
-    return undefined
-  }, [])
-
-  // Auto-save playback session on track / queue / state change
-  useEffect(() => {
-    scheduleSavePlaybackSession()
-  }, [currentTrack, playQueue, isShuffle, repeatMode])
-
-  // Sync gapless playback setting to BASS
-  useEffect(() => {
-    window.api?.bassSetGapless?.(gaplessEnabled)
-  }, [gaplessEnabled])
-
-  // Preload next track for BASS gapless playback (Bit-Perfect or DSD mode)
-  useEffect(() => {
-    if (!gaplessEnabled || (!bitPerfectEnabled && !isDsdTrack(currentTrack))) {
-      return
-    }
-    if (!currentTrack || !isPlaying || playQueue.length === 0) {
-      return
-    }
-    const currentIndex = playQueue.findIndex(
-      (t) =>
-        (t.filePath === currentTrack.filePath || t.id === currentTrack.id) &&
-        t.startTime === currentTrack.startTime
-    )
-    let nextTrack: any = null
-    if (repeatMode === 2) {
-      nextTrack = currentTrack
-    } else if (currentIndex !== -1) {
-      let nextIdx = currentIndex + 1
-      if (nextIdx >= playQueue.length && repeatMode === 1) {
-        nextIdx = 0
-      }
-      if (nextIdx >= 0 && nextIdx < playQueue.length) {
-        nextTrack = playQueue[nextIdx]
-      }
-    }
-
-    if (nextTrack && nextTrack.filePath && !nextTrack.isOnline) {
-      window.api?.bassPreloadNext?.(nextTrack.filePath, nextTrack.startTime, nextTrack.endTime)
-    }
-  }, [currentTrack, playQueue, repeatMode, isPlaying, bitPerfectEnabled, gaplessEnabled])
-
-  // Per-Track Lyric Offset: restore saved offset when track changes
-  useEffect(() => {
-    if (currentTrack) {
-      const trackKey = currentTrack.filePath || currentTrack.id
-      if (trackKey && trackLyricOffsets[trackKey] !== undefined) {
-        setLyricOffset(trackLyricOffsets[trackKey])
-        return
-      }
-    }
-    setLyricOffset(0)
-  }, [currentTrack?.filePath, currentTrack?.id, trackLyricOffsets])
-
   // Auto-save Config & Update Tray
   useEffect(() => {
-    if (!isConfigLoaded) return // Không lưu cấu hình mặc định vào file khi chưa đọc xong
+    if (!isConfigLoaded) return
     // @ts-ignore
-    window.api.saveConfig({
+    window.api?.saveConfig?.({
       volume,
       crossfadeEnabled,
       crossfadeDuration,
@@ -4657,7 +1135,7 @@ export default function App() {
       customAccentColor
     })
     // @ts-ignore
-    window.api.updateTrayConfig({ minimizeToTray, closeToTray })
+    window.api?.updateTrayConfig?.({ minimizeToTray, closeToTray })
   }, [
     volume,
     crossfadeEnabled,
@@ -4682,1585 +1160,78 @@ export default function App() {
     isConfigLoaded
   ])
 
-  // Dominant Color (Bỏ qua hoàn toàn trong Core Mode và Lite Mode)
+  // Library FS changes & playback session scheduling
   useEffect(() => {
-    if (isLite || isCore || effectiveBgImage) {
-      setThemeColor('transparent') // Không dùng màu nền đè lên ảnh nền
-      return
-    }
-    if (currentTrack?.coverArt) {
-      getDominantColor(currentTrack.coverArt, setThemeColor)
-    } else {
-      setThemeColor('rgba(39, 39, 42, 0)')
-    }
-  }, [currentTrack, isLite, isCore, effectiveBgImage])
-
-  // SMART MEMORY RECOVERY (DỌN DẸP BỘ NHỚ THÔNG MINH - 0% GIẬT LAG)
-  // 1. Dọn dẹp khi đổi bài hát (trì hoãn 1.5s để UI ổn định trước)
-  useEffect(() => {
-    if (!currentTrack) return
-    const timer = setTimeout(() => {
-      window.api?.clearWebFrameCache?.()
-      window.api?.clearMemoryCache?.()
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [currentTrack?.id])
-
-  // 2. Dọn dẹp sâu khi ứng dụng thu nhỏ hoặc nhận sự kiện onDeepClean từ Main Process
-  useEffect(() => {
-    const triggerGC = () => {
-      try {
-        window.api?.clearWebFrameCache?.()
-      } catch (_) {}
-      try {
-        window.api?.forceRendererGC?.()
-      } catch (_) {}
-      try {
-        window.api?.forceGC?.()
-      } catch (_) {}
-      window.api?.clearMemoryCache?.()
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        triggerGC()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    if (window.api?.onDeepClean) {
-      window.api.onDeepClean(() => {
-        triggerGC()
-      })
-    }
-
-    // 3. Chu kỳ kiểm tra dọn dẹp nhàn rỗi (mỗi 3 phút khi chạy ngầm)
-    const idleInterval = setInterval(() => {
-      if (document.hidden) {
-        triggerGC()
-      }
-    }, 180000)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      clearInterval(idleInterval)
-    }
-  }, [])
-
-  // 4. Giải phóng bộ nhớ đệm ảnh không dùng khi chuyển đổi tab / view
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        window.api?.clearWebFrameCache?.()
-        window.api?.forceRendererGC?.()
-        window.api?.forceGC?.()
-      } catch (_) {}
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [activeView])
-
-  // DISCORD RICH PRESENCE SYNC
-  const updateDiscordSettings = (
-    updates: Partial<{
-      enabled: boolean
-      clientId: string
-      showDetails: boolean
-      showTime: boolean
-      showCover: boolean
-      showQuality: boolean
-      showButtons: boolean
-      showIdle: boolean
-    }>
-  ) => {
-    if (updates.enabled !== undefined) setDiscordRpcEnabled(updates.enabled)
-    if (updates.clientId !== undefined) setDiscordClientId(updates.clientId)
-    if (updates.showDetails !== undefined) setDiscordShowDetails(updates.showDetails)
-    if (updates.showTime !== undefined) setDiscordShowTime(updates.showTime)
-    if (updates.showCover !== undefined) setDiscordShowCover(updates.showCover)
-    if (updates.showQuality !== undefined) setDiscordShowQuality(updates.showQuality)
-    if (updates.showButtons !== undefined) setDiscordShowButtons(updates.showButtons)
-    if (updates.showIdle !== undefined) setDiscordShowIdle(updates.showIdle)
-
-    // @ts-ignore
-    if (window.api && window.api.discordUpdateConfig) {
-      // @ts-ignore
-      window.api.discordUpdateConfig(updates)
-    }
-  }
-
-  // Periodic Discord RPC connection status check
-  useEffect(() => {
-    const checkStatus = () => {
-      // @ts-ignore
-      if (window.api && window.api.discordGetStatus) {
-        // @ts-ignore
-        window.api
-          .discordGetStatus()
-          .then((st: any) => {
-            if (st) setDiscordConnected(Boolean(st.isConnected))
-          })
-          .catch(() => {})
-      }
-    }
-    checkStatus()
-    const interval = setInterval(checkStatus, 5000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Send Discord Rich Presence updates
-  const sendDiscordPresence = useCallback(
-    (override?: { isPlaying?: boolean; position?: number }) => {
-      // @ts-ignore
-      if (!window.api || !window.api.discordUpdatePresence) return
-
-      if (!currentTrack) {
-        // @ts-ignore
-        window.api.discordUpdatePresence({ isPlaying: false })
-        return
-      }
-
-      let onlineUrl: string | null = null
-      if (currentTrack.isOnline) {
-        if (currentTrack.platform === 'soundcloud') {
-          onlineUrl = currentTrack.permalinkUrl || currentTrack.url || currentTrack.id
-        } else if (currentTrack.videoId) {
-          onlineUrl = `https://music.youtube.com/watch?v=${currentTrack.videoId}`
-        }
-      }
-
-      const isDsd = isDsdTrack(currentTrack)
-      const useBassTime = bitPerfectEnabled || isDsd
-
-      const curPos =
-        override?.position !== undefined
-          ? override.position
-          : useBassTime
-            ? (audioRef.current as any)?._currentTime || 0
-            : audioRef.current?.currentTime || 0
-
-      const curPlaying = override?.isPlaying !== undefined ? override.isPlaying : isPlaying
-
-      const curDur = useBassTime
-        ? (audioRef.current as any)?._duration || currentTrack.duration || 0
-        : audioRef.current?.duration || currentTrack.duration || 0
-
-      // @ts-ignore
-      window.api.discordUpdatePresence({
-        title: currentTrack.title,
-        artist: currentTrack.artist,
-        album: currentTrack.album,
-        duration: curDur,
-        position: curPos,
-        isPlaying: curPlaying,
-        coverArt: currentTrack.coverArt,
-        isOnline: currentTrack.isOnline,
-        platform: currentTrack.platform,
-        onlineUrl: onlineUrl,
-        format: currentTrack.format,
-        bitrate: currentTrack.bitrate,
-        sampleRate: currentTrack.sampleRate,
-        bitDepth: currentTrack.bitDepth
-      })
-    },
-    [currentTrack, isPlaying, bitPerfectEnabled]
-  )
-
-  useEffect(() => {
-    if (isConfigLoaded) {
-      sendDiscordPresence()
-    }
-  }, [
-    currentTrack?.id,
-    currentTrack?.filePath,
-    currentTrack?.title,
-    isPlaying,
-    isConfigLoaded,
-    sendDiscordPresence
-  ])
-
-  // Audio Context & Cấu trúc luồng Bit-perfect
-  // EFFECT 1: CHỈ KHỞI TẠO LẠI BỘ LỌC KHI ĐỔI BÀI HOẶC BẬT/TẮT EQ (Tiết kiệm CPU)
-  useEffect(() => {
-    if (!audioRef.current) return
-    let isCancelled = false
-
-    const setupAudio = async () => {
-      if (
-        audioCtxRef.current &&
-        (audioCtxRef.current.sampleRate !== currentSampleRate ||
-          audioCtxRef.current.state === 'closed' ||
-          (audioCtxRef.current.state as string) === 'interrupted')
-      ) {
-        try {
-          await audioCtxRef.current.close()
-        } catch (e) {}
-        if (isCancelled) return
-        audioCtxRef.current = null
-        sourceNodeRef.current = null
-        analyserNodeRef.current = null
-        preampNodeRef.current = null
-        compressorNodeRef.current = null
-        filterNodesRef.current = []
-      }
-      if (isCancelled) return
-
-      if (!audioCtxRef.current) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-        try {
-          audioCtxRef.current = new AudioContextClass({ sampleRate: currentSampleRate })
-        } catch (e) {
-          audioCtxRef.current = new AudioContextClass()
-        }
-
-        // Bơm lại thiết bị đầu ra cho Context mới ngay khi nó vừa được tái tạo
-        const targetId = getBrowserSinkId(selectedDeviceRef.current)
-        if (typeof (audioCtxRef.current as any).setSinkId === 'function') {
-          ;(audioCtxRef.current as any).setSinkId(targetId).catch(() => {})
-        }
-      }
-      const ctx = audioCtxRef.current
-
-      if (!analyserNodeRef.current || analyserNodeRef.current.context !== ctx) {
-        analyserNodeRef.current = ctx.createAnalyser()
-        analyserNodeRef.current.fftSize = 2048
-      }
-      if (!sourceNodeRef.current || sourceNodeRef.current.context !== ctx) {
-        try {
-          if (!audioRef.current || !(audioRef.current instanceof HTMLAudioElement)) return
-          sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current)
-        } catch (e) {
-          return
-        }
-      }
-      if (!sourceNodeRef.current) return
-
-      if (!preampNodeRef.current || preampNodeRef.current.context !== ctx) {
-        preampNodeRef.current = ctx.createGain()
-      }
-      if (!compressorNodeRef.current || compressorNodeRef.current.context !== ctx) {
-        const comp = ctx.createDynamicsCompressor()
-        comp.threshold.value = -18
-        comp.knee.value = 12
-        comp.ratio.value = 4
-        comp.attack.value = 0.005
-        comp.release.value = 0.15
-        compressorNodeRef.current = comp
-      }
-
-      try {
-        sourceNodeRef.current?.disconnect()
-      } catch (e) {}
-      try {
-        preampNodeRef.current?.disconnect()
-      } catch (e) {}
-      try {
-        analyserNodeRef.current?.disconnect()
-      } catch (e) {}
-      try {
-        compressorNodeRef.current?.disconnect()
-      } catch (e) {}
-      filterNodesRef.current.forEach((node) => {
-        try {
-          node.disconnect()
-          node.frequency.cancelScheduledValues(0)
-          node.gain.cancelScheduledValues(0)
-        } catch (e) {}
-      })
-      filterNodesRef.current = []
-
-      // Độ lợi tuyến tính của Preamp & Cân bằng âm lượng (Loudness Normalization)
-      const normGainDb = loudnessNormalization ? ((currentTrack as any)?.replayGain ?? -3.0) : 0
-      const linearPreamp =
-        (isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0) * Math.pow(10, normGainDb / 20)
-      preampNodeRef.current.gain.value = linearPreamp
-
-      if (isCore) {
-        // CHẾ ĐỘ CỐT LÕI (CORE MODE): DIRECT STREAMING (0% DSP, 0% CPU, Bit-Perfect)
-        sourceNodeRef.current.connect(ctx.destination)
-        return
-      }
-
-      let prevNode: AudioNode = sourceNodeRef.current
-      if (isEqEnabled) {
-        // Nối qua GainNode Preamp trước khi vào các BiquadFilter EQ
-        prevNode.connect(preampNodeRef.current)
-        prevNode = preampNodeRef.current
-
-        const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
-        sortedBands.forEach((band) => {
-          const filter = ctx.createBiquadFilter()
-          filter.type = band.type || 'peaking'
-          filter.frequency.value = band.frequency
-          filter.gain.value = band.gain
-          filter.Q.value = band.q ?? 1.4
-          prevNode.connect(filter)
-          prevNode = filter
-          filterNodesRef.current.push(filter)
-        })
-      }
-
-      prevNode.connect(analyserNodeRef.current)
-      analyserNodeRef.current.connect(compressorNodeRef.current)
-      compressorNodeRef.current.connect(ctx.destination)
-
-      if (isPlaying && ctx.state === 'suspended') {
-        await ctx.resume().catch(() => {})
-      }
-    }
-    setupAudio().catch((e) => console.error('[setupAudio error]', e))
-
-    return () => {
-      isCancelled = true
-    }
-  }, [
-    isEqEnabled,
-    currentSampleRate,
-    isCore,
-    eqBands.length,
-    loudnessNormalization,
-    bitPerfectEnabled,
-    audioRemountCount
-  ])
-
-  // EFFECT 2: THAY ĐỔI EQ & PREAMP REALTIME (0% CPU - Chỉ thay thế thông số, không nối lại Graph)
-  useEffect(() => {
-    if (preampNodeRef.current) {
-      const normGainDb = loudnessNormalization ? ((currentTrack as any)?.replayGain ?? -3.0) : 0
-      const linearPreamp =
-        (isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0) * Math.pow(10, normGainDb / 20)
-      preampNodeRef.current.gain.value = linearPreamp
-    }
-    if (!isEqEnabled || filterNodesRef.current.length === 0) return
-    const sortedBands = [...eqBands].sort((a, b) => a.frequency - b.frequency)
-    sortedBands.forEach((band, index) => {
-      const filter = filterNodesRef.current[index]
-      if (filter) {
-        // Thuật toán gán số trực tiếp, phản hồi thời gian thực
-        filter.frequency.value = band.frequency
-        filter.gain.value = band.gain
-        filter.Q.value = band.q ?? 1.4
-        filter.type = band.type || 'peaking'
-      }
+    const unlistenFs = window.api?.onLibraryFsChanged?.(() => {
+      libraryOps.loadLibrary(true, false)
     })
-  }, [eqBands, isEqEnabled, preampGain, loudnessNormalization, currentTrack])
-
-  // Track Cover Loading
-  useEffect(() => {
-    if (isLite) return
-    let isCurrent = true
-    if (currentTrack && !currentTrack.isCloud && currentTrack.coverArt?.includes('.thumbnails')) {
-      // @ts-ignore
-      window.api.getTrackCover(currentTrack.id || currentTrack.filePath).then((highResCover) => {
-        if (isCurrent && highResCover) {
-          setCurrentTrack((prev: any) => ({ ...prev, coverArt: highResCover }))
-        }
-      })
-    }
     return () => {
-      isCurrent = false
+      if (typeof unlistenFs === 'function') unlistenFs()
     }
-  }, [currentTrack?.id])
+  }, [libraryOps])
 
-  // Audio Playing Effect
   useEffect(() => {
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) return
-    let fadeInterval: any = null
-    if (audioRef.current && audioCtxRef.current) {
-      if (isPlaying) {
-        // Đánh thức lại AudioContext khi bấm Play
-        if (audioCtxRef.current.state === 'suspended') {
-          audioCtxRef.current.resume().catch(() => {})
-        }
+    scheduleSavePlaybackSession()
+  }, [currentTrack, volume])
 
-        audioRef.current.play().catch((e) => {
-          if (e.name !== 'AbortError') console.warn('Audio play error:', e)
-        })
-        if (crossfadeEnabled) {
-          audioRef.current.volume = 0
-          const curVol = Math.max(0, Math.min(1, sliderToGain(volume)))
-          const steps = Math.max(1, crossfadeDuration * 20)
-          const step = curVol / steps
-          let cur = 0
-          fadeInterval = setInterval(() => {
-            cur += step
-            if (audioRef.current && cur < curVol) {
-              audioRef.current.volume = Math.max(0, Math.min(1, cur))
-            } else {
-              if (audioRef.current) audioRef.current.volume = curVol
-              clearInterval(fadeInterval)
-            }
-          }, 50)
-        } else {
-          audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
-        }
-      } else {
-        audioRef.current.pause()
-        // ĐÓNG BĂNG toàn bộ xử lý âm thanh (EQ, Visualizer) khi dừng nhạc
-        if (audioCtxRef.current.state === 'running') {
-          audioCtxRef.current.suspend().catch(() => {})
-        }
-      }
-    }
+  // Auto-updater status check & listener
+  useEffect(() => {
+    window.api?.updaterGetStatus?.()?.then((st: any) => {
+      if (st) setUpdaterStatus(st)
+    })?.catch(() => {})
+
+    const unlisten = window.api?.onUpdaterStatusChanged?.((st: any) => {
+      setUpdaterStatus(st)
+    })
     return () => {
-      if (fadeInterval) clearInterval(fadeInterval)
-    }
-  }, [isPlaying, currentTrack, bitPerfectEnabled, crossfadeEnabled, crossfadeDuration, volume])
-
-  // Load Lyrics — thứ tự ưu tiên: file .lrc -> lời trong metadata -> lời online (Musixmatch)
-  useEffect(() => {
-    setCurrentLyricIndex(-1)
-    if (isLite || !currentTrack) {
-      setLyrics([])
-      return
-    }
-
-    // Tránh race condition: bỏ kết quả của bài cũ nếu người dùng đã chuyển bài trong lúc đang tải
-    let cancelled = false
-    const trackPath = currentTrack.id || currentTrack.filePath
-    setLyrics([])
-
-    const loadLyrics = async () => {
-      // 1. File .lrc cùng thư mục với bài hát
-      if (trackPath && (window as any).api?.readLrcFile) {
-        try {
-          const externalLrc = await (window as any).api.readLrcFile(trackPath)
-          if (cancelled) return
-          const parsedExternal = buildLyricLines(externalLrc)
-          if (parsedExternal.length > 0) {
-            setLyrics(parsedExternal)
-            return
-          }
-        } catch (e) {
-          console.warn('Lỗi đọc file .lrc:', e)
-        }
-      }
-
-      // 2. Lời bài hát nhúng trong metadata (đồng bộ hoặc lời thô)
-      const parsedInternal = buildLyricLines(currentTrack.lyrics)
-      if (parsedInternal.length > 0) {
-        setLyrics(parsedInternal)
-        return
-      }
-
-      // 3. Lời bài hát online
-      if (
-        currentTrack.title &&
-        currentTrack.artist &&
-        !currentTrack.artist.toLowerCase().includes('unknown')
-      ) {
-        try {
-          // @ts-ignore
-          const mmRes = await window.api.fetchMusixmatchLyrics(
-            currentTrack.title,
-            currentTrack.artist,
-            currentTrack.album,
-            currentTrack.duration
-          )
-          if (cancelled) return
-          if (mmRes?.success && mmRes.lyrics) {
-            const parsedOnline = mmRes.isSynced ? parseLRC(mmRes.lyrics) : []
-            if (parsedOnline.length > 0) {
-              setLyrics(parsedOnline)
-              return
-            }
-            const plainOnline = parsePlainLyrics(mmRes.lyrics)
-            if (plainOnline.length > 0) {
-              setLyrics([
-                ...plainOnline,
-                { time: 0, text: '', unsynced: true },
-                {
-                  time: 0,
-                  text: `(${t('lyrics.sourceNote', {
-                    source:
-                      mmRes.source === 'lrclib'
-                        ? 'LRCLIB'
-                        : mmRes.source === 'netease'
-                          ? 'NetEase Cloud'
-                          : mmRes.source === 'kugou'
-                            ? 'Kugou Music'
-                            : 'Musixmatch'
-                  })})`,
-                  unsynced: true
-                }
-              ])
-              return
-            }
-          } else if (
-            mmRes &&
-            mmRes.code &&
-            mmRes.code !== 'NOT_FOUND' &&
-            mmRes.code !== 'NO_LYRICS'
-          ) {
-            // Lỗi thật sự của API (token, giới hạn tần suất, mạng...) -> ghi log để dễ chẩn đoán
-            console.warn('Lỗi lấy lời online:', mmRes.code, mmRes.error)
-          }
-        } catch (e) {
-          console.error('Lỗi lấy lời Musixmatch', e)
-        }
-      }
-
-      if (!cancelled) setLyrics([])
-    }
-
-    loadLyrics()
-    return () => {
-      cancelled = true
-    }
-  }, [currentTrack])
-
-  // Sync Lyrics & Preload Buffer Next Track
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-
-    const handleTimeUpdate = () => {
-      // --- LOGIC 1: ĐỒNG BỘ LỜI BÀI HÁT (Chỉ cập nhật khi giao diện đang mở trên màn hình) ---
-      setCurrentTime(audio.currentTime)
-
-      // CUE virtual track boundary check
-      const trackStart = currentTrack?.startTime || 0
-      const trackEnd = currentTrack?.endTime || 0
-      if (
-        !isSwitchingTrackRef.current &&
-        !audio.seeking &&
-        trackEnd > trackStart &&
-        audio.currentTime >= trackStart &&
-        audio.currentTime >= trackEnd - 0.25
-      ) {
-        if (!hasTriggeredCrossfadeRef.current) {
-          hasTriggeredCrossfadeRef.current = true
-          handleNext()
-        }
-        return
-      }
-
-      const activeIdx = useLyricsStore.getState().currentLyricIndex
-      if (!document.hidden && lyrics.length > 0 && lyrics[0].unsynced) {
-        // Lời thô không có mốc thời gian: không highlight theo thời gian phát
-        if (activeIdx !== -1) setCurrentLyricIndex(-1)
-      } else if (!document.hidden && lyrics.length > 0) {
-        const visualTime = audio.currentTime + 0.3 + (lyricOffset || 0)
-        const index = lyrics.findIndex((line, i) => {
-          const nextLine = lyrics[i + 1]
-          if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
-          return visualTime >= line.time
-        })
-        if (index !== activeIdx) setCurrentLyricIndex(index)
-      } else if (!document.hidden && activeIdx !== -1 && lyrics.length === 0) {
-        setCurrentLyricIndex(-1)
-      }
-
-      // --- LOGIC 2: PRELOAD BUFFER BÀI TIẾP THEO ---
-      // Nếu chỉ còn 15 giây là hết bài, chuẩn bị tải bài kế tiếp
-      if (audio.duration && audio.duration - audio.currentTime < 15 && playQueue.length > 0) {
-        const currentIndex = playQueue.findIndex((t) => t.id === currentTrack?.id)
-        let nextIndex = currentIndex + 1
-        if (nextIndex >= playQueue.length) nextIndex = repeatMode > 0 ? 0 : -1
-
-        if (nextIndex !== -1) {
-          const nextTrack = playQueue[nextIndex]
-          // Nếu bài tiếp theo là nhạc Online và chưa được preload
-          if (
-            nextTrack.isOnline &&
-            nextTrack.originalId &&
-            preloadedRef.current !== nextTrack.originalId
-          ) {
-            preloadedRef.current = nextTrack.originalId
-            // @ts-ignore
-            window.api.preloadStream(nextTrack.originalId) // Gọi Backend ngầm bóc tách URL trước
-          }
-        }
-      }
-
-      // --- LOGIC 3: CROSSFADE TRANSITION SANG BÀI KẾ TIẾP ---
-      if (
-        !isSwitchingTrackRef.current &&
-        !audio.seeking &&
-        crossfadeEnabled &&
-        !bitPerfectEnabled &&
-        audio.duration &&
-        audio.duration > crossfadeDuration &&
-        audio.duration - audio.currentTime <= crossfadeDuration &&
-        !hasTriggeredCrossfadeRef.current
-      ) {
-        hasTriggeredCrossfadeRef.current = true
-        handleNext()
-      } else if (
-        hasTriggeredCrossfadeRef.current &&
-        audio.duration &&
-        audio.duration - audio.currentTime > crossfadeDuration + 2
-      ) {
-        hasTriggeredCrossfadeRef.current = false
-      }
-    }
-
-    audio.addEventListener('timeupdate', handleTimeUpdate)
-    return () => audio.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [
-    lyrics,
-    playQueue,
-    currentTrack,
-    repeatMode,
-    lyricOffset,
-    crossfadeEnabled,
-    crossfadeDuration,
-    bitPerfectEnabled,
-    handleNext,
-    audioRemountCount
-  ])
-
-  // In-App Keyboard Shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+K / Cmd+K -> Spotlight Command Palette
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setShowCommandPalette((prev) => !prev)
-        return
-      }
-
-      const target = e.target as HTMLElement
-      if (
-        target &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-      )
-        return
-
-      // Space / K -> Play / Pause
-      if (e.code === 'Space' || e.code === 'KeyK') {
-        e.preventDefault()
-        handlePlayPause()
-        return
-      }
-
-      // ArrowRight -> Seek +5s
-      if (e.code === 'ArrowRight' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault()
-        if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-          window.api.bassSeek(5, 'relative')
-        } else if (audioRef.current && currentTrack) {
-          audioRef.current.currentTime = Math.min(
-            audioRef.current.duration || 9999,
-            audioRef.current.currentTime + 5
-          )
-        }
-        return
-      }
-
-      // ArrowLeft -> Seek -5s
-      if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault()
-        if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-          window.api.bassSeek(-5, 'relative')
-        } else if (audioRef.current && currentTrack) {
-          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
-        }
-        return
-      }
-
-      // Ctrl+Right / Shift+N / KeyN -> Next track
-      if (
-        (e.ctrlKey && e.code === 'ArrowRight') ||
-        (e.shiftKey && e.code === 'KeyN') ||
-        (e.code === 'KeyN' && !e.ctrlKey && !e.altKey)
-      ) {
-        e.preventDefault()
-        handleNext()
-        return
-      }
-
-      // Ctrl+Left / Shift+P / KeyP -> Previous track
-      if (
-        (e.ctrlKey && e.code === 'ArrowLeft') ||
-        (e.shiftKey && e.code === 'KeyP') ||
-        (e.code === 'KeyP' && !e.ctrlKey && !e.altKey)
-      ) {
-        e.preventDefault()
-        handlePrev()
-        return
-      }
-
-      // ArrowUp / Ctrl+Up -> Volume Up
-      if (e.code === 'ArrowUp') {
-        e.preventDefault()
-        handleVolumeUp()
-        return
-      }
-
-      // ArrowDown / Ctrl+Down -> Volume Down
-      if (e.code === 'ArrowDown') {
-        e.preventDefault()
-        handleVolumeDown()
-        return
-      }
-
-      // M -> Mute toggle
-      if (e.code === 'KeyM' && !e.ctrlKey && !e.altKey) {
-        e.preventDefault()
-        toggleMute()
-        return
-      }
-
-      // S -> Shuffle toggle
-      if (e.code === 'KeyS' && !e.ctrlKey && !e.altKey) {
-        e.preventDefault()
-        toggleShuffle()
-        return
-      }
-
-      // R -> Repeat toggle
-      if (e.code === 'KeyR' && !e.ctrlKey && !e.altKey) {
-        e.preventDefault()
-        toggleRepeat()
-        return
-      }
-
-      // / or Ctrl+F -> Focus Search
-      if ((e.code === 'Slash' && !e.ctrlKey && !e.shiftKey) || (e.ctrlKey && e.code === 'KeyF')) {
-        e.preventDefault()
-        const searchEl = document.querySelector('header input[type="text"]') as HTMLInputElement
-        if (searchEl) {
-          searchEl.focus()
-          searchEl.select()
-        }
-        return
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    currentTrack,
-    isPlaying,
-    bitPerfectEnabled,
-    playQueue,
-    repeatMode,
-    volume,
-    prevVolume,
-    isShuffle,
-    originalQueue
-  ])
-
-  // Global Shortcuts
-  useEffect(() => {
-    if ((window as any).api?.onGlobalShortcut) {
-      ;(window as any).api.onGlobalShortcut((action: string) => {
-        switch (action) {
-          case 'play-pause':
-            handlePlayPause()
-            break
-          case 'next':
-            handleNext()
-            break
-          case 'prev':
-            handlePrev()
-            break
-          case 'vol-up':
-            handleVolumeUp()
-            break
-          case 'vol-down':
-            handleVolumeDown()
-            break
-          case 'seek-forward':
-            if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-              window.api.bassSeek(5, 'relative')
-            } else if (audioRef.current && currentTrack) {
-              audioRef.current.currentTime = Math.min(
-                audioRef.current.duration || 9999,
-                audioRef.current.currentTime + 5
-              )
-            }
-            break
-          case 'seek-backward':
-            if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-              window.api.bassSeek(-5, 'relative')
-            } else if (audioRef.current && currentTrack) {
-              audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
-            }
-            break
-        }
-      })
+      if (typeof unlisten === 'function') unlisten()
     }
   }, [])
 
-  // Global Drag & Drop File Handler (Tính năng 10)
+  // Download progress listener & cleanup
   useEffect(() => {
-    const handleDragEnter = (e: DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      dragCounterRef.current++
-      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
-        setIsDraggingFile(true)
-      }
-    }
-
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-
-    const handleDragLeave = (e: DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      dragCounterRef.current--
-      if (dragCounterRef.current <= 0) {
-        dragCounterRef.current = 0
-        setIsDraggingFile(false)
-      }
-    }
-
-    const handleDrop = async (e: DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      dragCounterRef.current = 0
-      setIsDraggingFile(false)
-
-      if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return
-
-      const files = Array.from(e.dataTransfer.files)
-      const audioExtensions = [
-        '.mp3',
-        '.flac',
-        '.wav',
-        '.m4a',
-        '.ogg',
-        '.opus',
-        '.aac',
-        '.alac',
-        '.aiff',
-        '.wma',
-        '.dsf',
-        '.dff',
-        '.dsd'
-      ]
-      const droppedPaths: string[] = []
-
-      for (const file of files) {
-        const filePath = (file as any).path || (file as any).name
-        if (filePath) {
-          const lower = filePath.toLowerCase()
-          if (audioExtensions.some((ext) => lower.endsWith(ext))) {
-            droppedPaths.push(filePath)
-          }
-        }
-      }
-
-      if (droppedPaths.length === 0) {
-        showToast(
-          language === 'vi'
-            ? 'Không tìm thấy tệp âm thanh hợp lệ'
-            : 'No supported audio files found',
-          'error'
-        )
-        return
-      }
-
-      const newTracks = droppedPaths.map((p) => {
-        const fileName = p.split(/[\\/]/).pop() || 'Unknown'
-        const title = fileName.replace(/\.[^/.]+$/, '')
-        const ext = p.split('.').pop()?.toLowerCase() || ''
-        const isDsd = ext === 'dsf' || ext === 'dff' || ext === 'dsd'
-        return {
-          id: p,
-          title,
-          artist: 'Unknown Artist',
-          album: 'Local Drops',
-          filePath: p,
-          duration: 0,
-          format: isDsd
-            ? ext === 'dsf'
-              ? 'DSF'
-              : ext === 'dff'
-                ? 'DFF'
-                : 'DSD'
-            : ext.toUpperCase() || 'AUDIO',
-          bitDepth: isDsd ? 1 : undefined,
-          sampleRate: isDsd ? 2822400 : undefined,
-          lossless: isDsd || ['flac', 'wav', 'alac', 'aiff'].includes(ext)
-        }
-      })
-
-      setPlayQueue((prev) => [...prev, ...newTracks])
-      showToast(
-        language === 'vi'
-          ? `Đã thêm ${newTracks.length} bài hát vào hàng đợi`
-          : `Added ${newTracks.length} tracks to queue`,
-        'success'
-      )
-      if (!isPlaying && newTracks.length > 0) {
-        handlePlayTrack(newTracks[0])
-      }
-    }
-
-    window.addEventListener('dragenter', handleDragEnter)
-    window.addEventListener('dragover', handleDragOver)
-    window.addEventListener('dragleave', handleDragLeave)
-    window.addEventListener('drop', handleDrop)
-
-    return () => {
-      window.removeEventListener('dragenter', handleDragEnter)
-      window.removeEventListener('dragover', handleDragOver)
-      window.removeEventListener('dragleave', handleDragLeave)
-      window.removeEventListener('drop', handleDrop)
-    }
-  }, [isPlaying, language])
-
-  // Windows Media Session API Integration (Fn Media Keys & OS OSD)
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
-
-    if (!currentTrack) {
-      navigator.mediaSession.metadata = null
-      navigator.mediaSession.playbackState = 'none'
-      return
-    }
-
-    const artworkList: { src: string; sizes: string; type: string }[] = []
-    if (currentTrack.coverArt && typeof currentTrack.coverArt === 'string') {
-      const safeArt = formatImageSource(currentTrack.coverArt, streamPort)
-      if (
-        safeArt &&
-        (safeArt.startsWith('http://') ||
-          safeArt.startsWith('https://') ||
-          safeArt.startsWith('data:'))
-      ) {
-        artworkList.push({ src: safeArt, sizes: '512x512', type: 'image/jpeg' })
-      }
-    }
-
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title || 'Untitled',
-        artist: currentTrack.artist || 'Unknown Artist',
-        album: currentTrack.album || 'Unknown Album',
-        artwork: artworkList
-      })
-    } catch (e) {}
-
-    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
-
-    const actionHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      [
-        'play',
-        () => {
-          handlePlayPause()
-        }
-      ],
-      [
-        'pause',
-        () => {
-          handlePlayPause()
-        }
-      ],
-      [
-        'previoustrack',
-        () => {
-          handlePrev()
-        }
-      ],
-      [
-        'nexttrack',
-        () => {
-          handleNext()
-        }
-      ],
-      [
-        'seekto',
-        (details) => {
-          if (details.seekTime !== undefined && details.seekTime !== null) {
-            if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-              window.api.bassSeek(details.seekTime, 'absolute')
-            } else if (audioRef.current) {
-              audioRef.current.currentTime = details.seekTime
-            }
-          }
-        }
-      ],
-      [
-        'seekbackward',
-        (details) => {
-          const offset = details.seekOffset || 5
-          if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-            window.api.bassSeek(-offset, 'relative')
-          } else if (audioRef.current) {
-            audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - offset)
-          }
-        }
-      ],
-      [
-        'seekforward',
-        (details) => {
-          const offset = details.seekOffset || 5
-          if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-            window.api.bassSeek(offset, 'relative')
-          } else if (audioRef.current && audioRef.current.duration) {
-            audioRef.current.currentTime = Math.min(
-              audioRef.current.duration,
-              audioRef.current.currentTime + offset
-            )
-          }
-        }
-      ]
-    ]
-
-    for (const [action, handler] of actionHandlers) {
-      try {
-        navigator.mediaSession.setActionHandler(action, handler)
-      } catch (e) {}
-    }
-  }, [currentTrack, isPlaying, bitPerfectEnabled, handlePlayPause, handlePrev, handleNext])
-
-  // Sleep Timer Countdown & Volume Fade-out
-  const sleepTimerTargetTimeRef = useRef<number | null>(null)
-
-  const handleSetSleepTimer = (mode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track') => {
-    setSleepTimerMode(mode)
-    setShowSleepTimerMenu(false)
-    if (mode === 'off') {
-      sleepTimerTargetTimeRef.current = null
-      setSleepTimerRemaining(null)
-      if (sleepTimerOriginalVolRef.current !== null) {
-        setVolume(sleepTimerOriginalVolRef.current)
-        const restoredGain = sliderToGain(sleepTimerOriginalVolRef.current)
-        if (audioRef.current) audioRef.current.volume = restoredGain
-        if (bitPerfectEnabled) window.api.bassSetVolume(restoredGain)
-        sleepTimerOriginalVolRef.current = null
-      }
-      showToast(t('player.sleepTimerOffToast'), 'info')
-      return
-    }
-
-    if (mode === 'end_of_track') {
-      sleepTimerTargetTimeRef.current = null
-      setSleepTimerRemaining(null)
-      showToast(t('player.sleepTimerEndTrackToast'), 'success')
-      return
-    }
-
-    const mins = parseInt(mode, 10)
-    if (!isNaN(mins) && mins > 0) {
-      const targetTime = Date.now() + mins * 60 * 1000
-      sleepTimerTargetTimeRef.current = targetTime
-      setSleepTimerRemaining(mins * 60)
-      sleepTimerOriginalVolRef.current = volume
-      showToast(t('player.sleepTimerMinsToast', { mins }), 'success')
-    }
-  }
-
-  useEffect(() => {
-    if (
-      sleepTimerMode === 'off' ||
-      sleepTimerMode === 'end_of_track' ||
-      !sleepTimerTargetTimeRef.current
-    ) {
-      return
-    }
-
-    const interval = setInterval(() => {
-      const targetTime = sleepTimerTargetTimeRef.current
-      if (!targetTime) return
-      const now = Date.now()
-      const remainingSeconds = Math.max(0, Math.round((targetTime - now) / 1000))
-      setSleepTimerRemaining(remainingSeconds)
-
-      // Trong 30 giây cuối cùng: tự động giảm dần âm lượng (Fade-out)
-      if (remainingSeconds <= 30 && remainingSeconds > 0) {
-        if (sleepTimerOriginalVolRef.current === null) {
-          sleepTimerOriginalVolRef.current = volume
-        }
-        const fadeRatio = remainingSeconds / 30
-        const baseGain = sliderToGain(sleepTimerOriginalVolRef.current || 1)
-        const fadedVolume = baseGain * fadeRatio
-        if (audioRef.current) audioRef.current.volume = fadedVolume
-        if (bitPerfectEnabled) window.api.bassSetVolume(fadedVolume)
-      }
-
-      // Khi hết thời gian: Tắt nhạc
-      if (remainingSeconds <= 0) {
-        clearInterval(interval)
-        sleepTimerTargetTimeRef.current = null
-        if (audioRef.current) audioRef.current.pause()
-        if (bitPerfectEnabled) window.api.bassPause()
-        setIsPlaying(false)
-        if (sleepTimerOriginalVolRef.current !== null) {
-          setVolume(sleepTimerOriginalVolRef.current)
-          const restoredGain = sliderToGain(sleepTimerOriginalVolRef.current)
-          if (audioRef.current) audioRef.current.volume = restoredGain
-          if (bitPerfectEnabled) window.api.bassSetVolume(restoredGain)
-          sleepTimerOriginalVolRef.current = null
-        }
-        setSleepTimerMode('off')
-        setSleepTimerRemaining(null)
-        showToast(t('player.sleepTimerStoppedToast'), 'info')
-      }
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [sleepTimerMode, volume, bitPerfectEnabled])
-
-  const changeLyricOffset = (delta: number) => {
-    setLyricOffset((prev) => {
-      const next = Math.round((prev + delta) * 10) / 10
-      try {
-        localStorage.setItem('meis_lyric_offset', String(next))
-      } catch (e) {}
-      if (currentTrack) {
-        const trackKey = currentTrack.filePath || currentTrack.id
-        if (trackKey) {
-          updateTrackLyricOffset(trackKey, next)
-          window.api?.setLyricOffset?.(trackKey, next).catch(() => {})
-        }
-      }
-      showToast(t('player.lyricOffsetToast', { offset: next > 0 ? `+${next}` : next }), 'info')
-      return next
+    const unlisten = window.api?.onDownloadProgress?.((data: any) => {
+      setDownloadProgress(data)
     })
-  }
-
-  const resetLyricOffset = () => {
-    setLyricOffset(0)
-    try {
-      localStorage.setItem('meis_lyric_offset', '0')
-    } catch (e) {}
-    if (currentTrack) {
-      const trackKey = currentTrack.filePath || currentTrack.id
-      if (trackKey) {
-        updateTrackLyricOffset(trackKey, 0)
-        window.api?.setLyricOffset?.(trackKey, 0).catch(() => {})
-      }
-    }
-    showToast(t('player.lyricOffsetResetToast'), 'info')
-  }
-
-  // ==========================================
-  // 6. RENDERERS
-  // ==========================================
-  // ==========================================
-  // 6. RENDERERS (VIRTUALIZED TABLE)
-  // ==========================================
-  const renderTrackTable = (tracks: any[]) => {
-    if (!tracks || tracks.length === 0) return null
-
-    if (viewMode === 'grid') {
-      return (
-        <TrackGrid
-          tracks={tracks}
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          isLite={isLite}
-          handleRowClick={handleRowClick}
-          onContextMenu={handleTrackContextMenu}
-          openTagEditor={openTagEditor}
-          onArtistClick={navigateToArtist}
-        />
-      )
-    }
-
-    if (viewMode === 'compact') {
-      return (
-        <TrackCompactList
-          tracks={tracks}
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          isLite={isLite}
-          handleRowClick={handleRowClick}
-          onContextMenu={handleTrackContextMenu}
-          openTrackInfo={openTrackInfo}
-          onArtistClick={navigateToArtist}
-        />
-      )
-    }
-
-    return (
-      <div className="flex-1 flex flex-col min-h-[300px] h-full w-full bg-theme-60/20 rounded-lg border border-theme-30/50 overflow-hidden">
-        <TableVirtuoso
-          style={{ height: '100%', width: '100%', minHeight: '300px' }}
-          data={tracks}
-          components={VirtuosoComponents}
-          increaseViewportBy={{ top: 200, bottom: 200 }}
-          fixedHeaderContent={() => (
-            <tr className="text-zinc-500 border-b border-theme-30/50 select-none bg-theme-60 shadow-sm text-xs">
-              <th
-                onClick={() => {
-                  if (selectedTrackIds.length > 0 && selectedTrackIds.length === tracks.length) {
-                    clearSelectedTracks()
-                  } else {
-                    const allIds = tracks.map((t) => t.id || t.filePath).filter(Boolean)
-                    setSelectedTrackIds(allIds)
-                  }
-                }}
-                className="pb-3 pt-3.5 font-medium w-10 sm:w-12 text-center cursor-pointer group hover:text-white transition whitespace-nowrap"
-                title={
-                  selectedTrackIds.length > 0 && selectedTrackIds.length === tracks.length
-                    ? t('common.deselectAll') || 'Deselect All'
-                    : t('common.selectAll') || 'Select All'
-                }
-              >
-                <div className="inline-flex items-center gap-1 justify-center">
-                  {selectedTrackIds.length > 0 && selectedTrackIds.length === tracks.length ? (
-                    <CheckSquare size={13} className="text-theme-10" />
-                  ) : (
-                    <span>{t('trackTable.index')}</span>
-                  )}
-                </div>
-              </th>
-              <th
-                onClick={() => handleSort('title')}
-                className="pb-3 pt-3.5 font-medium cursor-pointer group hover:text-white transition min-w-0 pr-4"
-                title={t('trackTable.sortTitle')}
-              >
-                <div className="inline-flex items-center gap-1">
-                  <span>{t('trackTable.title')}</span>
-                  {sortField === 'title' ? (
-                    sortOrder === 'asc' ? (
-                      <ArrowUp size={11} className="text-theme-10" />
-                    ) : (
-                      <ArrowDown size={11} className="text-theme-10" />
-                    )
-                  ) : (
-                    <ArrowUpDown
-                      size={11}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    />
-                  )}
-                </div>
-              </th>
-              <th
-                onClick={() => handleSort('album')}
-                className="pb-3 pt-3.5 font-medium cursor-pointer group hover:text-white transition hidden md:table-cell md:w-[28%] lg:w-[32%] pr-4"
-                title={t('trackTable.sortAlbum')}
-              >
-                <div className="inline-flex items-center gap-1">
-                  <span>{t('trackTable.album')}</span>
-                  {sortField === 'album' ? (
-                    sortOrder === 'asc' ? (
-                      <ArrowUp size={11} className="text-theme-10" />
-                    ) : (
-                      <ArrowDown size={11} className="text-theme-10" />
-                    )
-                  ) : (
-                    <ArrowUpDown
-                      size={11}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    />
-                  )}
-                </div>
-              </th>
-              <th
-                onClick={() => handleSort('isCloud')}
-                className="pb-3 pt-3.5 font-medium cursor-pointer group hover:text-white transition w-28 sm:w-32 text-center whitespace-nowrap"
-                title={t('trackTable.sortFormat')}
-              >
-                <div className="inline-flex items-center gap-1 justify-center">
-                  <span>{t('trackTable.format')}</span>
-                  {sortField === 'isCloud' ? (
-                    sortOrder === 'asc' ? (
-                      <ArrowUp size={11} className="text-theme-10" />
-                    ) : (
-                      <ArrowDown size={11} className="text-theme-10" />
-                    )
-                  ) : (
-                    <ArrowUpDown
-                      size={11}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    />
-                  )}
-                </div>
-              </th>
-              <th
-                onClick={() => handleSort('duration')}
-                className="pb-3 pt-3.5 font-medium text-right pr-4 cursor-pointer group hover:text-white transition w-16 sm:w-20 whitespace-nowrap"
-                title={t('trackTable.sortDuration')}
-              >
-                <div className="inline-flex items-center gap-1 justify-end">
-                  <span>{t('trackTable.duration')}</span>
-                  {sortField === 'duration' ? (
-                    sortOrder === 'asc' ? (
-                      <ArrowUp size={11} className="text-theme-10" />
-                    ) : (
-                      <ArrowDown size={11} className="text-theme-10" />
-                    )
-                  ) : (
-                    <ArrowUpDown
-                      size={11}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    />
-                  )}
-                </div>
-              </th>
-              <th
-                className="pb-3 pt-3.5 font-medium text-center w-10 sm:w-11"
-                title={t('trackTable.actions')}
-              >
-                <Info size={13} className="mx-auto text-zinc-500" />
-              </th>
-            </tr>
-          )}
-          itemContent={(index, track) => (
-            <TrackRow
-              track={track}
-              index={index}
-              isThisTrackPlaying={currentTrack?.id === track.id}
-              isPlaying={isPlaying}
-              isLite={isLite}
-              handleRowClick={handleRowClick}
-              tracks={tracks}
-              openTrackInfo={openTrackInfo}
-              onContextMenu={handleTrackContextMenu}
-              onArtistClick={navigateToArtist}
-            />
-          )}
-        />
-      </div>
-    )
-  }
-
-  // ==========================================
-  // 7. MAIN RENDER
-  // ==========================================
-
-  // BASS Audio Listeners (WASAPI / ASIO / DSD)
-  // BASS Audio Listeners (WASAPI / ASIO / DSD)
-  useEffect(() => {
-    const unTime = window.api.onBassTime
-      ? window.api.onBassTime((val) => {
-          const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
-          if (useBass && audioRef.current) {
-            ;(audioRef.current as any)._currentTime = val
-            const dur = (audioRef.current as any)._duration || currentTrack?.duration || 0
-            if (
-              !isSwitchingTrackRef.current &&
-              crossfadeEnabled &&
-              dur > crossfadeDuration &&
-              dur - val <= crossfadeDuration &&
-              !hasTriggeredCrossfadeRef.current
-            ) {
-              hasTriggeredCrossfadeRef.current = true
-              handleNext()
-            } else if (
-              hasTriggeredCrossfadeRef.current &&
-              dur > crossfadeDuration &&
-              dur - val > crossfadeDuration + 2
-            ) {
-              hasTriggeredCrossfadeRef.current = false
-            }
-            if (!document.hidden && lyrics.length > 0 && !lyrics[0].unsynced) {
-              const visualTime = val + 0.3 + (lyricOffset || 0)
-              const index = lyrics.findIndex((line, i) => {
-                const nextLine = lyrics[i + 1]
-                if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
-                return visualTime >= line.time
-              })
-              if (index !== useLyricsStore.getState().currentLyricIndex) setCurrentLyricIndex(index)
-            }
-            setCurrentTime(val)
-          }
-        })
-      : undefined
-
-    const unDuration = window.api.onBassDuration
-      ? window.api.onBassDuration((val) => {
-          const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
-          if (useBass && audioRef.current) {
-            ;(audioRef.current as any)._duration = val
-          }
-        })
-      : undefined
-
-    const unPaused = window.api.onBassPaused
-      ? window.api.onBassPaused((val) => {
-          const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
-          if (useBass) {
-            setIsPlaying(!val)
-          }
-        })
-      : undefined
-
-    const unEnded = window.api.onBassEnded
-      ? window.api.onBassEnded(() => {
-          if (sleepTimerMode === 'end_of_track') {
-            setSleepTimerMode('off')
-            setSleepTimerRemaining(null)
-            setIsPlaying(false)
-            window.api.bassPause()
-            showToast(t('player.sleepTimerStoppedToast'), 'info')
-            return
-          }
-          const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
-          if (useBass) {
-            if (!hasTriggeredCrossfadeRef.current) {
-              handleNext()
-            }
-            hasTriggeredCrossfadeRef.current = false
-          }
-        })
-      : undefined
-
-    const unGapless = window.api?.onBassGaplessTransition
-      ? window.api.onBassGaplessTransition(({ nextPath, nextInfo }) => {
-          const currentIndex = playQueue.findIndex(
-            (t) =>
-              (t.filePath === currentTrack?.filePath || t.id === currentTrack?.id) &&
-              t.startTime === currentTrack?.startTime
-          )
-          let candidateTrack: any = null
-          if (repeatMode === 2) {
-            candidateTrack = currentTrack
-          } else if (currentIndex !== -1) {
-            let nextIdx = currentIndex + 1
-            if (nextIdx >= playQueue.length && repeatMode === 1) nextIdx = 0
-            if (nextIdx >= 0 && nextIdx < playQueue.length) {
-              candidateTrack = playQueue[nextIdx]
-            }
-          }
-
-          if (candidateTrack && candidateTrack.filePath === nextPath) {
-            isGaplessTransitioningRef.current = true
-            setCurrentTrack(candidateTrack)
-          } else {
-            const found = playQueue.find((t) => t.filePath === nextPath)
-            if (found) {
-              isGaplessTransitioningRef.current = true
-              setCurrentTrack(found)
-            }
-          }
-          setIsPlaying(true)
-        })
-      : undefined
-
-    const unError = window.api.onBassError
-      ? window.api.onBassError((err: string) => {
-          setIsPlaying(false)
-          showToast(
-            `${language === 'vi' ? 'Lỗi âm thanh WASAPI/ASIO' : 'WASAPI/ASIO Audio error'}: ${err}`,
-            'error'
-          )
-        })
-      : undefined
-
-    const unAudioParams = window.api.onBassAudioParams
-      ? window.api.onBassAudioParams((params: any) => {
-          if (params && params.samplerate) {
-            setBassOutParams(params)
-          }
-        })
-      : undefined
-
     return () => {
-      if (typeof unTime === 'function') unTime()
-      if (typeof unDuration === 'function') unDuration()
-      if (typeof unPaused === 'function') unPaused()
-      if (typeof unEnded === 'function') unEnded()
-      if (typeof unGapless === 'function') unGapless()
-      if (typeof unError === 'function') unError()
-      if (typeof unAudioParams === 'function') unAudioParams()
+      if (typeof unlisten === 'function') unlisten()
     }
-  }, [
-    handleNext,
-    crossfadeEnabled,
-    crossfadeDuration,
-    bitPerfectEnabled,
-    sleepTimerMode,
-    currentTrack,
-    lyrics,
-    lyricOffset,
-    playQueue,
-    repeatMode
-  ])
+  }, [setDownloadProgress])
 
-  useEffect(() => {
-    if (!bitPerfectEnabled && !isDsdTrack(currentTrack)) {
-      setBassOutParams(null)
-    }
-  }, [bitPerfectEnabled, currentTrack])
-
-  // Watch currentTrack
-  useEffect(() => {
-    if (isGaplessTransitioningRef.current) {
-      isGaplessTransitioningRef.current = false
-      return
-    }
-    if (currentTrack && currentTrack.filePath) {
-      if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-        window.api.bassPlay(
-          currentTrack.filePath,
-          crossfadeEnabled ? crossfadeDuration : 0,
-          bitPerfectEnabled,
-          currentTrack.startTime,
-          currentTrack.endTime
-        )
-        if (audioRef.current) audioRef.current.pause()
-        if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
-          const seekTo = pendingSeekTimeRef.current
-          pendingSeekTimeRef.current = null
-          setTimeout(() => {
-            window.api.bassSeek(seekTo, 'absolute')
-          }, 150)
-        }
-      } else {
-        // Dừng BASS/WASAPI khi phát bằng HTML Audio để giải phóng thiết bị
-        window.api.bassStop().catch(() => {})
-        if (audioRef.current && typeof currentTrack.startTime === 'number') {
-          audioRef.current.currentTime = currentTrack.startTime
-        }
-      }
-    }
-  }, [currentTrack, bitPerfectEnabled, bitPerfectType, crossfadeEnabled, crossfadeDuration])
-
-  // Watch EQ & Preamp
-  useEffect(() => {
-    // Trong chế độ Bit-Perfect hoặc DSD, bypass toàn bộ EQ filter để bảo toàn 100% bit dữ liệu truyền tới DAC
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-      window.api.bassSetEqualizer([], 0)
-      return
-    }
-    if (isEqEnabled) {
-      window.api.bassSetEqualizer(eqBands, preampGain)
-    } else {
-      window.api.bassSetEqualizer([], 0)
-    }
-  }, [eqBands, isEqEnabled, preampGain, bitPerfectEnabled, currentTrack])
-
-  // Watch Volume
-  useEffect(() => {
-    const effectiveGain = sliderToGain(volume)
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
-      window.api.bassSetVolume(effectiveGain)
-    } else if (audioRef.current) {
-      audioRef.current.volume = Math.max(0, Math.min(1, effectiveGain))
-    }
-  }, [volume, bitPerfectEnabled, currentTrack, audioRemountCount])
-
+  // ==========================================
+  // 8. RENDER
+  // ==========================================
   return (
     <>
-      {!isCore && (
+      {!theming.isCore && (
         <div className="custom-bg-container">
           <div
-            className={`custom-bg-layer ${!isLite ? 'transition-all' : ''}`}
+            className={`custom-bg-layer ${!theming.isLite ? 'transition-all' : ''}`}
             style={{
-              backgroundImage: bgLayerA ? `url("${bgLayerA.replace(/"/g, '\\"')}")` : 'none',
-              opacity: activeBgLayer === 'A' && bgLayerA ? customBgOpacity : 0
+              backgroundImage: theming.bgLayerA ? `url("${theming.bgLayerA.replace(/"/g, '\\"')}")` : 'none',
+              opacity: theming.activeBgLayer === 'A' && theming.bgLayerA ? customBgOpacity : 0
             }}
           />
           <div
-            className={`custom-bg-layer ${!isLite ? 'transition-all' : ''}`}
+            className={`custom-bg-layer ${!theming.isLite ? 'transition-all' : ''}`}
             style={{
-              backgroundImage: bgLayerB ? `url("${bgLayerB.replace(/"/g, '\\"')}")` : 'none',
-              opacity: activeBgLayer === 'B' && bgLayerB ? customBgOpacity : 0
+              backgroundImage: theming.bgLayerB ? `url("${theming.bgLayerB.replace(/"/g, '\\"')}")` : 'none',
+              opacity: theming.activeBgLayer === 'B' && theming.bgLayerB ? customBgOpacity : 0
             }}
           />
         </div>
       )}
-      {/* 1. ĐƯA THẺ AUDIO RA NGOÀI CÙNG VÀ ÉP THAY ĐỔI SAMPLE RATE */}
+
+      {/* AUDIO ELEMENT */}
       <audio
-        key={`${currentSampleRate}_${audioRemountCount}`} // Tự động remount khi Sample Rate hoặc audio pipeline thay đổi
+        key={`${audioEngine.currentSampleRate}_${audioEngine.audioRemountCount}`}
         ref={(el) => {
-          ;(audioRef as any).current = el
+          ;(audioEngine.audioRef as any).current = el
           if (el) {
             el.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
           }
         }}
-        crossOrigin="anonymous" // QUAN TRỌNG: Ổn định luồng CORS cho Web Audio API
+        crossOrigin="anonymous"
         preload="auto"
         autoPlay={!bitPerfectEnabled && !isDsdTrack(currentTrack) && isPlaying}
         src={
@@ -6268,190 +1239,42 @@ export default function App() {
             ? formatAudioSource(currentTrack.filePath, streamPort)
             : undefined
         }
-        onPlay={() => {
-          if (audioRef.current && !bitPerfectEnabled && !isDsdTrack(currentTrack)) {
-            audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
+        onPlay={audioEngine.handleAudioPlay}
+        onLoadedMetadata={() => {
+          if (
+            audioEngine.audioRef.current &&
+            currentTrack?.startTime &&
+            currentTrack.startTime > 0 &&
+            audioEngine.audioRef.current.currentTime < currentTrack.startTime
+          ) {
+            audioEngine.audioRef.current.currentTime = currentTrack.startTime
           }
         }}
-        onEnded={() => {
-          const audio = audioRef.current
-          // BẢO HIỂM 2 (CHỐNG ĐỨT LUỒNG NGẦM):
-          // Nếu bài hát kết thúc giả (còn dư > 2 giây) do rớt mạng, tự động tải và nối lại đúng thời điểm đó!
-          if (audio && audio.duration && audio.duration - audio.currentTime > 2) {
-            console.warn('[Player] Phát hiện đứt luồng mạng, tự động nối lại...')
-            const time = audio.currentTime
-            audio.load()
-            audio.currentTime = time
-            audio.play()
-            return
-          }
-          if (sleepTimerMode === 'end_of_track') {
-            setSleepTimerMode('off')
-            setSleepTimerRemaining(null)
-            setIsPlaying(false)
-            if (audio) audio.pause()
-            showToast(t('player.sleepTimerStoppedToast'), 'info')
-            return
-          }
-          if (!hasTriggeredCrossfadeRef.current) {
-            handleNext()
-          }
-          hasTriggeredCrossfadeRef.current = false
-        }}
-        onLoadedMetadata={handleLoadedMetadata}
-        onError={(e) => {
-          if (isDsdTrack(currentTrack)) return
-          // BẢO HIỂM 3 (CHỐNG TREO THẺ AUDIO & LẶP VÔ HẠN):
-          const audio = audioRef.current
-          const mediaErr = (e.currentTarget as HTMLAudioElement).error
-          console.warn('[Audio Tag Error]', mediaErr?.code, mediaErr?.message, audio?.src)
-          if (audio && currentTrack) {
-            // Nếu src rỗng hoặc chưa tải, không skip bài hát mù quáng
-            if (!audio.src || audio.src === window.location.href) return
-            // Nếu lỗi ngay từ giây đầu tiên (Server sập 500), bỏ qua luôn bài này để tránh kẹt
-            if (audio.currentTime === 0) {
-              console.warn(
-                `[Player] Luồng dữ liệu bị hỏng hoàn toàn. Bỏ qua bài: ${currentTrack.title}`
-              )
-              handleNext()
-            } else {
-              // Nếu đang phát giữa chừng mà bị lỗi (mất mạng tạm thời), mới cố gắng phục hồi
-              console.warn('[Player] Trình phát báo lỗi kết nối giữa chừng, tự động phục hồi...')
-              const time = audio.currentTime
-              audio.load()
-              audio.currentTime = time
-              audio.play().catch(() => {})
-            }
-          }
-        }}
-        loop={repeatMode === 2}
+        onEnded={audioEngine.handleAudioEnded}
+        onTimeUpdate={audioEngine.handleAudioTimeUpdate}
+        onError={audioEngine.handleAudioError}
       />
 
-      {/* Hidden HTML5 Audio Element for Next-Track Gapless Audio Frame Caching */}
-      {gaplessEnabled && !bitPerfectEnabled && !isDsdTrack(currentTrack) && (() => {
-        const currentIndex = playQueue.findIndex(
-          (t) =>
-            (t.id === currentTrack?.id || t.filePath === currentTrack?.filePath) &&
-            t.startTime === currentTrack?.startTime
-        )
-        let nextTrack: any = null
-        if (repeatMode === 2) {
-          nextTrack = currentTrack
-        } else if (currentIndex !== -1) {
-          let nextIdx = currentIndex + 1
-          if (nextIdx >= playQueue.length && repeatMode === 1) nextIdx = 0
-          if (nextIdx >= 0 && nextIdx < playQueue.length) nextTrack = playQueue[nextIdx]
-        }
-        if (nextTrack && nextTrack.filePath && !nextTrack.isOnline && !isDsdTrack(nextTrack)) {
-          return (
-            <audio
-              key={`gapless_preload_${nextTrack.filePath}_${nextTrack.startTime || 0}`}
-              preload="auto"
-              src={formatAudioSource(nextTrack.filePath, streamPort)}
-              style={{ display: 'none' }}
-            />
-          )
-        }
-        return null
-      })()}
-
-      {/* 2. RẼ NHÁNH GIAO DIỆN BẰNG TERNARY OPERATOR */}
       {isMiniPlayer ? (
-        // --- GIAO DIỆN MINI PLAYER ---
-        <div
-          className="h-screen w-screen bg-zinc-950/90 backdrop-blur-md overflow-hidden flex items-center p-3 border border-theme-30 select-none cursor-move"
-          style={{ backgroundColor: themeColor, WebkitAppRegion: 'drag' } as any}
-        >
-          {!isLite && (
-            <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
-          )}
-
-          <div
-            className="w-24 h-24 bg-theme-30 rounded-lg overflow-hidden shadow-xl flex-shrink-0 relative group"
-            style={{ WebkitAppRegion: 'no-drag' } as any}
-          >
-            <DynamicCoverArt
-              track={currentTrack}
-              streamPort={streamPort}
-              tier="md"
-              isLite={isLite}
-              smartAspect={true}
-              fallbackIconSize={32}
-              className="w-full h-full pointer-events-none"
-            />
-            <button
-              onClick={handleToggleMiniPlayer}
-              className="absolute top-1 left-1 bg-black/60 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-theme-10 transition z-20"
-              title={language === 'vi' ? 'Trở về chế độ đầy đủ' : 'Return to Standard Mode'}
-              style={{ WebkitAppRegion: 'no-drag' } as any}
-            >
-              <Maximize2 size={14} />
-            </button>
-          </div>
-
-          <div className="flex-1 ml-4 flex flex-col justify-center overflow-hidden pointer-events-none">
-            <div className="truncate mb-2 pr-4">
-              <h4 className="text-sm font-bold text-white truncate">
-                {currentTrack ? currentTrack.title : 'Meis Radio'}
-              </h4>
-              <p className="text-xs text-zinc-400 truncate">
-                {currentTrack
-                  ? Array.isArray(currentTrack.artists) && currentTrack.artists.length > 0
-                    ? currentTrack.artists.join(', ')
-                    : currentTrack.artist ||
-                      (language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist')
-                  : language === 'vi'
-                    ? 'Sẵn sàng phát nhạc'
-                    : 'Ready to play'}
-              </p>
-            </div>
-
-            <div
-              className="flex items-center gap-3 pointer-events-auto"
-              style={{ WebkitAppRegion: 'no-drag' } as any}
-            >
-              <button
-                onClick={handlePrev}
-                className="text-zinc-400 hover:text-white transition"
-                style={{ WebkitAppRegion: 'no-drag' } as any}
-              >
-                <SkipBack size={18} />
-              </button>
-              <button
-                onClick={handlePlayPause}
-                className="w-8 h-8 rounded-full bg-theme-10 text-white flex items-center justify-center hover:scale-105 transition"
-                style={{ WebkitAppRegion: 'no-drag' } as any}
-              >
-                {isPlaying ? (
-                  <Pause size={16} className="fill-current" />
-                ) : (
-                  <Play size={16} className="fill-current translate-x-[1px]" />
-                )}
-              </button>
-              <button
-                onClick={handleNext}
-                className="text-zinc-400 hover:text-white transition"
-                style={{ WebkitAppRegion: 'no-drag' } as any}
-              >
-                <SkipForward size={18} />
-              </button>
-            </div>
-          </div>
-        </div>
+        <MiniPlayerView
+          handleToggleMiniPlayer={handleToggleMiniPlayer}
+          handlePlayPause={audioEngine.handlePlayPause}
+          handleNext={audioEngine.handleNext}
+          handlePrev={audioEngine.handlePrev}
+        />
       ) : (
-        // --- GIAO DIỆN CHÍNH (FULL SCREEN) ---
         <div
           data-mode={appMode}
-          className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${isLite ? '' : 'transition-colors duration-1000'}`}
+          className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${theming.isLite ? '' : 'transition-colors duration-1000'}`}
           style={{
-            backgroundColor: effectiveBgImage ? 'transparent' : isCore ? '#121212' : themeColor
+            backgroundColor: theming.effectiveBgImage ? 'transparent' : theming.isCore ? '#121212' : themeColor
           }}
         >
-          {!isLite && !effectiveBgImage && (
+          {!theming.isLite && !theming.effectiveBgImage && (
             <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
           )}
 
-          {/* OVERLAYS & MODALS */}
+          {/* TOAST NOTIFICATION */}
           {toast.visible && (
             <div
               onClick={hideToast}
@@ -6478,26 +1301,22 @@ export default function App() {
             </div>
           )}
 
-          {/* ========================================= */}
-          {/* MỚI: PROGRESS BAR DẠNG TOAST (NỔI GÓC PHẢI) */}
-          {/* ========================================= */}
           <DownloadProgressToast t={t} />
 
-          {/* Multi-Select Batch Action Bar */}
           <BatchActionBar
             onPlaySelected={(ids) => {
               const idSet = new Set(ids)
               const selectedTracks = libraryTracks.filter(
-                (t) => idSet.has(t.id) || (t.filePath && idSet.has(t.filePath))
+                (trk) => idSet.has(trk.id) || (trk.filePath && idSet.has(trk.filePath))
               )
               if (selectedTracks.length > 0) {
-                handleRowClick(selectedTracks[0], selectedTracks)
+                audioEngine.handleRowClick(selectedTracks[0], selectedTracks)
               }
             }}
             onAddToQueue={(ids) => {
               const idSet = new Set(ids)
               const selectedTracks = libraryTracks.filter(
-                (t) => idSet.has(t.id) || (t.filePath && idSet.has(t.filePath))
+                (trk) => idSet.has(trk.id) || (trk.filePath && idSet.has(trk.filePath))
               )
               if (selectedTracks.length > 0) {
                 setPlayQueue((prev) => [...prev, ...selectedTracks])
@@ -6523,9 +1342,9 @@ export default function App() {
             onDeleteSelected={async (ids) => {
               const idSet = new Set(ids)
               const matched = libraryTracks.filter(
-                (t) => idSet.has(t.id) || (t.filePath && idSet.has(t.filePath))
+                (trk) => idSet.has(trk.id) || (trk.filePath && idSet.has(trk.filePath))
               )
-              const paths = matched.map((t) => t.filePath).filter(Boolean) as string[]
+              const paths = matched.map((trk) => trk.filePath).filter(Boolean) as string[]
               if (paths.length === 0) return
               const confirmed = window.confirm(
                 `${t('batchActions.deleteSelected') || 'Xóa các bài đã chọn'} (${paths.length} ${t('common.tracks') || 'bài'})?`
@@ -6539,7 +1358,7 @@ export default function App() {
                 }
                 showToast(t('toasts.movedToTrash') || 'Đã chuyển vào thùng rác', 'info')
                 clearSelectedTracks()
-                loadLibrary(true, false)
+                libraryOps.loadLibrary(true, false)
               }
             }}
             onClearSelection={clearSelectedTracks}
@@ -6547,166 +1366,162 @@ export default function App() {
 
           <ErrorBoundary fallback={null}>
             <React.Suspense fallback={null}>
-            <DuplicateFinderModal
-              isOpen={showDuplicateFinder}
-              onClose={() => setShowDuplicateFinder(false)}
-              onDeleteTracks={async (trackPaths) => {
-                if (window.api?.deleteTrack) {
-                  for (const p of trackPaths) {
-                    try {
-                      await window.api.deleteTrack(p, false)
-                    } catch {}
+              <DuplicateFinderModal
+                isOpen={showDuplicateFinder}
+                onClose={() => setShowDuplicateFinder(false)}
+                onDeleteTracks={async (trackPaths) => {
+                  if (window.api?.deleteTrack) {
+                    for (const p of trackPaths) {
+                      try {
+                        await window.api.deleteTrack(p, false)
+                      } catch {}
+                    }
+                    showToast(t('toasts.movedToTrash') || 'Đã xóa bản trùng lặp', 'info')
+                    libraryOps.loadLibrary(true, false)
                   }
-                  showToast(t('toasts.movedToTrash') || 'Đã xóa bản trùng lặp', 'info')
-                  loadLibrary(true, false)
-                }
-              }}
-              onPlayTrack={(tr) => handleRowClick(tr, libraryTracks)}
-            />
-
-            <SmartPlaylistModal
-              isOpen={showSmartPlaylists}
-              onClose={() => setShowSmartPlaylists(false)}
-              onPlayPlaylist={(tracks) => {
-                if (tracks && tracks.length > 0) {
-                  handleRowClick(tracks[0], tracks)
-                }
-              }}
-            />
-
-            <CloudActionModal
-              track={cloudActionTrack}
-              isDownloading={isDownloading}
-              onClose={() => setCloudActionTrack(null)}
-              onAction={handleCloudAction}
-            />
-
-            {infoTrack && (
-              <TrackInfoModal
-                track={infoTrack}
-                onClose={() => setInfoTrack(null)}
-                onEditTags={(tr) => openTagEditor(tr)}
-                onPlayTrack={(tr) => handleRowClick(tr, libraryTracks)}
+                }}
               />
-            )}
 
-            {editingTrack && (
-              <TagEditorModal
-                track={editingTrack}
-                tags={editTags}
-                imagePath={editImagePath}
-                setTags={setEditTags}
-                onSelectImage={handleSelectTagImage}
-                onSave={saveTags}
-                onClose={() => setEditingTrack(null)}
+              <SmartPlaylistModal
+                isOpen={showSmartPlaylists}
+                onClose={() => setShowSmartPlaylists(false)}
+                onPlayPlaylist={(tracks) => {
+                  if (tracks && tracks.length > 0) {
+                    audioEngine.handleRowClick(tracks[0], tracks)
+                  }
+                }}
               />
-            )}
 
-            <PlaylistRenameModal
-              isOpen={playlistRename.isOpen}
-              newName={playlistRename.newName}
-              setNewName={(name) => setPlaylistRename({ ...playlistRename, newName: name })}
-              onCancel={() => setPlaylistRename({ isOpen: false, oldName: '', newName: '' })}
-              onSubmit={handleRenameSubmit}
-            />
+              <CloudActionModal
+                track={cloudActionTrack}
+                isDownloading={isDownloading}
+                onClose={() => setCloudActionTrack(null)}
+                onAction={handleCloudAction}
+              />
 
-            <EditPlaylistModal
-              isOpen={showEditUserPlaylistModal}
-              playlist={editingUserPlaylist}
-              onClose={() => {
-                setShowEditUserPlaylistModal(false)
-                setEditingUserPlaylist(null)
-              }}
-              onSave={handleSaveEditUserPlaylist}
-            />
+              {libraryOps.infoTrack && (
+                <TrackInfoModal track={libraryOps.infoTrack} onClose={() => libraryOps.setInfoTrack(null)} />
+              )}
 
-            <CreatePlaylistModal
-              isOpen={showCreateModal}
-              onClose={() => setShowCreateModal(false)}
-              onCreate={handleCreatePlaylistSubmit}
-            />
+              {libraryOps.editingTrack && (
+                <TagEditorModal
+                  track={libraryOps.editingTrack}
+                  tags={libraryOps.editTags}
+                  imagePath={libraryOps.editImagePath}
+                  setTags={libraryOps.setEditTags}
+                  onSelectImage={libraryOps.handleSelectTagImage}
+                  onSave={libraryOps.saveTags}
+                  onClose={() => libraryOps.setEditingTrack(null)}
+                />
+              )}
 
-            <CreatePlaylistModal
-              isOpen={showCreateUserPlaylistModal}
-              onClose={() => setShowCreateUserPlaylistModal(false)}
-              onCreate={handleCreateUserPlaylist}
-            />
+              <PlaylistRenameModal
+                isOpen={playlistRename.isOpen}
+                newName={playlistRename.newName}
+                setNewName={(name) => setPlaylistRename({ ...playlistRename, newName: name })}
+                onCancel={() => setPlaylistRename({ isOpen: false, oldName: '', newName: '' })}
+                onSubmit={libraryOps.handleRenameSubmit}
+              />
 
-            <AddSongsModal
-              isOpen={showAddSongsModal}
-              tracks={libraryTracks}
-              playlistName={activePlaylist?.name || ''}
-              onClose={() => setShowAddSongsModal(false)}
-              onAddTracks={handleAddTracksToActivePlaylist}
-            />
+              <EditPlaylistModal
+                isOpen={showEditUserPlaylistModal}
+                playlist={editingUserPlaylist}
+                onClose={() => {
+                  setShowEditUserPlaylistModal(false)
+                  setEditingUserPlaylist(null)
+                }}
+                onSave={libraryOps.handleSaveEditUserPlaylist}
+              />
 
-            <AddSongsModal
-              isOpen={showAddSongsToUserPlaylistModal}
-              tracks={libraryTracks}
-              playlistName={activeUserPlaylist?.name || ''}
-              onClose={() => setShowAddSongsToUserPlaylistModal(false)}
-              onAddTracks={handleAddSongsToUserPlaylist}
-            />
+              <CreatePlaylistModal
+                isOpen={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
+                onCreate={libraryOps.handleCreatePlaylistSubmit}
+              />
 
-            <EQPanel
-              showEQ={showEQ}
-              setShowEQ={setShowEQ}
-              isEqEnabled={isEqEnabled}
-              setIsEqEnabled={setIsEqEnabled}
-              eqBands={eqBands}
-              setEqBands={setEqBands}
-              filterNodesRef={filterNodesRef}
-              preampGain={preampGain}
-              setPreampGain={setPreampGain}
-            />
+              <CreatePlaylistModal
+                isOpen={showCreateUserPlaylistModal}
+                onClose={() => setShowCreateUserPlaylistModal(false)}
+                onCreate={libraryOps.handleCreateUserPlaylist}
+              />
 
-            <SpectrogramModal
-              isOpen={showSpectrogramModal}
-              onClose={() => setShowSpectrogramModal(false)}
-              analyserNodeRef={analyserNodeRef}
-              isPlaying={isPlaying}
-              isLite={isLite}
-              currentTrack={currentTrack}
-              audioRef={audioRef}
-            />
+              <AddSongsModal
+                isOpen={showAddSongsModal}
+                tracks={libraryTracks}
+                playlistName={activePlaylist?.name || ''}
+                onClose={() => setShowAddSongsModal(false)}
+                onAddTracks={libraryOps.handleAddTracksToActivePlaylist}
+              />
 
-            <CustomDialogModal dialog={customDialog} onClose={() => setCustomDialog(null)} />
+              <AddSongsModal
+                isOpen={showAddSongsToUserPlaylistModal}
+                tracks={libraryTracks}
+                playlistName={activeUserPlaylist?.name || ''}
+                onClose={() => setShowAddSongsToUserPlaylistModal(false)}
+                onAddTracks={libraryOps.handleAddSongsToUserPlaylist}
+              />
 
-            <CommandPaletteModal
-              onPlayTrack={handlePlayTrack}
-              onStartRadio={() => handleStartRadio()}
-              onTogglePlay={handlePlayPause}
-              onNext={handleNext}
-              onPrev={handlePrev}
-              onToggleShuffle={toggleShuffle}
-              onToggleRepeat={toggleRepeat}
-              onVolumeUp={handleVolumeUp}
-              onVolumeDown={handleVolumeDown}
-              onToggleMute={toggleMute}
-              onSeekForward={handleSeekForward}
-              onSeekBackward={handleSeekBackward}
-              onReloadLibrary={handleReloadLibrary}
-              onAddLibraryFolder={handleAddLibraryFolder}
-              onNavigateToArtist={navigateToArtist}
-            />
-            <MusicInsightsModal />
-            <BackupModal />
-          </React.Suspense>
+              <EQPanel
+                showEQ={showEQ}
+                setShowEQ={setShowEQ}
+                isEqEnabled={isEqEnabled}
+                setIsEqEnabled={setIsEqEnabled}
+                eqBands={eqBands}
+                setEqBands={setEqBands}
+                filterNodesRef={audioEngine.filterNodesRef}
+                preampGain={preampGain}
+                setPreampGain={setPreampGain}
+              />
+
+              <SpectrogramModal
+                isOpen={showSpectrogramModal}
+                onClose={() => setShowSpectrogramModal(false)}
+                analyserNodeRef={audioEngine.analyserNodeRef}
+                isPlaying={isPlaying}
+                isLite={theming.isLite}
+                currentTrack={currentTrack}
+                audioRef={audioEngine.audioRef}
+              />
+
+              <CustomDialogModal dialog={customDialog} onClose={() => setCustomDialog(null)} />
+
+              <CommandPaletteModal
+                onPlayTrack={audioEngine.handlePlayTrack}
+                onStartRadio={() => audioEngine.handleStartRadio()}
+                onTogglePlay={audioEngine.handlePlayPause}
+                onNext={audioEngine.handleNext}
+                onPrev={audioEngine.handlePrev}
+                onToggleShuffle={audioEngine.toggleShuffle}
+                onToggleRepeat={audioEngine.toggleRepeat}
+                onVolumeUp={audioEngine.handleVolumeUp}
+                onVolumeDown={audioEngine.handleVolumeDown}
+                onToggleMute={audioEngine.toggleMute}
+                onSeekForward={audioEngine.handleSeekForward}
+                onSeekBackward={audioEngine.handleSeekBackward}
+                onReloadLibrary={libraryOps.handleReloadLibrary}
+                onAddLibraryFolder={libraryOps.handleAddLibraryFolder}
+                onNavigateToArtist={navigateToArtist}
+              />
+              <MusicInsightsModal />
+              <BackupModal />
+            </React.Suspense>
           </ErrorBoundary>
+
           <DragDropOverlay isDragging={isDraggingFile} />
 
-          {contextMenu && (
+          {libraryOps.contextMenu && (
             <ContextMenu
-              x={contextMenu.x}
-              y={contextMenu.y}
-              items={contextMenu.items}
-              onClose={() => setContextMenu(null)}
+              x={libraryOps.contextMenu.x}
+              y={libraryOps.contextMenu.y}
+              items={libraryOps.contextMenu.items}
+              onClose={() => libraryOps.setContextMenu(null)}
             />
           )}
 
+          {/* TOP DRAGGABLE TITLE BAR */}
           <div
             className="w-full h-8 flex-shrink-0 z-[100] flex items-center px-3 gap-2"
-            style={{ WebkitAppRegion: 'drag' as any }}
+            style={{ WebkitAppRegion: 'drag' } as any}
           >
             <div className="flex items-center gap-2 text-zinc-400 text-sm font-semibold opacity-70">
               <svg
@@ -6731,9 +1546,8 @@ export default function App() {
             </div>
           </div>
 
+          {/* MAIN SHELL */}
           <div className="flex flex-1 overflow-hidden">
-            {/* SIDEBAR TABS */}
-            {/* SIDEBAR COMPONENT */}
             <Sidebar
               activeView={activeView}
               setActiveView={setActiveView}
@@ -6746,4556 +1560,428 @@ export default function App() {
               setActiveUserPlaylist={setActiveUserPlaylist}
               fetchDashboard={fetchDashboard}
               fetchScDashboard={fetchScDashboard}
-              isCore={isCore}
+              isCore={theming.isCore}
             />
 
-            {/* NỘI DUNG CHÍNH (ĐỔI THEO TAB) */}
-            <main
-              className={`flex-1 flex flex-col bg-transparent overflow-hidden ${isLyricsMaximized && showLyricsPanel ? 'hidden' : ''}`}
-            >
-              <header className="h-20 px-8 flex items-center justify-between border-b border-theme-30/50 flex-shrink-0 w-full">
-                <div className="relative w-96 flex items-center">
-                  <Search
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
-                    size={18}
-                  />
-                  <input
-                    type="text"
-                    value={searchInput}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setSearchInput(val)
-                      if (
-                        activeView !== 'home' &&
-                        activeView !== 'home-ytm' &&
-                        activeView !== 'home-soundcloud'
-                      ) {
-                        setSearchQuery(val)
-                      } else if (val === '') {
-                        setSearchQuery('')
-                        if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard()
-                        if (activeView === 'home-soundcloud') fetchScDashboard()
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && searchInput.trim() !== '') {
-                        if (activeView === 'home' || activeView === 'home-ytm') {
-                          // @ts-ignore
-                          window.api.searchOnline(searchInput).then((res) => {
-                            if (res.success) {
-                              if (res.isUrl) {
-                                // Mở Playlist hoặc Phát bài hát từ Link
-                                if (res.type === 'playlist')
-                                  setActiveAlbum({ title: res.title, tracks: res.tracks })
-                                else if (res.type === 'song') playAndGenerateRadio(res.track)
-                              } else {
-                                // Hiển thị giao diện danh mục như Trang chủ
-                                setDashboardData(res.data)
-                              }
-                            } else {
-                              showAlert({
-                                title: t('common.error'),
-                                message:
-                                  (language === 'vi'
-                                    ? 'Lỗi tìm kiếm YouTube Music: '
-                                    : 'YouTube Music search error: ') + res.error
-                              })
-                            }
-                          })
-                        } else if (activeView === 'home-soundcloud') {
-                          // @ts-ignore
-                          window.api.searchScOnline(searchInput).then((res) => {
-                            if (res.success) {
-                              const sections: any[] = []
-                              if (res.tracks && res.tracks.length > 0) {
-                                sections.push({
-                                  title: `${t('songsView.searchResults')}: "${searchInput}"`,
-                                  contents: res.tracks
-                                })
-                              }
-                              if (res.playlists && res.playlists.length > 0) {
-                                sections.push({
-                                  title:
-                                    language === 'vi'
-                                      ? 'Danh sách phát liên quan'
-                                      : 'Related Playlists',
-                                  contents: res.playlists
-                                })
-                              }
-                              setScDashboardData(sections)
-                            } else {
-                              showAlert({
-                                title: t('common.error'),
-                                message:
-                                  (language === 'vi'
-                                    ? 'Lỗi tìm kiếm SoundCloud: '
-                                    : 'SoundCloud search error: ') + res.error
-                              })
-                            }
-                          })
-                        } else {
-                          setSearchQuery(searchInput)
-                        }
-                      }
-                    }}
-                    placeholder={
-                      activeView === 'home' || activeView === 'home-ytm'
-                        ? t('header.searchYtm')
-                        : activeView === 'home-soundcloud'
-                          ? t('header.searchSc')
-                          : t('header.searchLocal')
-                    }
-                    className="w-full bg-theme-60/50 border border-zinc-700/50 rounded-full py-2 pl-10 pr-9 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors placeholder:text-zinc-500"
-                  />
-                  {searchInput && (
+            <main className="flex-1 flex flex-col min-w-0 bg-transparent relative z-10 overflow-hidden">
+              {/* HEADER SEARCH & NAVIGATION */}
+              <div className="flex items-center justify-between p-4 sm:px-6 lg:px-8 border-b border-theme-30/30 gap-4 flex-wrap">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="flex items-center gap-1 text-zinc-400">
                     <button
-                      type="button"
-                      onClick={() => {
-                        setSearchInput('')
-                        setSearchQuery('')
-                        if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard()
-                        if (activeView === 'home-soundcloud') fetchScDashboard()
-                      }}
-                      className="absolute right-3 text-zinc-400 hover:text-white p-0.5 rounded transition"
+                      onClick={nav.handleNavBack}
+                      className="p-1.5 rounded-full hover:bg-theme-30/50 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      title={language === 'vi' ? 'Quay lại (Chuột 4)' : 'Back (Mouse 4)'}
                     >
-                      <X size={14} />
+                      <ArrowLeft size={18} />
                     </button>
-                  )}
+                    <button
+                      onClick={nav.handleNavForward}
+                      className="p-1.5 rounded-full hover:bg-theme-30/50 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      title={language === 'vi' ? 'Tiến tới (Chuột 5)' : 'Forward (Mouse 5)'}
+                    >
+                      <ArrowLeft size={18} className="rotate-180" />
+                    </button>
+                  </div>
+
+                  <div className="relative flex-1 max-w-md">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <input
+                      type="text"
+                      placeholder={
+                        activeView === 'home' || activeView === 'home-ytm'
+                          ? t('header.searchYtm')
+                          : activeView === 'home-soundcloud'
+                            ? t('header.searchSc')
+                            : t('header.searchLocal')
+                      }
+                      value={searchInput}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setSearchInput(val)
+                        setSearchQuery(val)
+                        if (!val) {
+                          if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard()
+                          if (activeView === 'home-soundcloud') fetchScDashboard()
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          if (activeView === 'home' || activeView === 'home-ytm') {
+                            // @ts-ignore
+                            window.api?.searchOnline?.(searchInput)?.then((res: any) => {
+                              if (res?.success) {
+                                setDashboardData(res.data)
+                              } else {
+                                libraryOps.showAlert({
+                                  title: t('common.error'),
+                                  message: res?.error || 'Lỗi tìm kiếm YouTube Music'
+                                })
+                              }
+                            })
+                          } else if (activeView === 'home-soundcloud') {
+                            // @ts-ignore
+                            window.api?.searchScOnline?.(searchInput)?.then((res: any) => {
+                              if (res?.success) {
+                                const sections = [
+                                  {
+                                    title: `${t('header.searchSc')}: "${searchInput}"`,
+                                    contents: res.tracks
+                                  }
+                                ]
+                                setScDashboardData(sections)
+                              } else {
+                                libraryOps.showAlert({
+                                  title: t('common.error'),
+                                  message: res?.error || 'Lỗi tìm kiếm SoundCloud'
+                                })
+                              }
+                            })
+                          }
+                        }
+                      }}
+                      className="w-full bg-theme-60/80 border border-zinc-700/50 rounded-full py-1.5 pl-9 pr-8 text-sm text-white placeholder-zinc-400 focus:outline-none focus:border-theme-10 transition shadow-inner"
+                    />
+                    {searchInput && (
+                      <button
+                        onClick={() => {
+                          setSearchInput('')
+                          setSearchQuery('')
+                          if (activeView === 'home' || activeView === 'home-ytm') fetchDashboard()
+                          if (activeView === 'home-soundcloud') fetchScDashboard()
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-0.5 rounded transition cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {/* Tùy chọn chuyển đổi kiểu hiển thị (View Mode Switcher) */}
-                  {(activeView === 'songs' ||
-                    activeView === 'playlists' ||
-                    activeView === 'artists' ||
-                    activeView === 'genres' ||
-                    activeView === 'user-playlists') && (
-                    <div className="flex items-center bg-theme-60/50 p-1 rounded-full border border-zinc-700/50">
-                      <button
-                        onClick={() => {
-                          setViewMode('table')
-                          localStorage.setItem('meis_view_mode', 'table')
-                        }}
-                        className={`sys-btn p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'table' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
-                        title={t('viewOptions.table')}
-                      >
-                        <List size={14} />
-                        <span className="btn-text">{t('viewOptions.table')}</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setViewMode('grid')
-                          localStorage.setItem('meis_view_mode', 'grid')
-                        }}
-                        className={`sys-btn p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'grid' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
-                        title={t('viewOptions.grid')}
-                      >
-                        <LayoutGrid size={14} />
-                        <span className="btn-text">{t('viewOptions.grid')}</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setViewMode('compact')
-                          localStorage.setItem('meis_view_mode', 'compact')
-                        }}
-                        className={`sys-btn p-1.5 px-3 rounded-full text-xs font-medium flex items-center gap-1.5 transition ${viewMode === 'compact' ? 'bg-theme-10 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
-                        title={t('viewOptions.compact')}
-                      >
-                        <Rows3 size={14} />
-                        <span className="btn-text">{t('viewOptions.compact')}</span>
-                      </button>
-                    </div>
-                  )}
+                {(activeView === 'songs' ||
+                  activeView === 'playlists' ||
+                  activeView === 'artists' ||
+                  activeView === 'genres' ||
+                  activeView === 'user-playlists') && (
+                  <div className="flex items-center bg-theme-60/50 p-1 rounded-full border border-zinc-700/50">
+                    <button
+                      onClick={() => setViewMode('table')}
+                      className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'table' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      title={t('header.tableView')}
+                    >
+                      <Rows3 size={15} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'grid' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      title={t('header.gridView')}
+                    >
+                      <LayoutGrid size={15} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('compact')}
+                      className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'compact' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      title={t('header.compactView')}
+                    >
+                      <List size={15} />
+                    </button>
+                  </div>
+                )}
+              </div>
 
-                  <button
-                    onClick={() => handleReloadLibrary(false)}
-                    disabled={isReloading}
-                    className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 bg-theme-60/50 border border-zinc-700/50 rounded-full transition-colors shrink-0 cursor-pointer ${isReloading ? 'text-theme-10' : 'text-zinc-400 hover:text-white hover:border-zinc-600'}`}
-                    title={t('header.refreshLibrary')}
-                  >
-                    <RefreshCw size={15} className={isReloading ? 'animate-spin' : ''} />
-                  </button>
-                </div>
-              </header>
-
-              <div className="flex-1 flex overflow-hidden">
-                {/* CỘT TRÁI: DATA VIEW */}
+              {/* CONTENT VIEW ROUTING */}
+              <div className="flex flex-1 overflow-hidden relative">
                 <div
-                  key={`${activeView}-${activeAlbum ? activeAlbum.browseId || activeAlbum.title || 'album' : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.name || ''}-${activeUserPlaylist?.id || ''}`}
-                  className={`${isLite || isCore ? '' : 'animate-fade-in'} flex-1 flex flex-col p-4 sm:p-6 lg:p-8 relative ${activeView === 'settings' || activeView === 'drive' || activeView === 'home' || (activeView === 'playlists' && !activePlaylist) || activeView === 'artists' || (activeView === 'genres' && !activeGenre) || (activeView === 'user-playlists' && !activeUserPlaylist) ? 'overflow-y-auto' : 'overflow-hidden'}`}
+                  key={`${activeView}-${activeAlbum ? (activeAlbum as any).browseId || activeAlbum.title || 'album' : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.id || activePlaylist?.name || ''}-${activeUserPlaylist?.id || activeUserPlaylist?.name || ''}`}
+                  className={`${theming.isLite ? '' : 'animate-fade-in'} flex-1 flex flex-col p-4 sm:p-6 lg:p-8 relative ${
+                    activeView === 'settings' ||
+                    activeView === 'drive' ||
+                    activeView === 'home' ||
+                    (activeView === 'playlists' && !activePlaylist) ||
+                    activeView === 'artists' ||
+                    (activeView === 'genres' && !activeGenre) ||
+                    (activeView === 'user-playlists' && !activeUserPlaylist)
+                      ? 'overflow-y-auto'
+                      : 'overflow-hidden'
+                  }`}
                 >
-                  {/* VIEW: TRANG CHỦ TỔNG QUAN (DASHBOARD) */}
                   {activeView === 'home' && (
-                    <div className="flex flex-col space-y-8 pb-16">
-                      {/* HERO HEADER */}
-                      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-12 h-12 rounded-2xl bg-theme-10/15 border border-theme-10/30 text-theme-10 flex items-center justify-center shadow-lg shadow-theme-10/10 shrink-0">
-                            <Sparkles size={24} className="fill-current" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h2 className="text-2xl lg:text-3xl font-extrabold text-white truncate">
-                              {t('home.dashboardTitle')}
-                            </h2>
-                            <p className="text-xs text-zinc-400 truncate">
-                              {t('home.dashboardSubtitle')}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                          <button
-                            onClick={() => {
-                              if (dashboardRecommendations.length > 0) {
-                                handleRowClick(
-                                  dashboardRecommendations[0],
-                                  dashboardRecommendations
-                                )
-                              } else if (libraryTracks.length > 0) {
-                                handleRowClick(libraryTracks[0], libraryTracks)
-                              }
-                            }}
-                            disabled={libraryTracks.length === 0}
-                            className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10/90 disabled:opacity-50 text-white px-3.5 py-2 sm:px-4 sm:py-2.5 xl:px-5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                            title={t('home.playAllRecommendations')}
-                          >
-                            <Play size={16} className="fill-current shrink-0" />
-                            <span className="btn-text">{t('home.playAllRecommendations')}</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              if (libraryTracks.length > 0) {
-                                const shuffled = fisherYatesShuffle(libraryTracks)
-                                handleRowClick(shuffled[0], shuffled)
-                              }
-                            }}
-                            disabled={libraryTracks.length === 0}
-                            className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                            title={t('home.shuffleAllLibrary')}
-                          >
-                            <Shuffle size={16} className="shrink-0" />
-                            <span className="btn-text">{t('home.shuffleAllLibrary')}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* STATS OVERVIEW CARDS */}
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div
-                          onClick={() => setActiveView('songs')}
-                          className="bg-theme-60/40 hover:bg-theme-30/40 border border-theme-30/60 hover:border-theme-10/40 rounded-2xl p-4 flex items-center gap-4 transition cursor-pointer group shadow-sm"
-                        >
-                          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-theme-10 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-                            <Library size={22} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-2xl font-black text-white group-hover:text-theme-10 transition">
-                              {libraryTracks.length}
-                            </p>
-                            <p className="text-xs text-zinc-400 truncate">{t('home.statsSongs')}</p>
-                          </div>
-                        </div>
-
-                        <div
-                          onClick={() => setActiveView('playlists')}
-                          className="bg-theme-60/40 hover:bg-theme-30/40 border border-theme-30/60 hover:border-theme-10/40 rounded-2xl p-4 flex items-center gap-4 transition cursor-pointer group shadow-sm"
-                        >
-                          <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-                            <Disc size={22} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-2xl font-black text-white group-hover:text-blue-400 transition">
-                              {playlists.length + userPlaylists.length}
-                            </p>
-                            <p className="text-xs text-zinc-400 truncate">
-                              {t('home.statsPlaylists')}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div
-                          onClick={() => setActiveView('artists')}
-                          className="bg-theme-60/40 hover:bg-theme-30/40 border border-theme-30/60 hover:border-theme-10/40 rounded-2xl p-4 flex items-center gap-4 transition cursor-pointer group shadow-sm"
-                        >
-                          <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-                            <Mic2 size={22} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-2xl font-black text-white group-hover:text-purple-400 transition">
-                              {uniqueArtistsCount}
-                            </p>
-                            <p className="text-xs text-zinc-400 truncate">
-                              {t('home.statsArtists')}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="bg-theme-60/40 border border-theme-30/60 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
-                          <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
-                            <History size={22} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-2xl font-black text-white">
-                              {recentlyPlayed.length}
-                            </p>
-                            <p className="text-xs text-zinc-400 truncate">
-                              {t('home.statsRecent')}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* KHỐI 1: GỢI Ý BÀI HÁT TỪ THƯ MỤC NHẠC (DỰA TRÊN LỊCH SỬ NGHE VÀ THƯ VIỆN) */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2 truncate">
-                              <Sparkles size={18} className="text-theme-10 shrink-0" />
-                              <span className="truncate">{t('home.forYouTitle')}</span>
-                            </h3>
-                            <p className="text-xs text-zinc-400 mt-0.5 truncate">
-                              {t('home.forYouSubtitle')}
-                            </p>
-                          </div>
-                          {dashboardRecommendations.length > 0 && (
-                            <button
-                              onClick={() =>
-                                handleRowClick(
-                                  dashboardRecommendations[0],
-                                  dashboardRecommendations
-                                )
-                              }
-                              className="text-xs font-medium text-theme-10 hover:underline flex items-center gap-1 transition shrink-0 cursor-pointer"
-                            >
-                              <Play size={12} className="fill-current" />{' '}
-                              {t('userPlaylistsView.playAll')}
-                            </button>
-                          )}
-                        </div>
-
-                        {dashboardRecommendations.length > 0 ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                            {dashboardRecommendations.map((track, idx) => {
-                              const isCurrent =
-                                currentTrack?.id === track.id ||
-                                currentTrack?.filePath === track.filePath
-                              return (
-                                <div
-                                  key={track.id || track.filePath || idx}
-                                  onClick={() => handleRowClick(track, dashboardRecommendations)}
-                                  onContextMenu={(e) => handleTrackContextMenu(track, e)}
-                                  className={`flex items-center gap-3.5 p-2.5 rounded-2xl border transition group cursor-pointer ${
-                                    isCurrent
-                                      ? 'bg-theme-10/15 border-theme-10/40 text-theme-10'
-                                      : 'bg-theme-60/40 hover:bg-theme-30/50 border-theme-30/40 hover:border-theme-30 text-white'
-                                  }`}
-                                >
-                                  <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden relative shrink-0 shadow-md">
-                                    <DynamicCoverArt
-                                      track={track}
-                                      tier="sm"
-                                      isLite={isLite}
-                                      fallbackIcon={<Music size={18} className="text-zinc-600" />}
-                                      className="w-full h-full group-hover:scale-105 transition duration-300"
-                                    />
-                                    <div
-                                      className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                                    >
-                                      {isCurrent && isPlaying ? (
-                                        <span className="w-3.5 h-3.5 rounded-full bg-theme-10 animate-pulse"></span>
-                                      ) : (
-                                        <Play
-                                          size={16}
-                                          className="text-white fill-current ml-0.5"
-                                        />
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex-1 min-w-0">
-                                    <p
-                                      className={`text-sm font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}
-                                    >
-                                      {track.title || t('common.unknown')}
-                                    </p>
-                                    <ArtistLinks
-                                      artists={track.artists}
-                                      fallbackArtist={track.artist || t('player.unknownArtist')}
-                                      onArtistClick={navigateToArtist}
-                                      className="text-xs text-zinc-400 block truncate mt-0.5"
-                                    />
-                                  </div>
-
-                                  <span className="text-[11px] text-zinc-500 shrink-0 pr-2">
-                                    {formatDuration(track.duration)}
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        ) : (
-                          <div className="bg-theme-60/30 border border-theme-30/40 rounded-2xl p-8 text-center flex flex-col items-center justify-center">
-                            <Music size={40} className="text-zinc-600 mb-3" />
-                            <p className="text-sm font-medium text-zinc-300">
-                              {t('home.noRecentTitle')}
-                            </p>
-                            <p className="text-xs text-zinc-500 max-w-md mt-1">
-                              {t('home.noRecentDesc')}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* KHỐI 2: ĐÃ NGHE GẦN ĐÂY (RECENTLY PLAYED) */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2 truncate">
-                              <History size={18} className="text-amber-400 shrink-0" />
-                              <span className="truncate">{t('home.recentlyPlayedTitle')}</span>
-                            </h3>
-                            <p className="text-xs text-zinc-400 mt-0.5 truncate">
-                              {t('home.recentlyPlayedSubtitle')}
-                            </p>
-                          </div>
-                        </div>
-
-                        {recentlyPlayed.length > 0 ? (
-                          <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide snap-x">
-                            {recentlyPlayed.slice(0, 15).map((track, idx) => {
-                              const isCurrent =
-                                currentTrack?.id === track.id ||
-                                currentTrack?.filePath === track.filePath
-                              return (
-                                <div
-                                  key={idx}
-                                  onClick={() => handleRowClick(track, recentlyPlayed)}
-                                  onContextMenu={(e) => handleTrackContextMenu(track, e)}
-                                  className="min-w-[140px] max-w-[140px] snap-start group cursor-pointer"
-                                >
-                                  <div className="w-full aspect-square rounded-2xl bg-theme-30 mb-2.5 overflow-hidden relative shadow-lg border border-theme-30/40">
-                                    <DynamicCoverArt
-                                      track={track}
-                                      tier="md"
-                                      isLite={isLite}
-                                      smartAspect={true}
-                                      fallbackIcon={<Music size={28} className="text-zinc-600" />}
-                                      className="w-full h-full group-hover:scale-105 transition duration-300"
-                                    />
-                                    <div
-                                      className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                                    >
-                                      {isCurrent && isPlaying ? (
-                                        <span className="w-5 h-5 rounded-full bg-theme-10 animate-pulse"></span>
-                                      ) : (
-                                        <div className="w-9 h-9 rounded-full bg-theme-10 flex items-center justify-center shadow-lg text-white">
-                                          <Play size={16} className="fill-current ml-0.5" />
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <p
-                                    className={`text-xs font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}
-                                  >
-                                    {track.title}
-                                  </p>
-                                  <ArtistLinks
-                                    artists={track.artists}
-                                    fallbackArtist={track.artist}
-                                    onArtistClick={navigateToArtist}
-                                    className="text-[11px] text-zinc-500 block truncate mt-0.5"
-                                  />
-                                </div>
-                              )
-                            })}
-                          </div>
-                        ) : (
-                          <div className="bg-theme-60/20 border border-theme-30/30 rounded-2xl p-6 text-center text-zinc-500 text-xs">
-                            {t('home.noRecentDesc')}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* KHỐI 3: KHÁM PHÁ TỪ THƯ MỤC NHẠC */}
-                      {randomDiscoverTracks.length > 0 && (
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between gap-3 flex-wrap">
-                            <div className="min-w-0 flex-1">
-                              <h3 className="text-xl font-bold text-white flex items-center gap-2 truncate">
-                                <Compass size={18} className="text-blue-400 shrink-0" />
-                                <span className="truncate">{t('home.discoverFolderTitle')}</span>
-                              </h3>
-                              <p className="text-xs text-zinc-400 mt-0.5 truncate">
-                                {t('home.discoverFolderSubtitle')}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                            {randomDiscoverTracks.map((track, idx) => {
-                              const isCurrent =
-                                currentTrack?.id === track.id ||
-                                currentTrack?.filePath === track.filePath
-                              return (
-                                <div
-                                  key={track.id || track.filePath || idx}
-                                  onClick={() => handleRowClick(track, randomDiscoverTracks)}
-                                  onContextMenu={(e) => handleTrackContextMenu(track, e)}
-                                  className={`flex items-center gap-3.5 p-2.5 rounded-2xl border transition group cursor-pointer ${
-                                    isCurrent
-                                      ? 'bg-theme-10/15 border-theme-10/40 text-theme-10'
-                                      : 'bg-theme-60/40 hover:bg-theme-30/50 border-theme-30/40 hover:border-theme-30 text-white'
-                                  }`}
-                                >
-                                  <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden relative shrink-0 shadow-md">
-                                    <DynamicCoverArt
-                                      track={track}
-                                      tier="sm"
-                                      isLite={isLite}
-                                      fallbackIcon={<Music size={18} className="text-zinc-600" />}
-                                      className="w-full h-full group-hover:scale-105 transition duration-300"
-                                    />
-                                    <div
-                                      className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity ${isCurrent && isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                                    >
-                                      {isCurrent && isPlaying ? (
-                                        <span className="w-3.5 h-3.5 rounded-full bg-theme-10 animate-pulse"></span>
-                                      ) : (
-                                        <Play
-                                          size={16}
-                                          className="text-white fill-current ml-0.5"
-                                        />
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex-1 min-w-0">
-                                    <p
-                                      className={`text-sm font-semibold truncate ${isCurrent ? 'text-theme-10' : 'text-zinc-100 group-hover:text-white'}`}
-                                    >
-                                      {track.title || t('common.unknown')}
-                                    </p>
-                                    <ArtistLinks
-                                      artists={track.artists}
-                                      fallbackArtist={track.artist || t('player.unknownArtist')}
-                                      onArtistClick={navigateToArtist}
-                                      className="text-xs text-zinc-400 block truncate mt-0.5"
-                                    />
-                                  </div>
-
-                                  <span className="text-[11px] text-zinc-500 shrink-0 pr-2">
-                                    {formatDuration(track.duration)}
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <HomeView
+                      handleRowClick={audioEngine.handleRowClick}
+                      handleTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      navigateToArtist={navigateToArtist}
+                      uniqueArtistsCount={uniqueArtistsCount}
+                      formatDuration={formatDuration}
+                    />
                   )}
 
-                  {/* VIEW: TRANG CHỦ YOUTUBE MUSIC */}
                   {activeView === 'home-ytm' && (
-                    <div className="flex flex-col h-full">
-                      {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST --- */}
-                      {activeAlbum ? (
-                        <div className="flex flex-col h-full animate-fade-in space-y-6">
-                          <div>
-                            <button
-                              onClick={() => setActiveAlbum(null)}
-                              className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
-                            >
-                              <ArrowLeft size={16} /> {t('home.backToDashboard')}
-                            </button>
-                            <div className="flex items-end justify-between gap-6 mb-6">
-                              <div className="flex items-end gap-6 min-w-0">
-                                {activeAlbum.thumbnail && (
-                                  <div className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl flex-shrink-0">
-                                    <DynamicCoverArt
-                                      src={activeAlbum.thumbnail}
-                                      tier="lg"
-                                      isLite={isLite}
-                                      fallbackIcon={<Disc size={48} className="text-zinc-600" />}
-                                      className="w-full h-full"
-                                    />
-                                  </div>
-                                )}
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-2">
-                                    {t('home.ytmPlaylist')}
-                                  </p>
-                                  <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-3 truncate">
-                                    {activeAlbum.title}
-                                  </h2>
-                                  <p className="text-sm text-zinc-400 mb-4">
-                                    {activeAlbum.tracks?.length || 0} {t('common.songs')}
-                                  </p>
-                                  {activeAlbum.tracks && activeAlbum.tracks.length > 0 && (
-                                    <div className="flex items-center gap-3">
-                                      <button
-                                        onClick={() =>
-                                          handleRowClick(activeAlbum.tracks[0], activeAlbum.tracks)
-                                        }
-                                        className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-red-600/20 cursor-pointer"
-                                      >
-                                        <Play size={16} className="fill-current" />{' '}
-                                        {t('userPlaylistsView.playAll')}
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          const shuffled = fisherYatesShuffle(activeAlbum.tracks)
-                                          handleRowClick(shuffled[0], shuffled)
-                                        }}
-                                        className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                      >
-                                        <Shuffle size={16} /> {t('artistsView.shuffle')}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {isAlbumLoading ? (
-                            <div className="flex-1 flex flex-col items-center justify-center">
-                              <Activity size={40} className="text-red-500 mb-4 animate-bounce" />
-                              <p className="text-red-400 animate-pulse font-medium">
-                                {t('home.extractingYtm')}
-                              </p>
-                            </div>
-                          ) : (
-                            renderTrackTable(activeAlbum.tracks)
-                          )}
-                        </div>
-                      ) : (
-                        /* --- NẾU LÀ MÀN HÌNH DASHBOARD GỐC --- */
-                        <>
-                          <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-3">
-                              {(searchInput.trim() || searchQuery.trim()) && (
-                                <button
-                                  onClick={() => {
-                                    setSearchInput('')
-                                    setSearchQuery('')
-                                    fetchDashboard()
-                                  }}
-                                  title={t('home.backToDashboard')}
-                                  className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition cursor-pointer shrink-0"
-                                >
-                                  <ArrowLeft size={18} />
-                                </button>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setSearchInput('')
-                                  setSearchQuery('')
-                                  fetchDashboard()
-                                }}
-                                title={t('home.refreshYtm')}
-                                className="focus:outline-none flex items-center justify-center cursor-pointer hover:scale-110 transition-all w-10 h-10 rounded-xl bg-red-600/10 border border-red-500/20 text-red-500"
-                              >
-                                <Play size={20} className="fill-current" />
-                              </button>
-                              <div>
-                                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                                  {t('home.ytmTitle')}
-                                </h2>
-                                <p className="text-xs text-zinc-400">{t('home.ytmSubtitle')}</p>
-                              </div>
-                            </div>
-
-                            {/* NÚT ĐĂNG NHẬP / ĐĂNG XUẤT YOUTUBE */}
-                            <div className="flex items-center gap-3">
-                              {isYtmLoggedIn ? (
-                                <div className="flex items-center gap-3 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                    <span className="text-xs text-zinc-300 font-medium">
-                                      {t('home.ytmSynced')}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={handleYtmLogout}
-                                    className="text-xs text-red-400 hover:text-red-300 hover:underline transition font-medium border-l border-zinc-700 pl-3"
-                                    title={t('home.ytmLogout')}
-                                  >
-                                    {t('home.ytmLogout')}
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={handleYtmLogin}
-                                  className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-red-600/20"
-                                >
-                                  <Cloud size={18} /> {t('home.ytmLogin')}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
-                            {/* THÔNG BÁO KHI CHƯA ĐĂNG NHẬP (TRỐNG DỮ LIỆU) */}
-                            {dashboardData.length === 0 ? (
-                              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
-                                <ListMusic size={56} className="mb-4 opacity-20" />
-                                <p className="text-lg">{t('home.noRecommendationsTitle')}</p>
-                                <p className="text-sm mt-1">{t('home.noRecommendationsDesc')}</p>
-                              </div>
-                            ) : (
-                              dashboardData.map((section, index) => {
-                                const isListSection = section.contents.some(
-                                  (t: any) => t.style === 'LIST'
-                                )
-
-                                return (
-                                  <div key={index}>
-                                    <h3 className="text-xl font-bold text-white mb-4">
-                                      {section.title}
-                                    </h3>
-
-                                    <div
-                                      className={`overflow-x-auto pb-4 scrollbar-hide snap-x ${isListSection ? 'grid grid-rows-4 grid-flow-col gap-x-6 gap-y-3' : 'flex gap-4'}`}
-                                    >
-                                      {section.contents.map((item: any, i: number) => {
-                                        if (item.style === 'LIST') {
-                                          return (
-                                            <div
-                                              key={i}
-                                              className="flex items-center gap-3 w-96 snap-start group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition"
-                                              onClick={() => handleDashboardItemClick(item)}
-                                            >
-                                              <div className="w-12 h-12 bg-theme-30 rounded flex-shrink-0 relative overflow-hidden shadow-md">
-                                                {item.thumbnails && item.thumbnails.length > 0 ? (
-                                                  <img
-                                                    loading="lazy"
-                                                    src={
-                                                      item.thumbnails[item.thumbnails.length - 1]
-                                                        .url
-                                                    }
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                                                  />
-                                                ) : (
-                                                  <ListMusic
-                                                    size={16}
-                                                    className="m-auto mt-4 text-zinc-600"
-                                                  />
-                                                )}
-                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                  <Play
-                                                    size={18}
-                                                    className="text-white fill-current ml-0.5"
-                                                  />
-                                                </div>
-                                              </div>
-                                              <div className="flex-1 truncate">
-                                                <p className="font-semibold text-sm text-white truncate group-hover:text-red-400 transition">
-                                                  {item.title}
-                                                </p>
-                                                <p className="text-xs text-zinc-500 truncate mt-0.5">
-                                                  {item.subtitle}
-                                                </p>
-                                              </div>
-                                              {!item.isArtist && (
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    handleDashboardItemDownload(item)
-                                                  }}
-                                                  className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-400/10 rounded-full transition"
-                                                  title={t('home.downloadToLib')}
-                                                >
-                                                  <Download size={14} />
-                                                </button>
-                                              )}
-                                            </div>
-                                          )
-                                        }
-
-                                        return (
-                                          <div
-                                            key={i}
-                                            className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer"
-                                            onClick={() => handleDashboardItemClick(item)}
-                                          >
-                                            <div className="w-40 h-40 bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-lg">
-                                              {item.thumbnails && item.thumbnails.length > 0 ? (
-                                                <img
-                                                  loading="lazy"
-                                                  src={
-                                                    item.thumbnails[item.thumbnails.length - 1].url
-                                                  }
-                                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                                                />
-                                              ) : (
-                                                <ListMusic
-                                                  size={40}
-                                                  className="m-auto mt-16 text-zinc-600"
-                                                />
-                                              )}
-                                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    handleDashboardItemClick(item)
-                                                  }}
-                                                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs text-white font-medium flex items-center gap-1 transition"
-                                                >
-                                                  <Play size={14} /> {t('home.playNow')}
-                                                </button>
-                                                {!item.isArtist && (
-                                                  <button
-                                                    onClick={(e) => {
-                                                      e.stopPropagation()
-                                                      handleDashboardItemDownload(item)
-                                                    }}
-                                                    className="w-10 h-10 flex items-center justify-center bg-theme-30/90 text-white rounded-full hover:bg-red-600 hover:scale-110 transition shadow-2xl"
-                                                    title={t('home.downloadToLib')}
-                                                  >
-                                                    <Download size={18} />
-                                                  </button>
-                                                )}
-                                              </div>
-                                            </div>
-                                            <p className="font-semibold text-sm text-white truncate">
-                                              {item.title}
-                                            </p>
-                                            <p className="text-xs text-zinc-500 truncate mt-1">
-                                              {item.subtitle}
-                                            </p>
-                                          </div>
-                                        )
-                                      })}
-                                    </div>
-                                  </div>
-                                )
-                              })
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    <YtmHomeView
+                      activeAlbum={activeAlbum}
+                      setActiveAlbum={setActiveAlbum}
+                      handleRowClick={audioEngine.handleRowClick}
+                      isAlbumLoading={isAlbumLoading}
+                      searchInput={searchInput}
+                      setSearchInput={setSearchInput}
+                      searchQuery={searchQuery}
+                      setSearchQuery={setSearchQuery}
+                      fetchDashboard={fetchDashboard}
+                      isYtmLoggedIn={isYtmLoggedIn}
+                      handleYtmLogin={handleYtmLogin}
+                      handleYtmLogout={handleYtmLogout}
+                      dashboardData={dashboardData}
+                      handleDashboardItemClick={handleDashboardItemClick}
+                      handleDashboardItemDownload={handleDashboardItemDownload}
+                      handleTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      openTagEditor={libraryOps.openTagEditor}
+                      openTrackInfo={libraryOps.openTrackInfo}
+                      navigateToArtist={navigateToArtist}
+                    />
                   )}
 
-                  {/* VIEW: TRANG CHỦ SOUNDCLOUD */}
                   {activeView === 'home-soundcloud' && (
-                    <div className="flex flex-col h-full">
-                      {/* --- NẾU ĐANG XEM CHI TIẾT ALBUM/PLAYLIST SOUNDCLOUD --- */}
-                      {activeAlbum ? (
-                        <div className="flex flex-col h-full animate-fade-in space-y-6">
-                          <div>
-                            <button
-                              onClick={() => setActiveAlbum(null)}
-                              className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
-                            >
-                              <ArrowLeft size={16} /> {t('home.backToDashboard')}
-                            </button>
-                            <div className="flex items-end justify-between gap-6 mb-6">
-                              <div className="flex items-end gap-6 min-w-0">
-                                {activeAlbum.thumbnail && (
-                                  <div className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl flex-shrink-0">
-                                    <DynamicCoverArt
-                                      src={activeAlbum.thumbnail}
-                                      tier="lg"
-                                      isLite={isLite}
-                                      fallbackIcon={
-                                        <Disc size={48} className="text-amber-500/50" />
-                                      }
-                                      className="w-full h-full"
-                                    />
-                                  </div>
-                                )}
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">
-                                    {t('home.scPlaylist')}
-                                  </p>
-                                  <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-3 truncate">
-                                    {activeAlbum.title}
-                                  </h2>
-                                  <p className="text-sm text-zinc-400 mb-4">
-                                    {activeAlbum.tracks?.length || 0} {t('common.songs')}
-                                  </p>
-                                  {activeAlbum.tracks && activeAlbum.tracks.length > 0 && (
-                                    <div className="flex items-center gap-3">
-                                      <button
-                                        onClick={() =>
-                                          handleRowClick(activeAlbum.tracks[0], activeAlbum.tracks)
-                                        }
-                                        className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-amber-500/20 cursor-pointer"
-                                      >
-                                        <Play size={16} className="fill-current" />{' '}
-                                        {t('userPlaylistsView.playAll')}
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          const shuffled = fisherYatesShuffle(activeAlbum.tracks)
-                                          handleRowClick(shuffled[0], shuffled)
-                                        }}
-                                        className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                      >
-                                        <Shuffle size={16} /> {t('artistsView.shuffle')}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {isAlbumLoading ? (
-                            <div className="flex-1 flex flex-col items-center justify-center">
-                              <Activity size={40} className="text-amber-500 mb-4 animate-bounce" />
-                              <p className="text-amber-400 animate-pulse font-medium">
-                                {t('home.extractingSc')}
-                              </p>
-                            </div>
-                          ) : (
-                            renderTrackTable(activeAlbum.tracks)
-                          )}
-                        </div>
-                      ) : (
-                        /* --- NẾU LÀ MÀN HÌNH SOUNDCLOUD DASHBOARD --- */
-                        <>
-                          <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                              {(searchInput.trim() || searchQuery.trim()) && (
-                                <button
-                                  onClick={() => {
-                                    setSearchInput('')
-                                    setSearchQuery('')
-                                    fetchScDashboard()
-                                  }}
-                                  title={t('home.backToDashboard')}
-                                  className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-full transition cursor-pointer shrink-0"
-                                >
-                                  <ArrowLeft size={18} />
-                                </button>
-                              )}
-                              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center">
-                                <Cloud size={22} className="fill-current" />
-                              </div>
-                              <div>
-                                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                                  {t('home.scTitle')}
-                                </h2>
-                                <p className="text-xs text-zinc-400">{t('home.scSubtitle')}</p>
-                              </div>
-                            </div>
-
-                            {/* THANH THÔNG TIN TÀI KHOẢN & ĐĂNG NHẬP / ĐỔI TÀI KHOẢN SOUNDCLOUD */}
-                            <div className="flex items-center gap-3">
-                              {scUser ? (
-                                <div className="flex items-center gap-3 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3 py-1.5">
-                                  {scUser.avatarUrl ? (
-                                    <img
-                                      src={scUser.avatarUrl}
-                                      alt={scUser.username}
-                                      className="w-7 h-7 rounded-full object-cover border border-amber-500/50"
-                                    />
-                                  ) : (
-                                    <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold">
-                                      {scUser.username?.charAt(0).toUpperCase()}
-                                    </div>
-                                  )}
-                                  <div className="flex flex-col">
-                                    <span className="text-xs font-semibold text-white">
-                                      {scUser.username}
-                                    </span>
-                                    <span className="text-[10px] text-amber-400">
-                                      {t('home.scMember')}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={handleScLogout}
-                                    className="text-xs text-amber-400 hover:text-amber-300 hover:underline transition font-medium border-l border-zinc-700 pl-3 ml-1"
-                                    title={t('home.scLogout')}
-                                  >
-                                    {t('home.scLogout')}
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={handleScLogin}
-                                  className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white px-4 py-2 rounded-xl text-xs font-semibold transition shadow-lg shadow-orange-600/20"
-                                >
-                                  <Cloud size={16} /> {t('home.scLogin')}
-                                </button>
-                              )}
-
-                              <button
-                                onClick={() => fetchScDashboard()}
-                                disabled={isScLoading}
-                                className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
-                                title={t('home.refreshSc')}
-                              >
-                                <RefreshCw
-                                  size={16}
-                                  className={isScLoading ? 'animate-spin text-amber-400' : ''}
-                                />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* THANH CHỌN THỂ LOẠI (GENRE FILTER PILLS) */}
-                          <div className="flex items-center gap-2 overflow-x-auto pb-3 scrollbar-hide mb-4 shrink-0">
-                            {SC_GENRES.map((g) => {
-                              const isSelected = selectedScGenre === g.id
-                              return (
-                                <button
-                                  key={g.id}
-                                  onClick={() => {
-                                    setSelectedScGenre(g.id)
-                                    fetchScDashboard(g.id)
-                                  }}
-                                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
-                                    isSelected
-                                      ? 'bg-amber-500 text-black font-semibold shadow-md shadow-amber-500/20'
-                                      : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700'
-                                  }`}
-                                >
-                                  {t(`home.genres.${g.key}` as any)}
-                                </button>
-                              )
-                            })}
-                          </div>
-
-                          {/* NỘI DUNG SOUNDCLOUD SECTIONS */}
-                          <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
-                            {isScLoading && scDashboardData.length === 0 ? (
-                              <div className="flex-1 flex flex-col items-center justify-center mt-20 text-zinc-500">
-                                <Activity
-                                  size={40}
-                                  className="text-amber-500 animate-bounce mb-3"
-                                />
-                                <p className="text-sm font-medium text-amber-400 animate-pulse">
-                                  {t('home.loadingSc')}
-                                </p>
-                              </div>
-                            ) : scDashboardData.length === 0 ? (
-                              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
-                                <Cloud size={56} className="mb-4 opacity-20 text-amber-500" />
-                                <p className="text-lg">{t('home.noScTracksTitle')}</p>
-                                <p className="text-sm mt-1">{t('home.noScTracksDesc')}</p>
-                              </div>
-                            ) : (
-                              scDashboardData.map((section, index) => {
-                                const isListSection = section.contents.some(
-                                  (t: any) => t.style === 'LIST' || t.format === 'STREAM'
-                                )
-
-                                return (
-                                  <div key={index}>
-                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                      <span>{section.title}</span>
-                                    </h3>
-
-                                    <div
-                                      className={`overflow-x-auto pb-4 scrollbar-hide snap-x ${isListSection ? 'grid grid-rows-4 grid-flow-col gap-x-6 gap-y-3' : 'flex gap-4'}`}
-                                    >
-                                      {section.contents.map((item: any, i: number) => {
-                                        if (item.style === 'LIST' || item.format === 'STREAM') {
-                                          return (
-                                            <div
-                                              key={i}
-                                              className="flex items-center gap-3 w-96 snap-start group cursor-pointer hover:bg-white/5 p-2 rounded-lg transition"
-                                              onClick={() => handleScItemClick(item)}
-                                              onContextMenu={(e) => {
-                                                e.preventDefault()
-                                                setContextMenu({
-                                                  x: e.clientX,
-                                                  y: e.clientY,
-                                                  items: [
-                                                    {
-                                                      id: 'sc-play',
-                                                      label: t('contextMenu.play'),
-                                                      onClick: () => handleScItemClick(item)
-                                                    },
-                                                    {
-                                                      id: 'sc-queue',
-                                                      label: t('contextMenu.addQueue'),
-                                                      onClick: () =>
-                                                        setPlayQueue((prev) => [...prev, item])
-                                                    },
-                                                    {
-                                                      id: 'sc-dl',
-                                                      label: t('contextMenu.downloadToLib'),
-                                                      onClick: () =>
-                                                        handleDashboardItemDownload(item)
-                                                    }
-                                                  ]
-                                                })
-                                              }}
-                                            >
-                                              <div className="w-12 h-12 bg-theme-30 rounded-lg flex-shrink-0 relative overflow-hidden shadow-md">
-                                                {item.coverArt ||
-                                                (item.thumbnails && item.thumbnails.length > 0) ? (
-                                                  <img
-                                                    loading="lazy"
-                                                    src={item.coverArt || item.thumbnails[0].url}
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                                                  />
-                                                ) : (
-                                                  <Cloud
-                                                    size={20}
-                                                    className="m-auto mt-3 text-amber-500/50"
-                                                  />
-                                                )}
-                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                  <Play
-                                                    size={18}
-                                                    className="text-amber-400 fill-current ml-0.5"
-                                                  />
-                                                </div>
-                                              </div>
-                                              <div className="flex-1 truncate">
-                                                <p className="font-semibold text-sm text-white truncate group-hover:text-amber-400 transition">
-                                                  {item.title}
-                                                </p>
-                                                <p className="text-xs text-zinc-500 truncate mt-0.5">
-                                                  {item.artist || item.subtitle}
-                                                </p>
-                                              </div>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  handleDashboardItemDownload(item)
-                                                }}
-                                                className="w-8 h-8 flex items-center justify-center text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-amber-400 hover:bg-amber-400/10 rounded-full transition"
-                                                title={t('home.downloadToLib')}
-                                              >
-                                                <Download size={14} />
-                                              </button>
-                                            </div>
-                                          )
-                                        }
-
-                                        return (
-                                          <div
-                                            key={i}
-                                            className="min-w-[160px] max-w-[160px] snap-start group cursor-pointer"
-                                            onClick={() => handleScItemClick(item)}
-                                          >
-                                            <div className="w-40 h-40 bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-lg">
-                                              {item.coverArt ||
-                                              (item.thumbnails && item.thumbnails.length > 0) ? (
-                                                <img
-                                                  loading="lazy"
-                                                  src={item.coverArt || item.thumbnails[0].url}
-                                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                                                />
-                                              ) : (
-                                                <Cloud
-                                                  size={40}
-                                                  className="m-auto mt-16 text-amber-500/40"
-                                                />
-                                              )}
-                                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    handleScItemClick(item)
-                                                  }}
-                                                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 rounded-lg text-xs text-black font-semibold flex items-center gap-1 transition"
-                                                >
-                                                  <Play size={14} /> {t('home.playNow')}
-                                                </button>
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    handleDashboardItemDownload(item)
-                                                  }}
-                                                  className="w-10 h-10 flex items-center justify-center bg-theme-30/90 text-white rounded-full hover:bg-amber-500 hover:text-black hover:scale-110 transition shadow-2xl"
-                                                  title={t('home.downloadToLib')}
-                                                >
-                                                  <Download size={18} />
-                                                </button>
-                                              </div>
-                                            </div>
-                                            <p className="font-semibold text-sm text-white truncate">
-                                              {item.title}
-                                            </p>
-                                            <p className="text-xs text-zinc-500 truncate mt-1">
-                                              {item.subtitle || item.artist}
-                                            </p>
-                                          </div>
-                                        )
-                                      })}
-                                    </div>
-                                  </div>
-                                )
-                              })
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    <SoundCloudView
+                      activeAlbum={activeAlbum}
+                      setActiveAlbum={setActiveAlbum}
+                      handleRowClick={audioEngine.handleRowClick}
+                      isAlbumLoading={isAlbumLoading}
+                      searchInput={searchInput}
+                      setSearchInput={setSearchInput}
+                      searchQuery={searchQuery}
+                      setSearchQuery={setSearchQuery}
+                      fetchScDashboard={fetchScDashboard}
+                      isScLoading={isScLoading}
+                      scUser={scUser}
+                      handleScLogin={handleScLogin}
+                      handleScLogout={handleScLogout}
+                      selectedScGenre={selectedScGenre}
+                      setSelectedScGenre={setSelectedScGenre}
+                      scDashboardData={scDashboardData}
+                      handleScItemClick={handleScItemClick}
+                      handleDashboardItemDownload={handleDashboardItemDownload}
+                      setContextMenu={libraryOps.setContextMenu}
+                      setPlayQueue={setPlayQueue}
+                      handleTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      openTagEditor={libraryOps.openTagEditor}
+                      openTrackInfo={libraryOps.openTrackInfo}
+                      navigateToArtist={navigateToArtist}
+                    />
                   )}
 
-                  {/* VIEW: BÀI HÁT */}
                   {activeView === 'songs' && (
-                    <>
-                      <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3 flex-wrap">
-                        <div className="flex items-end gap-3 min-w-0 flex-1">
-                          <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">
-                            {searchQuery ? t('songsView.searchResults') : t('songsView.songList')}
-                          </h2>
-                          <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
-                            {processedLibraryTracks.length} {t('common.songs')}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                          <button
-                            onClick={() => {
-                              if (processedLibraryTracks.length > 0) {
-                                setIsShuffle(true)
-                                const shuffled = fisherYatesShuffle(processedLibraryTracks)
-                                handleRowClick(shuffled[0], shuffled)
-                              }
-                            }}
-                            disabled={processedLibraryTracks.length === 0}
-                            className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-white px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer"
-                            title={t('songsView.randomPlay')}
-                          >
-                            <Shuffle size={15} />{' '}
-                            <span className="btn-text">{t('songsView.randomPlay')}</span>
-                          </button>
-                          <button
-                            onClick={handleImportFiles}
-                            className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-10 hover:bg-theme-10 text-white px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                            title={t('songsView.addMusic')}
-                          >
-                            <Plus size={16} />{' '}
-                            <span className="btn-text">{t('songsView.addMusic')}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Quick Filter Chips (All, Favorites, Lossless, Hi-Res, DSD, CUE) */}
-                      <div className="mb-4">
-                        <QuickFilterChips
-                          onOpenDuplicateFinder={() => setShowDuplicateFinder(true)}
-                          onOpenSmartPlaylists={() => setShowSmartPlaylists(true)}
-                        />
-                      </div>
-
-                      {libraryPath ? (
-                        processedLibraryTracks.length > 0 ? (
-                          renderTrackTable(processedLibraryTracks)
-                        ) : (
-                          <p className="text-zinc-500 mt-10 text-center">
-                            {t('songsView.noSongsMatched', { query: searchQuery })}
-                          </p>
-                        )
-                      ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
-                          <HardDrive size={56} className="mb-4 opacity-20" />
-                          <p className="text-lg">{t('songsView.libraryNotConfigured')}</p>
-                          <p className="text-sm mt-1">{t('songsView.libraryNotConfiguredDesc')}</p>
-                        </div>
-                      )}
-                    </>
+                    <SongsView
+                      searchQuery={searchQuery}
+                      libraryPath={libraryPath}
+                      processedLibraryTracks={processedLibraryTracks}
+                      handleRowClick={audioEngine.handleRowClick}
+                      handleImportFiles={libraryOps.handleImportFiles}
+                      setShowDuplicateFinder={setShowDuplicateFinder}
+                      setShowSmartPlaylists={setShowSmartPlaylists}
+                      setIsShuffle={setIsShuffle}
+                      handleTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      openTagEditor={libraryOps.openTagEditor}
+                      openTrackInfo={libraryOps.openTrackInfo}
+                      navigateToArtist={navigateToArtist}
+                    />
                   )}
 
-                  {/* VIEW: GOOGLE DRIVE */}
+                  {activeView === 'artists' && (
+                    <ArtistsView
+                      searchQuery={searchQuery}
+                      deferredSearchQuery={deferredSearchQuery}
+                      artistsData={artistsData}
+                      activeArtist={activeArtist}
+                      setActiveArtist={setActiveArtist}
+                      handleRowClick={audioEngine.handleRowClick}
+                      handleArtistContextMenu={libraryOps.handleArtistContextMenu}
+                      handleTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      openTagEditor={libraryOps.openTagEditor}
+                      openTrackInfo={libraryOps.openTrackInfo}
+                      navigateToArtist={navigateToArtist}
+                    />
+                  )}
+
+                  {activeView === 'genres' && (
+                    <GenresView
+                      searchQuery={searchQuery}
+                      deferredSearchQuery={deferredSearchQuery}
+                      genresData={genresData}
+                      activeGenre={activeGenre}
+                      setActiveGenre={setActiveGenre}
+                      handleRowClick={audioEngine.handleRowClick}
+                      navigateToArtist={navigateToArtist}
+                      handleTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      openTagEditor={libraryOps.openTagEditor}
+                      openTrackInfo={libraryOps.openTrackInfo}
+                    />
+                  )}
+
+                  {activeView === 'user-playlists' && (
+                    <UserPlaylistsView
+                      searchQuery={searchQuery}
+                      deferredSearchQuery={deferredSearchQuery}
+                      userPlaylists={userPlaylists}
+                      activeUserPlaylist={activeUserPlaylist}
+                      setActiveUserPlaylist={setActiveUserPlaylist}
+                      activeUserPlaylistTracks={activeUserPlaylistTracks}
+                      getResolvedUserPlaylistTracks={libraryOps.getResolvedUserPlaylistTracks}
+                      handleRowClick={audioEngine.handleRowClick}
+                      handleUserPlaylistContextMenu={libraryOps.handleUserPlaylistContextMenu}
+                      handleChangeUserPlaylistCover={libraryOps.handleChangeUserPlaylistCover}
+                      setShowCreateUserPlaylistModal={setShowCreateUserPlaylistModal}
+                      setShowAddSongsToUserPlaylistModal={setShowAddSongsToUserPlaylistModal}
+                      setShowEditUserPlaylistModal={setShowEditUserPlaylistModal}
+                      setEditingUserPlaylist={setEditingUserPlaylist}
+                      handleDeleteUserPlaylist={libraryOps.handleDeleteUserPlaylist}
+                      handleTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      openTagEditor={libraryOps.openTagEditor}
+                      openTrackInfo={libraryOps.openTrackInfo}
+                      navigateToArtist={navigateToArtist}
+                    />
+                  )}
+
+                  {activeView === 'playlists' && (
+                    <FolderPlaylistsView
+                      searchQuery={searchQuery}
+                      playlists={playlists}
+                      matchedPlaylists={matchedPlaylists}
+                      visiblePlaylists={visiblePlaylists}
+                      activePlaylist={activePlaylist}
+                      setActivePlaylist={setActivePlaylist}
+                      processedPlaylistTracks={processedPlaylistTracks}
+                      processedLibraryTracks={processedLibraryTracks}
+                      handleRowClick={audioEngine.handleRowClick}
+                      handleOpenPlaylist={(pl) => {
+                        setActivePlaylist(pl)
+                        setSearchQuery('')
+                      }}
+                      handlePlayPlaylistTracks={(plOrTracks) => {
+                        const tracks = Array.isArray(plOrTracks) ? plOrTracks : plOrTracks?.tracks
+                        if (tracks && tracks.length > 0) {
+                          audioEngine.handleRowClick(tracks[0], tracks)
+                        }
+                      }}
+                      handlePlaylistContextMenu={libraryOps.handlePlaylistContextMenu}
+                      handleChangePlaylistImage={libraryOps.handleChangePlaylistImage}
+                      handleExtractPlaylistImage={libraryOps.handleExtractPlaylistImage}
+                      handleOpenPlaylistRename={(plOrName) => {
+                        const name = typeof plOrName === 'string' ? plOrName : plOrName?.name || ''
+                        const id = typeof plOrName === 'object' ? plOrName?.id : undefined
+                        setPlaylistRename({
+                          isOpen: true,
+                          oldName: name,
+                          newName: name,
+                          id
+                        })
+                      }}
+                      setShowCreateModal={setShowCreateModal}
+                      handleAutoGeneratePlaylists={libraryOps.handleAutoGeneratePlaylists}
+                      playlistsLoadMoreRef={playlistsLoadMoreRef}
+                      setPlaylistsRenderLimit={setPlaylistsRenderLimit}
+                      setShowAddSongsModal={setShowAddSongsModal}
+                      handleImportFiles={libraryOps.handleImportFiles}
+                      setShowDuplicateFinder={setShowDuplicateFinder}
+                      setShowSmartPlaylists={setShowSmartPlaylists}
+                      handleTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      openTagEditor={libraryOps.openTagEditor}
+                      openTrackInfo={libraryOps.openTrackInfo}
+                      navigateToArtist={navigateToArtist}
+                    />
+                  )}
+
                   {activeView === 'drive' && (
-                    <div className="flex flex-col h-full max-w-4xl">
-                      <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-                          <Cloud size={32} className="text-theme-10" /> {t('driveView.title')}
-                        </h2>
-                      </div>
-
-                      <div className="bg-theme-60/50 border border-theme-30 p-6 rounded-xl mb-6 shadow-lg">
-                        <h3 className="text-theme-10 font-semibold mb-2">
-                          {t('driveView.enterFolderLink')}
-                        </h3>
-                        <p className="text-sm text-zinc-400 mb-4">
-                          {t('driveView.folderLinkDesc')}
-                        </p>
-                        <div className="flex gap-3 items-center">
-                          <div className="relative flex-1">
-                            <Link
-                              size={18}
-                              className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
-                            />
-                            <input
-                              type="text"
-                              value={driveLink}
-                              onChange={(e) => setDriveLink(e.target.value)}
-                              placeholder={t('driveView.folderLinkPlaceholder')}
-                              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-theme-10 transition-colors"
-                            />
-                          </div>
-                          <button
-                            onClick={handleDriveSubmit}
-                            disabled={!driveLink || isFetchingDrive}
-                            title={t('driveView.scanData')}
-                            className="sys-btn bg-theme-10 hover:bg-theme-10 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-                          >
-                            {isFetchingDrive ? (
-                              <span className="animate-pulse">{t('driveView.scanning')}</span>
-                            ) : (
-                              <>
-                                <Search size={15} />
-                                <span className="btn-text">{t('driveView.scanData')}</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Kết quả / Danh sách file đã tìm thấy */}
-                      <div className="flex-1 flex flex-col bg-theme-60/30 border border-theme-30/50 rounded-xl p-6 min-h-[300px]">
-                        {driveFiles.length === 0 ? (
-                          <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
-                            <Cloud size={56} className="mb-4 opacity-20" />
-                            <p className="text-lg">{t('driveView.emptyTitle')}</p>
-                            <p className="text-sm mt-1">{t('driveView.emptyDesc')}</p>
-                          </div>
-                        ) : (
-                          (() => {
-                            // Lọc file Drive theo từ khóa tìm kiếm trên Header
-                            const lowerQuery = searchQuery.toLowerCase()
-                            const filteredDriveFiles = searchQuery
-                              ? driveFiles.filter((f) => f.title.toLowerCase().includes(lowerQuery))
-                              : driveFiles
-
-                            return (
-                              <>
-                                <div className="flex items-center justify-between mb-4 pb-4 border-b border-theme-30/50">
-                                  <h3 className="font-bold text-white">
-                                    {searchQuery
-                                      ? t('driveView.foundResults', {
-                                          count: filteredDriveFiles.length,
-                                          query: searchQuery
-                                        })
-                                      : t('driveView.foundAudioFiles', {
-                                          count: driveFiles.length
-                                        })}
-                                  </h3>
-                                  <div className="flex gap-3">
-                                    <button
-                                      onClick={handleDriveStream}
-                                      title={t('driveView.streamAll')}
-                                      className="sys-btn flex items-center gap-2 bg-theme-10/10 text-theme-10 hover:bg-theme-10/20 px-4 py-2 rounded-lg text-sm font-medium transition cursor-pointer"
-                                    >
-                                      <Wifi size={16} />{' '}
-                                      <span className="btn-text">{t('driveView.streamAll')}</span>
-                                    </button>
-                                    <button
-                                      onClick={handleDriveDownload}
-                                      disabled={isDownloading}
-                                      title={t('driveView.downloadLossless')}
-                                      className="sys-btn flex items-center gap-2 bg-theme-30 text-white hover:bg-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 cursor-pointer"
-                                    >
-                                      {isDownloading ? (
-                                        <span className="animate-pulse">{t('common.loading')}</span>
-                                      ) : (
-                                        <>
-                                          <Download size={16} />{' '}
-                                          <span className="btn-text">
-                                            {t('driveView.downloadLossless')}
-                                          </span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-2 overflow-y-auto pr-2">
-                                  {filteredDriveFiles.length === 0 ? (
-                                    <p className="text-zinc-500 text-center mt-10">
-                                      {t('songsView.noSongsMatched', { query: searchQuery })}
-                                    </p>
-                                  ) : (
-                                    filteredDriveFiles.map((f, i) => (
-                                      <div
-                                        key={i}
-                                        className="flex items-center gap-4 p-3 bg-theme-60/40 hover:bg-theme-30/80 rounded-lg border border-theme-30/50 transition"
-                                      >
-                                        <div className="w-10 h-10 bg-theme-30 rounded flex items-center justify-center flex-shrink-0 text-theme-10">
-                                          <ListMusic size={18} />
-                                        </div>
-                                        <div className="flex-1 truncate">
-                                          <p className="font-semibold text-white truncate text-sm">
-                                            {f.title}
-                                          </p>
-                                          <p className="text-xs text-zinc-500 mt-0.5">
-                                            {t('driveView.originalFormat')}:{' '}
-                                            <span className="text-theme-10/80 uppercase">
-                                              {f.format}
-                                            </span>
-                                          </p>
-                                        </div>
-                                        <button
-                                          onClick={() => setCloudActionTrack(f)}
-                                          className="px-3 py-1.5 bg-theme-30 hover:bg-zinc-700 rounded text-xs text-zinc-300 font-medium transition"
-                                        >
-                                          {t('common.options')}
-                                        </button>
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-                              </>
-                            )
-                          })()
-                        )}
-                      </div>
-                    </div>
+                    <DriveView
+                      loadLibrary={libraryOps.loadLibrary}
+                      processedLibraryTracks={processedLibraryTracks}
+                      showAlert={libraryOps.showAlert}
+                    />
                   )}
 
-                  {/* VIEW: TẢI XUỐNG (SOULSEEK ENGINE) */}
                   {activeView === 'downloads' && (
                     <React.Suspense
                       fallback={
                         <div className="flex-1 flex items-center justify-center text-zinc-500">
-                          Loading...
+                          <Cloud size={32} className="animate-spin text-theme-10" />
                         </div>
                       }
                     >
-                      <DownloadsView onPlayTrack={handlePlayTrack} />
+                      <DownloadsView onPlayTrack={audioEngine.handlePlayTrack} />
                     </React.Suspense>
                   )}
 
-                  {/* VIEW: CÀI ĐẶT (CHIA THÀNH CÁC ISLAND RIÊNG BIỆT) */}
+                  {activeView === 'analytics' && (
+                    <AnalyticsView onPlayTrack={audioEngine.handlePlayTrack} />
+                  )}
+
                   {activeView === 'settings' && (
-                    <div className="w-full max-w-5xl space-y-6 pb-20">
-                      <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
-                        <div className="min-w-0 flex-1">
-                          <h2 className="text-2xl sm:text-3xl font-extrabold text-white truncate flex items-center gap-3">
-                            <Settings className="text-theme-10 w-7 h-7 sm:w-8 sm:h-8 shrink-0" />
-                            <span>{t('settings.title')}</span>
-                          </h2>
-                        </div>
-                      </div>
-
-                      {/* ISLAND 1: CÁ NHÂN HÓA (PERSONALIZATION) */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-5">
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                              <Palette size={20} />
-                            </div>
-                            <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                              {t('settings.customBg.title')}
-                            </h3>
-                          </div>
-                        </div>
-
-                        {/* BẢNG CHỌN CHẾ ĐỘ HIỂN THỊ HỆ THỐNG: CLASSIC VS SLEEK */}
-                        <div className="pt-1">
-                          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-10 mb-2.5">
-                            {t('settings.customBg.uiStyleTitle')}
-                          </label>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                            {/* 1. Chế độ Classic (Cổ điển) */}
-                            <div
-                              onClick={() => setUiStyle('classic')}
-                              className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                                uiStyle === 'classic'
-                                  ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
-                                  : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
-                              }`}
-                            >
-                              <div>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-bold text-white flex items-center gap-2 text-sm">
-                                    <LayoutTemplate
-                                      size={16}
-                                      className={
-                                        uiStyle === 'classic' ? 'text-theme-10' : 'text-zinc-400'
-                                      }
-                                    />
-                                    {t('settings.customBg.classicMode')}
-                                  </span>
-                                  <div
-                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${uiStyle === 'classic' ? 'border-theme-10 bg-theme-10/20' : 'border-zinc-700'}`}
-                                  >
-                                    {uiStyle === 'classic' && (
-                                      <div className="w-2 h-2 rounded-full bg-theme-10" />
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Minh họa trực quan Chế độ Classic */}
-                              <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-                                  {language === 'vi' ? 'Xem trước:' : 'Preview:'}
-                                </span>
-                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-200 text-xs border border-zinc-700/60">
-                                  <Shuffle size={12} className="text-theme-10" />
-                                  <span>{t('songsView.randomPlay')}</span>
-                                </div>
-                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-theme-10/20 text-theme-10 text-xs border border-theme-10/30">
-                                  <Plus size={12} />
-                                  <span>{t('songsView.addMusic')}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 2. Chế độ Sleek (Tinh gọn) */}
-                            <div
-                              onClick={() => setUiStyle('sleek')}
-                              className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                                uiStyle === 'sleek'
-                                  ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
-                                  : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
-                              }`}
-                            >
-                              <div>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-bold text-white flex items-center gap-2 text-sm">
-                                    <Sparkles
-                                      size={16}
-                                      className={
-                                        uiStyle === 'sleek' ? 'text-theme-10' : 'text-zinc-400'
-                                      }
-                                    />
-                                    {t('settings.customBg.sleekMode')}
-                                  </span>
-                                  <div
-                                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${uiStyle === 'sleek' ? 'border-theme-10 bg-theme-10/20' : 'border-zinc-700'}`}
-                                  >
-                                    {uiStyle === 'sleek' && (
-                                      <div className="w-2 h-2 rounded-full bg-theme-10" />
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Minh họa trực quan Chế độ Sleek */}
-                              <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-                                  {language === 'vi' ? 'Xem trước:' : 'Preview:'}
-                                </span>
-                                <div
-                                  className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-zinc-800 text-zinc-200 text-xs border border-zinc-700/60"
-                                  title={t('songsView.randomPlay')}
-                                >
-                                  <Shuffle size={13} className="text-theme-10" />
-                                </div>
-                                <div
-                                  className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-theme-10/20 text-theme-10 text-xs border border-theme-10/30"
-                                  title={t('songsView.addMusic')}
-                                >
-                                  <Plus size={13} />
-                                </div>
-                                <span className="text-[11px] text-emerald-400 font-medium ml-1">
-                                  {language === 'vi'
-                                    ? '✓ Giữ nguyên tên bài hát'
-                                    : '✓ Preserves song text'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* TÙY CHỈNH HÌNH NỀN & MÀU SẮC */}
-                        <div className="pt-4 border-t border-theme-30/40">
-                          {isCore ? (
-                            <p className="text-xs text-zinc-400 italic bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
-                              {language === 'vi'
-                                ? 'Tính năng hình nền & giao diện màu sắc bị tắt hoàn toàn ở Chế độ tối giản để tối ưu hiệu năng.'
-                                : 'Background and dynamic theme are completely disabled in Core Mode for maximum performance.'}
-                            </p>
-                          ) : (
-                            <>
-                              {/* PHẦN 1: TÙY CHỌN MÀU ACCENT & CHỦ ĐẠO */}
-                              <div className="mb-5">
-                                <label className="block text-xs font-semibold uppercase tracking-wider text-theme-10 mb-2.5">
-                                  {t('settings.customBg.accentTitle')}
-                                </label>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                  {/* 1. Theo bài hát */}
-                                  <div
-                                    onClick={() => setAccentColorMode('track')}
-                                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                                      accentColorMode === 'track'
-                                        ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
-                                        : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between mb-1.5">
-                                      <span className="font-bold text-white flex items-center gap-2 text-sm">
-                                        <Disc
-                                          size={16}
-                                          className={
-                                            accentColorMode === 'track'
-                                              ? 'text-theme-10'
-                                              : 'text-zinc-400'
-                                          }
-                                        />
-                                        {t('settings.customBg.accentTrack')}
-                                      </span>
-                                      <div
-                                        className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                          accentColorMode === 'track'
-                                            ? 'border-theme-10 bg-theme-10/20'
-                                            : 'border-zinc-700'
-                                        }`}
-                                      >
-                                        {accentColorMode === 'track' && (
-                                          <div className="w-2 h-2 rounded-full bg-theme-10" />
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* 2. Theo hình nền */}
-                                  <div
-                                    onClick={() => setAccentColorMode('background')}
-                                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                                      accentColorMode === 'background'
-                                        ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
-                                        : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between mb-1.5">
-                                      <span className="font-bold text-white flex items-center gap-2 text-sm">
-                                        <ImageIcon
-                                          size={16}
-                                          className={
-                                            accentColorMode === 'background'
-                                              ? 'text-theme-10'
-                                              : 'text-zinc-400'
-                                          }
-                                        />
-                                        {t('settings.customBg.accentBg')}
-                                      </span>
-                                      <div
-                                        className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                          accentColorMode === 'background'
-                                            ? 'border-theme-10 bg-theme-10/20'
-                                            : 'border-zinc-700'
-                                        }`}
-                                      >
-                                        {accentColorMode === 'background' && (
-                                          <div className="w-2 h-2 rounded-full bg-theme-10" />
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* 3. Tùy chỉnh */}
-                                  <div
-                                    onClick={() => setAccentColorMode('custom')}
-                                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                                      accentColorMode === 'custom'
-                                        ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
-                                        : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between mb-1.5">
-                                      <span className="font-bold text-white flex items-center gap-2 text-sm">
-                                        <Palette
-                                          size={16}
-                                          className={
-                                            accentColorMode === 'custom'
-                                              ? 'text-theme-10'
-                                              : 'text-zinc-400'
-                                          }
-                                        />
-                                        {t('settings.customBg.accentCustom')}
-                                      </span>
-                                      <div
-                                        className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                          accentColorMode === 'custom'
-                                            ? 'border-theme-10 bg-theme-10/20'
-                                            : 'border-zinc-700'
-                                        }`}
-                                      >
-                                        {accentColorMode === 'custom' && (
-                                          <div className="w-2 h-2 rounded-full bg-theme-10" />
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Bảng chọn màu khi ở chế độ Tùy chỉnh */}
-                                {accentColorMode === 'custom' && (
-                                  <div className="mt-3.5 p-3.5 rounded-xl bg-zinc-950/70 border border-zinc-800/80 flex flex-wrap items-center gap-3">
-                                    {/* Các ô màu gợi ý nhanh */}
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      {PRESET_ACCENT_COLORS.map((preset) => {
-                                        const isSelected =
-                                          customAccentColor.toLowerCase() ===
-                                          preset.color.toLowerCase()
-                                        return (
-                                          <button
-                                            key={preset.color}
-                                            type="button"
-                                            onClick={() => setCustomAccentColor(preset.color)}
-                                            title={preset.name}
-                                            className={`w-7 h-7 rounded-full transition-transform cursor-pointer relative flex items-center justify-center ${
-                                              isSelected
-                                                ? 'scale-110 ring-2 ring-white shadow-md'
-                                                : 'hover:scale-105 opacity-80 hover:opacity-100'
-                                            }`}
-                                            style={{ backgroundColor: preset.color }}
-                                          >
-                                            {isSelected && (
-                                              <Check size={14} className="text-white drop-shadow" />
-                                            )}
-                                          </button>
-                                        )
-                                      })}
-                                    </div>
-
-                                    {/* Hộp chọn màu tự do & mã HEX */}
-                                    <div className="flex items-center gap-2 sm:ml-auto">
-                                      <div className="relative flex items-center">
-                                        <input
-                                          type="color"
-                                          value={
-                                            /^#[0-9a-fA-F]{6}$/.test(customAccentColor)
-                                              ? customAccentColor
-                                              : '#10b981'
-                                          }
-                                          onChange={(e) => setCustomAccentColor(e.target.value)}
-                                          className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 p-0"
-                                          title={t('settings.customBg.customColorPicker')}
-                                        />
-                                      </div>
-                                      <input
-                                        type="text"
-                                        value={customAccentColor}
-                                        onChange={(e) => {
-                                          const val = e.target.value
-                                          if (/^#[0-9a-fA-F]{0,6}$/.test(val)) {
-                                            setCustomAccentColor(val)
-                                          }
-                                        }}
-                                        placeholder="#10b981"
-                                        maxLength={7}
-                                        className="w-24 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs font-mono text-zinc-200 uppercase focus:border-theme-10 outline-none"
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* PHẦN 2: HÌNH NỀN ỨNG DỤNG */}
-                              <div className="pt-4 border-t border-theme-30/40">
-                                <label className="block text-xs font-semibold uppercase tracking-wider text-theme-10 mb-2">
-                                  {t('settings.customBg.wallpaperTitle')}
-                                </label>
-                                {/* Checkbox tùy chọn dùng ảnh bìa bài hát */}
-                                <label className="flex items-center gap-3 cursor-pointer mb-4 select-none group w-fit">
-                                  <input
-                                    type="checkbox"
-                                    checked={useTrackCoverAsBg}
-                                    onChange={(e) => setUseTrackCoverAsBg(e.target.checked)}
-                                    className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
-                                  />
-                                  <span className="text-sm text-zinc-300 group-hover:text-white transition">
-                                    {t('settings.customBg.useTrackCover')}
-                                  </span>
-                                </label>
-
-                                {/* Phần dán link & chọn file: Ẩn khi bật chế độ dùng ảnh bìa */}
-                                {!useTrackCoverAsBg && (
-                                  <div className="flex gap-2.5 sm:gap-3 items-center mb-4 flex-wrap">
-                                    <input
-                                      type="text"
-                                      value={bgImageInput}
-                                      onChange={(e) => setBgImageInput(e.target.value)}
-                                      placeholder={t('settings.customBg.placeholder')}
-                                      className="flex-1 min-w-[200px] bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-sm text-zinc-300 focus:border-theme-10 outline-none"
-                                    />
-                                    <button
-                                      onClick={() => {
-                                        const normalized = normalizeImagePath(bgImageInput)
-                                        if (normalized) {
-                                          setBgImageInput(normalized)
-                                          setCustomBgImage(normalized)
-                                        }
-                                      }}
-                                      className="sys-btn flex items-center gap-1.5 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                      title={t('settings.customBg.applyLink')}
-                                    >
-                                      <Check size={15} />
-                                      <span className="btn-text">
-                                        {t('settings.customBg.applyLink')}
-                                      </span>
-                                    </button>
-                                    <button
-                                      onClick={async () => {
-                                        const filePath = await window.api.selectImageFile()
-                                        if (filePath) {
-                                          const normalized = normalizeImagePath(filePath)
-                                          setBgImageInput(normalized)
-                                          setCustomBgImage(normalized)
-                                        }
-                                      }}
-                                      className="sys-btn flex items-center gap-1.5 bg-theme-10 hover:bg-theme-10/90 text-white px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer shadow-lg shadow-theme-10/20"
-                                      title={t('settings.customBg.chooseImage')}
-                                    >
-                                      <ImageIcon size={15} />
-                                      <span className="btn-text">
-                                        {t('settings.customBg.chooseImage')}
-                                      </span>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setCustomBgImage(null)
-                                        setBgImageInput('')
-                                      }}
-                                      className="sys-btn flex items-center gap-1.5 bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                      title={t('settings.customBg.removeBg')}
-                                    >
-                                      <Trash2 size={15} />
-                                      <span className="btn-text">
-                                        {t('settings.customBg.removeBg')}
-                                      </span>
-                                    </button>
-                                  </div>
-                                )}
-
-                                <div className="flex flex-col gap-4">
-                                  <div className="flex items-center gap-4">
-                                    <span className="text-sm text-zinc-300 w-32">
-                                      {t('settings.customBg.opacity')}:
-                                    </span>
-                                    <input
-                                      type="range"
-                                      min="0"
-                                      max="1"
-                                      step="0.05"
-                                      value={customBgOpacity}
-                                      onChange={(e) =>
-                                        setCustomBgOpacity(parseFloat(e.target.value))
-                                      }
-                                      onWheel={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        const delta = e.deltaY < 0 ? 0.05 : -0.05
-                                        setCustomBgOpacity((prev) =>
-                                          Math.max(
-                                            0,
-                                            Math.min(1, Math.round((prev + delta) * 100) / 100)
-                                          )
-                                        )
-                                      }}
-                                      className="flex-1 accent-theme-10"
-                                    />
-                                    <span className="text-sm font-mono text-zinc-400 w-12 text-right">
-                                      {Math.round(customBgOpacity * 100)}%
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-4">
-                                    <span className="text-sm text-zinc-300 w-32">
-                                      {t('settings.customBg.blur')}:
-                                    </span>
-                                    <input
-                                      type="range"
-                                      min="0"
-                                      max="100"
-                                      step="1"
-                                      value={customBgBlur}
-                                      onChange={(e) => setCustomBgBlur(parseInt(e.target.value))}
-                                      onWheel={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        const delta = e.deltaY < 0 ? 2 : -2
-                                        setCustomBgBlur((prev) =>
-                                          Math.max(0, Math.min(100, prev + delta))
-                                        )
-                                      }}
-                                      className="flex-1 accent-theme-10"
-                                    />
-                                    <span className="text-sm font-mono text-zinc-400 w-12 text-right">
-                                      {customBgBlur}px
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </>
-                          )}
-
-                          {/* Thanh tiến trình dạng sóng âm (Waveform Seekbar Toggle) */}
-                          <div className="flex items-center justify-between pt-4 border-t border-theme-30/40">
-                            <div className="flex flex-col pr-4">
-                              <span className="text-zinc-300 text-sm font-medium">
-                                {t('settings.customBg.waveformSeekbar')}
-                              </span>
-                              <span className="text-xs text-zinc-400 mt-0.5">
-                                {t('settings.customBg.waveformSeekbarDesc')}
-                              </span>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={waveformSeekbarEnabled}
-                              onChange={(e) => setWaveformSeekbarEnabled(e.target.checked)}
-                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ISLAND 2: NGÔN NGỮ (LANGUAGE) */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                            <Languages size={20} />
-                          </div>
-                          <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                            {t('settings.language.title')}
-                          </h3>
-                        </div>
-                        <div className="w-72 pt-1">
-                          <CustomSelect
-                            value={language}
-                            onChange={(val) => setLanguage(val as any)}
-                            options={[
-                              { value: 'en', label: t('settings.language.english') },
-                              { value: 'vi', label: t('settings.language.vietnamese') }
-                            ]}
-                          />
-                        </div>
-                      </div>
-
-                      {/* ISLAND 3: THƯ VIỆN NHẠC (MUSIC LIBRARY) */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                              <Folder size={20} />
-                            </div>
-                            <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                              {t('settings.library.title')}
-                            </h3>
-                          </div>
-                          <span className="text-xs text-zinc-400 px-3 py-1 rounded-full bg-zinc-900/80 border border-zinc-800">
-                            {libraryPaths.length} {t('settings.library.folderCount')} •{' '}
-                            {libraryTracks.length} {t('common.songs')}
-                          </span>
-                        </div>
-
-                        <div className="space-y-2.5">
-                          {libraryPaths.length === 0 ? (
-                            <p className="text-zinc-500 italic text-sm p-3 bg-zinc-950/60 rounded-xl border border-zinc-800">
-                              {t('settings.library.notSet')}
-                            </p>
-                          ) : (
-                            libraryPaths.map((fPath, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between gap-3 bg-zinc-950/80 p-3 rounded-xl border border-zinc-800/80 hover:border-zinc-700 transition"
-                              >
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                  <Folder size={18} className="text-theme-10 shrink-0" />
-                                  <span className="text-sm text-zinc-200 truncate font-mono">
-                                    {fPath}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    onClick={() => handleUpdateLibraryFolder(fPath)}
-                                    className="sys-btn flex items-center gap-1 px-3 py-1.5 bg-theme-30/60 hover:bg-theme-30 text-xs font-medium text-zinc-300 hover:text-white rounded-xl transition cursor-pointer"
-                                    title={t('settings.library.updateFolder')}
-                                  >
-                                    <Edit2 size={13} />
-                                    <span className="btn-text">{t('settings.library.change')}</span>
-                                  </button>
-                                  <button
-                                    onClick={async () => {
-                                      // @ts-ignore
-                                      await window.api.showInFolder(fPath)
-                                    }}
-                                    className="p-1.5 bg-theme-30/60 hover:bg-theme-30 text-zinc-400 hover:text-white rounded-xl transition cursor-pointer"
-                                    title={t('settings.library.openFolder')}
-                                  >
-                                    <FolderOpen size={15} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRemoveLibraryFolder(fPath)}
-                                    className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition cursor-pointer"
-                                    title={t('settings.library.removeFolder')}
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap pt-2">
-                          <button
-                            onClick={handleAddLibraryFolder}
-                            className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10/90 text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                            title={t('settings.library.addFolder')}
-                          >
-                            <Plus size={16} />
-                            <span className="btn-text">{t('settings.library.addFolder')}</span>
-                          </button>
-                          <button
-                            onClick={() => handleReloadLibrary(false)}
-                            disabled={isReloading}
-                            className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 hover:text-white px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                            title={t('settings.library.rescan')}
-                          >
-                            <RefreshCw size={15} className={isReloading ? 'animate-spin' : ''} />
-                            <span className="btn-text">{t('settings.library.rescan')}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* ISLAND 4: ĐỘNG CƠ ÂM THANH & BIT-PERFECT */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                              <Volume2 size={20} />
-                            </div>
-                            <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                              {t('settings.bitPerfect.title')}
-                            </h3>
-                          </div>
-                          <label className="flex items-center gap-3 cursor-pointer select-none">
-                            <span className="text-zinc-300 text-sm font-medium">
-                              {t('settings.bitPerfect.label')}
-                            </span>
-                            <input
-                              type="checkbox"
-                              checked={bitPerfectEnabled}
-                              onChange={async (e) => {
-                                const val = e.target.checked
-                                const prevTrack = currentTrack
-                                const currentPlaybackTime =
-                                  (audioRef.current as any)?._currentTime ||
-                                  audioRef.current?.currentTime ||
-                                  0
-                                const wasPlaying = isPlaying
-
-                                try {
-                                  await window.api.setBitPerfect(val, volume, bitPerfectType)
-                                } catch (err: any) {
-                                  showToast(
-                                    `${language === 'vi' ? 'Không thể cấu hình Bit-perfect' : 'Could not configure Bit-perfect'}: ${err?.message || err}`,
-                                    'error'
-                                  )
-                                  return
-                                }
-
-                                if (currentPlaybackTime > 0) {
-                                  pendingSeekTimeRef.current = currentPlaybackTime
-                                }
-                                setBitPerfectEnabled(val)
-
-                                if (prevTrack && prevTrack.filePath) {
-                                  if (val) {
-                                    if (audioRef.current) audioRef.current.pause()
-                                  } else {
-                                    if (isDsdTrack(prevTrack)) {
-                                      // DSD không thể giải mã qua Web Audio HTML5, tiếp tục phát bằng BASS
-                                      window.api.bassPlay(
-                                        prevTrack.filePath,
-                                        0,
-                                        val,
-                                        prevTrack.startTime,
-                                        prevTrack.endTime
-                                      )
-                                    } else {
-                                      // Nhạc PCM: Dừng BASS và giải phóng thiết bị độc quyền ngay lập tức
-                                      await window.api.bassStop().catch(() => {})
-                                      await resetWebAudioPipeline()
-                                      setTimeout(() => {
-                                        if (audioRef.current) {
-                                          audioRef.current.volume = Math.max(
-                                            0,
-                                            Math.min(1, sliderToGain(volume))
-                                          )
-                                          audioRef.current.currentTime = currentPlaybackTime
-                                          if (wasPlaying) {
-                                            if (
-                                              audioCtxRef.current &&
-                                              audioCtxRef.current.state === 'suspended'
-                                            ) {
-                                              audioCtxRef.current.resume().catch(() => {})
-                                            }
-                                            audioRef.current.play().catch(console.warn)
-                                          }
-                                        }
-                                      }, 100)
-                                    }
-                                  }
-                                }
-                              }}
-                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
-                            />
-                          </label>
-                        </div>
-
-                        {/* Khi bật Bit-Perfect: Cung cấp 2 lựa chọn WASAPI và ASIO */}
-                        {bitPerfectEnabled && (
-                          <div className="p-4 rounded-xl bg-zinc-900/70 border border-theme-30/60 space-y-4">
-                            <div>
-                              <label className="block text-zinc-300 text-xs font-semibold uppercase tracking-wider mb-2">
-                                {t('settings.bitPerfect.outputType')}
-                              </label>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {/* Option WASAPI */}
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    if (bitPerfectType === 'wasapi') return
-                                    const currentPlaybackTime =
-                                      (audioRef.current as any)?._currentTime ||
-                                      audioRef.current?.currentTime ||
-                                      0
-                                    if (currentPlaybackTime > 0)
-                                      pendingSeekTimeRef.current = currentPlaybackTime
-                                    setBitPerfectType('wasapi')
-                                    await window.api.setBitPerfectOutputType('wasapi')
-                                    const res = await window.api.getAudioDevices('wasapi')
-                                    if (res?.success && Array.isArray(res.devices)) {
-                                      setAvailableAudioDevices(res.devices)
-                                      setSelectedDeviceId('auto')
-                                      window.api.setAudioDevice('auto')
-                                    }
-                                  }}
-                                  className={`flex flex-col items-start p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
-                                    bitPerfectType === 'wasapi'
-                                      ? 'bg-theme-10/10 border-theme-10 text-white shadow-sm ring-1 ring-theme-10/30'
-                                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between w-full">
-                                    <span className="text-xs font-bold text-zinc-100">
-                                      {t('settings.bitPerfect.wasapiOption')}
-                                    </span>
-                                    {bitPerfectType === 'wasapi' && (
-                                      <span className="w-2 h-2 rounded-full bg-theme-10" />
-                                    )}
-                                  </div>
-                                </button>
-
-                                {/* Option ASIO */}
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    if (bitPerfectType === 'asio') return
-                                    const currentPlaybackTime =
-                                      (audioRef.current as any)?._currentTime ||
-                                      audioRef.current?.currentTime ||
-                                      0
-                                    if (currentPlaybackTime > 0)
-                                      pendingSeekTimeRef.current = currentPlaybackTime
-                                    setBitPerfectType('asio')
-                                    await window.api.setBitPerfectOutputType('asio')
-                                    const res = await window.api.getAudioDevices('asio')
-                                    if (res?.success && Array.isArray(res.devices)) {
-                                      setAvailableAudioDevices(res.devices)
-                                      setSelectedDeviceId('auto')
-                                      window.api.setAudioDevice('auto')
-                                    }
-                                  }}
-                                  className={`flex flex-col items-start p-3.5 rounded-lg border text-left transition-all cursor-pointer ${
-                                    bitPerfectType === 'asio'
-                                      ? 'bg-theme-10/10 border-theme-10 text-white shadow-sm ring-1 ring-theme-10/30'
-                                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between w-full">
-                                    <span className="text-xs font-bold text-zinc-100">
-                                      {t('settings.bitPerfect.asioOption')}
-                                    </span>
-                                    {bitPerfectType === 'asio' && (
-                                      <span className="w-2 h-2 rounded-full bg-theme-10" />
-                                    )}
-                                  </div>
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Lựa chọn thiết bị đầu ra âm thanh / DAC */}
-                            <div>
-                              <label className="block text-zinc-300 text-xs font-medium mb-1.5">
-                                {t('settings.bitPerfect.deviceLabel')} (
-                                {bitPerfectType === 'asio' ? 'ASIO Driver' : 'WASAPI Endpoint'})
-                              </label>
-                              <select
-                                value={selectedDeviceId}
-                                onChange={(e) => {
-                                  const newDev = e.target.value
-                                  setSelectedDeviceId(newDev)
-                                  if (window.api && (window.api as any).setAudioDevice) {
-                                    ;(window.api as any).setAudioDevice(newDev)
-                                  }
-                                }}
-                                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-theme-10 transition-colors"
-                              >
-                                <option value="auto">{t('settings.bitPerfect.deviceAuto')}</option>
-                                {availableAudioDevices
-                                  .filter((d) => d.name !== 'auto')
-                                  .map((dev) => (
-                                    <option key={dev.name} value={dev.name}>
-                                      {dev.description || dev.name}
-                                    </option>
-                                  ))}
-                              </select>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Lựa chọn thiết bị khi không bật Bit-Perfect */}
-                        {!bitPerfectEnabled && (
-                          <div className="pt-2">
-                            <label className="block text-zinc-300 text-xs font-medium mb-1.5">
-                              {t('settings.bitPerfect.deviceLabel')}
-                            </label>
-                            <select
-                              value={selectedDeviceId}
-                              onChange={(e) => {
-                                const newDev = e.target.value
-                                setSelectedDeviceId(newDev)
-                                if (window.api && (window.api as any).setAudioDevice) {
-                                  ;(window.api as any).setAudioDevice(newDev)
-                                }
-                              }}
-                              className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-theme-10 transition-colors"
-                            >
-                              <option value="auto">{t('settings.bitPerfect.deviceAuto')}</option>
-                              {availableAudioDevices
-                                .filter((d) => d.name !== 'auto')
-                                .map((dev) => (
-                                  <option key={dev.name} value={dev.name}>
-                                    {dev.description || dev.name}
-                                  </option>
-                                ))}
-                            </select>
-                          </div>
-                        )}
-
-                        {/* Cân bằng âm lượng (Loudness Normalization) */}
-                        <div className="flex items-center justify-between pt-4 border-t border-theme-30/40">
-                          <span className="text-zinc-300 text-sm font-medium">
-                            {language === 'vi'
-                              ? 'Cân bằng âm lượng (Loudness Normalization)'
-                              : 'Loudness Normalization'}
-                          </span>
-                          <input
-                            type="checkbox"
-                            checked={loudnessNormalization}
-                            onChange={(e) => setLoudnessNormalization(e.target.checked)}
-                            className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
-                          />
-                        </div>
-
-                        {/* Phát nhạc liền mạch (Gapless Playback) */}
-                        <div className="flex flex-col gap-2 pt-4 border-t border-theme-30/40">
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-col pr-4">
-                              <span className="text-zinc-300 text-sm font-medium">
-                                {t('settings.gaplessPlayback')}
-                              </span>
-                              <span className="text-xs text-zinc-400 mt-0.5">
-                                {t('settings.gaplessPlaybackDesc')}
-                              </span>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={gaplessEnabled}
-                              onChange={(e) => setGaplessEnabled(e.target.checked)}
-                              className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ISLAND 5: HIỆU NĂNG & CHẾ ĐỘ HOẠT ĐỘNG (APP MODE) */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                            <Cpu size={20} />
-                          </div>
-                          <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                            {t('settings.appMode.title')}
-                          </h3>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
-                          {/* 1. Tiêu chuẩn (Standard) */}
-                          <div
-                            onClick={() => {
-                              setAppMode('default')
-                              setShowVisualizer(true)
-                            }}
-                            className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                              appMode === 'default'
-                                ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
-                                : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
-                            }`}
-                          >
-                            <span className="font-bold text-white flex items-center gap-2">
-                              <Sparkles
-                                size={16}
-                                className={
-                                  appMode === 'default' ? 'text-theme-10' : 'text-zinc-400'
-                                }
-                              />
-                              {t('settings.appMode.standard')}
-                            </span>
-                            {appMode === 'default' && (
-                              <span className="w-2 h-2 rounded-full bg-theme-10" />
-                            )}
-                          </div>
-
-                          {/* 2. Tiết kiệm (Lite) */}
-                          <div
-                            onClick={() => {
-                              setAppMode('lite')
-                              setShowVisualizer(false)
-                              setShowLyricsPanel(false)
-                              setIsLyricsMaximized(false)
-                              // @ts-ignore
-                              if (window.api && window.api.forceGC)
-                                setTimeout(() => window.api.forceGC(), 100)
-                            }}
-                            className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                              appMode === 'lite'
-                                ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
-                                : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
-                            }`}
-                          >
-                            <span className="font-bold text-white flex items-center gap-2">
-                              <Leaf
-                                size={16}
-                                className={appMode === 'lite' ? 'text-theme-10' : 'text-zinc-400'}
-                              />
-                              {t('settings.appMode.lite')}
-                            </span>
-                            {appMode === 'lite' && (
-                              <span className="w-2 h-2 rounded-full bg-theme-10" />
-                            )}
-                          </div>
-
-                          {/* 3. Cốt lõi (Core) */}
-                          <div
-                            onClick={() => {
-                              setAppMode('core')
-                              setShowVisualizer(false)
-                              setShowLyricsPanel(false)
-                              setIsLyricsMaximized(false)
-                              setShowEQ(false)
-                              if (
-                                activeView === 'home' ||
-                                activeView === 'home-ytm' ||
-                                activeView === 'home-soundcloud' ||
-                                activeView === 'online' ||
-                                activeView === 'drive'
-                              ) {
-                                setActiveView('songs')
-                              }
-                              // @ts-ignore
-                              if (window.api && window.api.forceGC)
-                                setTimeout(() => window.api.forceGC(), 100)
-                            }}
-                            className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                              appMode === 'core'
-                                ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
-                                : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
-                            }`}
-                          >
-                            <span className="font-bold text-white flex items-center gap-2">
-                              <Cpu
-                                size={16}
-                                className={appMode === 'core' ? 'text-theme-10' : 'text-zinc-400'}
-                              />
-                              {t('settings.appMode.core')}
-                            </span>
-                            {appMode === 'core' && (
-                              <span className="w-2 h-2 rounded-full bg-theme-10" />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ISLAND 6: HÀNH VI CỬA SỔ (WINDOW BEHAVIOR) */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                            <AppWindow size={20} />
-                          </div>
-                          <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                            {t('settings.windowBehavior.title')}
-                          </h3>
-                        </div>
-
-                        <div className="flex flex-col gap-4 pt-1">
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <p className="text-zinc-200 text-sm font-medium">
-                              {t('settings.windowBehavior.onMinimize')}
-                            </p>
-                            <div className="w-72">
-                              <CustomSelect
-                                value={minimizeToTray ? 'tray' : 'taskbar'}
-                                onChange={(val) => setMinimizeToTray(val === 'tray')}
-                                options={[
-                                  {
-                                    value: 'taskbar',
-                                    label: t('settings.windowBehavior.minimizeTaskbar')
-                                  },
-                                  {
-                                    value: 'tray',
-                                    label: t('settings.windowBehavior.minimizeTray')
-                                  }
-                                ]}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between flex-wrap gap-2 pt-3 border-t border-theme-30/30">
-                            <p className="text-zinc-200 text-sm font-medium">
-                              {t('settings.windowBehavior.onClose')}
-                            </p>
-                            <div className="w-72">
-                              <CustomSelect
-                                value={closeToTray ? 'tray' : 'quit'}
-                                onChange={(val) => setCloseToTray(val === 'tray')}
-                                options={[
-                                  { value: 'quit', label: t('settings.windowBehavior.closeQuit') },
-                                  { value: 'tray', label: t('settings.windowBehavior.closeTray') }
-                                ]}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ISLAND 7: DISCORD RICH PRESENCE */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                              <Flame size={20} />
-                            </div>
-                            <div className="flex items-center gap-2.5">
-                              <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                                {t('settings.discordRpc.title')}
-                              </h3>
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${
-                                  discordConnected
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/50'
-                                }`}
-                              >
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full ${discordConnected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`}
-                                />
-                                {discordConnected
-                                  ? t('settings.discordRpc.connectedStatus')
-                                  : t('settings.discordRpc.disconnectedStatus')}
-                              </span>
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={discordRpcEnabled}
-                            onChange={(e) => updateDiscordSettings({ enabled: e.target.checked })}
-                            className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer"
-                          />
-                        </div>
-
-                        {discordRpcEnabled && (
-                          <div className="space-y-4 pt-1">
-                            {/* Toggles Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {/* 1. Show Details */}
-                              <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                                <p className="text-zinc-200 text-sm font-medium pr-2">
-                                  {t('settings.discordRpc.showDetails')}
-                                </p>
-                                <input
-                                  type="checkbox"
-                                  checked={discordShowDetails}
-                                  onChange={(e) =>
-                                    updateDiscordSettings({ showDetails: e.target.checked })
-                                  }
-                                  className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                                />
-                              </label>
-
-                              {/* 2. Show Live Progress Time */}
-                              <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                                <p className="text-zinc-200 text-sm font-medium pr-2">
-                                  {t('settings.discordRpc.showTime')}
-                                </p>
-                                <input
-                                  type="checkbox"
-                                  checked={discordShowTime}
-                                  onChange={(e) =>
-                                    updateDiscordSettings({ showTime: e.target.checked })
-                                  }
-                                  className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                                />
-                              </label>
-
-                              {/* 3. Show Cover Art */}
-                              <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                                <p className="text-zinc-200 text-sm font-medium pr-2">
-                                  {t('settings.discordRpc.showCover')}
-                                </p>
-                                <input
-                                  type="checkbox"
-                                  checked={discordShowCover}
-                                  onChange={(e) =>
-                                    updateDiscordSettings({ showCover: e.target.checked })
-                                  }
-                                  className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                                />
-                              </label>
-
-                              {/* 4. Show Quality */}
-                              <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                                <p className="text-zinc-200 text-sm font-medium pr-2">
-                                  {t('settings.discordRpc.showQuality')}
-                                </p>
-                                <input
-                                  type="checkbox"
-                                  checked={discordShowQuality}
-                                  onChange={(e) =>
-                                    updateDiscordSettings({ showQuality: e.target.checked })
-                                  }
-                                  className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                                />
-                              </label>
-
-                              {/* 5. Show Buttons */}
-                              <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                                <p className="text-zinc-200 text-sm font-medium pr-2">
-                                  {t('settings.discordRpc.showButtons')}
-                                </p>
-                                <input
-                                  type="checkbox"
-                                  checked={discordShowButtons}
-                                  onChange={(e) =>
-                                    updateDiscordSettings({ showButtons: e.target.checked })
-                                  }
-                                  className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                                />
-                              </label>
-
-                              {/* 6. Show Idle */}
-                              <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40 hover:border-zinc-700 cursor-pointer transition">
-                                <p className="text-zinc-200 text-sm font-medium pr-2">
-                                  {t('settings.discordRpc.showIdle')}
-                                </p>
-                                <input
-                                  type="checkbox"
-                                  checked={discordShowIdle}
-                                  onChange={(e) =>
-                                    updateDiscordSettings({ showIdle: e.target.checked })
-                                  }
-                                  className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
-                                />
-                              </label>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ISLAND 8: GOOGLE DRIVE */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                            <Cloud size={20} />
-                          </div>
-                          <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                            {t('settings.googleDrive.title')}
-                          </h3>
-                        </div>
-                        <div className="pt-1">
-                          <input
-                            type="text"
-                            value={googleDriveApiKey}
-                            onChange={(e) => setGoogleDriveApiKey(e.target.value)}
-                            placeholder="AIzaSy..."
-                            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-2.5 text-sm text-zinc-300 focus:outline-none focus:border-theme-10 transition-colors"
-                          />
-                        </div>
-                      </div>
-
-                      {/* ISLAND 9: DỮ LIỆU, THỐNG KÊ & SAO LƯU */}
-                      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-                            <Database size={20} />
-                          </div>
-                          <h3 className="text-base sm:text-lg font-bold text-white truncate">
-                            {language === 'vi'
-                              ? 'Dữ liệu, Thống kê & Sao lưu'
-                              : 'Data, Insights & Backup'}
-                          </h3>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2.5 sm:gap-3 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => setShowBackupModal(true)}
-                            className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                            title={
-                              language === 'vi'
-                                ? 'Sao lưu & Khôi phục (M3U8 / Config)'
-                                : 'Backup & Restore (M3U8 / Config)'
-                            }
-                          >
-                            <Download size={16} className="shrink-0" />
-                            <span className="btn-text">
-                              {language === 'vi'
-                                ? 'Sao lưu & Khôi phục (M3U8 / Config)'
-                                : 'Backup & Restore (M3U8 / Config)'}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowInsightsModal(true)}
-                            className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                            title={
-                              language === 'vi'
-                                ? 'Xem thống kê nghe nhạc (Insights)'
-                                : 'View Music Insights'
-                            }
-                          >
-                            <BarChart2 size={16} className="shrink-0" />
-                            <span className="btn-text">
-                              {language === 'vi'
-                                ? 'Xem thống kê nghe nhạc (Insights)'
-                                : 'View Music Insights'}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* VIEW: NGHỆ SĨ (ARTISTS LIST) */}
-                  {activeView === 'artists' && !activeArtist && (
-                    <div className="flex flex-col h-full space-y-6">
-                      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-                        <div className="flex items-end gap-3 min-w-0 flex-1">
-                          <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">
-                            {searchQuery ? t('artistsView.searchResults') : t('artistsView.title')}
-                          </h2>
-                          <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
-                            {artistsData.artistsList.length} {t('artistsView.artistCount')} •{' '}
-                            {libraryTracks.length} {t('common.songs')}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Alphabet fast jump bar (tối đa 2 dòng, tự động ẩn dòng thừa) */}
-                      <div className="flex items-center content-start gap-1.5 flex-wrap max-h-[62px] overflow-hidden pb-1 border-b border-theme-30/40">
-                        {artistsData.alphabetGroups.map((grp) => (
-                          <button
-                            key={grp.letter}
-                            onClick={() => {
-                              const grpIdx = artistsData.alphabetGroups.findIndex(
-                                (g) => g.letter === grp.letter
-                              )
-                              if (grpIdx !== -1) {
-                                const target = chunkedAlphabetGroups[grpIdx]
-                                if (target?.isCollapsed) {
-                                  setCollapsedArtistLetters((prev) => ({
-                                    ...prev,
-                                    [grp.letter]: false
-                                  }))
-                                }
-                                setTimeout(
-                                  () => {
-                                    artistVirtuosoRef.current?.scrollToIndex({
-                                      index: target?.startRowIndex || 0,
-                                      align: 'start',
-                                      behavior: 'smooth'
-                                    })
-                                  },
-                                  target?.isCollapsed ? 50 : 0
-                                )
-                              }
-                            }}
-                            className="px-2.5 py-1 text-xs font-bold rounded-lg bg-theme-60/40 hover:bg-theme-10 hover:text-white text-zinc-400 transition shrink-0"
-                          >
-                            {grp.letter}{' '}
-                            <span className="text-[10px] opacity-60">({grp.count})</span>
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Danh sách nhóm theo Alphabet A-Z (Ảo hóa với GroupedVirtuoso / VirtuosoGrid) */}
-                      <div className="flex-1 min-h-[300px] h-full w-full overflow-hidden">
-                        {(() => {
-                          const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
-                          const normQuery = removeAccents(rawQuery)
-                          const filteredArtists = rawQuery
-                            ? artistsData.artistsList.filter((a) => matchesQuery(a.name, normQuery))
-                            : null
-
-                          if (filteredArtists) {
-                            if (filteredArtists.length === 0) {
-                              return (
-                                <p className="text-zinc-500 text-center mt-10">
-                                  {t('artistsView.noArtists')}
-                                </p>
-                              )
-                            }
-                            return (
-                              <VirtuosoGrid
-                                style={{ height: '100%', width: '100%' }}
-                                data={filteredArtists}
-                                listClassName="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-1"
-                                itemClassName="h-full"
-                                itemContent={(_idx, artist) => (
-                                  <div
-                                    key={artist.name}
-                                    onClick={() => setActiveArtist(artist)}
-                                    onContextMenu={(e) => handleArtistContextMenu(artist, e)}
-                                    className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md track-card-optimized"
-                                  >
-                                    <div className="flex items-center gap-4 min-w-0">
-                                      <div className="w-14 h-14 rounded-full overflow-hidden bg-theme-30 border border-theme-30/80 shadow-md flex items-center justify-center flex-shrink-0">
-                                        <DynamicCoverArt
-                                          src={artist.coverArt}
-                                          trackPath={artist.tracks?.[0]?.filePath}
-                                          tier="sm"
-                                          isLite={isLite}
-                                          fallbackIcon={
-                                            <Mic2 size={24} className="text-theme-10" />
-                                          }
-                                          className="w-full h-full"
-                                          imageClassName="group-hover:scale-105 transition duration-300"
-                                        />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">
-                                          {artist.name}
-                                        </h3>
-                                        <p className="text-xs text-zinc-400 mt-1">
-                                          {artist.albumCount} {t('artistsView.albumCount')} •{' '}
-                                          {artist.trackCount} {t('artistsView.trackCount')}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleArtistContextMenu(artist, e)
-                                      }}
-                                      className="text-zinc-500 hover:text-white p-2 rounded-lg transition opacity-0 group-hover:opacity-100"
-                                    >
-                                      <MoreVertical size={16} />
-                                    </button>
-                                  </div>
-                                )}
-                              />
-                            )
-                          }
-
-                          if (artistsData.alphabetGroups.length === 0) {
-                            return (
-                              <p className="text-zinc-500 text-center mt-10">
-                                {t('artistsView.noArtists')}
-                              </p>
-                            )
-                          }
-
-                          return (
-                            <GroupedVirtuoso
-                              ref={artistVirtuosoRef}
-                              style={{ height: '100%', width: '100%' }}
-                              components={{
-                                Group: ({ style, children, ...props }: any) => (
-                                  <div
-                                    {...props}
-                                    style={{
-                                      ...style,
-                                      position: 'relative'
-                                    }}
-                                  >
-                                    {children}
-                                  </div>
-                                )
-                              }}
-                              groupCounts={alphabetGroupCounts}
-                              groupContent={(index) => {
-                                const grp = chunkedAlphabetGroups[index]
-                                if (!grp) return null
-                                return (
-                                  <div
-                                    onClick={() =>
-                                      setCollapsedArtistLetters((prev) => ({
-                                        ...prev,
-                                        [grp.letter]: !prev[grp.letter]
-                                      }))
-                                    }
-                                    className="inline-flex items-center gap-2.5 cursor-pointer py-1.5 px-3 select-none group rounded-xl transition hover:bg-white/10 active:scale-95 my-1"
-                                  >
-                                    <span className="text-2xl font-bold font-sans text-white group-hover:text-theme-10 tracking-tight leading-none transition-colors">
-                                      {grp.letter}
-                                    </span>
-                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/10 text-white/90 group-hover:bg-theme-10 group-hover:text-white transition-colors">
-                                      {grp.count}
-                                    </span>
-                                    {grp.isCollapsed ? (
-                                      <ChevronRight
-                                        size={16}
-                                        className="text-white/60 group-hover:text-white transition-colors"
-                                      />
-                                    ) : (
-                                      <ChevronDown
-                                        size={16}
-                                        className="text-white/60 group-hover:text-white transition-colors"
-                                      />
-                                    )}
-                                  </div>
-                                )
-                              }}
-                              itemContent={(index, groupIndex) => {
-                                const grp = chunkedAlphabetGroups[groupIndex]
-                                if (!grp || grp.isCollapsed) return null
-                                const rowIndexInGroup = index - grp.startRowIndex
-                                const rowArtists = grp.rows[rowIndexInGroup] || []
-                                return (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-2">
-                                    {rowArtists.map((artist) => (
-                                      <div
-                                        key={artist.name}
-                                        onClick={() => setActiveArtist(artist)}
-                                        onContextMenu={(e) => handleArtistContextMenu(artist, e)}
-                                        className="bg-theme-60/40 hover:bg-theme-30/60 p-3.5 rounded-2xl border border-theme-30/40 hover:border-theme-10/40 transition group cursor-pointer flex items-center justify-between shadow-md track-card-optimized"
-                                      >
-                                        <div className="flex items-center gap-4 min-w-0">
-                                          <div className="w-14 h-14 rounded-full overflow-hidden bg-theme-30 border border-theme-30/80 shadow-md flex items-center justify-center flex-shrink-0">
-                                            <DynamicCoverArt
-                                              src={artist.coverArt}
-                                              trackPath={artist.tracks?.[0]?.filePath}
-                                              tier="sm"
-                                              isLite={isLite}
-                                              fallbackIcon={
-                                                <Mic2 size={24} className="text-theme-10" />
-                                              }
-                                              className="w-full h-full"
-                                              imageClassName="group-hover:scale-105 transition duration-300"
-                                            />
-                                          </div>
-                                          <div className="min-w-0">
-                                            <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">
-                                              {artist.name}
-                                            </h3>
-                                            <p className="text-xs text-zinc-400 mt-1">
-                                              {artist.albumCount} {t('artistsView.albumCount')} •{' '}
-                                              {artist.trackCount} {t('artistsView.trackCount')}
-                                            </p>
-                                          </div>
-                                        </div>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleArtistContextMenu(artist, e)
-                                          }}
-                                          className="text-zinc-500 hover:text-white p-2 rounded-lg transition opacity-0 group-hover:opacity-100"
-                                        >
-                                          <MoreVertical size={16} />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )
-                              }}
-                            />
-                          )
-                        })()}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* VIEW: CHI TIẾT NGHỆ SĨ (ARTIST DETAIL) */}
-                  {activeView === 'artists' && activeArtist && (
-                    <div className="flex flex-col space-y-8 pb-16">
-                      <div>
-                        <button
-                          onClick={() => setActiveArtist(null)}
-                          className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
-                        >
-                          <ArrowLeft size={16} /> {t('artistsView.backToArtists')}
-                        </button>
-
-                        <div className="flex items-end gap-6 mb-6">
-                          <div className="w-36 h-36 rounded-full overflow-hidden bg-theme-30 border-2 border-theme-10/40 shadow-2xl flex items-center justify-center flex-shrink-0">
-                            <DynamicCoverArt
-                              src={activeArtist.coverArt}
-                              trackPath={activeArtist.tracks?.[0]?.filePath}
-                              tier="lg"
-                              isLite={isLite}
-                              fallbackIcon={<Mic2 size={48} className="text-theme-10" />}
-                              className="w-full h-full"
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">
-                              {t('artistsView.title')}
-                            </p>
-                            <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">
-                              {activeArtist.name}
-                            </h2>
-                            <p className="text-sm text-zinc-400 mb-4">
-                              {activeArtist.albums.length} {t('artistsView.albumCount')} •{' '}
-                              {activeArtist.tracks.length} {t('artistsView.trackCount')}
-                            </p>
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => {
-                                  if (activeArtist.tracks.length > 0) {
-                                    handleRowClick(activeArtist.tracks[0], activeArtist.tracks)
-                                  }
-                                }}
-                                className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                                title={t('artistsView.playAll')}
-                              >
-                                <Play size={16} className="fill-current" />{' '}
-                                <span className="btn-text">{t('artistsView.playAll')}</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (activeArtist.tracks.length > 0) {
-                                    const shuffled = fisherYatesShuffle(activeArtist.tracks)
-                                    handleRowClick(shuffled[0], shuffled)
-                                  }
-                                }}
-                                className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                title={t('artistsView.shuffle')}
-                              >
-                                <Shuffle size={16} />{' '}
-                                <span className="btn-text">{t('artistsView.shuffle')}</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section: Albums & Danh sách phát của nghệ sĩ */}
-                      {activeArtist.albums && activeArtist.albums.length > 0 && (
-                        <div className="space-y-3">
-                          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                            <Disc size={18} className="text-theme-10" /> {t('artistsView.albums')} (
-                            {activeArtist.albums.length})
-                          </h3>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                            {activeArtist.albums.map((alb: any) => (
-                              <div
-                                key={alb.title}
-                                onClick={() => {
-                                  if (alb.tracks.length > 0) {
-                                    handleRowClick(alb.tracks[0], alb.tracks)
-                                  }
-                                }}
-                                className="bg-theme-60/40 p-3 rounded-xl border border-theme-30/40 hover:bg-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between"
-                              >
-                                <div className="aspect-square bg-theme-30 rounded-lg mb-2.5 overflow-hidden relative shadow-md">
-                                  <DynamicCoverArt
-                                    src={alb.coverArt}
-                                    trackPath={alb.tracks?.[0]?.filePath}
-                                    tier="md"
-                                    isLite={isLite}
-                                    fallbackIcon={<Disc size={32} />}
-                                    className="w-full h-full"
-                                    imageClassName="group-hover:scale-105 transition duration-300"
-                                  />
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    <div className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg">
-                                      <Play size={18} className="ml-0.5 fill-current" />
-                                    </div>
-                                  </div>
-                                </div>
-                                <div>
-                                  <h4 className="font-semibold text-sm text-white group-hover:text-theme-10 transition truncate">
-                                    {alb.title}
-                                  </h4>
-                                  <p className="text-xs text-zinc-400 truncate mt-0.5">
-                                    {alb.year ? `${alb.year} • ` : ''}
-                                    {alb.tracks.length} {t('artistsView.trackCount')}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Section: Tất cả bài hát / Singles */}
-                      <div className="space-y-3 min-h-[500px]">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                          <Music size={18} className="text-theme-10" />{' '}
-                          {t('artistsView.singlesAndTracks')} ({activeArtist.tracks.length})
-                        </h3>
-                        <div className="w-full h-[540px]">
-                          {renderTrackTable(activeArtist.tracks)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* VIEW: THỂ LOẠI (GENRES LIST) */}
-                  {activeView === 'genres' && !activeGenre && (
-                    <div className="flex flex-col h-full space-y-6">
-                      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-                        <div className="flex items-end gap-3 min-w-0 flex-1">
-                          <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">
-                            {searchQuery ? t('genresView.searchResults') : t('genresView.title')}
-                          </h2>
-                          <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
-                            {genresData.length} {t('genresView.genreCount')} •{' '}
-                            {libraryTracks.length} {t('common.songs')}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 min-h-[300px] h-full w-full overflow-hidden">
-                        {(() => {
-                          const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
-                          const normQuery = removeAccents(rawQuery)
-                          const filteredGenres = rawQuery
-                            ? genresData.filter((g) => matchesQuery(g.name, normQuery))
-                            : genresData
-
-                          if (filteredGenres.length === 0) {
-                            return (
-                              <p className="text-zinc-500 text-center mt-10">
-                                {t('genresView.noGenres')}
-                              </p>
-                            )
-                          }
-
-                          if (viewMode === 'table') {
-                            return (
-                              <div className="w-full h-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl flex flex-col">
-                                <Virtuoso
-                                  style={{ height: '100%', width: '100%' }}
-                                  data={filteredGenres}
-                                  fixedHeaderContent={() => (
-                                    <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-60/95 backdrop-blur-md border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider select-none">
-                                      <div className="col-span-1 text-center">#</div>
-                                      <div className="col-span-5">{t('genresView.title')}</div>
-                                      <div className="col-span-4">{t('genresView.topArtists')}</div>
-                                      <div className="col-span-1 text-center">
-                                        {t('common.songs')}
-                                      </div>
-                                      <div className="col-span-1 text-right">
-                                        {t('player.play')}
-                                      </div>
-                                    </div>
-                                  )}
-                                  itemContent={(idx, genre) => (
-                                    <div
-                                      key={genre.name}
-                                      onClick={() => setActiveGenre(genre)}
-                                      className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized border-b border-theme-30/20"
-                                    >
-                                      <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
-                                        {idx + 1}
-                                      </div>
-                                      <div className="col-span-5 flex items-center gap-3.5 min-w-0">
-                                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-theme-10/30 to-theme-30 border border-theme-10/30 flex items-center justify-center shrink-0 shadow-md">
-                                          <Tag size={20} className="text-theme-10" />
-                                        </div>
-                                        <div className="min-w-0">
-                                          <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">
-                                            {genre.name}
-                                          </h4>
-                                          <p className="text-xs text-zinc-500 truncate mt-0.5">
-                                            {genre.artistCount} {t('artistsView.artistCount')}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="col-span-4 flex items-center gap-1.5 overflow-hidden">
-                                        {genre.artists.slice(0, 3).map((art: string) => (
-                                          <span
-                                            key={art}
-                                            className="px-2 py-0.5 bg-theme-30/50 text-[11px] text-zinc-300 rounded-md truncate max-w-[120px]"
-                                          >
-                                            {art}
-                                          </span>
-                                        ))}
-                                        {genre.artists.length > 3 && (
-                                          <span className="text-[10px] text-zinc-500">
-                                            +{genre.artists.length - 3}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="col-span-1 text-center">
-                                        <span className="px-2 py-0.5 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
-                                          {genre.trackCount}
-                                        </span>
-                                      </div>
-                                      <div className="col-span-1 text-right">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            if (genre.tracks.length > 0)
-                                              handleRowClick(genre.tracks[0], genre.tracks)
-                                          }}
-                                          className="p-2 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition"
-                                          title={t('artistsView.playAll')}
-                                        >
-                                          <Play size={14} className="ml-0.5 fill-current" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                />
-                              </div>
-                            )
-                          }
-
-                          if (viewMode === 'compact') {
-                            return (
-                              <Virtuoso
-                                style={{ height: '100%', width: '100%' }}
-                                data={filteredGenres}
-                                itemContent={(idx, genre) => (
-                                  <div className="pb-1.5">
-                                    <div
-                                      key={genre.name}
-                                      onClick={() => setActiveGenre(genre)}
-                                      className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
-                                    >
-                                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                        <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">
-                                          {idx + 1}
-                                        </span>
-                                        <div className="w-8 h-8 rounded-lg bg-theme-10/20 border border-theme-10/30 flex items-center justify-center shrink-0">
-                                          <Tag size={15} className="text-theme-10" />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                          <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">
-                                            {genre.name}
-                                          </h4>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-4 shrink-0">
-                                        <span className="text-xs text-zinc-400 font-mono">
-                                          {genre.trackCount} {t('common.songs')} •{' '}
-                                          {genre.artistCount} {t('artistsView.artistCount')}
-                                        </span>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            if (genre.tracks.length > 0)
-                                              handleRowClick(genre.tracks[0], genre.tracks)
-                                          }}
-                                          className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
-                                          title={t('artistsView.playAll')}
-                                        >
-                                          <Play size={13} className="ml-0.5 fill-current" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              />
-                            )
-                          }
-
-                          return (
-                            <VirtuosoGrid
-                              style={{ height: '100%', width: '100%' }}
-                              data={filteredGenres}
-                              listClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5 p-1"
-                              itemClassName="h-full"
-                              itemContent={(_idx, genre) => (
-                                <div
-                                  key={genre.name}
-                                  onClick={() => setActiveGenre(genre)}
-                                  className="bg-gradient-to-br from-theme-60/80 to-theme-30/40 hover:from-theme-10/20 hover:to-theme-30/70 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/50 transition duration-300 group cursor-pointer shadow-lg flex flex-col justify-between h-48 track-card-optimized"
-                                >
-                                  <div className="w-full aspect-video bg-theme-30/60 rounded-xl overflow-hidden relative mb-3 flex items-center justify-center">
-                                    {!isLite && genre.coverArts.length > 0 ? (
-                                      <div className="w-full h-full grid grid-cols-2 gap-0.5">
-                                        {genre.coverArts.slice(0, 4).map((c, i) => (
-                                          <DynamicCoverArt
-                                            key={i}
-                                            src={c}
-                                            tier="sm"
-                                            isLite={isLite}
-                                            className="w-full h-full"
-                                          />
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <Tag size={32} className="text-theme-10/80" />
-                                    )}
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          if (genre.tracks.length > 0)
-                                            handleRowClick(genre.tracks[0], genre.tracks)
-                                        }}
-                                        className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition"
-                                      >
-                                        <Play size={18} className="ml-0.5 fill-current" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <h3 className="font-bold text-white text-base group-hover:text-theme-10 transition truncate">
-                                      {genre.name}
-                                    </h3>
-                                    <p className="text-xs text-zinc-400 mt-1">
-                                      {genre.trackCount} {t('common.songs')} • {genre.artistCount}{' '}
-                                      {t('artistsView.artistCount')}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-                            />
-                          )
-                        })()}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* VIEW: CHI TIẾT THỂ LOẠI (GENRE DETAIL) */}
-                  {activeView === 'genres' && activeGenre && (
-                    <div className="flex flex-col h-full space-y-6">
-                      <div>
-                        <button
-                          onClick={() => setActiveGenre(null)}
-                          className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
-                        >
-                          <ArrowLeft size={16} /> {t('genresView.backToGenres')}
-                        </button>
-
-                        <div className="flex items-end gap-6 mb-6">
-                          <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-theme-10/30 to-theme-30 border border-theme-10/40 shadow-2xl flex items-center justify-center flex-shrink-0">
-                            <Tag size={48} className="text-theme-10" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">
-                              {t('genresView.title')}
-                            </p>
-                            <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">
-                              {activeGenre.name}
-                            </h2>
-                            <p className="text-sm text-zinc-400 mb-4">
-                              {activeGenre.tracks.length} {t('common.songs')} •{' '}
-                              {activeGenre.artistCount} {t('artistsView.artistCount')}
-                            </p>
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => {
-                                  if (activeGenre.tracks.length > 0) {
-                                    handleRowClick(activeGenre.tracks[0], activeGenre.tracks)
-                                  }
-                                }}
-                                className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                                title={t('artistsView.playAll')}
-                              >
-                                <Play size={16} className="fill-current" />{' '}
-                                <span className="btn-text">{t('artistsView.playAll')}</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (activeGenre.tracks.length > 0) {
-                                    const shuffled = fisherYatesShuffle(activeGenre.tracks)
-                                    handleRowClick(shuffled[0], shuffled)
-                                  }
-                                }}
-                                className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                title={t('artistsView.shuffle')}
-                              >
-                                <Shuffle size={16} />{' '}
-                                <span className="btn-text">{t('artistsView.shuffle')}</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Top nghệ sĩ trong thể loại */}
-                        {activeGenre.artists && activeGenre.artists.length > 0 && (
-                          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                            <span className="text-xs text-zinc-500 shrink-0">
-                              {t('genresView.topArtists')}:
-                            </span>
-                            {activeGenre.artists.slice(0, 10).map((art: string) => (
-                              <span
-                                key={art}
-                                onClick={() => {
-                                  navigateToArtist(art)
-                                }}
-                                className="px-3 py-1 bg-theme-60/60 hover:bg-theme-10/20 hover:text-theme-10 rounded-full text-xs text-zinc-300 font-medium transition border border-theme-30/50 cursor-pointer shrink-0"
-                              >
-                                {art}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-h-0 flex flex-col">
-                        {renderTrackTable(activeGenre.tracks)}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* VIEW: PLAYLIST CỦA NGƯỜI DÙNG (USER PLAYLISTS LIST) */}
-                  {activeView === 'user-playlists' && !activeUserPlaylist && (
-                    <div className="flex flex-col h-full space-y-6">
-                      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-                        <div className="flex items-end gap-3 min-w-0 flex-1">
-                          <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">
-                            {searchQuery
-                              ? t('userPlaylistsView.searchResults')
-                              : t('userPlaylistsView.title')}
-                          </h2>
-                          <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
-                            {userPlaylists.length} {t('userPlaylistsView.playlistCount')}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setShowCreateUserPlaylistModal(true)}
-                          className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-10 hover:bg-theme-10 text-white px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition shadow-lg shadow-theme-10/20 shrink-0 cursor-pointer"
-                          title={t('userPlaylistsView.createPlaylist')}
-                        >
-                          <Plus size={16} />{' '}
-                          <span className="btn-text">{t('userPlaylistsView.createPlaylist')}</span>
-                        </button>
-                      </div>
-
-                      <div className="flex-1 overflow-y-auto pr-2">
-                        {(() => {
-                          const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
-                          const normQuery = removeAccents(rawQuery)
-                          const matchedUserPlaylists = rawQuery
-                            ? userPlaylists.filter((pl) => matchesQuery(pl.name, normQuery))
-                            : userPlaylists
-
-                          if (matchedUserPlaylists.length === 0) {
-                            return (
-                              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
-                                <ListPlus size={56} className="mb-4 opacity-20" />
-                                <p className="text-lg">{t('userPlaylistsView.noPlaylists')}</p>
-                                <button
-                                  onClick={() => setShowCreateUserPlaylistModal(true)}
-                                  className="mt-4 px-4 py-2 bg-theme-10 text-white rounded-lg text-sm font-medium transition"
-                                >
-                                  {t('userPlaylistsView.createPlaylist')}
-                                </button>
-                              </div>
-                            )
-                          }
-
-                          if (viewMode === 'table') {
-                            return (
-                              <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
-                                <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                                  <div className="col-span-1 text-center">#</div>
-                                  <div className="col-span-6">{t('userPlaylistsView.title')}</div>
-                                  <div className="col-span-3 text-center">{t('common.songs')}</div>
-                                  <div className="col-span-2 text-right">
-                                    {t('trackTable.actions')}
-                                  </div>
-                                </div>
-                                <div className="divide-y divide-theme-30/20">
-                                  {matchedUserPlaylists.map((pl, idx) => {
-                                    const resolved = getResolvedUserPlaylistTracks(pl)
-                                    const coverImg =
-                                      pl.thumbnail || resolved.find((t) => t.coverArt)?.coverArt
-
-                                    return (
-                                      <div
-                                        key={pl.id}
-                                        onClick={() => setActiveUserPlaylist(pl)}
-                                        onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                                        className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
-                                      >
-                                        <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
-                                          {idx + 1}
-                                        </div>
-                                        <div className="col-span-6 flex items-center gap-3.5 min-w-0">
-                                          <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
-                                            <DynamicCoverArt
-                                              src={coverImg}
-                                              trackPath={resolved[0]?.filePath}
-                                              tier="sm"
-                                              isLite={isLite}
-                                              fallbackIcon={
-                                                <ListPlus size={20} className="text-zinc-600" />
-                                              }
-                                              className="w-full h-full"
-                                            />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  if (resolved.length > 0)
-                                                    handleRowClick(resolved[0], resolved)
-                                                }}
-                                                className="text-white hover:scale-110 transition"
-                                              >
-                                                <Play size={16} className="fill-current" />
-                                              </button>
-                                            </div>
-                                          </div>
-                                          <div className="min-w-0">
-                                            <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">
-                                              {pl.name}
-                                            </h4>
-                                            <p className="text-xs text-zinc-500 truncate mt-0.5">
-                                              {t('userPlaylistsView.title')}
-                                            </p>
-                                          </div>
-                                        </div>
-                                        <div className="col-span-3 text-center">
-                                          <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
-                                            {pl.trackIds?.length || 0} {t('common.songs')}
-                                          </span>
-                                        </div>
-                                        <div className="col-span-2 flex items-center justify-end gap-2">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              handleChangeUserPlaylistCover(pl.id)
-                                            }}
-                                            className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100"
-                                            title={t('userPlaylistsView.chooseCover')}
-                                          >
-                                            <ImageIcon size={15} />
-                                          </button>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              handleUserPlaylistContextMenu(pl, e)
-                                            }}
-                                            className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition"
-                                          >
-                                            <MoreVertical size={15} />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )
-                          }
-
-                          if (viewMode === 'compact') {
-                            return (
-                              <div className="w-full space-y-1.5">
-                                {matchedUserPlaylists.map((pl, idx) => {
-                                  const resolved = getResolvedUserPlaylistTracks(pl)
-                                  const coverImg =
-                                    pl.thumbnail || resolved.find((t) => t.coverArt)?.coverArt
-
-                                  return (
-                                    <div
-                                      key={pl.id}
-                                      onClick={() => setActiveUserPlaylist(pl)}
-                                      onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                                      className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
-                                    >
-                                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                        <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">
-                                          {idx + 1}
-                                        </span>
-                                        <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                                          <DynamicCoverArt
-                                            src={coverImg}
-                                            trackPath={resolved[0]?.filePath}
-                                            tier="sm"
-                                            isLite={isLite}
-                                            fallbackIcon={
-                                              <ListPlus size={16} className="text-zinc-600" />
-                                            }
-                                            className="w-full h-full"
-                                          />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                          <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">
-                                            {pl.name}
-                                          </h4>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-4 shrink-0">
-                                        <span className="text-xs text-zinc-400 font-mono">
-                                          {pl.trackIds?.length || 0} {t('common.songs')}
-                                        </span>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            if (resolved.length > 0)
-                                              handleRowClick(resolved[0], resolved)
-                                          }}
-                                          className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
-                                          title={t('artistsView.playAll')}
-                                        >
-                                          <Play size={13} className="ml-0.5 fill-current" />
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleUserPlaylistContextMenu(pl, e)
-                                          }}
-                                          className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
-                                        >
-                                          <MoreVertical size={14} />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )
-                          }
-
-                          return (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
-                              {matchedUserPlaylists.map((pl) => {
-                                const resolved = getResolvedUserPlaylistTracks(pl)
-                                const coverImg =
-                                  pl.thumbnail || resolved.find((t) => t.coverArt)?.coverArt
-
-                                return (
-                                  <div
-                                    key={pl.id}
-                                    onClick={() => setActiveUserPlaylist(pl)}
-                                    onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                                    className="bg-theme-60/40 hover:bg-theme-30/50 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between shadow-lg track-card-optimized"
-                                  >
-                                    <div className="aspect-square bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-md">
-                                      <DynamicCoverArt
-                                        src={coverImg}
-                                        trackPath={resolved[0]?.filePath}
-                                        tier="md"
-                                        isLite={isLite}
-                                        fallbackIcon={
-                                          <ListPlus size={36} className="text-zinc-600" />
-                                        }
-                                        className="w-full h-full"
-                                        imageClassName="group-hover:scale-105 transition duration-300"
-                                      />
-                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            if (resolved.length > 0)
-                                              handleRowClick(resolved[0], resolved)
-                                          }}
-                                          className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg"
-                                        >
-                                          <Play size={18} className="ml-0.5 fill-current" />
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleChangeUserPlaylistCover(pl.id)
-                                          }}
-                                          className="w-8 h-8 rounded-full bg-black/70 text-white hover:bg-theme-10 flex items-center justify-center transition"
-                                          title={t('userPlaylistsView.chooseCover')}
-                                        >
-                                          <ImageIcon size={14} />
-                                        </button>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <div className="min-w-0 flex-1 pr-2">
-                                        <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">
-                                          {pl.name}
-                                        </h3>
-                                        <p className="text-xs text-zinc-400 mt-0.5">
-                                          {pl.trackIds?.length || 0} {t('common.songs')}
-                                        </p>
-                                      </div>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleUserPlaylistContextMenu(pl, e)
-                                        }}
-                                        className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
-                                      >
-                                        <MoreVertical size={14} />
-                                      </button>
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* VIEW: CHI TIẾT PLAYLIST NGƯỜI DÙNG (USER PLAYLIST DETAIL) */}
-                  {activeView === 'user-playlists' && activeUserPlaylist && (
-                    <div className="flex flex-col h-full space-y-6">
-                      <div>
-                        <button
-                          onClick={() => setActiveUserPlaylist(null)}
-                          className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition"
-                        >
-                          <ArrowLeft size={16} /> {t('userPlaylistsView.title')}
-                        </button>
-
-                        <div className="flex items-end justify-between gap-6 mb-6">
-                          <div className="flex items-end gap-6 min-w-0">
-                            <div
-                              onClick={() => {
-                                setEditingUserPlaylist(activeUserPlaylist)
-                                setShowEditUserPlaylistModal(true)
-                              }}
-                              className="w-36 h-36 rounded-2xl overflow-hidden bg-theme-30 border border-theme-30/80 shadow-2xl relative group cursor-pointer flex-shrink-0"
-                              title={t('modals.editPlaylist.title')}
-                            >
-                              <DynamicCoverArt
-                                src={
-                                  activeUserPlaylist.thumbnail ||
-                                  activeUserPlaylistTracks.find((t) => t.coverArt)?.coverArt
-                                }
-                                trackPath={activeUserPlaylistTracks[0]?.filePath}
-                                tier="lg"
-                                isLite={isLite}
-                                fallbackIcon={<ListPlus size={44} className="text-zinc-600" />}
-                                className="w-full h-full"
-                              />
-                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1">
-                                <ImageIcon size={18} />
-                                <span>{t('modals.editPlaylist.title')}</span>
-                              </div>
-                            </div>
-
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">
-                                {t('userPlaylistsView.title')}
-                              </p>
-                              <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-2 truncate">
-                                {activeUserPlaylist.name}
-                              </h2>
-                              {activeUserPlaylist.description && (
-                                <p className="text-sm text-zinc-300 line-clamp-2 max-w-xl mb-3">
-                                  {activeUserPlaylist.description}
-                                </p>
-                              )}
-                              <p className="text-sm text-zinc-400 mb-4">
-                                {activeUserPlaylistTracks.length} {t('common.songs')}
-                              </p>
-
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={() => {
-                                    if (activeUserPlaylistTracks.length > 0) {
-                                      handleRowClick(
-                                        activeUserPlaylistTracks[0],
-                                        activeUserPlaylistTracks
-                                      )
-                                    }
-                                  }}
-                                  className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                                >
-                                  <Play size={16} className="fill-current" />{' '}
-                                  {t('userPlaylistsView.playAll')}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (activeUserPlaylistTracks.length > 0) {
-                                      const shuffled = fisherYatesShuffle(activeUserPlaylistTracks)
-                                      handleRowClick(shuffled[0], shuffled)
-                                    }
-                                  }}
-                                  className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                >
-                                  <Shuffle size={16} /> {t('artistsView.shuffle')}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3 shrink-0">
-                            <button
-                              onClick={() => setShowAddSongsToUserPlaylistModal(true)}
-                              className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                            >
-                              <Plus size={16} /> {t('userPlaylistsView.addSongs')}
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingUserPlaylist(activeUserPlaylist)
-                                setShowEditUserPlaylistModal(true)
-                              }}
-                              className="p-2.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition cursor-pointer"
-                              title={t('modals.editPlaylist.title')}
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUserPlaylist(activeUserPlaylist)}
-                              className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition cursor-pointer"
-                              title={t('userPlaylistsView.deletePlaylist')}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 min-h-0 flex flex-col">
-                        {activeUserPlaylistTracks.length > 0 ? (
-                          renderTrackTable(activeUserPlaylistTracks)
-                        ) : (
-                          <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-10">
-                            <ListPlus size={48} className="mb-3 opacity-20" />
-                            <p className="text-base">{t('userPlaylistsView.empty')}</p>
-                            <button
-                              onClick={() => setShowAddSongsToUserPlaylistModal(true)}
-                              className="mt-4 px-4 py-2 bg-theme-10 text-white rounded-lg text-sm font-medium transition"
-                            >
-                              {t('userPlaylistsView.addSongs')}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* VIEW: PLAYLISTS THƯ MỤC / ALBUMS */}
-                  {activeView === 'playlists' && !activePlaylist && (
-                    <>
-                      <div className="flex items-center justify-between mb-6 sm:mb-8 gap-3 flex-wrap">
-                        <div className="flex items-end gap-3 min-w-0 flex-1">
-                          <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">
-                            {searchQuery
-                              ? t('playlistsView.searchResults')
-                              : t('playlistsView.title')}
-                          </h2>
-                          <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
-                            {playlists.length} {t('userPlaylistsView.playlistCount')}
-                          </span>
-                        </div>
-                        {!searchQuery && (
-                          <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
-                            <button
-                              onClick={() => setShowCreateModal(true)}
-                              className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-10 hover:bg-theme-10 text-white px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                              title={t('playlistsView.createPlaylist')}
-                            >
-                              <Plus size={16} />{' '}
-                              <span className="btn-text">{t('playlistsView.createPlaylist')}</span>
-                            </button>
-                            <button
-                              onClick={handleAutoGeneratePlaylists}
-                              className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-30 hover:bg-theme-10/20 hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer"
-                              title={t('playlistsView.autoCategorize')}
-                            >
-                              <Sparkles size={16} />{' '}
-                              <span className="btn-text">{t('playlistsView.autoCategorize')}</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {!searchQuery && playlists.length === 0 ? (
-                        <p className="text-zinc-500">{t('playlistsView.noPlaylists')}</p>
-                      ) : (
-                        <div className="space-y-10">
-                          {(matchedPlaylists.length > 0 || !searchQuery) && (
-                            <div>
-                              {searchQuery && (
-                                <h3 className="text-xl font-bold text-white mb-6">
-                                  {t('playlistsView.playlistsAndAlbums', {
-                                    count: matchedPlaylists.length
-                                  })}
-                                </h3>
-                              )}
-
-                              {viewMode === 'table' ? (
-                                <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
-                                  <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                                    <div className="col-span-1 text-center">#</div>
-                                    <div className="col-span-7">{t('playlistsView.title')}</div>
-                                    <div className="col-span-2 text-center">
-                                      {t('common.songs')}
-                                    </div>
-                                    <div className="col-span-2 text-right">
-                                      {t('trackTable.actions')}
-                                    </div>
-                                  </div>
-                                  <div className="divide-y divide-theme-30/20">
-                                    {visiblePlaylists.map((pl, idx) => (
-                                      <PlaylistItemRow
-                                        key={pl.name}
-                                        pl={pl}
-                                        idx={idx}
-                                        isLite={isLite}
-                                        onOpen={handleOpenPlaylist}
-                                        onPlay={handlePlayPlaylistTracks}
-                                        onContextMenu={handlePlaylistContextMenu}
-                                        onChangeImage={handleChangePlaylistImage}
-                                        onRename={handleOpenPlaylistRename}
-                                        t={t}
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : viewMode === 'compact' ? (
-                                <div className="w-full space-y-1.5">
-                                  {visiblePlaylists.map((pl, idx) => (
-                                    <PlaylistItemCompact
-                                      key={pl.name}
-                                      pl={pl}
-                                      idx={idx}
-                                      isLite={isLite}
-                                      onOpen={handleOpenPlaylist}
-                                      onPlay={handlePlayPlaylistTracks}
-                                      onContextMenu={handlePlaylistContextMenu}
-                                      t={t}
-                                    />
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
-                                  {visiblePlaylists.map((pl) => (
-                                    <PlaylistItemCard
-                                      key={pl.name}
-                                      pl={pl}
-                                      isLite={isLite}
-                                      onOpen={handleOpenPlaylist}
-                                      onContextMenu={handlePlaylistContextMenu}
-                                      onChangeImage={handleChangePlaylistImage}
-                                      onExtractImage={handleExtractPlaylistImage}
-                                      onRename={handleOpenPlaylistRename}
-                                      t={t}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Sentinel tải lũy tiến (Progressive batching) */}
-                              {visiblePlaylists.length < matchedPlaylists.length && (
-                                <div
-                                  ref={playlistsLoadMoreRef}
-                                  className="w-full py-6 flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer transition"
-                                  onClick={() =>
-                                    setPlaylistsRenderLimit((prev) =>
-                                      Math.min(prev + 36, matchedPlaylists.length)
-                                    )
-                                  }
-                                >
-                                  <span>
-                                    {language === 'vi'
-                                      ? `Hiển thị ${visiblePlaylists.length} / ${matchedPlaylists.length} danh sách phát (Cuộn xuống để tải thêm)`
-                                      : `Showing ${visiblePlaylists.length} / ${matchedPlaylists.length} playlists (Scroll down to load more)`}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {searchQuery && (
-                            <div className="flex flex-col h-[520px] w-full shrink-0">
-                              <h3 className="text-xl font-bold text-white mb-4 shrink-0">
-                                {t('common.songs')} ({processedLibraryTracks.length})
-                              </h3>
-                              <div className="flex-1 min-h-0 flex flex-col h-[460px] w-full">
-                                {processedLibraryTracks.length > 0 ? (
-                                  renderTrackTable(processedLibraryTracks)
-                                ) : (
-                                  <p className="text-zinc-500 mt-4">
-                                    {t('songsView.noSongsMatched', { query: searchQuery })}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {searchQuery &&
-                            matchedPlaylists.length === 0 &&
-                            processedLibraryTracks.length === 0 && (
-                              <p className="text-zinc-500 mt-8 text-center">
-                                {t('playlistsView.noResults', { query: searchQuery })}
-                              </p>
-                            )}
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* VIEW: CHI TIẾT PLAYLIST THƯ MỤC */}
-                  {activeView === 'playlists' && activePlaylist && (
-                    <div className="flex flex-col h-full space-y-6">
-                      <div>
-                        <button
-                          onClick={() => setActivePlaylist(null)}
-                          className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-4 transition cursor-pointer"
-                        >
-                          <ArrowLeft size={16} /> {t('sidebar.myPlaylists')}
-                        </button>
-
-                        <div
-                          className="flex items-end justify-between gap-6 mb-6"
-                          onContextMenu={(e) => handlePlaylistContextMenu(activePlaylist, e)}
-                        >
-                          <div className="flex items-end gap-6 min-w-0">
-                            <div className="w-36 h-36 bg-theme-30 rounded-2xl overflow-hidden shadow-2xl relative group shrink-0 border border-theme-30/80">
-                              <DynamicCoverArt
-                                src={activePlaylist.thumbnail}
-                                trackPath={activePlaylist.path}
-                                tier="lg"
-                                isLite={isLite}
-                                fallbackIcon={<FolderPlus size={40} className="text-zinc-600" />}
-                                className="w-full h-full"
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">
-                                Playlist
-                              </p>
-                              <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">
-                                {activePlaylist.name}
-                              </h2>
-                              <p className="text-sm text-zinc-400 mb-4">
-                                {processedPlaylistTracks.length} {t('common.songs')}
-                              </p>
-
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={() => {
-                                    if (processedPlaylistTracks.length > 0) {
-                                      handleRowClick(
-                                        processedPlaylistTracks[0],
-                                        processedPlaylistTracks
-                                      )
-                                    }
-                                  }}
-                                  className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                                >
-                                  <Play size={16} className="fill-current" />{' '}
-                                  {t('userPlaylistsView.playAll')}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (processedPlaylistTracks.length > 0) {
-                                      const shuffled = fisherYatesShuffle(processedPlaylistTracks)
-                                      handleRowClick(shuffled[0], shuffled)
-                                    }
-                                  }}
-                                  className="flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                                >
-                                  <Shuffle size={16} /> {t('artistsView.shuffle')}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Nút thêm nhạc riêng cho Playlist */}
-                          <div className="flex gap-3 shrink-0">
-                            <button
-                              onClick={() => setShowAddSongsModal(true)}
-                              title={t('playlistsView.addExistingSongs')}
-                              className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-                            >
-                              <Plus size={16} />{' '}
-                              <span className="btn-text">
-                                {t('playlistsView.addExistingSongs')}
-                              </span>
-                            </button>
-                            <button
-                              onClick={handleImportFiles}
-                              title={t('playlistsView.importFromComputer')}
-                              className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
-                            >
-                              <Upload size={16} />{' '}
-                              <span className="btn-text">
-                                {t('playlistsView.importFromComputer')}
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <QuickFilterChips
-                          onOpenDuplicateFinder={() => setShowDuplicateFinder(true)}
-                          onOpenSmartPlaylists={() => setShowSmartPlaylists(true)}
-                        />
-                      </div>
-                      <div className="flex-1 min-h-0 flex flex-col">
-                        {renderTrackTable(processedPlaylistTracks)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* CỘT PHẢI: LỜI BÀI HÁT (SPLIT VIEW) */}
-                {showLyricsPanel && !isLyricsMaximized && (
-                  <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
-                    <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
-                      <h3 className="font-bold text-white flex items-center gap-2">
-                        <Mic2 size={16} className="text-theme-10" /> {t('lyrics.title')}
-                      </h3>
-                      <div className="flex items-center gap-1.5 text-xs">
-                        <button
-                          onClick={() => changeLyricOffset(-0.5)}
-                          title={t('player.lyricOffsetFast')}
-                          className="px-1.5 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 font-mono transition"
-                        >
-                          -0.5s
-                        </button>
-                        <button
-                          onClick={resetLyricOffset}
-                          title={t('player.lyricOffsetReset')}
-                          className={`px-1.5 py-0.5 rounded font-mono transition ${lyricOffset !== 0 ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30' : 'bg-zinc-800/60 text-zinc-400'}`}
-                        >
-                          {lyricOffset > 0 ? `+${lyricOffset}` : lyricOffset}s
-                        </button>
-                        <button
-                          onClick={() => changeLyricOffset(0.5)}
-                          title={t('player.lyricOffsetSlow')}
-                          className="px-1.5 py-0.5 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 font-mono transition"
-                        >
-                          +0.5s
-                        </button>
-                        <button
-                          onClick={() => setIsLyricsMaximized(true)}
-                          className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30 ml-1"
-                        >
-                          <Maximize2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
-                      <SyncedLyricsList
-                        lyrics={lyrics}
-                        audioRef={audioRef}
-                        noLyricsText={t('lyrics.noLyrics')}
-                      />
-                    </div>
-                    <div className="p-3 border-t border-theme-30/50 bg-zinc-950/40 h-16 shrink-0 w-full overflow-hidden flex items-center justify-center">
-                      {bitPerfectEnabled || isDsdTrack(currentTrack) ? (
-                        <div
-                          className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border ${isDsdTrack(currentTrack) ? 'text-amber-400/90 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400/90 bg-emerald-500/10 border-emerald-500/20'}`}
-                        >
-                          <span
-                            className={`w-2 h-2 rounded-full animate-pulse ${isDsdTrack(currentTrack) ? 'bg-amber-400' : 'bg-emerald-400'}`}
-                          />
-                          <span>
-                            {isDsdTrack(currentTrack)
-                              ? `${getDsdRateLabel(currentTrack?.sampleRate) || 'DSD'} Direct Stream`
-                              : 'Bit-perfect Direct Stream'}{' '}
-                            {bassOutParams?.samplerate
-                              ? `(${isDsdTrack(currentTrack) ? formatAudioSampleRate(bassOutParams.samplerate!) : bassOutParams.samplerate! >= 1000 ? `${bassOutParams.samplerate! / 1000}kHz` : `${bassOutParams.samplerate!}Hz`})`
-                              : '(Bypass DSP)'}
-                          </span>
-                        </div>
-                      ) : (
-                        <WebGLVisualizer
-                          analyserNodeRef={analyserNodeRef}
-                          isPlaying={isPlaying}
-                          isLite={isLite}
-                          showVisualizer={true}
-                        />
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* CỘT PHẢI: HÀNG ĐỢI DANH SÁCH PHÁT (QUEUE) */}
-                {showQueuePanel && (
-                  <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
-                    <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-white flex items-center gap-2">
-                          <List size={16} className="text-theme-10" /> {t('queue.title')}
-                        </h3>
-                        <span className="text-xs text-zinc-500 font-mono">
-                          ({playQueue.length})
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {playQueue.length > 0 && (
-                          <button
-                            onClick={() => {
-                              setPlayQueue([])
-                              showToast(t('player.queueCleared'), 'info')
-                            }}
-                            className="text-xs text-zinc-400 hover:text-red-400 px-2 py-1 rounded hover:bg-theme-30 flex items-center gap-1 transition cursor-pointer"
-                            title={t('player.clearQueueTitle')}
-                          >
-                            <Trash2 size={12} />
-                            <span>{t('player.clearQueue')}</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setShowQueuePanel(false)}
-                          className="text-zinc-400 hover:text-white p-1 rounded hover:bg-theme-30"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                      {playQueue.length === 0 ? (
-                        <p className="text-zinc-500 italic mt-10 text-center">{t('queue.empty')}</p>
-                      ) : (
-                        <DndContext
-                          sensors={dndSensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={(event) => {
-                            const { active, over } = event
-                            if (active.id !== over?.id) {
-                              setPlayQueue((items) => {
-                                const oldIndex = items.findIndex(
-                                  (_, i) => `queue-${i}` === active.id
-                                )
-                                const newIndex = items.findIndex(
-                                  (_, i) => `queue-${i}` === over?.id
-                                )
-                                return arrayMove(items, oldIndex, newIndex)
-                              })
-                            }
-                          }}
-                        >
-                          {(() => {
-                            const visibleQueue = playQueue.slice(0, queueRenderLimit)
-                            return (
-                              <>
-                                <SortableContext
-                                  items={visibleQueue.map((_, i) => `queue-${i}`)}
-                                  strategy={verticalListSortingStrategy}
-                                >
-                                  {visibleQueue.map((track, index) => {
-                                    const isActive = currentTrack?.id === track.id
-                                    return (
-                                      <SortableQueueItem
-                                        key={`queue-${index}`}
-                                        id={`queue-${index}`}
-                                        track={track}
-                                        isActive={isActive}
-                                        isPlaying={isPlaying}
-                                        isLite={isLite}
-                                        onPlay={handlePlayTrack}
-                                        onContextMenu={handleTrackContextMenu}
-                                        onArtistClick={navigateToArtist}
-                                      />
-                                    )
-                                  })}
-                                </SortableContext>
-                                {visibleQueue.length < playQueue.length && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setQueueRenderLimit((prev) =>
-                                        Math.min(prev + 60, playQueue.length)
-                                      )
-                                    }
-                                    className="w-full py-2.5 text-center text-xs text-zinc-400 hover:text-white cursor-pointer bg-theme-30/40 hover:bg-theme-30/80 rounded-lg transition"
-                                  >
-                                    {language === 'vi'
-                                      ? `Hiển thị ${visibleQueue.length} / ${playQueue.length} bài (Bấm để tải thêm)`
-                                      : `Showing ${visibleQueue.length} / ${playQueue.length} tracks (Click to load more)`}
-                                  </button>
-                                )}
-                              </>
-                            )
-                          })()}
-                        </DndContext>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </main>
-
-            {/* FULLSCREEN LYRICS */}
-            {isLyricsMaximized && showLyricsPanel && (
-              <div
-                className="flex-1 flex flex-col bg-transparent z-10 relative animate-fade-in"
-                style={{ willChange: 'opacity, transform' }}
-              >
-                <div className="absolute top-8 right-8 flex items-center gap-3 z-50">
-                  <div className="flex items-center gap-1.5 text-xs bg-theme-60/80 backdrop-blur-md border border-theme-30/60 p-1.5 px-3 rounded-full shadow-lg">
-                    <span className="text-zinc-400 text-[11px] mr-1">
-                      {t('player.lyricOffset')}:
-                    </span>
-                    <button
-                      onClick={() => changeLyricOffset(-0.5)}
-                      title={t('player.lyricOffsetFast')}
-                      className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono transition cursor-pointer"
-                    >
-                      -0.5s
-                    </button>
-                    <button
-                      onClick={resetLyricOffset}
-                      title={t('player.lyricOffsetReset')}
-                      className={`px-2 py-0.5 rounded font-mono transition cursor-pointer ${lyricOffset !== 0 ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30' : 'bg-zinc-800 text-zinc-400'}`}
-                    >
-                      {lyricOffset > 0 ? `+${lyricOffset}` : lyricOffset}s
-                    </button>
-                    <button
-                      onClick={() => changeLyricOffset(0.5)}
-                      title={t('player.lyricOffsetSlow')}
-                      className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono transition cursor-pointer"
-                    >
-                      +0.5s
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => setIsLyricsMaximized(false)}
-                    className="text-zinc-400 hover:text-white bg-theme-30 p-3 rounded-full hover:scale-110 transition-transform cursor-pointer"
-                  >
-                    <Minimize2 size={24} />
-                  </button>
-                </div>
-                <div className="flex-1 flex items-center justify-center p-12">
-                  <div className="w-1/2 flex flex-col items-center justify-center gap-6">
-                    <div className="w-[min(28vw,38vh)] max-w-[420px] min-w-[240px] aspect-square rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
-                      <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-10 rounded-full mix-blend-overlay"></div>
-                      <div className="w-12 h-12 bg-zinc-950 rounded-full absolute z-20 border-2 border-zinc-700 shadow-inner"></div>
-                      <DynamicCoverArt
-                        track={currentTrack}
-                        src={originalCover || currentTrack?.coverArt}
-                        highResSrc={originalCover || currentTrack?.coverArtHighRes}
-                        streamPort={streamPort}
-                        tier="xl"
-                        isLite={isLite}
-                        animateSpin={true}
-                        isPlaying={isPlaying}
-                        fallbackImageSrc={meiSingingPlaceholder}
-                        className="w-full h-full"
-                        imageClassName="w-full h-full object-cover rounded-full"
-                      />
-                    </div>
-
-                    {/* VISUALIZER DƯỚI ĐĨA THAN */}
-                    <div className="w-[min(28vw,38vh)] max-w-[420px] min-w-[240px] h-14 rounded-xl bg-zinc-950/50 border border-theme-30/50 p-2 overflow-hidden flex items-center justify-center shadow-inner">
-                      {bitPerfectEnabled || isDsdTrack(currentTrack) ? (
-                        <div
-                          className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border ${isDsdTrack(currentTrack) ? 'text-amber-400/90 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400/90 bg-emerald-500/10 border-emerald-500/20'}`}
-                        >
-                          <span
-                            className={`w-2 h-2 rounded-full animate-pulse ${isDsdTrack(currentTrack) ? 'bg-amber-400' : 'bg-emerald-400'}`}
-                          />
-                          <span>
-                            {isDsdTrack(currentTrack)
-                              ? `${getDsdRateLabel(currentTrack?.sampleRate) || 'DSD'} Direct Stream`
-                              : 'Bit-perfect Direct Stream'}{' '}
-                            {bassOutParams?.samplerate
-                              ? `(${isDsdTrack(currentTrack) ? formatAudioSampleRate(bassOutParams.samplerate!) : bassOutParams.samplerate! >= 1000 ? `${bassOutParams.samplerate! / 1000}kHz` : `${bassOutParams.samplerate!}Hz`})`
-                              : '(Bypass DSP)'}
-                          </span>
-                        </div>
-                      ) : (
-                        <WebGLVisualizer
-                          analyserNodeRef={analyserNodeRef}
-                          isPlaying={isPlaying}
-                          isLite={isLite}
-                          showVisualizer={true}
-                        />
-                      )}
-                    </div>
-
-                    <div className="text-center">
-                      <h2 className="text-3xl font-bold text-white mb-2">{currentTrack?.title}</h2>
-                      <ArtistLinks
-                        artists={currentTrack?.artists}
-                        fallbackArtist={currentTrack?.artist}
-                        onArtistClick={navigateToArtist}
-                        className="text-theme-10 text-lg"
-                      />
-                    </div>
-                  </div>
-                  <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">
-                    <SyncedLyricsList
-                      lyrics={lyrics}
-                      audioRef={audioRef}
-                      isVinyl={true}
-                      noLyricsText={t('lyrics.noLyrics')}
+                    <SettingsView
+                      handleUpdateLibraryFolder={libraryOps.handleUpdateLibraryFolder}
+                      handleRemoveLibraryFolder={libraryOps.handleRemoveLibraryFolder}
+                      handleAddLibraryFolder={libraryOps.handleAddLibraryFolder}
+                      handleReloadLibrary={libraryOps.handleReloadLibrary}
+                      showToast={showToast}
+                      audioRef={audioEngine.audioRef}
+                      audioCtxRef={audioEngine.audioCtxRef}
+                      pendingSeekTimeRef={audioEngine.pendingSeekTimeRef}
+                      resetWebAudioPipeline={audioEngine.resetWebAudioPipeline}
+                      setShowBackupModal={setShowBackupModal}
+                      setShowInsightsModal={setShowInsightsModal}
+                      updaterStatus={updaterStatus}
+                      setUpdaterStatus={setUpdaterStatus}
                     />
-                  </div>
+                  )}
                 </div>
+
+                {/* SIDE LYRICS DRAWER */}
+                {showLyricsPanel && !isLyricsMaximized && (
+                  <SideLyricsPanel
+                    lyrics={lyricsData.lyrics}
+                    audioRef={audioEngine.audioRef}
+                    analyserNodeRef={audioEngine.analyserNodeRef}
+                    changeLyricOffset={lyricsData.changeLyricOffset}
+                    resetLyricOffset={lyricsData.resetLyricOffset}
+                  />
+                )}
+
+                {/* PLAY QUEUE DRAWER */}
+                {showQueuePanel && (
+                  <QueuePanel
+                    onPlayTrack={audioEngine.handlePlayTrack}
+                    onTrackContextMenu={libraryOps.handleTrackContextMenu}
+                    onArtistClick={navigateToArtist}
+                  />
+                )}
               </div>
-            )}
+
+              {/* FULLSCREEN VINYL LYRICS */}
+              {isLyricsMaximized && showLyricsPanel && (
+                <FullscreenLyrics
+                  lyrics={lyricsData.lyrics}
+                  originalCover={lyricsData.originalCover}
+                  audioRef={audioEngine.audioRef}
+                  analyserNodeRef={audioEngine.analyserNodeRef}
+                  navigateToArtist={navigateToArtist}
+                  changeLyricOffset={lyricsData.changeLyricOffset}
+                  resetLyricOffset={lyricsData.resetLyricOffset}
+                />
+              )}
+            </main>
           </div>
 
-          {/* PLAYER BAR */}
-          <footer className="h-24 bg-theme-60 border-t border-theme-30 flex items-center justify-between px-3.5 sm:px-6 z-30 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
-            <div className="flex items-center gap-3 sm:gap-4 w-[28%] max-w-[260px] lg:max-w-[320px] min-w-0 z-10">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
-                <DynamicCoverArt
-                  track={currentTrack}
-                  streamPort={streamPort}
-                  tier="md"
-                  isLite={isLite}
-                  smartAspect={true}
-                  fallbackIconSize={24}
-                  className="w-full h-full"
-                />
-              </div>
-              <div className="truncate min-w-0 flex-1">
-                <h4 className="text-sm font-bold text-white leading-tight truncate">
-                  {currentTrack ? currentTrack.title : t('player.noTrack')}
-                </h4>
-                <div className="text-xs text-zinc-400 mt-1 truncate">
-                  {currentTrack ? (
-                    <ArtistLinks
-                      artists={currentTrack.artists}
-                      fallbackArtist={currentTrack.artist || t('player.unknownArtist')}
-                      onArtistClick={navigateToArtist}
-                      className="text-xs text-zinc-400"
-                    />
-                  ) : (
-                    t('player.unknownArtist')
-                  )}
-                </div>
-                {currentTrack && (
-                  <div className="flex items-center gap-2 mt-1 truncate">
-                    <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md shrink-0">
-                      {isDsdTrack(currentTrack) ? (
-                        <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
-                          {getDsdRateLabel(currentTrack.sampleRate) || currentTrack.format || 'DSD'}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] uppercase font-bold text-theme-10 bg-theme-10/10 px-1.5 py-0.5 rounded">
-                          {currentTrack.lossless ? 'Lossless' : currentTrack.format || 'MP3'}
-                        </span>
-                      )}
-                      {currentTrack.bitDepth && (
-                        <span
-                          className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${isDsdTrack(currentTrack) ? 'text-amber-400 bg-amber-500/10' : 'text-blue-500 bg-blue-500/10'}`}
-                        >
-                          {currentTrack.bitDepth}-BIT
-                        </span>
-                      )}
-                      {(bitPerfectEnabled || isDsdTrack(currentTrack)) &&
-                        (() => {
-                          const activeAudioParams = bassOutParams
-                          return (
-                            <span
-                              className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                                activeAudioParams?.isDsd
-                                  ? 'text-amber-400 bg-amber-500/10'
-                                  : isDsdTrack(currentTrack)
-                                    ? 'text-amber-400/90 bg-amber-500/10'
-                                    : bitPerfectType === 'asio'
-                                      ? 'text-purple-400 bg-purple-500/10'
-                                      : 'text-emerald-400 bg-emerald-500/10'
-                              }`}
-                              title={
-                                activeAudioParams?.samplerate
-                                  ? `${bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Exclusive'}: ${activeAudioParams.samplerate}Hz • ${activeAudioParams.format || 'Direct'} (Bit-perfect)`
-                                  : isDsdTrack(currentTrack)
-                                    ? 'BASS DSD Engine'
-                                    : 'Direct bit-perfect stream to hardware DAC'
-                              }
-                            >
-                              {activeAudioParams?.isDsd
-                                ? bitPerfectType === 'asio'
-                                  ? 'DSD Native'
-                                  : 'DSD (DoP)'
-                                : isDsdTrack(currentTrack)
-                                  ? activeAudioParams?.format || 'DSD Engine'
-                                  : bitPerfectType === 'asio'
-                                    ? 'ASIO Direct'
-                                    : 'WASAPI Direct'}
-                            </span>
-                          )
-                        })()}
-                    </div>
-                    <span className="text-[10px] text-zinc-500 hidden md:inline truncate">
-                      {bitPerfectEnabled && bassOutParams?.samplerate
-                        ? isDsdTrack(currentTrack)
-                          ? formatAudioSampleRate(bassOutParams.samplerate)
-                          : bassOutParams.samplerate >= 1000
-                            ? `${bassOutParams.samplerate / 1000}kHz`
-                            : `${bassOutParams.samplerate}Hz`
-                        : currentTrack.sampleRate
-                          ? isDsdTrack(currentTrack)
-                            ? formatAudioSampleRate(currentTrack.sampleRate)
-                            : currentTrack.sampleRate >= 1000
-                              ? `${currentTrack.sampleRate / 1000}kHz`
-                              : `${currentTrack.sampleRate}Hz`
-                          : ''}
-                      {currentTrack.bitrate
-                        ? ` | ${Math.round(currentTrack.bitrate / 1000)} kbps`
-                        : ''}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {currentTrack && (
-                <button
-                  type="button"
-                  onClick={async (e) => {
-                    e.stopPropagation()
-                    const trackKey = currentTrack.filePath || currentTrack.id
-                    if (!trackKey) return
-                    const isFav = favoriteTrackIds.includes(trackKey)
-                    toggleFavoriteId(trackKey)
-                    if (window.api?.toggleFavorite) {
-                      await window.api.toggleFavorite(trackKey, !isFav).catch(() => {})
-                    }
-                    showToast(
-                      !isFav
-                        ? t('favorites.addedToFavorites') || 'Đã thêm vào yêu thích'
-                        : t('favorites.removedFromFavorites') || 'Đã xóa khỏi yêu thích',
-                      'info',
-                      1500
-                    )
-                  }}
-                  className={`p-1.5 rounded-full transition-all shrink-0 cursor-pointer ${
-                    favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
-                      ? 'text-rose-500 hover:text-rose-400 bg-rose-500/10'
-                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
-                  }`}
-                  title={
-                    favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
-                      ? t('favorites.removeFromFavorites') || 'Bỏ yêu thích'
-                      : t('favorites.addToFavorites') || 'Yêu thích'
-                  }
-                >
-                  <Heart
-                    size={18}
-                    className={
-                      favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
-                        ? 'fill-rose-500'
-                        : ''
-                    }
-                  />
-                </button>
-              )}
-            </div>
-
-            {/* Cụm điều khiển & Thanh tiến trình luôn nằm ở vị trí trung tâm tuyệt đối */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[44%] max-w-xl min-w-[260px] sm:min-w-[320px] px-2 flex flex-col items-center justify-center pointer-events-none z-10">
-              <div className="w-full flex flex-col items-center pointer-events-auto">
-                <div className="relative w-full flex items-center justify-center mb-1.5">
-                  {/* Nút điều khiển đối xứng qua nút Play ở giữa */}
-                  <div className="flex items-center gap-3 sm:gap-5 justify-center">
-                    <button
-                      onClick={toggleShuffle}
-                      className={`transition ${isShuffle ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}
-                    >
-                      <Shuffle size={17} />
-                    </button>
-                    <button
-                      onClick={handlePrev}
-                      className="text-zinc-400 hover:text-white transition"
-                    >
-                      <SkipBack size={19} />
-                    </button>
-                    <button
-                      onClick={handlePlayPause}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform ${currentTrack ? 'bg-theme-10 text-white hover:scale-105' : 'bg-theme-30 text-zinc-500 cursor-not-allowed'}`}
-                    >
-                      {isPlaying ? (
-                        <Pause size={19} className="fill-current" />
-                      ) : (
-                        <Play size={19} className="fill-current translate-x-[2px]" />
-                      )}
-                    </button>
-                    <button
-                      onClick={handleNext}
-                      className="text-zinc-400 hover:text-white transition"
-                    >
-                      <SkipForward size={19} />
-                    </button>
-                    <button
-                      onClick={toggleRepeat}
-                      className={`transition ${repeatMode > 0 ? 'text-theme-10' : 'text-zinc-400 hover:text-white'}`}
-                    >
-                      {repeatMode === 2 ? <Repeat1 size={17} /> : <Repeat size={17} />}
-                    </button>
-                  </div>
-
-                  {/* YouTube-style Smart Autoplay Switch đặt absolute ở lề phải để không làm lệch tâm nút Play */}
-                  <div
-                    className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1.5"
-                    title={
-                      smartAutoplay ? t('player.smartAutoplay') : t('player.smartAutoplayDesc')
-                    }
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSmartAutoplay((prev) => !prev)}
-                      className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        smartAutoplay ? 'bg-theme-10' : 'bg-zinc-700'
-                      }`}
-                      role="switch"
-                      aria-checked={smartAutoplay}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out flex items-center justify-center ${
-                          smartAutoplay
-                            ? 'translate-x-3 text-zinc-950'
-                            : 'translate-x-0 text-zinc-500'
-                        }`}
-                      >
-                        {smartAutoplay ? (
-                          <Sparkles size={7} className="text-zinc-950 fill-current" />
-                        ) : (
-                          <div className="w-1 h-1 rounded-full bg-zinc-400" />
-                        )}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-                <PlayerProgressBar
-                  audioRef={audioRef}
-                  currentTrack={currentTrack}
-                  crossfadeEnabled={crossfadeEnabled}
-                  crossfadeDuration={crossfadeDuration}
-                  repeatMode={repeatMode}
-                  onNext={handleNext}
-                  bitPerfectEnabled={bitPerfectEnabled}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 sm:gap-3.5 w-[28%] max-w-[260px] lg:max-w-[320px] min-w-0 text-zinc-400 relative z-20">
-              {!isCore && (
-                <>
-                  {!isLite && (
-                    <button
-                      onClick={handleToggleLyrics}
-                      className={`transition p-1.5 rounded-lg cursor-pointer ${showLyricsPanel ? 'text-theme-10 bg-theme-10/10' : 'hover:text-white hover:bg-theme-30/40 text-zinc-400'}`}
-                      title={t('player.lyrics')}
-                    >
-                      <Mic2 size={18} />
-                    </button>
-                  )}
-                  <PlayerToolsMenu
-                    showSpectrogramModal={showSpectrogramModal}
-                    setShowSpectrogramModal={setShowSpectrogramModal}
-                    isLite={isLite}
-                    handleToggleMiniPlayer={handleToggleMiniPlayer}
-                    showQueuePanel={showQueuePanel}
-                    handleToggleQueue={handleToggleQueue}
-                    showEQ={showEQ}
-                    setShowEQ={setShowEQ}
-                    onSetTimer={handleSetSleepTimer}
-                    playQueueLength={playQueue.length}
-                    t={t}
-                    language={language}
-                  />
-                </>
-              )}
-
-              {/* Thanh chỉnh âm lượng luôn giữ lại */}
-              <VolumeSlider
-                volume={volume}
-                setVolume={setVolume}
-                audioRef={audioRef}
-                bitPerfectEnabled={bitPerfectEnabled}
-              />
-            </div>
-          </footer>
+          {/* BOTTOM PLAYER BAR */}
+          <PlayerBar
+            audioRef={audioEngine.audioRef}
+            handlePlayPause={audioEngine.handlePlayPause}
+            handleNext={audioEngine.handleNext}
+            handlePrev={audioEngine.handlePrev}
+            toggleShuffle={audioEngine.toggleShuffle}
+            toggleRepeat={audioEngine.toggleRepeat}
+            handleToggleLyrics={handleToggleLyrics}
+            handleToggleQueue={handleToggleQueue}
+            handleToggleMiniPlayer={handleToggleMiniPlayer}
+            handleSetSleepTimer={sleepTimer.handleSetSleepTimer}
+            navigateToArtist={navigateToArtist}
+          />
         </div>
       )}
     </>

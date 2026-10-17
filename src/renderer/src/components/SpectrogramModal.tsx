@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Radio, X, Loader2 } from 'lucide-react'
 import { useTranslation } from '../locales'
+import { usePlayerStore } from '../stores'
 import { AudioSignalPath } from './AudioSignalPath'
 import { formatAudioSource } from '../utils/urlUtils'
 import { isDsdTrack, formatAudioSampleRate, getDsdRateLabel } from '../utils/formatUtils'
@@ -168,20 +169,30 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   useEffect(() => {
     if (!isOpen) return
 
+    const bitPerfectEnabled = usePlayerStore.getState().bitPerfectEnabled
+    const useBass = Boolean(bitPerfectEnabled || isDsdTrack(currentTrack))
+
     const updatePlayhead = (overrideTime?: number) => {
-      const cur = typeof overrideTime === 'number'
-        ? overrideTime
-        : ((audioRef?.current as any)?._currentTime ?? audioRef?.current?.currentTime ?? 0)
+      let cur = 0
+      if (typeof overrideTime === 'number') {
+        cur = overrideTime
+      } else if (useBass) {
+        cur = (audioRef?.current as any)?._currentTime ?? 0
+      } else {
+        cur = Math.max(0, (audioRef?.current?.currentTime ?? 0) - (currentTrack?.startTime || 0))
+      }
       setCurrentTime(cur)
       setDuration(currentTrack?.duration || audioRef?.current?.duration || 0)
     }
 
     let cleanupBass: (() => void) | undefined
-    const onTimeListener = (window as any).api?.onBassTime
-    if (typeof onTimeListener === 'function') {
-      cleanupBass = onTimeListener((val: number) => {
-        updatePlayhead(val)
-      })
+    if (useBass) {
+      const onTimeListener = (window as any).api?.onBassTime
+      if (typeof onTimeListener === 'function') {
+        cleanupBass = onTimeListener((val: number) => {
+          updatePlayhead(val)
+        })
+      }
     }
 
     const interval = setInterval(() => updatePlayhead(), 200)
@@ -385,11 +396,14 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
     const clickRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const targetSeconds = clickRatio * (duration || currentTrack?.duration || 0)
     
-    if (audioRef?.current) {
-      audioRef.current.currentTime = targetSeconds
-    }
-    if ((window as any).api?.bassSeek) {
-      (window as any).api.bassSeek(targetSeconds)
+    const useBass = Boolean(usePlayerStore.getState().bitPerfectEnabled || isDsdTrack(currentTrack))
+    if (useBass) {
+      ;(window as any).api?.bassSeek?.(targetSeconds, 'absolute')
+      if (audioRef?.current) {
+        ;(audioRef.current as any)._currentTime = targetSeconds
+      }
+    } else if (audioRef?.current) {
+      audioRef.current.currentTime = (currentTrack?.startTime || 0) + targetSeconds
     }
     setCurrentTime(targetSeconds)
   }

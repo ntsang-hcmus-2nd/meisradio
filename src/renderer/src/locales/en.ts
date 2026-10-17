@@ -39,6 +39,7 @@ export const en: TranslationDictionary = {
     genres: 'Genres',
     userPlaylists: 'My Playlists',
     downloads: 'Downloads',
+    analytics: 'Listening Analytics',
     cloudConnection: 'Cloud Sync',
     googleDrive: 'Google Drive',
     settings: 'Settings'
@@ -852,6 +853,38 @@ export const en: TranslationDictionary = {
     ruleOperator: 'Condition',
     ruleValue: 'Value',
     addRule: 'Add Rule'
+  },
+  analytics: {
+    title: 'Audiophile Listening Analytics',
+    subtitle: 'Listening rhythm, habits, and high-fidelity bit-perfect metrics over time',
+    range7d: '7 Days',
+    range30d: '30 Days',
+    range90d: '90 Days',
+    rangeAll: 'All Time',
+    refresh: 'Refresh',
+    totalListeningTime: 'Total Listening Time',
+    totalPlays: 'Total Plays',
+    uniqueTracks: 'Unique Tracks',
+    uniqueArtists: 'Artists',
+    uniqueAlbums: 'Albums',
+    audiophileQuality: 'Audiophile Quality',
+    bitPerfectRatio: 'Bit-Perfect Ratio',
+    lossless: 'Lossless',
+    hiRes: 'Hi-Res Studio',
+    dsdTracks: 'DSD tracks',
+    hourlyRhythm: '24-Hour Listening Rhythm',
+    hourlySubtitle: 'Distribution of play counts across hours of the day',
+    peakHour: 'Peak listening hour at',
+    weekdayActivity: 'Weekday Activity',
+    formatBreakdown: 'Format & Resolution Breakdown',
+    dailyTrend: 'Recent Activity Trend',
+    topArtists: 'Top Artists',
+    topAlbums: 'Top Albums',
+    topGenres: 'Top Genres',
+    mostPlayedTracks: 'Most Played Tracks',
+    noData: 'No listening data available',
+    noDataDesc: 'Play some of your favorite tracks to start generating advanced listening statistics!',
+    playsCount: 'plays'
   }
 }
 

@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 
+export interface ContextMenuSubItem {
+  id: string
+  label: string
+  icon?: React.ReactNode
+  onClick?: () => void
+  divider?: boolean
+}
+
 export interface ContextMenuItem {
   id: string
   label: string
@@ -9,12 +17,7 @@ export interface ContextMenuItem {
   disabled?: boolean
   danger?: boolean
   divider?: boolean
-  subItems?: {
-    id: string
-    label: string
-    onClick: () => void
-    icon?: React.ReactNode
-  }[]
+  subItems?: ContextMenuSubItem[]
 }
 
 interface ContextMenuProps {
@@ -142,21 +145,26 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
                   className="absolute left-full top-0 ml-1 min-w-[190px] max-h-64 overflow-y-auto bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/70 rounded-xl shadow-2xl p-1.5 text-xs z-[100000]"
                   onMouseDown={(e) => e.stopPropagation()}
                 >
-                  {item.subItems!.map(sub => (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        sub.onClick()
-                        onClose()
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-left text-zinc-200 hover:bg-white/10 hover:text-white truncate"
-                    >
-                      {sub.icon && <span className="shrink-0 opacity-80">{sub.icon}</span>}
-                      <span className="truncate font-medium">{sub.label}</span>
-                    </button>
-                  ))}
+                  {item.subItems!.map((sub) => {
+                    if (sub.divider) {
+                      return <div key={sub.id} className="h-px bg-zinc-700/50 my-1" />
+                    }
+                    return (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          sub.onClick?.()
+                          onClose()
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-left text-zinc-200 hover:bg-white/10 hover:text-white truncate"
+                      >
+                        {sub.icon && <span className="shrink-0 opacity-80">{sub.icon}</span>}
+                        <span className="truncate font-medium">{sub.label}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
