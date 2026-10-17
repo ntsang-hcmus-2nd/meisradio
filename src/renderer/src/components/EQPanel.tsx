@@ -5,6 +5,7 @@ import { CustomSelect } from './CustomSelect'
 import { EQBand } from '../App'
 import { BUILTIN_AUTOEQ_PROFILES, parsePeaceEqText, exportPeaceEqText, AutoEqProfile } from './autoeq/autoeqProfiles'
 import { useTranslation } from '../locales'
+import { useSettingsStore } from '../stores'
 
 interface EQPanelProps {
   showEQ: boolean
@@ -23,6 +24,8 @@ export const EQPanel: React.FC<EQPanelProps> = ({
   preampGain, setPreampGain
 }) => {
   const { t } = useTranslation()
+  const crossfeedEnabled = useSettingsStore((s) => s.crossfeedEnabled)
+  const setCrossfeedEnabled = useSettingsStore((s) => s.setCrossfeedEnabled)
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
@@ -90,7 +93,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         if (!text) return
         const parsed = parsePeaceEqText(text)
         if (parsed.bands.length === 0) {
-          alert('Không tìm thấy dải tần số nào hợp lệ trong tệp!')
+          alert(t('modals.eq.noBandsFound'))
           return
         }
 
@@ -109,7 +112,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         setEqBands(newBands)
         setIsEqEnabled(true)
       } catch (err: any) {
-        alert('Lỗi đọc tệp cấu hình: ' + err.message)
+        alert(t('common.error') + ': ' + err.message)
       }
     }
     reader.readAsText(file)
@@ -260,7 +263,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in relative">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in relative">
         
         {/* Hidden file input for Peace profile import */}
         <input 
@@ -272,22 +275,35 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         />
 
         {/* HEADER */}
-        <div className="flex flex-wrap items-center justify-between pb-4 border-b border-zinc-800 mb-4 shrink-0 gap-3">
-          <div className="flex items-center gap-3">
-            <Sliders className="text-theme-10" size={22} />
-            <div>
-              <h2 className="text-lg font-bold text-white leading-tight">{t('modals.eq.title')}</h2>
-              <p className="text-[11px] text-zinc-400">Peace Equalizer / EqualizerAPO Compatible</p>
+        <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4 shrink-0 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Sliders className="text-theme-10 shrink-0" size={22} />
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-white leading-tight truncate">{t('modals.eq.title')}</h2>
+              <p className="text-[11px] text-zinc-400 truncate">Peace Equalizer / EqualizerAPO Compatible</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <label className="flex items-center gap-2 cursor-pointer bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-theme-10">
               <span className="text-zinc-300 text-xs font-semibold">{t('modals.eq.enableEq')}</span>
               <input 
                 type="checkbox" 
                 checked={isEqEnabled} 
                 onChange={e => setIsEqEnabled(e.target.checked)} 
+                className="w-4 h-4 accent-theme-10 cursor-pointer" 
+              />
+            </label>
+
+            <label 
+              className="flex items-center gap-2 cursor-pointer bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-theme-10"
+              title="Crossfeed (Headphone Spatializer DSP)"
+            >
+              <span className="text-zinc-300 text-xs font-semibold">Crossfeed</span>
+              <input 
+                type="checkbox" 
+                checked={crossfeedEnabled} 
+                onChange={e => setCrossfeedEnabled(e.target.checked)} 
                 className="w-4 h-4 accent-theme-10 cursor-pointer" 
               />
             </label>
@@ -370,7 +386,10 @@ export const EQPanel: React.FC<EQPanelProps> = ({
               const nextPreamp = Math.max(-20, Math.min(10, Math.round((preampGain + delta) * 10) / 10))
               setPreampGain(nextPreamp)
             }}
-            className="w-48 h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" 
+            className="w-48 sm:w-64 h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" 
+            style={{ 
+              background: `linear-gradient(to right, var(--theme-10) ${Math.max(0, Math.min(100, ((preampGain + 20) / 30) * 100))}%, #27272a ${Math.max(0, Math.min(100, ((preampGain + 20) / 30) * 100))}%)` 
+            }}
           />
         </div>
 
@@ -548,7 +567,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-3 pr-1">
               {filteredAutoEqProfiles.length === 0 ? (
                 <div className="col-span-2 text-center text-zinc-500 py-12">
-                  No headphone profiles matched "{searchHeadphone}".
+                  No headphone profiles matched &quot;{searchHeadphone}&quot;.
                 </div>
               ) : (
                 filteredAutoEqProfiles.map(p => {

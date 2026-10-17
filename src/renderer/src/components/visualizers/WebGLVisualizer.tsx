@@ -54,48 +54,37 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
     }
     updateThemeColor()
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect) {
-          cachedWidth = Math.floor(entry.contentRect.width)
-          cachedHeight = Math.floor(entry.contentRect.height)
-          cachedDpr = window.devicePixelRatio || 1
-          if (cachedWidth > 0 && cachedHeight > 0) {
-            canvas.width = Math.floor(cachedWidth * cachedDpr)
-            canvas.height = Math.floor(cachedHeight * cachedDpr)
-          }
-        }
-      }
-      updateThemeColor()
-    })
-
-    resizeObserver.observe(canvas)
-
-    // Initial setup of canvas dimensions
+    // Initial setup of canvas dimensions if already visible
     if (cachedWidth > 0 && cachedHeight > 0) {
       canvas.width = Math.floor(cachedWidth * cachedDpr)
       canvas.height = Math.floor(cachedHeight * cachedDpr)
     }
 
     const draw = (now: number) => {
-      reqAnimRef.current = requestAnimationFrame(draw)
-
       const elapsed = now - lastDrawTime
-      if (elapsed < fpsInterval) return
+      if (elapsed < fpsInterval) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+        return
+      }
       lastDrawTime = now - (elapsed % fpsInterval)
 
       const width = cachedWidth
       const height = cachedHeight
       const dpr = cachedDpr
 
-      if (width === 0 || height === 0) return
+      if (width === 0 || height === 0) {
+        reqAnimRef.current = undefined
+        return
+      }
 
       ctx.save()
       ctx.scale(dpr, dpr)
       ctx.clearRect(0, 0, width, height)
 
       const analyser = analyserNodeRef.current
+      let hasActivity = false
       if (analyser && isPlaying) {
+        hasActivity = true
         if (analyser.context && (analyser.context as any).state === 'suspended') {
           try { (analyser.context as any).resume?.().catch(() => {}) } catch (e) {}
         }
@@ -137,9 +126,13 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
           }
         }
       } else {
+        // Khi pause, hạ dần các dải tần số về 0
         for (let i = 0; i < numBands; i++) {
           smoothedValues[i] = Math.max(0, smoothedValues[i] - 0.05)
           peakValues[i] = Math.max(0, peakValues[i] - 0.02)
+          if (smoothedValues[i] > 0.001 || peakValues[i] > 0.001) {
+            hasActivity = true
+          }
         }
       }
 
@@ -182,13 +175,69 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(({
       }
 
       ctx.restore()
+
+      // Tối ưu hóa: Nếu đã dừng phát và toàn bộ sóng đã rơi về 0, ngưng gọi requestAnimationFrame để tiết kiệm 100% CPU
+      if ((isPlaying || hasActivity) && !document.hidden) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+      } else {
+        reqAnimRef.current = undefined
+      }
     }
 
-    reqAnimRef.current = requestAnimationFrame(draw)
+    const startDrawLoop = () => {
+      if (!reqAnimRef.current && (isPlaying || !document.hidden)) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+      }
+    }
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      let becameVisible = false
+      for (const entry of entries) {
+        if (entry.contentRect) {
+          const w = Math.floor(entry.contentRect.width)
+          const h = Math.floor(entry.contentRect.height)
+          cachedDpr = window.devicePixelRatio || 1
+          if (w > 0 && h > 0) {
+            if (cachedWidth === 0 || cachedHeight === 0 || !reqAnimRef.current) {
+              becameVisible = true
+            }
+            cachedWidth = w
+            cachedHeight = h
+            canvas.width = Math.floor(cachedWidth * cachedDpr)
+            canvas.height = Math.floor(cachedHeight * cachedDpr)
+          } else {
+            cachedWidth = w
+            cachedHeight = h
+          }
+        }
+      }
+      updateThemeColor()
+      if (becameVisible) {
+        startDrawLoop()
+      }
+    })
+
+    resizeObserver.observe(canvas)
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (reqAnimRef.current) {
+          cancelAnimationFrame(reqAnimRef.current)
+          reqAnimRef.current = undefined
+        }
+      } else if (isPlaying) {
+        startDrawLoop()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    startDrawLoop()
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       resizeObserver.disconnect()
       if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
+      reqAnimRef.current = undefined
     }
   }, [isPlaying, isLite, showVisualizer, analyserNodeRef, barCount])
 

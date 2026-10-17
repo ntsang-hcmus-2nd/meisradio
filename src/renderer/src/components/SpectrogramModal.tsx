@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Radio, X, Loader2, Sparkles } from 'lucide-react'
+import { Radio, X, Loader2 } from 'lucide-react'
 import { useTranslation } from '../locales'
+import { usePlayerStore } from '../stores'
+import { AudioSignalPath } from './AudioSignalPath'
+import { formatAudioSource } from '../utils/urlUtils'
+import { isDsdTrack, formatAudioSampleRate, getDsdRateLabel } from '../utils/formatUtils'
 
 interface SpectrogramModalProps {
   isOpen: boolean
@@ -104,9 +108,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   isOpen,
   onClose,
   currentTrack,
-  audioRef
+  audioRef,
+  isPlaying
 }) => {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -163,15 +168,39 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
   // Track playback time for playhead
   useEffect(() => {
     if (!isOpen) return
-    const updatePlayhead = () => {
-      if (audioRef?.current) {
-        setCurrentTime(audioRef.current.currentTime || 0)
-        setDuration(audioRef.current.duration || currentTrack?.duration || 0)
+
+    const bitPerfectEnabled = usePlayerStore.getState().bitPerfectEnabled
+    const useBass = Boolean(bitPerfectEnabled || isDsdTrack(currentTrack))
+
+    const updatePlayhead = (overrideTime?: number) => {
+      let cur = 0
+      if (typeof overrideTime === 'number') {
+        cur = overrideTime
+      } else if (useBass) {
+        cur = (audioRef?.current as any)?._currentTime ?? 0
+      } else {
+        cur = Math.max(0, (audioRef?.current?.currentTime ?? 0) - (currentTrack?.startTime || 0))
+      }
+      setCurrentTime(cur)
+      setDuration(currentTrack?.duration || audioRef?.current?.duration || 0)
+    }
+
+    let cleanupBass: (() => void) | undefined
+    if (useBass) {
+      const onTimeListener = (window as any).api?.onBassTime
+      if (typeof onTimeListener === 'function') {
+        cleanupBass = onTimeListener((val: number) => {
+          updatePlayhead(val)
+        })
       }
     }
-    const interval = setInterval(updatePlayhead, 100)
+
+    const interval = setInterval(() => updatePlayhead(), 200)
     updatePlayhead()
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      if (typeof cleanupBass === 'function') cleanupBass()
+    }
   }, [isOpen, audioRef, currentTrack])
 
   // Full-track STFT Spectrogram Generator
@@ -200,17 +229,8 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
         }
       }
 
-      // 2. Fallback: Đọc bằng fetch trực tiếp với URL được encode chuẩn
-      let url = key
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        let normalized = key.replace(/\\/g, '/')
-        if (normalized.startsWith('file://')) {
-          url = encodeURI(normalized)
-        } else {
-          if (!normalized.startsWith('/')) normalized = '/' + normalized
-          url = encodeURI('file://' + normalized)
-        }
-      }
+      // 2. Fallback: Đọc bằng fetch trực tiếp với URL được stream an toàn qua HTTP Stream Server
+      const url = formatAudioSource(key)
 
       const response = await fetch(url)
       if (!response.ok) {
@@ -239,6 +259,16 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
       setLoading(true)
       setErrorMsg(null)
+
+      if (isDsdTrack(currentTrack)) {
+        setErrorMsg(
+          language === 'vi' 
+            ? 'Định dạng DSD (Direct Stream Digital 1-bit) là luồng bitstream nguyên bản cho DAC phần cứng, không hỗ trợ dựng phổ tần số qua Web Audio.'
+            : 'DSD (Direct Stream Digital 1-bit) is a raw bitstream for hardware DACs and does not support browser Web Audio spectrogram rendering.'
+        )
+        setLoading(false)
+        return
+      }
 
       try {
         // 1. Lấy dữ liệu file âm thanh và sampleRate gốc từ metadata
@@ -328,6 +358,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
         if (!isCancelled) {
           ctx.putImageData(imageData, 0, 0)
+          if (spectrogramCache.size >= 8) {
+            const oldest = spectrogramCache.keys().next().value
+            if (oldest) spectrogramCache.delete(oldest)
+          }
           spectrogramCache.set(trackKey, imageData)
           setLoading(false)
         }
@@ -362,11 +396,14 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
     const clickRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const targetSeconds = clickRatio * (duration || currentTrack?.duration || 0)
     
-    if (audioRef?.current) {
-      audioRef.current.currentTime = targetSeconds
-    }
-    if ((window as any).api?.mpvSeek) {
-      (window as any).api.mpvSeek(targetSeconds)
+    const useBass = Boolean(usePlayerStore.getState().bitPerfectEnabled || isDsdTrack(currentTrack))
+    if (useBass) {
+      ;(window as any).api?.bassSeek?.(targetSeconds, 'absolute')
+      if (audioRef?.current) {
+        ;(audioRef.current as any)._currentTime = targetSeconds
+      }
+    } else if (audioRef?.current) {
+      audioRef.current.currentTime = (currentTrack?.startTime || 0) + targetSeconds
     }
     setCurrentTime(targetSeconds)
   }
@@ -402,7 +439,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-fade-in">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl h-[84vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl h-[88vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* MODAL HEADER */}
         <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70 shrink-0">
@@ -413,21 +450,24 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
             <div>
               <div className="flex items-center gap-3">
                 <h2 className="text-lg font-bold text-white">{t('modals.spectrogram.title')}</h2>
-                {currentTrack && (
-                  <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
-                    <span className="font-bold text-theme-10 uppercase">
-                      {currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3')}
-                    </span>
-                    {(detectedBitDepth || currentTrack.bitDepth) && (
-                      <span className="text-blue-400 font-bold">
-                        {detectedBitDepth || currentTrack.bitDepth}-BIT
+                {currentTrack && (() => {
+                  const isDsd = isDsdTrack(currentTrack)
+                  return (
+                    <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
+                      <span className={`font-bold uppercase ${isDsd ? 'text-amber-400' : 'text-theme-10'}`}>
+                        {isDsd ? getDsdRateLabel(currentTrack.sampleRate || activeSampleRate) : (currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3'))}
                       </span>
-                    )}
-                    <span className="text-zinc-400">
-                      {activeSampleRate >= 1000 ? `${(activeSampleRate / 1000).toFixed(1).replace('.0', '')}kHz` : `${activeSampleRate}Hz`}
-                    </span>
-                  </div>
-                )}
+                      {(isDsd || detectedBitDepth || currentTrack.bitDepth) && (
+                        <span className="text-blue-400 font-bold">
+                          {isDsd ? '1-BIT' : `${detectedBitDepth || currentTrack.bitDepth}-BIT`}
+                        </span>
+                      )}
+                      <span className="text-zinc-400">
+                        {formatAudioSampleRate(activeSampleRate)}
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
               <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
                 {currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : t('modals.spectrogram.noTrack')}
@@ -445,7 +485,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
         </div>
 
         {/* SPECTROGRAM DISPLAY AREA */}
-        <div className="flex-1 relative flex bg-black overflow-hidden select-none">
+        <div className="flex-1 min-h-[220px] relative flex bg-black overflow-hidden select-none">
           
           {/* Y-AXIS FREQUENCY LABELS (0Hz to Sample Rate) */}
           <div className="w-18 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[11px] text-zinc-400 font-mono text-center z-10 shrink-0">
@@ -530,18 +570,18 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
           <span>{formatTime(duration)}</span>
         </div>
 
-        {/* MODAL FOOTER NOTE */}
-        <div className="p-3.5 border-t border-zinc-800 bg-zinc-950/90 flex items-center justify-between text-xs text-zinc-400 shrink-0">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-theme-10" />
-            <span>{t('modals.spectrogram.seekInstruction')}</span>
-          </div>
-          <p className="text-zinc-500 italic">
-            {t('modals.spectrogram.intensityLegend')}
-          </p>
-        </div>
+        {/* AUDIO SIGNAL FLOW (PIPELINE) */}
+        <AudioSignalPath
+          currentTrack={currentTrack}
+          activeSampleRate={activeSampleRate}
+          detectedBitDepth={detectedBitDepth}
+          isPlaying={isPlaying}
+        />
+
 
       </div>
     </div>
   )
 })
+
+SpectrogramModal.displayName = 'SpectrogramModal'

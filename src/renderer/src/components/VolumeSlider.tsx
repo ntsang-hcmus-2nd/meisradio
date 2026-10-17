@@ -1,28 +1,52 @@
 import React from 'react'
 import { Volume2, VolumeX } from 'lucide-react'
+import { usePlayerStore } from '../stores/playerStore'
+import { sliderToGain } from '../utils/audioUtils'
+import { isDsdTrack } from '../utils/formatUtils'
 
 interface VolumeSliderProps {
-  volume: number
-  setVolume: (val: number) => void
+  volume?: number
+  setVolume?: (val: number) => void
   audioRef: React.RefObject<HTMLAudioElement | null>
   bitPerfectEnabled?: boolean
 }
 
-export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, setVolume, audioRef, bitPerfectEnabled }) => {
+export const VolumeSlider: React.FC<VolumeSliderProps> = ({ 
+  volume: propVolume, 
+  setVolume: propSetVolume, 
+  audioRef, 
+  bitPerfectEnabled: propBitPerfect 
+}) => {
+  const storeVolume = usePlayerStore((s) => s.volume)
+  const storeSetVolume = usePlayerStore((s) => s.setVolume)
+  const storeBitPerfect = usePlayerStore((s) => s.bitPerfectEnabled)
+  const currentTrack = usePlayerStore((s) => s.currentTrack)
+
+  const volume = propVolume !== undefined ? propVolume : storeVolume
+  const setVolume = propSetVolume || storeSetVolume
+  const bitPerfectEnabled = propBitPerfect !== undefined ? propBitPerfect : storeBitPerfect
+  const useBass = Boolean(bitPerfectEnabled || isDsdTrack(currentTrack))
+  const setHardwareVolume = (v: number) => {
+    if ((window as any).api?.bassSetVolume) {
+      (window as any).api.bassSetVolume(v)
+    }
+  }
+
   const toggleMute = () => {
     if (volume === 0) {
       const prev = parseFloat(localStorage.getItem('player_volume_prev') || '1')
       setVolume(prev)
-      if (audioRef.current) audioRef.current.volume = prev
-      if (bitPerfectEnabled && (window as any).api?.mpvSetVolume) {
-        (window as any).api.mpvSetVolume(prev)
+      const gain = sliderToGain(prev)
+      if (audioRef.current) audioRef.current.volume = gain
+      if (useBass) {
+        setHardwareVolume(gain)
       }
     } else {
       localStorage.setItem('player_volume_prev', volume.toString())
       setVolume(0)
       if (audioRef.current) audioRef.current.volume = 0
-      if (bitPerfectEnabled && (window as any).api?.mpvSetVolume) {
-        (window as any).api.mpvSetVolume(0)
+      if (useBass) {
+        setHardwareVolume(0)
       }
     }
   }
@@ -33,15 +57,16 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, setVolume, a
     const delta = e.deltaY < 0 ? 0.05 : -0.05
     const newVol = Math.max(0, Math.min(1, Math.round((volume + delta) * 100) / 100))
     setVolume(newVol)
-    if (audioRef.current) audioRef.current.volume = newVol
-    if (bitPerfectEnabled && (window as any).api?.mpvSetVolume) {
-      (window as any).api.mpvSetVolume(newVol)
+    const gain = sliderToGain(newVol)
+    if (audioRef.current) audioRef.current.volume = gain
+    if (useBass) {
+      setHardwareVolume(gain)
     }
   }
 
   return (
     <div className="flex items-center gap-2 w-32" onWheel={handleWheel}>
-      <button onClick={toggleMute} className="hover:text-white transition cursor-pointer">
+      <button onClick={toggleMute} className="hover:text-white transition cursor-pointer" title={volume === 0 ? "Bật tiếng" : "Tắt tiếng"}>
         {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </button>
       <input 
@@ -53,14 +78,16 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({ volume, setVolume, a
         onChange={(e) => {
           const val = parseFloat(e.target.value)
           setVolume(val)
-          if (audioRef.current) audioRef.current.volume = val
-          if (bitPerfectEnabled && (window as any).api?.mpvSetVolume) {
-            (window as any).api.mpvSetVolume(val)
+          const gain = sliderToGain(val)
+          if (audioRef.current) audioRef.current.volume = gain
+          if (useBass) {
+            setHardwareVolume(gain)
           }
         }}
         onWheel={handleWheel}
         className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10" 
         style={{ background: `linear-gradient(to right, var(--theme-10) ${volume * 100}%, var(--theme-30) ${volume * 100}%)` }} 
+        title={`${Math.round(volume * 100)}%`}
       />
     </div>
   )

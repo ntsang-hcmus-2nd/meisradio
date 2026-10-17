@@ -343,15 +343,30 @@ export class DiscordRpcManager {
     }
 
     // 4. Small Image (Status & Audio Quality)
-    let qualityParts: string[] = []
+    const qualityParts: string[] = []
     if (showQuality) {
-      if (format) qualityParts.push(format.toUpperCase())
-      if (bitDepth && bitDepth > 0) qualityParts.push(`${bitDepth}-bit`)
-      if (sampleRate && sampleRate > 0) {
-        qualityParts.push(sampleRate >= 1000 ? `${(sampleRate / 1000).toFixed(1).replace('.0', '')}kHz` : `${sampleRate}Hz`)
-      }
-      if (bitrate && bitrate > 0 && !bitDepth) {
-        qualityParts.push(`${Math.round(bitrate / 1000)}kbps`)
+      const isDsd = (format && /^(dsd|dsf|dff|dsdiff)/i.test(format)) || (sampleRate && sampleRate >= 2000000) || bitDepth === 1
+      if (isDsd) {
+        let dsdLabel = 'DSD'
+        if (sampleRate) {
+          const factor = Math.round(sampleRate / 44100)
+          if (factor >= 64) dsdLabel = `DSD${factor}`
+          else if (sampleRate >= 2822400) dsdLabel = 'DSD64'
+        }
+        qualityParts.push(dsdLabel)
+        qualityParts.push('1-bit')
+        if (sampleRate) {
+          qualityParts.push(`${(sampleRate / 1000000).toFixed(2)}MHz`)
+        }
+      } else {
+        if (format) qualityParts.push(format.toUpperCase())
+        if (bitDepth && bitDepth > 0) qualityParts.push(`${bitDepth}-bit`)
+        if (sampleRate && sampleRate > 0) {
+          qualityParts.push(sampleRate >= 1000 ? `${(sampleRate / 1000).toFixed(1).replace('.0', '')}kHz` : `${sampleRate}Hz`)
+        }
+        if (bitrate && bitrate > 0 && !bitDepth) {
+          qualityParts.push(`${Math.round(bitrate / 1000)}kbps`)
+        }
       }
     }
     const qualityStr = qualityParts.length > 0 ? ` • ${qualityParts.join('/')}` : ''

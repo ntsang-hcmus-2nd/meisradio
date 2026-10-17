@@ -28,7 +28,7 @@ export async function getSoundCloudClientId(): Promise<string> {
     const scriptUrls = (htmlRes.data.match(/https:\/\/a-v2\.sndcdn\.com\/assets\/[a-zA-Z0-9-]+\.js/g) || []) as string[]
     
     // Quét các file script từ cuối lên (thường client_id nằm trong file app hoặc vendor)
-    for (const url of scriptUrls.slice(-6)) {
+    for (const url of scriptUrls.slice(-10)) {
       try {
         const scriptRes = await axios.get(url, { timeout: 6000 })
         const match = scriptRes.data.match(/client_id[:=]\s*["']([a-zA-Z0-9]{32})["']/)
@@ -44,8 +44,8 @@ export async function getSoundCloudClientId(): Promise<string> {
     console.warn('[SoundCloud] Không lấy được Client ID động, thử phương án dự phòng...', e)
   }
 
-  // Phương án dự phòng: Client ID phổ biến
-  const fallbackId = 'a3e059563d7fd3372b49b37f00a00bcf'
+  // Phương án dự phòng: Client ID phổ biến đang hoạt động
+  const fallbackId = 'IysGhRTI7AdLDwRrKw5hy3UqwhvyW3Vw'
   cachedClientId = fallbackId
   clientIdExpires = Date.now() + 3600 * 1000 * 4
   return fallbackId
@@ -76,7 +76,7 @@ export function formatScTrack(item: any): any {
   if (!track.id || !track.title) return null
 
   // Tìm ảnh bìa chất lượng cao (thay t500x500 hoặc large)
-  let coverUrl = track.artwork_url || track.user?.avatar_url || null
+  const coverUrl = track.artwork_url || track.user?.avatar_url || null
   let highResCover = coverUrl
   if (coverUrl) {
     highResCover = coverUrl.replace('-large.', '-t500x500.').replace('-badge.', '-t500x500.')
@@ -129,25 +129,144 @@ export async function getScUserProfile(oauthToken: string) {
   }
 }
 
+const SC_GENRE_SEARCH_MAP: Record<string, string> = {
+  'all-music': 'popular hits trending',
+  electronic: 'electronic edm',
+  hiphoprap: 'hip hop rap',
+  pop: 'pop hits',
+  chill: 'lofi chill',
+  rock: 'rock',
+  ambient: 'ambient relax',
+  danceedm: 'dance edm'
+}
+
 /**
- * 2. Lấy danh sách bài hát Trending theo Thể loại (Charts)
+ * 2. Lấy danh sách bài hát Trending theo Thể loại (Charts hoặc Search)
  */
 export async function getScTrendingCharts(genre: string = 'all-music', limit: number = 30) {
   const clientId = await getSoundCloudClientId()
-  const genreQuery = genre === 'all-music' ? 'soundcloud:genres:all-music' : `soundcloud:genres:${genre}`
-  
-  const res = await axios.get(`${SC_API_V2}/charts`, {
-    params: {
-      kind: 'top',
-      genre: genreQuery,
-      limit,
-      client_id: clientId
-    },
-    headers: getScHeaders()
-  })
 
-  const collection = res.data.collection || []
-  return collection.map((c: any) => formatScTrack(c.track)).filter(Boolean)
+  if (genre === 'all-music') {
+    // 1. Thử lấy bảng xếp hạng trending toàn cầu
+    try {
+      const res = await axios.get(`${SC_API_V2}/charts`, {
+        params: {
+          kind: 'trending',
+          genre: 'soundcloud:genres:all-music',
+          limit,
+          client_id: clientId
+        },
+        headers: getScHeaders(),
+        timeout: 8000
+      })
+
+      const collection = res.data?.collection || []
+      const tracks = collection.map((c: any) => formatScTrack(c.track || c)).filter(Boolean)
+      if (tracks.length > 0) return tracks
+    } catch (e: any) {
+      console.warn('[SoundCloud] Không thể lấy /charts trending:', e.message)
+    }
+
+    // 2. Fallback tìm kiếm bài hát thịnh hành nếu charts thất bại
+    try {
+      const searchRes = await axios.get(`${SC_API_V2}/search/tracks`, {
+        params: {
+          q: 'popular hits trending',
+          limit,
+          client_id: clientId
+        },
+        headers: getScHeaders(),
+        timeout: 8000
+      })
+      const collection = searchRes.data?.collection || []
+      return collection.map((c: any) => formatScTrack(c)).filter(Boolean)
+    } catch (e: any) {
+      console.warn('[SoundCloud] Fallback tìm kiếm bài hát trending thất bại:', e.message)
+      return []
+    }
+  }
+
+  // Đối với các thể loại con cụ thể (electronic, pop, chill...)
+  const searchQuery = SC_GENRE_SEARCH_MAP[genre] || genre
+  try {
+    const res = await axios.get(`${SC_API_V2}/search/tracks`, {
+      params: {
+        q: searchQuery,
+        limit,
+        client_id: clientId
+      },
+      headers: getScHeaders(),
+      timeout: 8000
+    })
+    const collection = res.data?.collection || []
+    const tracks = collection.map((c: any) => formatScTrack(c)).filter(Boolean)
+    if (tracks.length > 0) return tracks
+  } catch (e: any) {
+    console.warn(`[SoundCloud] Tìm kiếm thể loại ${genre} thất bại:`, e.message)
+  }
+
+  // Fallback: recent-tracks
+  try {
+    const recentRes = await axios.get(`${SC_API_V2}/recent-tracks/${genre}`, {
+      params: {
+        limit,
+        client_id: clientId
+      },
+      headers: getScHeaders(),
+      timeout: 6000
+    })
+    const collection = Array.isArray(recentRes.data) ? recentRes.data : recentRes.data?.collection || []
+    return collection.map((c: any) => formatScTrack(c)).filter(Boolean)
+  } catch (e) {
+    return []
+  }
+}
+
+/**
+ * 2.1 Lấy danh sách tuyển chọn (Mixed Selections / Curated Playlists) từ SoundCloud
+ */
+export async function getScMixedSelections(): Promise<any[]> {
+  const clientId = await getSoundCloudClientId()
+  try {
+    const res = await axios.get(`${SC_API_V2}/mixed-selections`, {
+      params: { client_id: clientId },
+      headers: getScHeaders(),
+      timeout: 8000
+    })
+
+    const collection = res.data?.collection || []
+    const sections: any[] = []
+
+    for (const sel of collection) {
+      const items = (sel.items?.collection || []).map((pl: any) => {
+        if (!pl || !pl.id || !pl.title) return null
+        const cover = pl.artwork_url || pl.user?.avatar_url || ''
+        const highResCover = cover ? cover.replace('-large.', '-t500x500.').replace('-badge.', '-t500x500.') : ''
+        return {
+          id: `sc-pl-${pl.id}`,
+          playlistId: String(pl.id),
+          title: pl.title,
+          subtitle: `${pl.user?.username || 'SoundCloud'} • ${pl.track_count || 0} bài hát`,
+          thumbnails: [{ url: highResCover || cover }],
+          coverArt: highResCover || cover,
+          isPlaylist: true,
+          platform: 'soundcloud',
+          style: 'CARD'
+        }
+      }).filter(Boolean)
+
+      if (items.length > 0) {
+        sections.push({
+          title: sel.title || 'SoundCloud Tuyển chọn',
+          contents: items
+        })
+      }
+    }
+    return sections
+  } catch (e: any) {
+    console.warn('[SoundCloud] Không lấy được mixed-selections:', e.message)
+    return []
+  }
 }
 
 /**

@@ -5,6 +5,7 @@
   src: url('./fonts/Whisper-Regular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -12,6 +13,7 @@
   src: url('./fonts/GoogleSansFlex.ttf') format('truetype');
   font-weight: 100 900;
   font-style: normal;
+  font-display: swap;
 }
 
 @theme {
@@ -25,6 +27,7 @@
   --bg-image: url('');
   --bg-opacity: 1;
   --bg-blur: 0px;
+  --bg-filter: none;
 }
 
 @theme {
@@ -50,6 +53,15 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--theme-10);
+}
+
+/* --- ẨN THANH CUỘN (NO SCROLLBAR UTILITY) --- */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
 /* --- HIỆU ỨNG CHUYỂN TAB --- */
@@ -102,7 +114,7 @@ body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: blur(var(--bg-blur));
+  filter: var(--bg-filter, none);
   transform: translateZ(0);
   image-rendering: -webkit-optimize-contrast;
   will-change: opacity;
@@ -176,3 +188,31 @@ body {
   contain-intrinsic-size: 0 48px;
   contain: layout style paint;
 }
+
+/* ==========================================================================
+   UI STYLE: CLASSIC VS SLEEK MODE
+   ========================================================================== */
+
+/* Chế độ Cổ điển (Classic): Hiển thị đầy đủ nhãn văn bản của hệ thống */
+[data-ui-style="classic"] .btn-text,
+[data-ui-style="classic"] .sys-btn-text {
+  display: inline !important;
+}
+
+[data-ui-style="classic"] .btn-badge {
+  display: inline-block !important;
+}
+
+/* Chế độ Tinh gọn (Sleek): Ẩn toàn bộ nhãn văn bản của các ô và nút hệ thống, chỉ dùng icon */
+[data-ui-style="sleek"] .btn-text,
+[data-ui-style="sleek"] .sys-btn-text,
+[data-ui-style="sleek"] .btn-badge {
+  display: none !important;
+}
+
+/* Tinh chỉnh padding và gap cho nút hệ thống khi ở chế độ Sleek để icon cân đối */
+[data-ui-style="sleek"] .sys-btn {
+  padding-left: 0.65rem !important;
+  padding-right: 0.65rem !important;
+  gap: 0 !important;
+}

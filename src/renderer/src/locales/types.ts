@@ -38,6 +38,8 @@ export interface TranslationDictionary {
     artists: string
     genres: string
     userPlaylists: string
+    downloads: string
+    analytics: string
     cloudConnection: string
     googleDrive: string
     settings: string
@@ -63,6 +65,7 @@ export interface TranslationDictionary {
     format: string
     duration: string
     actions: string
+    viewInfo: string
     sortIndex: string
     sortTitle: string
     sortAlbum: string
@@ -213,6 +216,12 @@ export interface TranslationDictionary {
     }
     customBg: {
       title: string
+      uiStyleTitle: string
+      uiStyleDesc: string
+      classicMode: string
+      classicModeDesc: string
+      sleekMode: string
+      sleekModeDesc: string
       useTrackCover: string
       placeholder: string
       applyLink: string
@@ -220,6 +229,14 @@ export interface TranslationDictionary {
       removeBg: string
       opacity: string
       blur: string
+      accentTitle: string
+      accentTrack: string
+      accentBg: string
+      accentCustom: string
+      customColorPicker: string
+      wallpaperTitle: string
+      waveformSeekbar: string
+      waveformSeekbarDesc: string
     }
     library: {
       title: string
@@ -239,6 +256,13 @@ export interface TranslationDictionary {
       title: string
       label: string
       note: string
+      outputType: string
+      wasapiOption: string
+      asioOption: string
+      deviceLabel: string
+      deviceAuto: string
+      asioDesc: string
+      wasapiDesc: string
     }
     googleDrive: {
       title: string
@@ -291,6 +315,11 @@ export interface TranslationDictionary {
       connectedStatus: string
       disconnectedStatus: string
     }
+    gaplessPlayback: string
+    gaplessPlaybackDesc: string
+    gaplessBitPerfectNotice: string
+    waveformSeekbar: string
+    waveformSeekbarDesc: string
   }
   player: {
     noTrack: string
@@ -300,6 +329,7 @@ export interface TranslationDictionary {
     miniPlayer: string
     queue: string
     equalizer: string
+    toolsMenu: string
     volume: string
     shuffle: string
     repeatOff: string
@@ -312,6 +342,32 @@ export interface TranslationDictionary {
     smartAutoplay: string
     smartAutoplayDesc: string
     smartAutoplayPlaying: string
+    clearQueue: string
+    clearQueueTitle: string
+    queueCleared: string
+    lyricOffset: string
+    lyricOffsetFast: string
+    lyricOffsetSlow: string
+    lyricOffsetReset: string
+    lyricOffsetToast: string
+    lyricOffsetResetToast: string
+    sleepTimer: string
+    sleepTimerOff: string
+    sleepTimer15: string
+    sleepTimer30: string
+    sleepTimer45: string
+    sleepTimer60: string
+    sleepTimerEndTrack: string
+    sleepTimerOffToast: string
+    sleepTimerEndTrackToast: string
+    sleepTimerMinsToast: string
+    sleepTimerStoppedToast: string
+    sleepTimerRemainingTitle: string
+    sleepTimerStopEndTitle: string
+    abLoop: string
+    setPointA: string
+    setPointB: string
+    clearLoop: string
   }
   lyrics: {
     title: string
@@ -319,6 +375,7 @@ export interface TranslationDictionary {
     syncing: string
     maximize: string
     minimize: string
+    sourceNote: string
   }
   queue: {
     title: string
@@ -328,6 +385,7 @@ export interface TranslationDictionary {
     play: string
     addQueue: string
     addToPlaylist: string
+    viewInfo: string
     editTags: string
     showInFolder: string
     removeFromPlaylist: string
@@ -373,6 +431,8 @@ export interface TranslationDictionary {
       descPlaceholder: string
       coverLabel: string
       chooseImage: string
+      chooseImageShort: string
+      changeImageShort: string
       removeImage: string
       save: string
       cancel: string
@@ -386,18 +446,87 @@ export interface TranslationDictionary {
       title: string
       flacTag: string
       mp3Tag: string
+      dsdTag: string
       audioTag: string
       chooseCover: string
       trackTitle: string
       placeholderTitle: string
       artist: string
       placeholderArtist: string
+      multiArtistHint: string
+      detectedArtists: string
       album: string
       placeholderAlbum: string
       lyrics: string
       lyricsFormatInfo: string
       lyricsPlaceholder: string
       saveDirect: string
+      albumArtist: string
+      genre: string
+      releaseYear: string
+      trackNumber: string
+      discNumber: string
+      dsdTagSupportNotice: string
+    }
+    trackInfo: {
+      title: string
+      tabOverview: string
+      tabAudioSpecs: string
+      tabLyrics: string
+      quickInfo: string
+      technicalDetails: string
+      fileDetails: string
+      generalDetails: string
+      additionalDetails: string
+      lyricsTitle: string
+      noLyrics: string
+      copySuccess: string
+      copyPathSuccess: string
+      copyLyricsSuccess: string
+      format: string
+      container: string
+      codec: string
+      sampleRate: string
+      bitDepth: string
+      bitrate: string
+      channels: string
+      channelsStereo: string
+      channelsMono: string
+      channelsSurround: string
+      duration: string
+      fileSize: string
+      filePath: string
+      source: string
+      sourceLocal: string
+      sourceOnline: string
+      sourceCloud: string
+      createdDate: string
+      modifiedDate: string
+      trackNumber: string
+      diskNumber: string
+      year: string
+      genre: string
+      album: string
+      albumArtist: string
+      artist: string
+      titleLabel: string
+      composer: string
+      lyricist: string
+      copyright: string
+      encoder: string
+      quality: string
+      losslessYes: string
+      lossy: string
+      dsdNative: string
+      hiResAudio: string
+      standardAudio: string
+      editTags: string
+      playTrack: string
+      showInFolder: string
+      copyInfo: string
+      copyPath: string
+      copyLyrics: string
+      close: string
     }
     spectrogram: {
       title: string
@@ -408,6 +537,33 @@ export interface TranslationDictionary {
       ensureLocalFile: string
       seekInstruction: string
       intensityLegend: string
+      signalPathTitle: string
+      signalPathSub: string
+      sourceStage: string
+      decodeStage: string
+      dspStage: string
+      driverStage: string
+      outputStage: string
+      bitPerfectBadge: string
+      dspActiveBadge: string
+      directBadge: string
+      bypassDsp: string
+      parametricEq: string
+      eqBypassed: string
+      wasapiExclusive: string
+      wasapiShared: string
+      exclusiveDesc: string
+      sharedDesc: string
+      defaultDevice: string
+      autoDevice: string
+      pcmStream: string
+      dsdStream: string
+      dspNoFilter: string
+      dspDirect: string
+      dspBitAccurate: string
+      asioDriver: string
+      asioDriverDesc: string
+      dsdNativeBadge: string
     }
     eq: {
       title: string
@@ -463,4 +619,256 @@ export interface TranslationDictionary {
     coverChangeSuccess: string
     coverChangedSuccess: string
   }
+  downloads: {
+    title: string
+    subtitle: string
+    connectedAs: string
+    connecting: string
+    disconnected: string
+    loginOrRegister: string
+    loginSubtitle: string
+    username: string
+    password: string
+    autoLogin: string
+    loginButton: string
+    logout: string
+    switchAccount: string
+    downloadFolder: string
+    changeFolder: string
+    openFolder: string
+    searchPlaceholder: string
+    searchButton: string
+    searching: string
+    filterAll: string
+    filterLossless: string
+    filter320k: string
+    filterFreeSlots: string
+    sortRelevance: string
+    sortSpeed: string
+    sortBitrate: string
+    sortSize: string
+    tabSearch: string
+    tabTransfers: string
+    downloadNow: string
+    downloading: string
+    completed: string
+    cancel: string
+    playNow: string
+    showInFolder: string
+    freeSlot: string
+    queued: string
+    resultsCount: string
+    noResults: string
+    noDownloads: string
+    registerTip: string
+    speed: string
+    size: string
+    format: string
+    peer: string
+    clearFinished: string
+    noFilterMatches: string
+    resetFilter: string
+  }
+  spotlight: {
+    title: string
+    placeholder: string
+    noResults: string
+    tabAll: string
+    tabTracks: string
+    tabArtists: string
+    tabAlbums: string
+    tabPlaylists: string
+    tabCommands: string
+    categoryRecent: string
+    categoryTracks: string
+    categoryArtists: string
+    categoryAlbums: string
+    categoryPlaylists: string
+    categoryCommands: string
+    categoryNavigation: string
+    categoryOnline: string
+    actionPlay: string
+    actionAddToQueue: string
+    actionOpen: string
+    addedToQueue: string
+    footerNavigate: string
+    footerSelect: string
+    footerQueue: string
+    footerFilter: string
+    footerClose: string
+    resultsCount: string
+    onlineSearchYtm: string
+    onlineSearchSc: string
+    onlineSearchSoulseek: string
+    tracksCount: string
+    cmdSmartRadio: string
+    cmdSmartRadioDesc: string
+    cmdPlayPause: string
+    cmdPlay: string
+    cmdPause: string
+    cmdNext: string
+    cmdPrev: string
+    cmdShuffleOn: string
+    cmdShuffleOff: string
+    cmdRepeatOff: string
+    cmdRepeatAll: string
+    cmdRepeatOne: string
+    cmdVolumeUp: string
+    cmdVolumeDown: string
+    cmdMute: string
+    cmdUnmute: string
+    cmdSeekForward: string
+    cmdSeekBackward: string
+    cmdClearQueue: string
+    cmdToggleLyrics: string
+    cmdToggleVinyl: string
+    cmdBitPerfectOn: string
+    cmdBitPerfectOff: string
+    cmdBitPerfectDesc: string
+    cmdLoudnessOn: string
+    cmdLoudnessOff: string
+    cmdLoudnessDesc: string
+    cmdEQ: string
+    cmdEQDesc: string
+    cmdSpectrogram: string
+    cmdSpectrogramDesc: string
+    cmdSleepTimer15: string
+    cmdSleepTimer30: string
+    cmdSleepTimer45: string
+    cmdSleepTimer60: string
+    cmdSleepTimerEnd: string
+    cmdSleepTimerCancel: string
+    cmdInsights: string
+    cmdInsightsDesc: string
+    cmdBackup: string
+    cmdBackupDesc: string
+    cmdMiniPlayer: string
+    cmdMiniPlayerDesc: string
+    cmdNavHome: string
+    cmdNavYtm: string
+    cmdNavSc: string
+    cmdNavSongs: string
+    cmdNavPlaylists: string
+    cmdNavUserPlaylists: string
+    cmdNavArtists: string
+    cmdNavGenres: string
+    cmdNavDownloads: string
+    cmdNavDrive: string
+    cmdNavSettings: string
+    cmdUiClassic: string
+    cmdUiSleek: string
+    cmdModeDefault: string
+    cmdModeLite: string
+    cmdModeCore: string
+    cmdViewTable: string
+    cmdViewGrid: string
+    cmdViewCompact: string
+    cmdRescan: string
+    cmdRescanDesc: string
+    cmdAddFolder: string
+    cmdAddFolderDesc: string
+    cmdAccentColor: string
+    cmdAccentTrack: string
+    cmdAccentBg: string
+    cmdAccentColorPreset: string
+  }
+  favorites: {
+    favorites: string
+    likedSongs: string
+    addToFavorites: string
+    removeFromFavorites: string
+    noFavoriteTracks: string
+  }
+  abLoop: {
+    abLoop: string
+    setPointA: string
+    setPointB: string
+    clearLoop: string
+    lyricOffset: string
+    lyricOffsetReset: string
+  }
+  quickFilter: {
+    filterAll: string
+    filterLossless: string
+    filterHiRes: string
+    filterDsd: string
+    filterFavorites: string
+    filterCue: string
+  }
+  filters?: {
+    filterAll: string
+    filterLossless: string
+    filterHiRes: string
+    filterDsd: string
+    filterFavorites: string
+    filterCue: string
+  }
+  batchActions: {
+    selectedCount: string
+    playSelected: string
+    addSelectedToQueue: string
+    editSelectedTags: string
+    deleteSelected: string
+    clearSelection: string
+  }
+  multiSelect?: {
+    selectedCount: string
+    playSelected: string
+    addSelectedToQueue: string
+    editSelectedTags: string
+    deleteSelected: string
+    clearSelection: string
+  }
+  duplicateFinder: {
+    duplicateFinder: string
+    duplicateFinderDesc: string
+    noDuplicatesFound: string
+    keepHighestQuality: string
+    deleteDuplicates: string
+  }
+  smartPlaylists: {
+    smartPlaylists: string
+    createSmartPlaylist: string
+    smartPlaylistName: string
+    matchAllRules: string
+    ruleField: string
+    ruleOperator: string
+    ruleValue: string
+    addRule: string
+  }
+  analytics: {
+    title: string
+    subtitle: string
+    range7d: string
+    range30d: string
+    range90d: string
+    rangeAll: string
+    refresh: string
+    totalListeningTime: string
+    totalPlays: string
+    uniqueTracks: string
+    uniqueArtists: string
+    uniqueAlbums: string
+    audiophileQuality: string
+    bitPerfectRatio: string
+    lossless: string
+    hiRes: string
+    dsdTracks: string
+    hourlyRhythm: string
+    hourlySubtitle: string
+    peakHour: string
+    weekdayActivity: string
+    formatBreakdown: string
+    dailyTrend: string
+    topArtists: string
+    topAlbums: string
+    topGenres: string
+    mostPlayedTracks: string
+    noData: string
+    noDataDesc: string
+    playsCount: string
+  }
 }
+
+export type TranslationSchema = TranslationDictionary
+

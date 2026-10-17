@@ -271,3 +271,47 @@ export const extractThemeColors = (imageSrc: string, trackKey?: string): Promise
     img.src = imageSrc;
   });
 };
+
+export const parseColorToRgb = (color: string): RGB | null => {
+  if (!color) return null
+  const clean = color.trim()
+  if (clean.startsWith('#')) {
+    const raw = clean.substring(1)
+    if (raw.length === 3) {
+      const r = parseInt(raw[0] + raw[0], 16)
+      const g = parseInt(raw[1] + raw[1], 16)
+      const b = parseInt(raw[2] + raw[2], 16)
+      if (isNaN(r) || isNaN(g) || isNaN(b)) return null
+      return { r, g, b }
+    }
+    if (raw.length === 6) {
+      const r = parseInt(raw.substring(0, 2), 16)
+      const g = parseInt(raw.substring(2, 4), 16)
+      const b = parseInt(raw.substring(4, 6), 16)
+      if (isNaN(r) || isNaN(g) || isNaN(b)) return null
+      return { r, g, b }
+    }
+  }
+  const rgbMatch = clean.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i)
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1], 10)
+    const g = parseInt(rgbMatch[2], 10)
+    const b = parseInt(rgbMatch[3], 10)
+    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+      return { r, g, b }
+    }
+  }
+  return null
+}
+
+export const generateThemeFromColor = (color: string): ThemeColors => {
+  const rgb = parseColorToRgb(color) || { r: 16, g: 185, b: 129 }
+  const c60 = enforceDarkness(rgb, 35)
+  const c30 = enforceDarkness(rgb, 65)
+  return {
+    primary60: `rgb(${c60.r}, ${c60.g}, ${c60.b})`,
+    secondary30: `rgb(${c30.r}, ${c30.g}, ${c30.b})`,
+    accent10: color
+  }
+}
+

@@ -22,8 +22,13 @@ const createWebGLProgram = (gl: WebGLRenderingContext, vsSource: string, fsSourc
   gl.attachShader(program, vertexShader)
   gl.attachShader(program, fragmentShader)
   gl.linkProgram(program)
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null
-  return program
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    gl.deleteShader(vertexShader)
+    gl.deleteShader(fragmentShader)
+    gl.deleteProgram(program)
+    return null
+  }
+  return { program, vs: vertexShader, fs: fragmentShader }
 }
 
 interface WebGLSpectrogramProps {
@@ -42,7 +47,16 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
   className
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const reqAnimRef = useRef<number | undefined>(undefined)
+  const isPlayingRef = useRef(isPlaying)
+  const reqAnimRef = useRef<number | null>(null)
+  const startDrawLoopRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying
+    if (isPlaying) {
+      startDrawLoopRef.current?.()
+    }
+  }, [isPlaying])
 
   useEffect(() => {
     if (isLite || !showSpectrogram || !canvasRef.current || !analyserNodeRef.current) return
@@ -102,8 +116,9 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
       }
     `
 
-    const program = createWebGLProgram(gl, vsSource, fsSource)
-    if (!program) return
+    const programInfo = createWebGLProgram(gl, vsSource, fsSource)
+    if (!programInfo) return
+    const { program, vs, fs } = programInfo
     gl.useProgram(program)
 
     const positionBuffer = gl.createBuffer()
@@ -134,26 +149,43 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
     const fpsInterval = 1000 / 40 // 40 FPS waterfall
     let currentColumn = 0
 
-    const draw = (now: number) => {
-      reqAnimRef.current = requestAnimationFrame(draw)
-
-      const elapsed = now - lastDrawTime
-      if (elapsed < fpsInterval) return
-      lastDrawTime = now - (elapsed % fpsInterval)
-
+    const updateCanvasSize = (w: number, h: number) => {
       const dpr = window.devicePixelRatio || 1
-      const rect = canvas.getBoundingClientRect()
-      if (rect.width > 0 && rect.height > 0) {
-        const targetW = Math.floor(rect.width * dpr)
-        const targetH = Math.floor(rect.height * dpr)
-        if (canvas.width !== targetW || canvas.height !== targetH) {
-          canvas.width = targetW
-          canvas.height = targetH
-          gl.viewport(0, 0, targetW, targetH)
+      const targetW = Math.floor(w * dpr)
+      const targetH = Math.floor(h * dpr)
+      if (targetW > 0 && targetH > 0 && (canvas.width !== targetW || canvas.height !== targetH)) {
+        canvas.width = targetW
+        canvas.height = targetH
+        gl.viewport(0, 0, targetW, targetH)
+      }
+    }
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect) {
+          updateCanvasSize(entry.contentRect.width, entry.contentRect.height)
         }
       }
+    })
+    resizeObserver.observe(canvas)
+    if (canvas.clientWidth && canvas.clientHeight) {
+      updateCanvasSize(canvas.clientWidth, canvas.clientHeight)
+    }
 
-      if (isPlaying && analyserNodeRef.current) {
+    const draw = (now: number) => {
+      if (!isPlayingRef.current || document.hidden) {
+        reqAnimRef.current = null
+        return
+      }
+
+      const elapsed = now - lastDrawTime
+      if (elapsed < fpsInterval) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+        return
+      }
+      lastDrawTime = now - (elapsed % fpsInterval)
+
+      if (analyserNodeRef.current) {
         analyserNodeRef.current.getByteFrequencyData(dataArray)
 
         gl.bindTexture(gl.TEXTURE_2D, texture)
@@ -165,16 +197,52 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
       const offset = currentColumn / textureWidth
       gl.uniform1f(offsetLoc, offset)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+      if (isPlayingRef.current && !document.hidden) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+      } else {
+        reqAnimRef.current = null
+      }
     }
-    reqAnimRef.current = requestAnimationFrame(draw)
+
+    const startDrawLoop = () => {
+      if (!reqAnimRef.current && isPlayingRef.current && !document.hidden) {
+        reqAnimRef.current = requestAnimationFrame(draw)
+      }
+    }
+    startDrawLoopRef.current = startDrawLoop
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (reqAnimRef.current) {
+          cancelAnimationFrame(reqAnimRef.current)
+          reqAnimRef.current = null
+        }
+      } else if (isPlayingRef.current) {
+        startDrawLoop()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    startDrawLoop()
 
     return () => {
+      startDrawLoopRef.current = null
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      resizeObserver.disconnect()
       if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
-      gl.deleteProgram(program)
-      gl.deleteTexture(texture)
-      gl.deleteBuffer(positionBuffer)
+      reqAnimRef.current = null
+      try {
+        gl.detachShader(program, vs)
+        gl.deleteShader(vs)
+        gl.detachShader(program, fs)
+        gl.deleteShader(fs)
+        gl.deleteProgram(program)
+      } catch (e) {}
+      if (texture) gl.deleteTexture(texture)
+      if (positionBuffer) gl.deleteBuffer(positionBuffer)
     }
-  }, [isPlaying, isLite, showSpectrogram, analyserNodeRef])
+  }, [isLite, showSpectrogram, analyserNodeRef])
 
   if (isLite || !showSpectrogram) return null
 

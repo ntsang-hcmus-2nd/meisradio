@@ -2,103 +2,225 @@ import fs from 'fs'
 import path from 'path'
 import { nativeImage } from 'electron'
 
-interface FlacTags {
+export interface FlacTagUpdate {
   title?: string
   artist?: string
+  artists?: string[]
   album?: string
-  lyrics?: string
+  albumArtist?: string
   genre?: string
+  year?: string
   date?: string
   trackNumber?: string
+  discNumber?: string
+  lyrics?: string
+  picture?: {
+    data: Buffer
+    mimeType: string
+    description?: string
+  } | null
 }
 
-interface FlacBlock {
+export type FlacTags = FlacTagUpdate
+
+export interface FlacBlock {
   isLast: boolean
   type: number
   data: Buffer
 }
 
+export interface FlacParsedMetadata {
+  blocks: FlacBlock[]
+  audioDataOffset: number
+}
+
 /**
- * Đọc cấu trúc các block Metadata của tệp FLAC
+ * Đọc cấu trúc các block Metadata FLAC từ byte 4 đến audioDataOffset
+ * KHÔNG đọc dữ liệu âm thanh vào RAM!
  */
-function parseFlacBlocks(fileBuffer: Buffer): { header: Buffer; blocks: FlacBlock[]; audioData: Buffer } {
-  if (fileBuffer.length < 4 || fileBuffer.toString('utf-8', 0, 4) !== 'fLaC') {
+export function parseFlacMetadataBlocks(fd: number): FlacParsedMetadata {
+  const magic = Buffer.alloc(4)
+  const bytesRead = fs.readSync(fd, magic, 0, 4, 0)
+  if (bytesRead < 4 || magic.toString('utf-8') !== 'fLaC') {
     throw new Error('Không phải tệp định dạng FLAC hợp lệ (thiếu magic fLaC header)')
   }
 
   const blocks: FlacBlock[] = []
   let offset = 4
+  let isLast = false
+  const headerBuf = Buffer.alloc(4)
 
-  while (offset < fileBuffer.length) {
-    if (offset + 4 > fileBuffer.length) break
-
-    const headerByte = fileBuffer[offset]
-    const isLast = (headerByte & 0x80) !== 0
-    const type = headerByte & 0x7f
-
-    const length = (fileBuffer[offset + 1] << 16) | (fileBuffer[offset + 2] << 8) | fileBuffer[offset + 3]
-    offset += 4
-
-    if (offset + length > fileBuffer.length) {
+  while (!isLast) {
+    const hdrRead = fs.readSync(fd, headerBuf, 0, 4, offset)
+    if (hdrRead < 4) {
       throw new Error('Dữ liệu block metadata FLAC bị cắt ngắn hoặc không hợp lệ')
     }
 
-    const data = fileBuffer.subarray(offset, offset + length)
-    blocks.push({ isLast, type, data: Buffer.from(data) })
-    offset += length
+    const headerByte = headerBuf[0]
+    isLast = (headerByte & 0x80) !== 0
+    const type = headerByte & 0x7f
+    const length = (headerBuf[1] << 16) | (headerBuf[2] << 8) | headerBuf[3]
+    offset += 4
 
-    if (isLast) break
+    if (length < 0 || length > 64 * 1024 * 1024) {
+      throw new Error(`Kích thước block metadata FLAC không hợp lệ: ${length}`)
+    }
+
+    const data = Buffer.alloc(length)
+    if (length > 0) {
+      const dataRead = fs.readSync(fd, data, 0, length, offset)
+      if (dataRead < length) {
+        throw new Error('Dữ liệu block metadata FLAC bị thiếu hoặc đọc lỗi')
+      }
+    }
+
+    blocks.push({ isLast, type, data })
+    offset += length
   }
 
-  const audioData = fileBuffer.subarray(offset)
   return {
-    header: fileBuffer.subarray(0, 4),
     blocks,
-    audioData: Buffer.from(audioData)
+    audioDataOffset: offset
+  }
+}
+
+/**
+ * Trích xuất Vorbis Comments và Vendor string từ block Vorbis Comment
+ */
+export function extractExistingComments(blockData: Buffer): { vendor: string; comments: string[] } {
+  try {
+    if (blockData.length < 8) return { vendor: '', comments: [] }
+    let pos = 0
+    const vendorLen = blockData.readUInt32LE(pos)
+    pos += 4
+    if (pos + vendorLen > blockData.length) return { vendor: '', comments: [] }
+    const vendor = blockData.toString('utf-8', pos, pos + vendorLen)
+    pos += vendorLen
+
+    if (pos + 4 > blockData.length) return { vendor, comments: [] }
+    const count = blockData.readUInt32LE(pos)
+    pos += 4
+
+    const comments: string[] = []
+    for (let i = 0; i < count; i++) {
+      if (pos + 4 > blockData.length) break
+      const cLen = blockData.readUInt32LE(pos)
+      pos += 4
+      if (pos + cLen > blockData.length) break
+      const commentStr = blockData.toString('utf-8', pos, pos + cLen)
+      comments.push(commentStr)
+      pos += cLen
+    }
+    return { vendor, comments }
+  } catch {
+    return { vendor: '', comments: [] }
   }
 }
 
 /**
  * Tạo block VORBIS_COMMENT cho FLAC
+ * Bảo toàn các thẻ không bị chỉnh sửa (REPLAYGAIN, COMPOSER, BPM,...)
  */
-function createVorbisCommentBlock(tags: FlacTags, existingComments: string[] = []): Buffer {
-  const vendorString = 'Meis Radio Audio Engine'
+export function createVorbisCommentBlock(
+  tags: FlacTagUpdate,
+  existingComments: string[] = [],
+  existingVendor?: string
+): Buffer {
+  const vendorString = existingVendor || 'Meis Radio Audio Engine'
   const vendorBuf = Buffer.from(vendorString, 'utf-8')
 
-  // Giữ lại các trường khác không bị ghi đè
-  const commentMap = new Map<string, string>()
-  for (const c of existingComments) {
-    const eqIdx = c.indexOf('=')
-    if (eqIdx !== -1) {
-      const key = c.substring(0, eqIdx).toUpperCase()
-      const val = c.substring(eqIdx + 1)
-      commentMap.set(key, val)
-    }
-  }
+  const keysToRemove = new Set<string>()
 
-  if (tags.title !== undefined) commentMap.set('TITLE', tags.title)
-  if (tags.artist !== undefined) commentMap.set('ARTIST', tags.artist)
-  if (tags.album !== undefined) commentMap.set('ALBUM', tags.album)
-  if (tags.genre !== undefined) commentMap.set('GENRE', tags.genre)
-  if (tags.date !== undefined) commentMap.set('DATE', tags.date)
-  if (tags.trackNumber !== undefined) commentMap.set('TRACKNUMBER', tags.trackNumber)
+  const isUpdatingArtist = tags.artist !== undefined || (Array.isArray(tags.artists) && tags.artists.length > 0)
+  if (isUpdatingArtist) {
+    keysToRemove.add('ARTIST')
+    keysToRemove.add('ARTISTS')
+  }
+  if (tags.title !== undefined) keysToRemove.add('TITLE')
+  if (tags.album !== undefined) keysToRemove.add('ALBUM')
+  if (tags.albumArtist !== undefined) {
+    keysToRemove.add('ALBUMARTIST')
+    keysToRemove.add('ALBUM ARTIST')
+  }
+  if (tags.genre !== undefined) keysToRemove.add('GENRE')
+  if (tags.year !== undefined || tags.date !== undefined) {
+    keysToRemove.add('DATE')
+    keysToRemove.add('YEAR')
+  }
+  if (tags.trackNumber !== undefined) {
+    keysToRemove.add('TRACKNUMBER')
+    keysToRemove.add('TRACK')
+  }
+  if (tags.discNumber !== undefined) {
+    keysToRemove.add('DISCNUMBER')
+    keysToRemove.add('DISC')
+  }
   if (tags.lyrics !== undefined) {
-    commentMap.set('LYRICS', tags.lyrics)
-    commentMap.set('UNSYNCEDLYRICS', tags.lyrics)
+    keysToRemove.add('LYRICS')
+    keysToRemove.add('UNSYNCEDLYRICS')
   }
 
-  const commentStrings: string[] = []
-  for (const [k, v] of commentMap.entries()) {
-    if (v && v.trim() !== '') {
-      commentStrings.push(`${k}=${v}`)
+  // Giữ lại các comment hiện có không bị ghi đè
+  const retainedComments = existingComments.filter((c) => {
+    const eqIdx = c.indexOf('=')
+    if (eqIdx === -1) return true
+    const key = c.substring(0, eqIdx).toUpperCase().trim()
+    return !keysToRemove.has(key)
+  })
+
+  const newComments: string[] = []
+
+  if (tags.title !== undefined && tags.title.trim()) {
+    newComments.push(`TITLE=${tags.title.trim()}`)
+  }
+  if (tags.album !== undefined && tags.album.trim()) {
+    newComments.push(`ALBUM=${tags.album.trim()}`)
+  }
+  if (tags.albumArtist !== undefined && tags.albumArtist.trim()) {
+    newComments.push(`ALBUMARTIST=${tags.albumArtist.trim()}`)
+  }
+  if (tags.genre !== undefined && tags.genre.trim()) {
+    newComments.push(`GENRE=${tags.genre.trim()}`)
+  }
+  const yearVal = tags.year ?? tags.date
+  if (yearVal !== undefined && yearVal.trim()) {
+    newComments.push(`DATE=${yearVal.trim()}`)
+    newComments.push(`YEAR=${yearVal.trim()}`)
+  }
+  if (tags.trackNumber !== undefined && tags.trackNumber.trim()) {
+    newComments.push(`TRACKNUMBER=${tags.trackNumber.trim()}`)
+  }
+  if (tags.discNumber !== undefined && tags.discNumber.trim()) {
+    newComments.push(`DISCNUMBER=${tags.discNumber.trim()}`)
+  }
+  if (tags.lyrics !== undefined && tags.lyrics.trim()) {
+    newComments.push(`LYRICS=${tags.lyrics.trim()}`)
+    newComments.push(`UNSYNCEDLYRICS=${tags.lyrics.trim()}`)
+  }
+
+  // Thêm các thẻ ARTIST độc lập cho từng nghệ sĩ (Chuẩn Vorbis Comment đa nghệ sĩ)
+  if (isUpdatingArtist) {
+    const artistList =
+      Array.isArray(tags.artists) && tags.artists.length > 0
+        ? tags.artists.map((a) => a.trim()).filter(Boolean)
+        : tags.artist && tags.artist.trim()
+          ? [tags.artist.trim()]
+          : []
+
+    for (const a of artistList) {
+      newComments.push(`ARTIST=${a}`)
+    }
+    if (artistList.length > 1) {
+      newComments.push(`ARTISTS=${artistList.join(', ')}`)
     }
   }
 
-  // Tính toán kích thước buffer
-  let totalSize = 4 + vendorBuf.length + 4 // vendor_length + vendor + user_comment_list_length
-  const encodedComments: Buffer[] = []
+  const finalComments = [...retainedComments, ...newComments]
 
-  for (const c of commentStrings) {
+  // Tính toán kích thước buffer Vorbis Comment
+  let totalSize = 4 + vendorBuf.length + 4
+  const encodedComments: Buffer[] = []
+  for (const c of finalComments) {
     const cBuf = Buffer.from(c, 'utf-8')
     encodedComments.push(cBuf)
     totalSize += 4 + cBuf.length
@@ -129,52 +251,28 @@ function createVorbisCommentBlock(tags: FlacTags, existingComments: string[] = [
 }
 
 /**
- * Trích xuất Vorbis Comments từ block hiện tại
- */
-function extractExistingComments(blockData: Buffer): string[] {
-  try {
-    if (blockData.length < 8) return []
-    let pos = 0
-    const vendorLen = blockData.readUInt32LE(pos)
-    pos += 4 + vendorLen
-    if (pos + 4 > blockData.length) return []
-
-    const count = blockData.readUInt32LE(pos)
-    pos += 4
-
-    const comments: string[] = []
-    for (let i = 0; i < count; i++) {
-      if (pos + 4 > blockData.length) break
-      const cLen = blockData.readUInt32LE(pos)
-      pos += 4
-      if (pos + cLen > blockData.length) break
-      const commentStr = blockData.toString('utf-8', pos, pos + cLen)
-      comments.push(commentStr)
-      pos += cLen
-    }
-    return comments
-  } catch (e) {
-    return []
-  }
-}
-
-/**
  * Tạo block PICTURE cho FLAC
  */
-function createPictureBlock(imageBuffer: Buffer, mimeType: string = 'image/jpeg'): Buffer {
+export function createPictureBlock(
+  imageBuffer: Buffer,
+  mimeType: string = 'image/jpeg',
+  description: string = ''
+): Buffer {
   let width = 0
   let height = 0
-  let colorDepth = 24
+  const colorDepth = 24
 
   try {
-    const nImg = nativeImage.createFromBuffer(imageBuffer)
-    const size = nImg.getSize()
-    width = size.width || 0
-    height = size.height || 0
-  } catch (e) {}
+    if (nativeImage && typeof nativeImage.createFromBuffer === 'function') {
+      const nImg = nativeImage.createFromBuffer(imageBuffer)
+      const size = nImg.getSize()
+      width = size.width || 0
+      height = size.height || 0
+    }
+  } catch {}
 
   const mimeBuf = Buffer.from(mimeType, 'utf-8')
-  const descBuf = Buffer.alloc(0) // Description rỗng
+  const descBuf = Buffer.from(description, 'utf-8')
 
   const totalSize = 4 + 4 + mimeBuf.length + 4 + descBuf.length + 4 + 4 + 4 + 4 + 4 + imageBuffer.length
   const result = Buffer.alloc(totalSize)
@@ -193,6 +291,8 @@ function createPictureBlock(imageBuffer: Buffer, mimeType: string = 'image/jpeg'
   // 3. Description length & Description
   result.writeUInt32BE(descBuf.length, pos)
   pos += 4
+  descBuf.copy(result, pos)
+  pos += descBuf.length
 
   // 4. Width
   result.writeUInt32BE(width, pos)
@@ -219,87 +319,362 @@ function createPictureBlock(imageBuffer: Buffer, mimeType: string = 'image/jpeg'
 }
 
 /**
- * Ghi trực tiếp Metadata và Ảnh bìa vào tệp .flac
+ * Cập nhật Metadata FLAC với hỗ trợ Fast Path (In-place ghi đè khi có đủ padding)
+ * và Slow Path (Stream 256KB copy an toàn khi cần mở rộng padding).
+ * KHÔNG BAO GIỜ nạp toàn bộ file âm thanh vào bộ nhớ RAM!
  */
-export async function writeFlacMetadata(
+export function updateFlacTags(
   filePath: string,
-  tags: FlacTags,
-  imagePath?: string | null
-): Promise<{ success: boolean; error?: string }> {
+  tags: FlacTagUpdate
+): { success: boolean; error?: string } {
+  let fd: number | null = null
+  let tempPath: string | null = null
+
   try {
     if (!fs.existsSync(filePath)) {
       return { success: false, error: 'Tệp FLAC không tồn tại' }
     }
 
-    const fileBuffer = fs.readFileSync(filePath)
-    const { header, blocks, audioData } = parseFlacBlocks(fileBuffer)
+    fd = fs.openSync(filePath, 'r+')
+    const { blocks: originalBlocks, audioDataOffset } = parseFlacMetadataBlocks(fd)
 
-    // Trích xuất comments cũ
+    // 1. Trích xuất Vorbis comments và vendor cũ
     let existingComments: string[] = []
-    const newBlocks: FlacBlock[] = []
-
-    for (const b of blocks) {
+    let existingVendor = ''
+    for (const b of originalBlocks) {
       if (b.type === 4) {
-        // VORBIS_COMMENT
-        existingComments = extractExistingComments(b.data)
-      } else if (b.type === 6 && imagePath) {
-        // PICTURE: Nếu có ảnh mới, bỏ block ảnh cũ
-        continue
-      } else {
-        newBlocks.push(b)
+        const parsed = extractExistingComments(b.data)
+        existingComments = parsed.comments
+        existingVendor = parsed.vendor
+        break
       }
     }
 
-    // 1. Tạo block VORBIS_COMMENT mới
-    const newVorbisData = createVorbisCommentBlock(tags, existingComments)
-    // Chèn VORBIS_COMMENT ngay sau STREAMINFO (block 0)
-    newBlocks.splice(1, 0, { isLast: false, type: 4, data: newVorbisData })
+    // 2. Tạo block VORBIS_COMMENT mới
+    const newVorbisData = createVorbisCommentBlock(tags, existingComments, existingVendor)
+    const newVorbisBlock: FlacBlock = { isLast: false, type: 4, data: newVorbisData }
 
-    // 2. Tạo block PICTURE mới nếu có ảnh
-    if (imagePath && fs.existsSync(imagePath)) {
+    // 3. Xử lý block PICTURE
+    let newPictureBlock: FlacBlock | null = null
+    if (tags.picture !== undefined) {
+      if (tags.picture && tags.picture.data && tags.picture.data.length > 0) {
+        const picData = createPictureBlock(
+          tags.picture.data,
+          tags.picture.mimeType || 'image/jpeg',
+          tags.picture.description || ''
+        )
+        newPictureBlock = { isLast: false, type: 6, data: picData }
+      }
+      // Nếu tags.picture === null, giữ newPictureBlock = null để xóa ảnh bìa
+    }
+
+    // 4. Lọc các block hiện có:
+    // - STREAMINFO (type 0): luôn giữ nguyên vị trí đầu tiên
+    // - PADDING (type 1): loại bỏ vì sẽ được tái tính toán
+    // - VORBIS_COMMENT (type 4): thay thế bằng newVorbisBlock
+    // - PICTURE (type 6): nếu có cập nhật ảnh bìa thì bỏ block ảnh cũ, ngược lại giữ nguyên
+    const streamInfo = originalBlocks.find((b) => b.type === 0)
+    if (!streamInfo) {
+      throw new Error('Không tìm thấy block STREAMINFO bắt buộc của FLAC')
+    }
+
+    const otherBlocks: FlacBlock[] = []
+    for (const b of originalBlocks) {
+      if (b.type === 0 || b.type === 1 || b.type === 4) {
+        continue
+      }
+      if (b.type === 6 && tags.picture !== undefined) {
+        continue
+      }
+      otherBlocks.push({ isLast: false, type: b.type, data: b.data })
+    }
+
+    // 5. Tập hợp các block cần ghi
+    const assembledBlocks: FlacBlock[] = [
+      { isLast: false, type: 0, data: streamInfo.data },
+      newVorbisBlock,
+      ...otherBlocks
+    ]
+    if (newPictureBlock) {
+      assembledBlocks.push(newPictureBlock)
+    }
+
+    // Tính kích thước các block mới (không tính padding)
+    let newMetadataBlocksSize = 0
+    for (const b of assembledBlocks) {
+      newMetadataBlocksSize += 4 + b.data.length
+    }
+
+    const existingMetadataAreaSize = audioDataOffset - 4
+    const leftoverSpace = existingMetadataAreaSize - newMetadataBlocksSize
+
+    // ==========================================
+    // FAST PATH: Ghi trực tiếp In-Place nếu vừa khít hoặc dư >= 4 bytes (tạo PADDING)
+    // 0 byte dữ liệu âm thanh bị đọc hoặc sao chép!
+    // ==========================================
+    if (leftoverSpace === 0 || leftoverSpace >= 4) {
+      if (leftoverSpace >= 4) {
+        const paddingDataLength = leftoverSpace - 4
+        assembledBlocks.push({
+          isLast: true,
+          type: 1, // PADDING
+          data: Buffer.alloc(paddingDataLength)
+        })
+      } else {
+        assembledBlocks[assembledBlocks.length - 1].isLast = true
+      }
+
+      for (let i = 0; i < assembledBlocks.length - 1; i++) {
+        assembledBlocks[i].isLast = false
+      }
+
+      const outBuffer = Buffer.alloc(existingMetadataAreaSize)
+      let writePos = 0
+      for (const b of assembledBlocks) {
+        const headerByte = (b.isLast ? 0x80 : 0x00) | (b.type & 0x7f)
+        outBuffer[writePos] = headerByte
+        outBuffer[writePos + 1] = (b.data.length >> 16) & 0xff
+        outBuffer[writePos + 2] = (b.data.length >> 8) & 0xff
+        outBuffer[writePos + 3] = b.data.length & 0xff
+        writePos += 4
+
+        b.data.copy(outBuffer, writePos)
+        writePos += b.data.length
+      }
+
+      fs.writeSync(fd, outBuffer, 0, existingMetadataAreaSize, 4)
+      fs.closeSync(fd)
+      fd = null
+
+      return { success: true }
+    }
+
+    // ==========================================
+    // SLOW PATH: Sao chép luồng dữ liệu âm thanh theo chunks 256KB
+    // Thêm block PADDING 16KB để các lần sửa sau rơi vào Fast Path
+    // Bộ nhớ RAM tiêu thụ tối đa chỉ 256KB!
+    // ==========================================
+    const EXTRA_PADDING_SIZE = 16384 // 16 KB
+    assembledBlocks.push({
+      isLast: true,
+      type: 1,
+      data: Buffer.alloc(EXTRA_PADDING_SIZE)
+    })
+
+    for (let i = 0; i < assembledBlocks.length - 1; i++) {
+      assembledBlocks[i].isLast = false
+    }
+
+    let totalNewMetadataSize = 4 // 'fLaC'
+    for (const b of assembledBlocks) {
+      totalNewMetadataSize += 4 + b.data.length
+    }
+
+    const headerAndMetaBuf = Buffer.alloc(totalNewMetadataSize)
+    headerAndMetaBuf.write('fLaC', 0, 4, 'ascii')
+    let pos = 4
+    for (const b of assembledBlocks) {
+      const headerByte = (b.isLast ? 0x80 : 0x00) | (b.type & 0x7f)
+      headerAndMetaBuf[pos] = headerByte
+      headerAndMetaBuf[pos + 1] = (b.data.length >> 16) & 0xff
+      headerAndMetaBuf[pos + 2] = (b.data.length >> 8) & 0xff
+      headerAndMetaBuf[pos + 3] = b.data.length & 0xff
+      pos += 4
+
+      b.data.copy(headerAndMetaBuf, pos)
+      pos += b.data.length
+    }
+
+    tempPath = `${filePath}.tmp_${Date.now()}`
+    const dstFd = fs.openSync(tempPath, 'w')
+
+    try {
+      // 1. Ghi header + metadata blocks
+      fs.writeSync(dstFd, headerAndMetaBuf, 0, headerAndMetaBuf.length)
+
+      // 2. Stream audio frames bằng vòng lặp buffer 256KB
+      const CHUNK_SIZE = 256 * 1024
+      const chunkBuf = Buffer.alloc(CHUNK_SIZE)
+      const stat = fs.fstatSync(fd)
+      let readPos = audioDataOffset
+
+      while (readPos < stat.size) {
+        const toRead = Math.min(CHUNK_SIZE, stat.size - readPos)
+        const bytesRead = fs.readSync(fd, chunkBuf, 0, toRead, readPos)
+        if (bytesRead <= 0) break
+        fs.writeSync(dstFd, chunkBuf, 0, bytesRead)
+        readPos += bytesRead
+      }
+
+      fs.closeSync(dstFd)
+      fs.closeSync(fd)
+      fd = null
+
+      const finalTempPath = tempPath!
+      let renamed = false
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          fs.renameSync(finalTempPath, filePath)
+          renamed = true
+          tempPath = null
+          break
+        } catch {
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50)
+        }
+      }
+
+      if (!renamed) {
+        fs.renameSync(finalTempPath, filePath)
+        tempPath = null
+      }
+
+      return { success: true }
+    } catch (e: any) {
+      try {
+        fs.closeSync(dstFd)
+      } catch {}
+      throw e
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Lỗi không xác định khi ghi thẻ FLAC' }
+  } finally {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd)
+      } catch {}
+    }
+    if (tempPath && fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath)
+      } catch {}
+    }
+  }
+}
+
+/**
+ * Hàm tương thích ngược với src/main/index.ts (writeFlacMetadata)
+ */
+export async function writeFlacMetadata(
+  filePath: string,
+  tags: FlacTagUpdate,
+  imagePath?: string | null
+): Promise<{ success: boolean; error?: string }> {
+  const updates: FlacTagUpdate = { ...tags }
+
+  if (imagePath && fs.existsSync(imagePath)) {
+    try {
       const imgBuffer = fs.readFileSync(imagePath)
       const ext = path.extname(imagePath).toLowerCase()
       const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg'
-      const pictureData = createPictureBlock(imgBuffer, mime)
-      newBlocks.push({ isLast: false, type: 6, data: pictureData })
+      updates.picture = {
+        data: imgBuffer,
+        mimeType: mime
+      }
+    } catch {}
+  } else if (imagePath === null) {
+    updates.picture = null
+  }
+
+  return updateFlacTags(filePath, updates)
+}
+
+/**
+ * Ghi thẻ FLAC và ảnh bìa trực tiếp (hỗ trợ buffer ảnh hoặc xóa ảnh)
+ */
+export function writeFlacTagsAndPicture(
+  filePath: string,
+  tags: FlacTagUpdate,
+  pictureBuffer?: Buffer | null
+): { success: boolean; error?: string } {
+  const updates: FlacTagUpdate = { ...tags }
+  if (pictureBuffer) {
+    updates.picture = {
+      data: pictureBuffer,
+      mimeType: 'image/jpeg'
+    }
+  } else if (pictureBuffer === null) {
+    updates.picture = null
+  }
+  return updateFlacTags(filePath, updates)
+}
+
+/**
+ * Đọc thông tin thẻ FLAC mà không tải toàn bộ file âm thanh vào bộ nhớ
+ */
+export function readFlacTags(filePath: string): FlacTagUpdate | null {
+  let fd: number | null = null
+  try {
+    if (!fs.existsSync(filePath)) return null
+    fd = fs.openSync(filePath, 'r')
+    const { blocks } = parseFlacMetadataBlocks(fd)
+
+    const result: FlacTagUpdate = {}
+
+    for (const b of blocks) {
+      if (b.type === 4) {
+        const { comments } = extractExistingComments(b.data)
+        const artists: string[] = []
+        for (const c of comments) {
+          const eqIdx = c.indexOf('=')
+          if (eqIdx === -1) continue
+          const key = c.substring(0, eqIdx).toUpperCase().trim()
+          const val = c.substring(eqIdx + 1).trim()
+          if (!val) continue
+
+          if (key === 'TITLE' && !result.title) result.title = val
+          else if (key === 'ALBUM' && !result.album) result.album = val
+          else if ((key === 'ALBUMARTIST' || key === 'ALBUM ARTIST') && !result.albumArtist) result.albumArtist = val
+          else if (key === 'GENRE' && !result.genre) result.genre = val
+          else if ((key === 'DATE' || key === 'YEAR') && !result.year) {
+            result.year = val
+            result.date = val
+          } else if ((key === 'TRACKNUMBER' || key === 'TRACK') && !result.trackNumber) result.trackNumber = val
+          else if ((key === 'DISCNUMBER' || key === 'DISC') && !result.discNumber) result.discNumber = val
+          else if ((key === 'LYRICS' || key === 'UNSYNCEDLYRICS') && !result.lyrics) result.lyrics = val
+          else if (key === 'ARTIST') artists.push(val)
+        }
+        if (artists.length > 0) {
+          result.artists = artists
+          result.artist = artists.join(', ')
+        }
+      } else if (b.type === 6 && !result.picture) {
+        if (b.data.length >= 32) {
+          let ptr = 4
+          const mimeLen = b.data.readUInt32BE(ptr)
+          ptr += 4
+          if (ptr + mimeLen <= b.data.length) {
+            const mime = b.data.toString('utf-8', ptr, ptr + mimeLen)
+            ptr += mimeLen
+            const descLen = b.data.readUInt32BE(ptr)
+            ptr += 4
+            const desc = b.data.toString('utf-8', ptr, ptr + descLen)
+            ptr += descLen
+            ptr += 16
+            if (ptr + 4 <= b.data.length) {
+              const dataLen = b.data.readUInt32BE(ptr)
+              ptr += 4
+              if (ptr + dataLen <= b.data.length) {
+                const picData = b.data.subarray(ptr, ptr + dataLen)
+                result.picture = {
+                  data: Buffer.from(picData),
+                  mimeType: mime,
+                  description: desc
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
-    // Đánh dấu block cuối cùng là isLast = true
-    for (let i = 0; i < newBlocks.length; i++) {
-      newBlocks[i].isLast = (i === newBlocks.length - 1)
+    return result
+  } catch {
+    return null
+  } finally {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd)
+      } catch {}
     }
-
-    // Tính tổng dung lượng cần ghi
-    let totalMetadataSize = 4 // 'fLaC'
-    for (const b of newBlocks) {
-      totalMetadataSize += 4 + b.data.length
-    }
-
-    const outBuffer = Buffer.alloc(totalMetadataSize + audioData.length)
-    header.copy(outBuffer, 0)
-    let writePos = 4
-
-    for (const b of newBlocks) {
-      const headerByte = (b.isLast ? 0x80 : 0x00) | (b.type & 0x7f)
-      outBuffer[writePos] = headerByte
-      outBuffer[writePos + 1] = (b.data.length >> 16) & 0xff
-      outBuffer[writePos + 2] = (b.data.length >> 8) & 0xff
-      outBuffer[writePos + 3] = b.data.length & 0xff
-      writePos += 4
-
-      b.data.copy(outBuffer, writePos)
-      writePos += b.data.length
-    }
-
-    audioData.copy(outBuffer, writePos)
-
-    // Ghi an toàn bằng tệp tạm rồi rename
-    const tempPath = `${filePath}.tmp_${Date.now()}`
-    fs.writeFileSync(tempPath, outBuffer)
-    fs.renameSync(tempPath, filePath)
-
-    return { success: true }
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Lỗi không xác định khi ghi thẻ FLAC' }
   }
 }
