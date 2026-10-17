@@ -1694,15 +1694,17 @@ export default function App() {
                 <div
                   key={`${activeView}-${activeAlbum ? (activeAlbum as any).browseId || activeAlbum.title || 'album' : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.id || activePlaylist?.name || ''}-${activeUserPlaylist?.id || activeUserPlaylist?.name || ''}`}
                   className={`${theming.isLite ? '' : 'animate-fade-in'} flex-1 flex flex-col p-4 sm:p-6 lg:p-8 relative ${
-                    activeView === 'settings' ||
-                    activeView === 'drive' ||
-                    activeView === 'home' ||
-                    (activeView === 'playlists' && !activePlaylist) ||
-                    activeView === 'artists' ||
-                    (activeView === 'genres' && !activeGenre) ||
-                    (activeView === 'user-playlists' && !activeUserPlaylist)
-                      ? 'overflow-y-auto'
-                      : 'overflow-hidden'
+                    activeView === 'analytics'
+                      ? 'overflow-y-auto no-scrollbar'
+                      : activeView === 'settings' ||
+                        activeView === 'drive' ||
+                        activeView === 'home' ||
+                        (activeView === 'playlists' && !activePlaylist) ||
+                        activeView === 'artists' ||
+                        (activeView === 'genres' && !activeGenre) ||
+                        (activeView === 'user-playlists' && !activeUserPlaylist)
+                        ? 'overflow-y-auto'
+                        : 'overflow-hidden'
                   }`}
                 >
                   {activeView === 'home' && (

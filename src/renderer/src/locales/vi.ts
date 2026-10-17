@@ -874,7 +874,7 @@ export const vi: TranslationDictionary = {
     uniqueTracks: 'Bài hát độc nhất',
     uniqueArtists: 'Nghệ sĩ',
     uniqueAlbums: 'Album',
-    audiophileQuality: 'Chất Lượng Audiophile',
+    audiophileQuality: 'Chất Lượng Audio',
     bitPerfectRatio: 'Tỷ Lệ Bit-Perfect',
     lossless: 'Lossless',
     hiRes: 'Hi-Res Studio',

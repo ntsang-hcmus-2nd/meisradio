@@ -867,7 +867,7 @@ export const en: TranslationDictionary = {
     uniqueTracks: 'Unique Tracks',
     uniqueArtists: 'Artists',
     uniqueAlbums: 'Albums',
-    audiophileQuality: 'Audiophile Quality',
+    audiophileQuality: 'Audio Quality',
     bitPerfectRatio: 'Bit-Perfect Ratio',
     lossless: 'Lossless',
     hiRes: 'Hi-Res Studio',

@@ -204,7 +204,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-24 text-zinc-100 select-none">
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-24 text-zinc-100 select-none no-scrollbar">
       {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-theme-60/80 via-theme-60/50 to-theme-10/10 border border-theme-30/40 backdrop-blur-xl shadow-lg">
         <div className="flex items-center gap-4">
@@ -214,13 +214,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
               <span>{t('analytics.title')}</span>
-              <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-theme-10/20 text-theme-10 border border-theme-10/30">
-                PRO HQ
-              </span>
             </h1>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
-              {t('analytics.subtitle')}
-            </p>
           </div>
         </div>
 
@@ -386,7 +380,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
                 <Clock size={18} className="text-theme-10" />
                 <span>{t('analytics.hourlyRhythm')}</span>
               </h2>
-              <p className="text-xs text-zinc-400 mt-0.5">{t('analytics.hourlySubtitle')}</p>
             </div>
             {maxHourCount > 0 && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-theme-10/15 border border-theme-10/30 text-theme-10 text-xs font-semibold">
@@ -451,9 +444,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
               <Calendar size={18} className="text-sky-400" />
               <span>{t('analytics.weekdayActivity')}</span>
             </h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              {language === 'vi' ? 'Thói quen nghe theo các ngày' : 'Listening patterns by day'}
-            </p>
           </div>
 
           <div className="h-44 pt-6 pb-2 flex items-end gap-2.5 w-full relative">
@@ -549,11 +539,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
                 <TrendingUp size={18} className="text-emerald-400" />
                 <span>{t('analytics.dailyTrend')}</span>
               </h2>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {language === 'vi'
-                  ? 'Thời gian nghe và lượt phát theo từng ngày'
-                  : 'Plays and minutes listened per day'}
-              </p>
             </div>
           </div>
 
@@ -761,7 +746,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto no-scrollbar">
           <table className="w-full text-left text-xs text-zinc-300 border-collapse">
             <thead>
               <tr className="border-b border-theme-30/30 text-zinc-500 uppercase tracking-wider text-[11px]">
