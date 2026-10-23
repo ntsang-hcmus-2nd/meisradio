@@ -90,19 +90,26 @@ export function formatAudioSource(
 ): string {
   if (!filePath || typeof filePath !== 'string') return ''
   const trimmed = filePath.trim()
+  const port = streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
+
+  // URL đã là endpoint phát của chính stream server nội bộ (/play?...) -> giữ
+  // nguyên (chỉ đổi port nếu stale sau restart). Bọc nó vào /local-audio sẽ
+  // khiến server trả 403 và thẻ <audio> báo MEDIA_ERR_SRC_NOT_SUPPORTED.
+  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//i.test(trimmed)) {
+    if (port > 0) {
+      return trimmed
+        .replace(/^http:\/\/127\.0\.0\.1:\d+/i, `http://127.0.0.1:${port}`)
+        .replace(/^http:\/\/localhost:\d+/i, `http://127.0.0.1:${port}`)
+    }
+    return trimmed
+  }
 
   // Giữ nguyên các URL streaming trực tuyến (YouTube, SoundCloud, Icecast stream...)
-  if (
-    (trimmed.startsWith('http://') || trimmed.startsWith('https://')) &&
-    !trimmed.includes('/local-audio?path=') &&
-    !trimmed.includes('127.0.0.1') &&
-    !trimmed.includes('localhost')
-  ) {
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed
   }
 
   const rawPath = extractRawFilePath(trimmed)
-  const port = streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
 
   if (port > 0 && rawPath) {
     return `http://127.0.0.1:${port}/local-audio?path=${encodeURIComponent(rawPath)}`

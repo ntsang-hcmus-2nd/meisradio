@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { usePlayerStore, useSettingsStore } from '../stores'
 import { formatImageSource } from '../utils/urlUtils'
 import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUtils'
+import { seekWebAudioCompatible, getReloadSeekOffset } from '../utils/onlineSeekUtils'
 
 interface UseMediaSessionProps {
   audioRef: React.RefObject<HTMLAudioElement | null>
@@ -68,8 +69,10 @@ export function useMediaSession({
             } else if (audioRef.current) {
               // seekTime là toạ độ ảo của track (0..duration); quy đổi sang toạ độ
               // vật lý rồi kẹp vào phạm vi [startTime, endTime] của track CUE.
+              // Stream online HLS qua helper để reload ?seek= khi cần.
               const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
-              audioRef.current.currentTime = clampSeekRange(range.start + details.seekTime, range)
+              const relTarget = clampSeekRange(range.start + details.seekTime, range) - range.start
+              seekWebAudioCompatible(audioRef.current, currentTrack, relTarget, range.start)
             }
           }
         }
@@ -82,10 +85,9 @@ export function useMediaSession({
             window.api?.bassSeek?.(-offset, 'relative')
           } else if (audioRef.current) {
             const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
-            audioRef.current.currentTime = clampSeekRange(
-              audioRef.current.currentTime - offset,
-              range
-            )
+            const baseAbs = audioRef.current.currentTime + getReloadSeekOffset(currentTrack)
+            const relTarget = clampSeekRange(baseAbs - offset, range) - range.start
+            seekWebAudioCompatible(audioRef.current, currentTrack, relTarget, range.start)
           }
         }
       ],
@@ -97,10 +99,9 @@ export function useMediaSession({
             window.api?.bassSeek?.(offset, 'relative')
           } else if (audioRef.current) {
             const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
-            audioRef.current.currentTime = clampSeekRange(
-              audioRef.current.currentTime + offset,
-              range
-            )
+            const baseAbs = audioRef.current.currentTime + getReloadSeekOffset(currentTrack)
+            const relTarget = clampSeekRange(baseAbs + offset, range) - range.start
+            seekWebAudioCompatible(audioRef.current, currentTrack, relTarget, range.start)
           }
         }
       ]

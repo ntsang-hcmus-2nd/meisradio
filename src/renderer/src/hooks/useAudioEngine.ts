@@ -11,6 +11,14 @@ import { useTranslation, useLanguage } from '../locales'
 import { sliderToGain } from '../utils/audioUtils'
 import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUtils'
 import { isSameTrack } from '../utils/trackStateUtils'
+import { extractRawFilePath } from '../utils/urlUtils'
+import {
+  seekWebAudioCompatible,
+  getReloadSeekOffset,
+  getOnlineSeekKey,
+  clearOnlineSeekState,
+  stripOnlineSeekParam
+} from '../utils/onlineSeekUtils'
 import { fisherYatesShuffle } from '../utils/arrayUtils'
 
 export const getBrowserSinkId = (deviceId: string | null | undefined): string => {
@@ -649,7 +657,19 @@ export function useAudioEngine() {
             }
           }
 
-          if (candidateTrack && candidateTrack.filePath === nextPath) {
+          // nextPath từ main là đường dẫn thô (không có file://, không có #track-N),
+          // còn track.filePath trong queue là URL file:// -> chuẩn hóa trước khi so.
+          // shortcut: so khớp tuyệt đối, tránh replay đè lên stream gapless vừa chuyển
+          // (replay gây giật + mở rộng cửa sổ race stop()/transition -> crash).
+          const normGaplessPath = (p: any): string => {
+            const raw = extractRawFilePath(typeof p === 'string' ? p : '') || ''
+            const noFrag = raw.includes('#track-') ? raw.split('#track-')[0] : raw
+            return noFrag.toLowerCase()
+          }
+          if (
+            candidateTrack &&
+            normGaplessPath(candidateTrack.filePath) === normGaplessPath(nextPath)
+          ) {
             isGaplessTransitioningRef.current = true
             hasTriggeredCrossfadeRef.current = false
             setCurrentTrack(candidateTrack)
@@ -861,6 +881,11 @@ export function useAudioEngine() {
     hasTriggeredCrossfadeRef.current = false
 
     const trackToPlay = { ...track }
+    // Đổi bài khác -> xóa offset/?seek= tồn đọng của bài cũ (tránh rò rỉ
+    // offset sang bài mới và đánh dấu HLS sai track).
+    if (currentTrack && getOnlineSeekKey(currentTrack) !== getOnlineSeekKey(trackToPlay)) {
+      clearOnlineSeekState(currentTrack)
+    }
     // Cấp phép crossfade cho track mới NGAY LẬP TỨC (trước khi chờ resolve stream
     // online) để handler timeUpdate của bài cũ — closure currentTrack vẫn là object
     // cũ — không thể tự gọi handleNext lần nữa trong cửa sổ chờ. Nếu resolve lỗi
@@ -947,8 +972,11 @@ export function useAudioEngine() {
       // 2 lần độ to trước khi nhỏ dần.
       if (crossfadeEnabled && isPlaying && currentTrack && !bitPerfectEnabled) {
         try {
-          const fadeAudio = new Audio(audioRef.current.src)
-          fadeAudio.currentTime = audioRef.current.currentTime
+          // src có thể kèm ?seek= (HLS reload): tước đi rồi cộng bù offset để
+          // fadeAudio tiếp tục đúng vị trí thay vì phát lại từ điểm seek.
+          const fadeSrc = stripOnlineSeekParam(audioRef.current.src || '')
+          const fadeAudio = new Audio(fadeSrc)
+          fadeAudio.currentTime = audioRef.current.currentTime + getReloadSeekOffset(currentTrack)
           const sliderVol = Math.max(0, Math.min(1, volume))
           fadeAudio.volume = sliderToGain(sliderVol)
           audioRef.current.volume = 0
@@ -1302,8 +1330,12 @@ export function useAudioEngine() {
     } else if (audioRef.current) {
       // Kẹp phạm vi theo [startTime, endTime] của track CUE thay vì [0, duration]
       // của cả tệp vật lý (tua qua ranh giới CUE sẽ nhảy sang bài kế tiếp).
+      // Stream online HLS (YTM) không tua native được -> helper tự reload ?seek=.
+      // Cộng offset reload (?seek=) vì sau reload currentTime đếm lại từ 0.
       const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
-      audioRef.current.currentTime = clampSeekRange(audioRef.current.currentTime + seconds, range)
+      const baseAbs = audioRef.current.currentTime + getReloadSeekOffset(currentTrack)
+      const relTarget = clampSeekRange(baseAbs + seconds, range) - range.start
+      seekWebAudioCompatible(audioRef.current, currentTrack, relTarget, range.start)
     }
   }
 
@@ -1312,7 +1344,9 @@ export function useAudioEngine() {
       window.api?.bassSeek?.(-seconds, 'relative')
     } else if (audioRef.current) {
       const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
-      audioRef.current.currentTime = clampSeekRange(audioRef.current.currentTime - seconds, range)
+      const baseAbs = audioRef.current.currentTime + getReloadSeekOffset(currentTrack)
+      const relTarget = clampSeekRange(baseAbs - seconds, range) - range.start
+      seekWebAudioCompatible(audioRef.current, currentTrack, relTarget, range.start)
     }
   }
 
@@ -1350,13 +1384,29 @@ export function useAudioEngine() {
     if (!audio) return
 
     const trackStart = currentTrack?.startTime || 0
-    const relTime = Math.max(0, audio.currentTime - trackStart)
+    // Stream HLS reload (?seek=) đếm lại currentTime từ 0 -> cộng bù offset
+    const hlsOffset = getReloadSeekOffset(currentTrack)
+    const relTime = Math.max(0, audio.currentTime - trackStart) + hlsOffset
     setCurrentTime(relTime)
 
     const trackEnd = currentTrack?.endTime || 0
     // Điểm kết thúc hiệu dụng: ranh giới CUE (endTime) nếu có, ngược lại là chu kỳ
     // phát dài thật của nguồn (bài thường / CUE full file).
-    const effectiveEnd = trackEnd > trackStart ? trackEnd : audio.duration || 0
+    const rawDur = audio.duration
+    const trackLen =
+      typeof currentTrack?.duration === 'number' && !isNaN(currentTrack.duration)
+        ? currentTrack.duration
+        : 0
+    let effectiveEnd = trackEnd > trackStart ? trackEnd : 0
+    if (!effectiveEnd) {
+      // Giữ nguyên hành vi cũ khi duration vật lý hợp lệ; chỉ dùng metadata khi
+      // duration vô định (NaN/Infinity ở luồng HLS transcode).
+      if (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > 0) {
+        effectiveEnd = rawDur
+      } else if (trackLen > 0) {
+        effectiveEnd = trackStart + Math.max(0, trackLen - hlsOffset)
+      }
+    }
     // Thời gian còn lại theo toạ độ ảo của track (khớp cách BASS tính
     // getDuration/getPosition: đều trừ startTime, cộng dồn ranh giới endTime)
     const remaining = effectiveEnd > 0 ? Math.max(0, effectiveEnd - audio.currentTime) : Infinity
@@ -1425,7 +1475,21 @@ export function useAudioEngine() {
 
   const handleAudioEnded = () => {
     const audio = audioRef.current
-    if (audio && audio.duration && audio.duration - audio.currentTime > 2) {
+    // Duration vô định (NaN/Infinity ở luồng HLS transcode) thì dùng metadata
+    // trừ offset reload, tránh nhầm "hết bài thật" thành "đứt mạng".
+    const hlsOff = getReloadSeekOffset(currentTrack)
+    const rawDur = audio?.duration
+    const metaLen =
+      typeof currentTrack?.duration === 'number' && !isNaN(currentTrack.duration)
+        ? currentTrack.duration
+        : 0
+    const effDur =
+      typeof rawDur === 'number' && isFinite(rawDur) && rawDur > 0
+        ? rawDur
+        : metaLen > 0
+          ? Math.max(0, metaLen - hlsOff)
+          : 0
+    if (audio && effDur > 0 && effDur - audio.currentTime > 2) {
       console.warn('[Player] Phát hiện đứt luồng mạng, tự động nối lại...')
       const time = audio.currentTime
       audio.load()

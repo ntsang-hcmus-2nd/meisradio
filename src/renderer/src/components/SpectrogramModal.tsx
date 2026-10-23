@@ -5,6 +5,7 @@ import { usePlayerStore } from '../stores'
 import { AudioSignalPath } from './AudioSignalPath'
 import { formatAudioSource } from '../utils/urlUtils'
 import { isDsdTrack, formatAudioSampleRate, getDsdRateLabel } from '../utils/formatUtils'
+import { seekWebAudioCompatible, getReloadSeekOffset } from '../utils/onlineSeekUtils'
 
 interface SpectrogramModalProps {
   isOpen: boolean
@@ -167,7 +168,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
         } else if (useBass) {
           cur = (audioRef?.current as any)?._currentTime ?? 0
         } else {
-          cur = Math.max(0, (audioRef?.current?.currentTime ?? 0) - (currentTrack?.startTime || 0))
+          // Stream HLS reload (?seek=) đếm lại currentTime từ 0 -> cộng bù offset
+          cur =
+            Math.max(0, (audioRef?.current?.currentTime ?? 0) - (currentTrack?.startTime || 0)) +
+            getReloadSeekOffset(currentTrack)
         }
         setCurrentTime(cur)
         setDuration(currentTrack?.duration || audioRef?.current?.duration || 0)
@@ -438,7 +442,13 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
           ;(audioRef.current as any)._currentTime = targetSeconds
         }
       } else if (audioRef?.current) {
-        audioRef.current.currentTime = (currentTrack?.startTime || 0) + targetSeconds
+        // Stream online HLS qua helper để reload ?seek= khi tua native thất bại
+        seekWebAudioCompatible(
+          audioRef.current,
+          currentTrack,
+          targetSeconds,
+          currentTrack?.startTime || 0
+        )
       }
       setCurrentTime(targetSeconds)
     }

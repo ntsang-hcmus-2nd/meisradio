@@ -194,6 +194,59 @@ export class BassManager extends EventEmitter {
   private gaplessEnabled: boolean = true
   private isTransitioningStream: boolean = false
   private preloadedStream: number = 0
+  // Tăng mỗi lần stop()/playFile() để hủy bỏ transition và deferred-free lỗi thời,
+  // chống use-after-free/double-free khi chuyển bài tay trong lúc audio thread
+  // đang chuyển gapless (dẫn tới crash native ngẫu nhiên).
+  private streamEpoch: number = 0
+  // Stream chờ giải phóng: free trực tiếp trong stop() có thể trúng lúc audio
+  // thread đang GetData trên chính handle đó -> park lại, xả ở lần stop() sau.
+  private parkedStreams: number[] = []
+  private lastKnownWasapiDevices: BassAudioDevice[] = []
+  private wasapiInitKey: string | null = null
+
+  private parkStreamForDeferredFree(handle: number): void {
+    if (handle) this.parkedStreams.push(handle)
+  }
+
+  private flushParkedStreams(): void {
+    if (this.parkedStreams.length === 0) return
+    const batch = this.parkedStreams
+    this.parkedStreams = []
+    for (const h of batch) {
+      if (h && h !== this.currentStream && h !== this.preloadedStream) {
+        try {
+          this.BASS_StreamFree(h)
+        } catch {}
+      }
+    }
+  }
+
+  // Liệt kê thiết bị WASAPI có chịu lỗi thoáng qua: USB DAC khi churn
+  // Free/Init exclusive liên tục có thể biến mất khỏi danh sách vài chục ms.
+  private getWasapiDevicesResilient(): BassAudioDevice[] {
+    let devs: BassAudioDevice[] = []
+    try {
+      devs = this.getAudioDevices('wasapi')
+    } catch {}
+    if (devs.length > 0) {
+      this.lastKnownWasapiDevices = devs
+      return devs
+    }
+    for (let attempt = 0; attempt < 3 && devs.length === 0; attempt++) {
+      const start = Date.now()
+      while (Date.now() - start < 50) {
+        // Chờ ngắn đồng bộ, chỉ đi vào nhánh lỗi hiếm này
+      }
+      try {
+        devs = this.getAudioDevices('wasapi')
+      } catch {}
+    }
+    if (devs.length > 0) {
+      this.lastKnownWasapiDevices = devs
+      return devs
+    }
+    return this.lastKnownWasapiDevices
+  }
 
   private get activeStream(): number {
     return this.currentStream
@@ -668,12 +721,16 @@ export class BassManager extends EventEmitter {
   private transitionToPreloadedStream(): boolean {
     if (this.isTransitioningStream || !this.nextActiveStream || !this.bassLib) return false
     this.isTransitioningStream = true
+    const epoch = this.streamEpoch
 
     try {
       const oldStream = this.activeStream
       const nextStream = this.nextActiveStream
       const nextPath = this.preloadedFilePath
       const nextInfo = this.preloadedInfo
+
+      // Bài khác đã stop()/play trong lúc chờ -> bỏ transition lỗi thời
+      if (!nextStream) return false
 
       this.activeStream = this.nextActiveStream
       this.nextActiveStream = 0
@@ -705,42 +762,48 @@ export class BassManager extends EventEmitter {
       }
       this.currentFilePath = nextPath
 
-      // Nếu đang ở chế độ ASIO, kích hoạt kênh ASIO cho stream mới trước khi giải phóng stream cũ
-      if (this.currentMode === 'asio') {
-        try {
-          if (this.BASS_ASIO_ChannelReset) {
-            this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
-          }
-          let en = false
-          if (this.BASS_ASIO_ChannelEnableBASS) {
-            en = this.BASS_ASIO_ChannelEnableBASS(false, 0, nextStream, true)
-          }
-          if (!en && this.BASS_ASIO_ChannelEnable) {
-            if (this.BASS_ASIO_ChannelSetFormat && !this.currentTrackInfo?.isNativeDsd) {
-              this.BASS_ASIO_ChannelSetFormat(false, 0, 19)
-            }
-            this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-            if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
-          }
-        } catch (err) {
-          console.error('Error re-enabling ASIO channel on gapless transition:', err)
-        }
-      }
-
-      // Defer freeing oldStream to avoid blocking real-time audio threads
+      // Phần nặng (ASIO re-enable, volume thiết bị, emit) KHÔNG chạy trên audio
+      // thread: BASS cấm gọi device API trong callback, dễ deadlock/crash.
+      // Chỉ swap handle + mốc thời gian ở đây, phần còn lại dời xuống setImmediate.
+      const mode = this.currentMode
+      const isNativeDsd = this.currentTrackInfo?.isNativeDsd
+      const vol = this.currentVolume
       setImmediate(() => {
-        if (oldStream && this.bassLib) {
+        // Bài đã đổi trong lúc chờ -> stream hiện tại không còn là của transition này
+        if (this.streamEpoch !== epoch || !nextStream) return
+        if (mode === 'asio') {
+          try {
+            if (this.BASS_ASIO_ChannelReset) {
+              this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
+            }
+            let en = false
+            if (this.BASS_ASIO_ChannelEnableBASS) {
+              en = this.BASS_ASIO_ChannelEnableBASS(false, 0, nextStream, true)
+            }
+            if (!en && this.BASS_ASIO_ChannelEnable) {
+              if (this.BASS_ASIO_ChannelSetFormat && !isNativeDsd) {
+                this.BASS_ASIO_ChannelSetFormat(false, 0, 19)
+              }
+              this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
+              if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
+            }
+          } catch (err) {
+            console.error('Error re-enabling ASIO channel on gapless transition:', err)
+          }
+        }
+
+        // Defer freeing oldStream: chỉ giải phóng khi handle đó không còn là
+        // stream đang phát/preload (BASS tái chế số handle, free nhầm = crash/mất tiếng).
+        if (oldStream && oldStream !== this.currentStream && oldStream !== this.preloadedStream) {
           try {
             this.BASS_StreamFree(oldStream)
           } catch {}
         }
-      })
 
-      // Áp dụng âm lượng cho stream mới
-      this.setVolume(this.currentVolume)
+        // Áp dụng âm lượng cho stream mới
+        this.setVolume(vol)
 
-      // Thông báo cho Main process & Renderer qua callback và event mà không làm nghẽn audio thread
-      setImmediate(() => {
+        // Thông báo cho Main process & Renderer qua callback và event mà không làm nghẽn audio thread
         if (nextPath) {
           if (this.onGaplessTransitionCallback) {
             try {
@@ -797,6 +860,10 @@ export class BassManager extends EventEmitter {
     if (!this.isInitialized || !this.currentStream || !this.isPlaying) {
       return { preloaded: false, reason: 'not-ready' }
     }
+    // Không đụng vào preload khi transition đang diễn ra trên audio thread
+    if (this.isTransitioningStream) {
+      return { preloaded: false, reason: 'transition-in-flight' }
+    }
     if (!filePath) {
       return { preloaded: false, reason: 'invalid-path' }
     }
@@ -831,9 +898,7 @@ export class BassManager extends EventEmitter {
 
     // Nếu đã có preloadedStream khác, giải phóng trước
     if (this.preloadedStream) {
-      try {
-        this.BASS_StreamFree(this.preloadedStream)
-      } catch {}
+      this.parkStreamForDeferredFree(this.preloadedStream)
       this.preloadedStream = 0
       this.preloadedFilePath = null
       this.preloadedInfo = null
@@ -1064,6 +1129,7 @@ export class BassManager extends EventEmitter {
    */
   private releaseDevices() {
     this.currentAsioDevice = -1
+    this.wasapiInitKey = null
     try {
       if (this.BASS_ASIO_Stop) this.BASS_ASIO_Stop()
       if (this.BASS_ASIO_ChannelReset)
@@ -1602,10 +1668,10 @@ export class BassManager extends EventEmitter {
         isDoP: false
       }
 
-      if (this.BASS_WASAPI_Free) this.BASS_WASAPI_Free()
-
       let devIndex = -1
-      const devs = this.getAudioDevices('wasapi')
+      // Liệt kê TRƯỚC khi Free: Free có thể làm enumerator của BASS trả về
+      // rỗng thoáng qua trên USB DAC khi churn exclusive nhanh -> dialog sai.
+      const devs = this.getWasapiDevicesResilient()
       if (devs.length === 0) {
         if (chan) {
           try {
@@ -1639,6 +1705,39 @@ export class BassManager extends EventEmitter {
         const def = devs.find((d) => d.isDefault) || devs[0]
         if (def) devIndex = parseInt(def.id, 10)
       }
+
+      // Tái dùng thiết bị đang init nếu cùng device + format + exclusive:
+      // bỏ qua Free/Init mỗi bài -> hết churn làm DAC rớt/USB reset khi chuyển nhanh.
+      const desiredKey = `${devIndex}|${streamFreq}|${chans}|ex`
+      if (this.wasapiInitKey === desiredKey) {
+        let devAlive = true
+        if (this.BASS_WASAPI_GetDeviceInfo) {
+          const probe: any = {}
+          try {
+            devAlive = !!this.BASS_WASAPI_GetDeviceInfo(devIndex, probe)
+          } catch {
+            devAlive = false
+          }
+        }
+        if (devAlive) {
+          this.setVolume(this.currentVolume)
+          if (this.BASS_WASAPI_Start) this.BASS_WASAPI_Start()
+          this.isPlaying = true
+          this.isPaused = false
+          this.emit('audio-out-params', {
+            samplerate: streamFreq,
+            format: isDsd ? 'DSD-to-PCM (176.4kHz)' : 'WASAPI Exclusive',
+            channels: `${chans} ch`,
+            mode: 'WASAPI',
+            isDsd: isDsd
+          })
+          this.startProgressTimer()
+          return true
+        }
+        this.wasapiInitKey = null
+      }
+
+      if (this.BASS_WASAPI_Free) this.BASS_WASAPI_Free()
 
       // Thử Exclusive mode trước (0.4s buffer, 0.05s period, KHÔNG AUTOFORMAT để đảm bảo Bit-Perfect)
       let ok = this.BASS_WASAPI_Init(
@@ -1678,10 +1777,12 @@ export class BassManager extends EventEmitter {
           this.currentStream = 0
         }
         this.isPlaying = false
+        this.wasapiInitKey = null
         const err = this.BASS_ErrorGetCode ? this.BASS_ErrorGetCode() : 0
         this.emit('error', this.formatBassErrorMessage(err, 'wasapi'))
         return false
       }
+      this.wasapiInitKey = `${devIndex}|${streamFreq}|${chans}|${isExclusive ? 'ex' : 'sh'}`
 
       // Kiểm tra tần số thực tế của WASAPI device
       let activeFreq = streamFreq
@@ -1903,11 +2004,20 @@ export class BassManager extends EventEmitter {
     this.stopProgressTimer()
     this.isPlaying = false
     this.isPaused = false
+    // Vô hiệu hóa mọi transition/deferred-free đang treo của bài cũ
+    this.streamEpoch++
+    // Xả batch đã park từ lần stop() trước (đủ cũ, audio thread không còn chạm tới)
+    this.flushParkedStreams()
 
     if (this.preloadedStream) {
-      try {
-        this.BASS_StreamFree(this.preloadedStream)
-      } catch {}
+      this.parkStreamForDeferredFree(this.preloadedStream)
+      this.preloadedStream = 0
+      this.preloadedFilePath = null
+      this.preloadedInfo = null
+    }
+
+    if (this.preloadedStream) {
+      this.parkStreamForDeferredFree(this.preloadedStream)
       this.preloadedStream = 0
       this.preloadedFilePath = null
       this.preloadedInfo = null
@@ -1931,9 +2041,7 @@ export class BassManager extends EventEmitter {
     }
 
     if (this.currentStream) {
-      try {
-        this.BASS_StreamFree(this.currentStream)
-      } catch {}
+      this.parkStreamForDeferredFree(this.currentStream)
       this.currentStream = 0
     }
     this.activeWasapiStream = 0

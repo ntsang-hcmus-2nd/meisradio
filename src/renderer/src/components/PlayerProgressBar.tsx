@@ -4,6 +4,7 @@ import { usePlayerStore } from '../stores/playerStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useTranslation } from '../locales'
 import { isDsdTrack } from '../utils/formatUtils'
+import { seekWebAudioCompatible, getReloadSeekOffset } from '../utils/onlineSeekUtils'
 
 const formatDuration = (seconds: number) => {
   if (!seconds || isNaN(seconds)) return '0:00'
@@ -209,7 +210,8 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       const update = () => {
         if (isDraggingRef.current) return
         const cur = audio.currentTime || 0
-        const rel = Math.max(0, cur - trackStart)
+        // Stream HLS reload (?seek=) đếm lại currentTime từ 0 -> cộng bù offset
+        const rel = Math.max(0, cur - trackStart) + getReloadSeekOffset(currentTrack)
         if (!checkAndLoop(rel)) {
           setCurrentTime(rel)
         }
@@ -237,7 +239,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       intervalId = setInterval(() => {
         if (!isDraggingRef.current && audioRef.current) {
           const cur = audioRef.current.currentTime || 0
-          const rel = Math.max(0, cur - trackStart)
+          const rel = Math.max(0, cur - trackStart) + getReloadSeekOffset(currentTrack)
           if (!checkAndLoop(rel)) {
             setCurrentTime(rel)
           }
@@ -256,6 +258,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
     audioRef,
     useBassTime,
     isPlaying,
+    currentTrack,
     currentTrack?.id,
     currentTrack?.filePath,
     currentTrack?.startTime
@@ -271,12 +274,14 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
         }
       } else if (audioRef.current) {
         const trackStart = currentTrack?.startTime || 0
-        audioRef.current.currentTime = trackStart + clamped
+        // Stream online HLS (YTM) không tua native được -> helper tự reload ?seek=.
+        // Đặt currentTime lạc quan để UI phản hồi ngay; timeupdate sẽ hiệu chỉnh.
+        seekWebAudioCompatible(audioRef.current, currentTrack, clamped, trackStart)
       }
       setCurrentTime(clamped)
       setIsDragging(false)
     },
-    [duration, useBassTime, audioRef, currentTrack?.startTime]
+    [duration, useBassTime, audioRef, currentTrack]
   )
 
   // --- Waveform Mouse / Touch Drag Scrubbing ---

@@ -1,15 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
 import { usePlayerStore, useUIStore } from '../stores'
 import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUtils'
+import { seekWebAudioCompatible, getReloadSeekOffset } from '../utils/onlineSeekUtils'
 
 /**
  * Tua bằng thao tác chu vi / phím tắt trên thẻ audio (WebAudio chuẩn):
  * kẹp phạm vi theo [startTime, endTime] của track CUE thay vì [0, duration]
- * của cả tệp vật lý.
+ * của cả tệp vật lý. Stream online HLS qua helper để reload ?seek= khi cần.
  */
 const seekAudioBy = (audio: HTMLAudioElement, track: any, delta: number) => {
   const range = getTrackSeekRange(track, audio.duration)
-  audio.currentTime = clampSeekRange(audio.currentTime + delta, range)
+  const relTarget =
+    clampSeekRange(audio.currentTime + getReloadSeekOffset(track) + delta, range) - range.start
+  seekWebAudioCompatible(audio, track, relTarget, range.start)
 }
 
 interface UseAppShortcutsProps {
