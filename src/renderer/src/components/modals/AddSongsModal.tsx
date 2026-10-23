@@ -10,7 +10,13 @@ interface AddSongsModalProps {
   onAddTracks: (selectedTracks: any[]) => void
 }
 
-export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, playlistName, onClose, onAddTracks }) => {
+export const AddSongsModal: React.FC<AddSongsModalProps> = ({
+  isOpen,
+  tracks,
+  playlistName,
+  onClose,
+  onAddTracks
+}) => {
   const { t } = useTranslation()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -66,13 +72,18 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">
           <div>
-            <h2 className="text-xl font-bold text-white">{t('modals.addSongs.title', { name: playlistName })}</h2>
+            <h2 className="text-xl font-bold text-white">
+              {t('modals.addSongs.title', { name: playlistName })}
+            </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              {t('modals.addSongs.showingCount', { shown: filteredTracks.length, total: tracks.length })}
+              {t('modals.addSongs.showingCount', {
+                shown: filteredTracks.length,
+                total: tracks.length
+              })}
             </p>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition"
           >
             <X size={20} />
@@ -151,7 +162,9 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
                   </div>
                   <div
                     className={`w-5 h-5 rounded-md flex items-center justify-center border transition ${
-                      isSelected ? 'bg-theme-10 border-theme-10 text-black' : 'border-zinc-700 bg-zinc-900/60'
+                      isSelected
+                        ? 'bg-theme-10 border-theme-10 text-black'
+                        : 'border-zinc-700 bg-zinc-900/60'
                     }`}
                   >
                     {isSelected && <Check size={14} className="stroke-[3]" />}
@@ -164,9 +177,9 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
 
         {/* Footer */}
         <div className="flex justify-end gap-3 pt-3 border-t border-zinc-800">
-          <button 
+          <button
             type="button"
-            onClick={onClose} 
+            onClick={onClose}
             className="px-4 py-2 text-sm text-zinc-400 hover:text-white rounded-xl transition"
           >
             {t('common.cancel')}
@@ -176,8 +189,8 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({ isOpen, tracks, pl
             onClick={handleConfirm}
             disabled={selectedIds.length === 0}
             className={`px-6 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition ${
-              selectedIds.length > 0 
-                ? 'bg-theme-10 hover:brightness-110 text-white shadow-lg shadow-theme-10/20' 
+              selectedIds.length > 0
+                ? 'bg-theme-10 hover:brightness-110 text-white shadow-lg shadow-theme-10/20'
                 : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
             }`}
           >

@@ -125,9 +125,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
             {visibleQueue.length < playQueue.length && (
               <button
                 type="button"
-                onClick={() =>
-                  setQueueRenderLimit((prev) => Math.min(prev + 60, playQueue.length))
-                }
+                onClick={() => setQueueRenderLimit((prev) => Math.min(prev + 60, playQueue.length))}
                 className="w-full py-2.5 text-center text-xs text-zinc-400 hover:text-white cursor-pointer bg-theme-30/40 hover:bg-theme-30/80 rounded-lg transition"
               >
                 {language === 'vi'

@@ -4,13 +4,7 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { BrowserWindow, session, dialog, ipcMain } from 'electron'
 import axios from 'axios'
-import {
-  getConfig,
-  saveConfig,
-  ytdlp,
-  getBinaryDir,
-  getMainWindow
-} from './sharedContext'
+import { getConfig, saveConfig, ytdlp, getBinaryDir, getMainWindow } from './sharedContext'
 import { sanitizeDirectoryName, sanitizeFileName } from './libraryScanner'
 import { streamUrlCache, getStreamPort, extractCovers } from './streamServer'
 
@@ -64,8 +58,7 @@ export function parseYtmItem(item: any) {
       ?.browseEndpointContextMusicConfig?.pageType
 
   const playlistId = browseId || navEndpoint?.watchEndpoint?.playlistId
-  const isArtist =
-    pageType === 'MUSIC_PAGE_TYPE_ARTIST' || (browseId && browseId.startsWith('UC'))
+  const isArtist = pageType === 'MUSIC_PAGE_TYPE_ARTIST' || (browseId && browseId.startsWith('UC'))
 
   const subtitleRuns =
     renderer.subtitle?.runs ||
@@ -116,9 +109,7 @@ export async function searchOnline(query: string) {
           isCloud: true,
           isOnline: true,
           platform: 'youtube',
-          coverArt: t.thumbnails
-            ? t.thumbnails[t.thumbnails.length - 1]?.url
-            : t.thumbnail || null,
+          coverArt: t.thumbnails ? t.thumbnails[t.thumbnails.length - 1]?.url : t.thumbnail || null,
           coverArtHighRes: null
         }))
         return {
@@ -229,9 +220,7 @@ export async function searchOnline(query: string) {
           if (!shelf) continue
 
           const titleRuns =
-            shelf.title?.runs ||
-            shelf.header?.musicCardShelfHeaderBasicRenderer?.title?.runs ||
-            []
+            shelf.title?.runs || shelf.header?.musicCardShelfHeaderBasicRenderer?.title?.runs || []
           const title =
             titleRuns.map((r: any) => r.text).join('') || `Kết quả ${sections.length + 1}`
 
@@ -441,7 +430,11 @@ export async function ytmLogout(): Promise<{ success: boolean; error?: string }>
   }
 }
 
-export async function getHomeDashboard(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+export async function getHomeDashboard(): Promise<{
+  success: boolean
+  data?: any[]
+  error?: string
+}> {
   const config = getConfig()
   if (!config.ytCookie) return { success: false, error: 'Chưa đăng nhập' }
 
@@ -515,7 +508,9 @@ export async function getHomeDashboard(): Promise<{ success: boolean; data?: any
   }
 }
 
-export async function getYtmPlaylist(playlistId: string): Promise<{ success: boolean; tracks?: any[]; error?: string }> {
+export async function getYtmPlaylist(
+  playlistId: string
+): Promise<{ success: boolean; tracks?: any[]; error?: string }> {
   const config = getConfig()
   try {
     let targetId = playlistId
@@ -637,7 +632,9 @@ export async function preloadStream(targetId: string): Promise<{ success: boolea
   }
 }
 
-export async function logWatchHistory(videoId: string): Promise<{ success: boolean; error?: string }> {
+export async function logWatchHistory(
+  videoId: string
+): Promise<{ success: boolean; error?: string }> {
   const config = getConfig()
   if (!config.ytCookie) return { success: false }
 
@@ -669,7 +666,9 @@ export async function logWatchHistory(videoId: string): Promise<{ success: boole
   }
 }
 
-export async function getUpNext(videoId: string): Promise<{ success: boolean; tracks?: any[]; error?: string }> {
+export async function getUpNext(
+  videoId: string
+): Promise<{ success: boolean; tracks?: any[]; error?: string }> {
   const config = getConfig()
   try {
     const url = 'https://music.youtube.com/youtubei/v1/next?prettyPrint=false'
@@ -740,7 +739,9 @@ export async function getUpNext(videoId: string): Promise<{ success: boolean; tr
   }
 }
 
-export async function getYtmArtist(artistId: string): Promise<{ success: boolean; tracks?: any[]; error?: string }> {
+export async function getYtmArtist(
+  artistId: string
+): Promise<{ success: boolean; tracks?: any[]; error?: string }> {
   const config = getConfig()
   try {
     const url = 'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false'

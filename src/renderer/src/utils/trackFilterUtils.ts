@@ -59,11 +59,7 @@ export function filterTracksByQuickFilter<T = any>(
       return isDsd || t.lossless || ['FLAC', 'WAV', 'ALAC', 'AIFF', 'APE'].includes(fmt)
     }
     if (quickFilter === 'hires') {
-      return (
-        isDsd ||
-        (t.sampleRate && t.sampleRate >= 88200) ||
-        (t.bitDepth && t.bitDepth >= 24)
-      )
+      return isDsd || (t.sampleRate && t.sampleRate >= 88200) || (t.bitDepth && t.bitDepth >= 24)
     }
     if (quickFilter === 'dsd') {
       return isDsd

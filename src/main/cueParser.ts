@@ -57,7 +57,11 @@ export const AUDIO_PROBE_EXTS = [
 export function splitArtistNames(raw: string): string[] {
   if (!raw || typeof raw !== 'string') return []
   const trimmed = raw.trim()
-  if (!trimmed || trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'unknown artist') {
+  if (
+    !trimmed ||
+    trimmed.toLowerCase() === 'unknown' ||
+    trimmed.toLowerCase() === 'unknown artist'
+  ) {
     return []
   }
 
@@ -210,7 +214,10 @@ export function cueTimeToSeconds(timeStr: string): number {
  */
 export function resolveReferencedAudioPath(cueDir: string, referencedFile: string): string {
   // Normalize path separators
-  const cleanRef = referencedFile.replace(/^[\\/]+/, '').replace(/\\/g, path.sep).replace(/\//g, path.sep)
+  const cleanRef = referencedFile
+    .replace(/^[\\/]+/, '')
+    .replace(/\\/g, path.sep)
+    .replace(/\//g, path.sep)
   const exactPath = path.isAbsolute(cleanRef) ? cleanRef : path.resolve(cueDir, cleanRef)
 
   if (fs.existsSync(exactPath)) {
@@ -243,7 +250,9 @@ export function resolveReferencedAudioPath(cueDir: string, referencedFile: strin
     }
 
     // 2. If only one single audio file exists in directory, map to it (very common for 1-disc rips)
-    const audioFiles = entries.filter((entry) => AUDIO_PROBE_EXTS.includes(path.extname(entry).toLowerCase()))
+    const audioFiles = entries.filter((entry) =>
+      AUDIO_PROBE_EXTS.includes(path.extname(entry).toLowerCase())
+    )
     if (audioFiles.length === 1) {
       return path.join(cueDir, audioFiles[0])
     }
@@ -416,7 +425,8 @@ export function parseCueContent(content: string, cueFilePath: string = ''): CueS
     const genre = raw.genre || globalGenre || undefined
     const year = raw.year || globalYear || undefined
 
-    const startTime = raw.index01 !== undefined ? raw.index01 : raw.index00 !== undefined ? raw.index00 : 0
+    const startTime =
+      raw.index01 !== undefined ? raw.index01 : raw.index00 !== undefined ? raw.index00 : 0
 
     let endTime: number | undefined = undefined
     let duration: number | undefined = undefined

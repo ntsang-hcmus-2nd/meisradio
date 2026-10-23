@@ -132,7 +132,12 @@ export const useSoulseekStore = create<SoulseekState>((set) => ({
     set((state) => {
       const remaining: Record<string, SoulseekDownload> = {}
       Object.entries(state.downloads).forEach(([id, item]) => {
-        if (item.status !== 'complete' && item.status !== 'cancelled' && item.status !== 'failed' && item.status !== 'error') {
+        if (
+          item.status !== 'complete' &&
+          item.status !== 'cancelled' &&
+          item.status !== 'failed' &&
+          item.status !== 'error'
+        ) {
           remaining[id] = item
         }
       })

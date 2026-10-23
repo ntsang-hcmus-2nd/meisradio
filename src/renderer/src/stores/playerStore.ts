@@ -12,7 +12,13 @@ export interface PlayerState {
   bitPerfectEnabled: boolean
   crossfadeEnabled: boolean
   crossfadeDuration: number
-  bassOutParams: { samplerate?: number; format?: string; channels?: string; mode?: 'WASAPI' | 'ASIO'; isDsd?: boolean } | null
+  bassOutParams: {
+    samplerate?: number
+    format?: string
+    channels?: string
+    mode?: 'WASAPI' | 'ASIO'
+    isDsd?: boolean
+  } | null
   smartAutoplay: boolean
   lyricOffset: number
   sleepTimerMode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track'
@@ -39,11 +45,24 @@ export interface PlayerState {
   setBitPerfectEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setCrossfadeEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setCrossfadeDuration: (duration: number | ((prev: number) => number)) => void
-  setBassOutParams: (params: { samplerate?: number; format?: string; channels?: string; mode?: 'WASAPI' | 'ASIO'; isDsd?: boolean } | null | ((prev: any) => any)) => void
+  setBassOutParams: (
+    params:
+      | {
+          samplerate?: number
+          format?: string
+          channels?: string
+          mode?: 'WASAPI' | 'ASIO'
+          isDsd?: boolean
+        }
+      | null
+      | ((prev: any) => any)
+  ) => void
   setSmartAutoplay: (autoplay: boolean | ((prev: boolean) => boolean)) => void
   setLyricOffset: (offset: number | ((prev: number) => number)) => void
   setSleepTimerMode: (mode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track') => void
-  setSleepTimerRemaining: (remaining: number | null | ((prev: number | null) => number | null)) => void
+  setSleepTimerRemaining: (
+    remaining: number | null | ((prev: number | null) => number | null)
+  ) => void
   setShowSleepTimerMenu: (show: boolean | ((prev: boolean) => boolean)) => void
 
   setLoopA: (loopA: number | null | ((prev: number | null) => number | null)) => void
@@ -169,28 +188,41 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     })),
   setIsPlaying: (valOrFn) => set((s) => ({ isPlaying: resolveVal(valOrFn, s.isPlaying) })),
   setIsShuffle: (valOrFn) => set((s) => ({ isShuffle: resolveVal(valOrFn, s.isShuffle) })),
-  setOriginalQueue: (valOrFn) => set((s) => ({ originalQueue: resolveVal(valOrFn, s.originalQueue) })),
+  setOriginalQueue: (valOrFn) =>
+    set((s) => ({ originalQueue: resolveVal(valOrFn, s.originalQueue) })),
   setPlayQueue: (valOrFn) => set((s) => ({ playQueue: resolveVal(valOrFn, s.playQueue) })),
   setRepeatMode: (valOrFn) => set((s) => ({ repeatMode: resolveVal(valOrFn, s.repeatMode) })),
   setVolume: (valOrFn) => set((s) => ({ volume: resolveVal(valOrFn, s.volume) })),
   setPrevVolume: (valOrFn) => set((s) => ({ prevVolume: resolveVal(valOrFn, s.prevVolume) })),
-  setBitPerfectEnabled: (valOrFn) => set((s) => ({ bitPerfectEnabled: resolveVal(valOrFn, s.bitPerfectEnabled) })),
-  setCrossfadeEnabled: (valOrFn) => set((s) => ({ crossfadeEnabled: resolveVal(valOrFn, s.crossfadeEnabled) })),
-  setCrossfadeDuration: (valOrFn) => set((s) => ({ crossfadeDuration: resolveVal(valOrFn, s.crossfadeDuration) })),
-  setBassOutParams: (valOrFn) => set((s) => ({ bassOutParams: resolveVal(valOrFn, s.bassOutParams) })),
-  setSmartAutoplay: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.smartAutoplay)
-    try { localStorage.setItem('meis_smart_autoplay', String(next)) } catch {}
-    return { smartAutoplay: next }
-  }),
-  setLyricOffset: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.lyricOffset)
-    try { localStorage.setItem('meis_lyric_offset', String(next)) } catch {}
-    return { lyricOffset: next }
-  }),
+  setBitPerfectEnabled: (valOrFn) =>
+    set((s) => ({ bitPerfectEnabled: resolveVal(valOrFn, s.bitPerfectEnabled) })),
+  setCrossfadeEnabled: (valOrFn) =>
+    set((s) => ({ crossfadeEnabled: resolveVal(valOrFn, s.crossfadeEnabled) })),
+  setCrossfadeDuration: (valOrFn) =>
+    set((s) => ({ crossfadeDuration: resolveVal(valOrFn, s.crossfadeDuration) })),
+  setBassOutParams: (valOrFn) =>
+    set((s) => ({ bassOutParams: resolveVal(valOrFn, s.bassOutParams) })),
+  setSmartAutoplay: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.smartAutoplay)
+      try {
+        localStorage.setItem('meis_smart_autoplay', String(next))
+      } catch {}
+      return { smartAutoplay: next }
+    }),
+  setLyricOffset: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.lyricOffset)
+      try {
+        localStorage.setItem('meis_lyric_offset', String(next))
+      } catch {}
+      return { lyricOffset: next }
+    }),
   setSleepTimerMode: (mode) => set({ sleepTimerMode: mode }),
-  setSleepTimerRemaining: (valOrFn) => set((s) => ({ sleepTimerRemaining: resolveVal(valOrFn, s.sleepTimerRemaining) })),
-  setShowSleepTimerMenu: (valOrFn) => set((s) => ({ showSleepTimerMenu: resolveVal(valOrFn, s.showSleepTimerMenu) })),
+  setSleepTimerRemaining: (valOrFn) =>
+    set((s) => ({ sleepTimerRemaining: resolveVal(valOrFn, s.sleepTimerRemaining) })),
+  setShowSleepTimerMenu: (valOrFn) =>
+    set((s) => ({ showSleepTimerMenu: resolveVal(valOrFn, s.showSleepTimerMenu) })),
 
   setLoopA: (valOrFn) => set((s) => ({ loopA: resolveVal(valOrFn, s.loopA) })),
   setLoopB: (valOrFn) => set((s) => ({ loopB: resolveVal(valOrFn, s.loopB) })),

@@ -61,7 +61,7 @@ export function getAudioFilesInDirectoryRecursive(
           }
         }
       }
-    } catch (err) {}
+    } catch {}
   }
 
   scan(dir)
@@ -83,7 +83,7 @@ export async function getAudioFilesInDirectoryRecursiveAsync(
     let entries: fs.Dirent[]
     try {
       entries = await fs.promises.readdir(currentDir, { withFileTypes: true })
-    } catch (err) {
+    } catch {
       return
     }
 
@@ -505,7 +505,7 @@ export function extractThemeColorsFromImage(img: Electron.NativeImage): {
       secondary30: `rgb(${c30.r}, ${c30.g}, ${c30.b})`,
       accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
     }
-  } catch (err) {
+  } catch {
     return {
       primary60: 'rgb(24, 24, 27)',
       secondary30: 'rgb(39, 39, 42)',
@@ -841,7 +841,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
             try {
               cached.preAggregated = preAggregated
               sqliteStorage.setLibraryCache(cached)
-            } catch (e) {}
+            } catch {}
           }
           setupLibraryWatchers(validPaths)
           return {
@@ -856,7 +856,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
           }
         }
       }
-    } catch (e) {}
+    } catch {}
   }
 
   // 2. LÀM MỚI GIA TĂNG (INCREMENTAL REFRESH)
@@ -869,7 +869,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
         if (key) previousTrackMap.set(key, t)
       }
     }
-  } catch (e) {}
+  } catch {}
 
   const tracks: any[] = []
   const playlists: any[] = []
@@ -1001,7 +1001,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
           try {
             fs.writeFileSync(thumbPath, thumbBuf)
             coverUrl = pathToFileURL(thumbPath).href
-          } catch (e) {}
+          } catch {}
           try {
             if (!fs.existsSync(centralThumbPath)) {
               fs.writeFileSync(centralThumbPath, thumbBuf)
@@ -1009,7 +1009,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
             if (!coverUrl) {
               coverUrl = pathToFileURL(centralThumbPath).href
             }
-          } catch (e) {}
+          } catch {}
 
           if (!calculatedColors) {
             calculatedColors = extractThemeColorsFromImage(img)
@@ -1035,10 +1035,10 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
                 if (!fs.existsSync(albumThumbPath)) {
                   fs.writeFileSync(albumThumbPath, thumbBuf)
                 }
-              } catch (e) {}
+              } catch {}
             }
           }
-        } catch (e) {}
+        } catch {}
       }
 
       let genreStr = ''
@@ -1065,9 +1065,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
                   tid === 'GEN'
                 ) {
                   if (t.value) {
-                    const val = Array.isArray(t.value)
-                      ? t.value.join(', ')
-                      : String(t.value).trim()
+                    const val = Array.isArray(t.value) ? t.value.join(', ') : String(t.value).trim()
                     if (val && val.toLowerCase() !== 'unknown') {
                       genreStr = val
                       break
@@ -1156,7 +1154,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
       markMetadataDirty(trackPath)
       cacheModified = true
       return trackData
-    } catch (e) {
+    } catch {
       const ext = path.extname(subItemName).toLowerCase()
       const isDsdExt = ext === '.dsf' || ext === '.dff' || ext === '.dsd'
       const fallbackTrack = {
@@ -1247,7 +1245,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
       if (!fs.existsSync(thumbDir)) {
         try {
           fs.mkdirSync(thumbDir)
-        } catch (e) {}
+        } catch {}
       }
 
       const dirents = await fs.promises.readdir(folderRoot, { withFileTypes: true })
@@ -1262,10 +1260,10 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
 
           if (isDir && item !== '.thumbnails') {
             const playlistTracks: any[] = []
-            const allFiles = await getAudioFilesInDirectoryRecursiveAsync(
-              itemPath,
-              [...supportedExts, '.cue']
-            )
+            const allFiles = await getAudioFilesInDirectoryRecursiveAsync(itemPath, [
+              ...supportedExts,
+              '.cue'
+            ])
             const allTrackPaths = allFiles.filter((f) => !f.toLowerCase().endsWith('.cue'))
             const subCuePaths = allFiles.filter((f) => f.toLowerCase().endsWith('.cue'))
 
@@ -1306,7 +1304,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
                 )
                 playlistTracks.push(trackData)
                 tracks.push(trackData)
-              } catch (e) {}
+              } catch {}
             }
 
             let thumbnailUrl = itemFolderCover?.coverUrl || null
@@ -1341,9 +1339,9 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
             )
             tracks.push(trackData)
           }
-        } catch (e) {}
+        } catch {}
       }
-    } catch (e) {}
+    } catch {}
   }
 
   const replacedAudioFiles = new Set<string>()
@@ -1490,7 +1488,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
       dsdVersion: 1,
       preAggregated
     })
-  } catch (e) {}
+  } catch {}
 
   setupLibraryWatchers(validPaths)
   return {
@@ -1631,7 +1629,7 @@ export function registerLibraryScannerIpc(): void {
           coverArt: null,
           isCloud: false
         })
-      } catch (err) {
+      } catch {
         importedTracks.push({
           id: destPath,
           filePath: pathToFileURL(destPath).href,
@@ -1662,7 +1660,7 @@ export function registerLibraryScannerIpc(): void {
       } else if (!fs.existsSync(rawPath)) {
         try {
           rawPath = decodeURIComponent(rawPath)
-        } catch (e) {}
+        } catch {}
       }
       const dir = path.dirname(rawPath)
       const fileNameWithoutExt = path.basename(rawPath, path.extname(rawPath))
@@ -1673,7 +1671,7 @@ export function registerLibraryScannerIpc(): void {
             const content = (await fs.promises.readFile(lrcPath, 'utf-8')).replace(/^\uFEFF/, '')
             if (content.trim()) return content
           }
-        } catch (e) {}
+        } catch {}
       }
 
       const cached = metadataCache[rawPath]
@@ -1692,101 +1690,106 @@ export function registerLibraryScannerIpc(): void {
           if (cached?.data) cached.data.lyrics = embedded
           return embedded
         }
-      } catch (e) {}
+      } catch {}
 
       return null
-    } catch (error) {
+    } catch {
       return null
     }
   })
 
-  ipcMain.handle('music:readAudioBuffer', async (_event, audioFilePath: string) => {
-    try {
-      if (!audioFilePath) return { success: false, error: 'Đường dẫn rỗng' }
-      let rawPath = audioFilePath
-      if (rawPath.includes('/local-audio?path=')) {
-        try {
-          const parsed = new URL(rawPath)
-          const p = parsed.searchParams.get('path')
-          if (p) rawPath = p
-        } catch (_) {}
-      }
-      if (rawPath.startsWith('http')) return { success: false, error: 'Chỉ hỗ trợ file cục bộ' }
-      rawPath = rawPath.replace(/^file:\/\/\/?/, '')
-      if (process.platform === 'win32') {
-        try {
-          rawPath = decodeURIComponent(rawPath)
-        } catch (e) {}
-        if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
-        rawPath = rawPath.replace(/\//g, '\\')
-      }
-      if (fs.existsSync(rawPath)) {
-        const stat = fs.statSync(rawPath)
-        let sampleRate: number | undefined = undefined
-        let bitDepth: number | undefined = undefined
-        try {
-          const metadata = await mm.parseFile(rawPath)
-          sampleRate = metadata?.format?.sampleRate
-          bitDepth = metadata?.format?.bitsPerSample
-        } catch (mErr) {}
+  ipcMain.handle(
+    'music:readAudioBuffer',
+    async (_event, audioFilePath: string, startTime?: number, endTime?: number) => {
+      try {
+        if (!audioFilePath) return { success: false, error: 'Đường dẫn rỗng' }
+        let rawPath = audioFilePath
+        if (rawPath.includes('/local-audio?path=')) {
+          try {
+            const parsed = new URL(rawPath)
+            const p = parsed.searchParams.get('path')
+            if (p) rawPath = p
+          } catch (_) {}
+        }
+        if (rawPath.startsWith('http')) return { success: false, error: 'Chỉ hỗ trợ file cục bộ' }
+        if (rawPath.includes('#track-')) rawPath = rawPath.split('#track-')[0]
+        rawPath = rawPath.replace(/^file:\/\/\/?/, '')
+        if (process.platform === 'win32') {
+          try {
+            rawPath = decodeURIComponent(rawPath)
+          } catch {}
+          if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+          rawPath = rawPath.replace(/\//g, '\\')
+        }
+        if (fs.existsSync(rawPath)) {
+          const stat = fs.statSync(rawPath)
+          let sampleRate: number | undefined = undefined
+          let bitDepth: number | undefined = undefined
+          try {
+            const metadata = await mm.parseFile(rawPath)
+            sampleRate = metadata?.format?.sampleRate
+            bitDepth = metadata?.format?.bitsPerSample
+          } catch {}
 
-        if (stat.size > 150 * 1024 * 1024) {
-          const ffmpegExe = getFfmpegPath()
-          const chunks: Buffer[] = []
-          const args = [
-            '-hide_banner',
-            '-loglevel',
-            'error',
-            '-i',
-            rawPath,
-            '-t',
-            '60',
-            '-ar',
-            '44100',
-            '-ac',
-            '2',
-            '-f',
-            'wav',
-            '-'
-          ]
-          await new Promise<void>((resolve, reject) => {
-            const ff = spawn(ffmpegExe, args)
-            ff.stdout.on('data', (c: Buffer) => chunks.push(c))
-            ff.on('close', (code) => {
-              if (code === 0 || chunks.length > 0) resolve()
-              else reject(new Error(`ffmpeg exited with code ${code}`))
+          if (stat.size > 150 * 1024 * 1024) {
+            const ffmpegExe = getFfmpegPath()
+            const chunks: Buffer[] = []
+            // CUE Sheet: cắt đúng đoạn [startTime, endTime] của track thay vì
+            // 60 giây đầu file (phổ của track nằm sau phút 1 sẽ ra rỗng).
+            const segStart = typeof startTime === 'number' && startTime > 0 ? startTime : 0
+            const segEnd = typeof endTime === 'number' && endTime > segStart ? endTime : 0
+            // shortcut: đoạn CUE quá dài vẫn bị chặn để không nổ RAM/IPC.
+            const SEG_CAP_SEC = 600
+            const args = ['-hide_banner', '-loglevel', 'error']
+            if (segStart > 0 || segEnd > 0) {
+              if (segStart > 0) args.push('-ss', segStart.toString())
+              const segLen = segEnd > 0 ? Math.min(segEnd - segStart, SEG_CAP_SEC) : SEG_CAP_SEC
+              args.push('-t', Math.max(1, segLen).toString())
+            } else {
+              args.push('-t', '60')
+            }
+            args.push('-i', rawPath, '-ar', '44100', '-ac', '2', '-f', 'wav', '-')
+            await new Promise<void>((resolve, reject) => {
+              const ff = spawn(ffmpegExe, args)
+              ff.stdout.on('data', (c: Buffer) => chunks.push(c))
+              ff.on('close', (code) => {
+                if (code === 0 || chunks.length > 0) resolve()
+                else reject(new Error(`ffmpeg exited with code ${code}`))
+              })
+              ff.on('error', reject)
             })
-            ff.on('error', reject)
-          })
 
-          const transcodedBuf = Buffer.concat(chunks)
+            const transcodedBuf = Buffer.concat(chunks)
+            return {
+              success: true,
+              buffer: transcodedBuf.buffer.slice(
+                transcodedBuf.byteOffset,
+                transcodedBuf.byteOffset + transcodedBuf.byteLength
+              ),
+              sampleRate: 44100,
+              bitDepth: 16,
+              segmented: segStart > 0 || segEnd > 0,
+              segmentStart: segStart
+            }
+          }
+
+          const fileBuffer = fs.readFileSync(rawPath)
           return {
             success: true,
-            buffer: transcodedBuf.buffer.slice(
-              transcodedBuf.byteOffset,
-              transcodedBuf.byteOffset + transcodedBuf.byteLength
+            buffer: fileBuffer.buffer.slice(
+              fileBuffer.byteOffset,
+              fileBuffer.byteOffset + fileBuffer.byteLength
             ),
-            sampleRate: 44100,
-            bitDepth: 16
+            sampleRate,
+            bitDepth
           }
         }
-
-        const fileBuffer = fs.readFileSync(rawPath)
-        return {
-          success: true,
-          buffer: fileBuffer.buffer.slice(
-            fileBuffer.byteOffset,
-            fileBuffer.byteOffset + fileBuffer.byteLength
-          ),
-          sampleRate,
-          bitDepth
-        }
+        return { success: false, error: `Không tìm thấy file: ${rawPath}` }
+      } catch (e: any) {
+        return { success: false, error: e.message }
       }
-      return { success: false, error: `Không tìm thấy file: ${rawPath}` }
-    } catch (e: any) {
-      return { success: false, error: e.message }
     }
-  })
+  )
 
   ipcMain.handle(
     'music:getWaveformPeaks',
@@ -1815,7 +1818,7 @@ export function registerLibraryScannerIpc(): void {
         if (process.platform === 'win32') {
           try {
             rawPath = decodeURIComponent(rawPath)
-          } catch (e) {}
+          } catch {}
           if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
           rawPath = rawPath.replace(/\//g, '\\')
         }
@@ -1942,7 +1945,7 @@ export function registerLibraryScannerIpc(): void {
         if (process.platform === 'win32') {
           try {
             rawPath = decodeURIComponent(rawPath)
-          } catch (e) {}
+          } catch {}
           if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
           rawPath = rawPath.replace(/\//g, '\\')
         }
@@ -1983,10 +1986,7 @@ export function registerLibraryScannerIpc(): void {
         if (typeof track.startTime === 'number' && track.startTime > 0) {
           args.push('-ss', track.startTime.toString())
         }
-        if (
-          typeof track.endTime === 'number' &&
-          track.endTime > (track.startTime || 0)
-        ) {
+        if (typeof track.endTime === 'number' && track.endTime > (track.startTime || 0)) {
           args.push('-to', track.endTime.toString())
         }
         // File .bin là ảnh đĩa RAW PCM (s16le, 44.1kHz, stereo) - FFmpeg không
@@ -2161,7 +2161,7 @@ export function registerLibraryScannerIpc(): void {
           coverArt: null,
           isCloud: false
         })
-      } catch (err) {
+      } catch {
         tracks.push({
           id: filePath,
           filePath: pathToFileURL(filePath).href,

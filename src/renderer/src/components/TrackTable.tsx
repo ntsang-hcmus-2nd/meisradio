@@ -1,9 +1,26 @@
 import React from 'react'
 import { TableVirtuoso } from 'react-virtuoso'
 import { CheckSquare, ArrowUp, ArrowDown, ArrowUpDown, Info } from 'lucide-react'
-import { TrackGrid, TrackCompactList, TrackRow, VirtuosoComponents } from './TrackListComponents'
+import { TrackGrid, TrackCompactList, TrackRow } from './TrackListComponents'
 import { useUIStore, usePlayerStore, useLibraryStore, useSettingsStore } from '../stores'
 import { useTranslation } from '../locales'
+
+const VirtuosoComponents = {
+  Table: ({ style, ...props }: any) => (
+    <table
+      {...props}
+      className="w-full text-left text-sm table-fixed"
+      style={{ ...style, borderCollapse: 'collapse' }}
+    />
+  ),
+  TableHead: React.forwardRef((props: any, ref: any) => <thead {...props} ref={ref} />),
+  TableRow: (props: any) => (
+    <tr
+      {...props}
+      className="group border-b border-theme-30/20 transition-colors cursor-pointer hover:bg-white/5"
+    />
+  )
+}
 
 interface TrackTableProps {
   tracks: any[]

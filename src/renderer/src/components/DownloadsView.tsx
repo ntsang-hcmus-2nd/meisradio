@@ -306,13 +306,24 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
       if (unsubProgress) unsubProgress()
       if (unsubCompleted) unsubCompleted()
     }
-  }, [setConnected, setIsConnecting, setUsername, setDownloadFolder, setDownloads, updateDownload, showToast, t])
+  }, [
+    setConnected,
+    setIsConnecting,
+    setUsername,
+    setDownloadFolder,
+    setDownloads,
+    updateDownload,
+    showToast,
+    t
+  ])
 
   // Login handler
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!loginUser.trim() || !loginPass.trim()) {
-      setLoginError(t('common.error') + ': ' + t('downloads.username') + ' / ' + t('downloads.password'))
+      setLoginError(
+        t('common.error') + ': ' + t('downloads.username') + ' / ' + t('downloads.password')
+      )
       return
     }
 
@@ -332,7 +343,9 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
         setLoginUser('')
         setLoginPass('')
         showToast(
-          t('common.success') + '! ' + t('downloads.connectedAs').replace('{username}', res.username || loginUser.trim()),
+          t('common.success') +
+            '! ' +
+            t('downloads.connectedAs').replace('{username}', res.username || loginUser.trim()),
           'success'
         )
       } else {
@@ -464,8 +477,8 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
         return (b.speed || 0) - (a.speed || 0)
       }
       if (sortBy === 'bitrate') {
-        const rankA = a.isLossless ? 10000 + (a.bitrate || 1000) : (a.bitrate || 0)
-        const rankB = b.isLossless ? 10000 + (b.bitrate || 1000) : (b.bitrate || 0)
+        const rankA = a.isLossless ? 10000 + (a.bitrate || 1000) : a.bitrate || 0
+        const rankB = b.isLossless ? 10000 + (b.bitrate || 1000) : b.bitrate || 0
         return rankB - rankA
       }
       if (sortBy === 'size') {
@@ -512,14 +525,19 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white flex items-center gap-2 min-w-0">
               <span className="truncate">{t('downloads.title')}</span>
             </h1>
-            <p className="text-xs text-zinc-400 mt-1 max-w-2xl truncate">{t('downloads.subtitle')}</p>
+            <p className="text-xs text-zinc-400 mt-1 max-w-2xl truncate">
+              {t('downloads.subtitle')}
+            </p>
           </div>
         </div>
 
         {/* CONNECTION STATUS & ACCOUNT BUTTON */}
         <div className="flex items-center gap-3 shrink-0">
           {connected ? (
-            <div className="flex items-center gap-2.5 bg-zinc-900/70 border border-emerald-500/30 px-3 py-2 rounded-xl backdrop-blur-md" title={t('downloads.connectedAs').replace('{username}', username || 'User')}>
+            <div
+              className="flex items-center gap-2.5 bg-zinc-900/70 border border-emerald-500/30 px-3 py-2 rounded-xl backdrop-blur-md"
+              title={t('downloads.connectedAs').replace('{username}', username || 'User')}
+            >
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
@@ -534,11 +552,17 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
               </button>
             </div>
           ) : isConnecting ? (
-            <div className="flex items-center justify-center p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400" title={t('downloads.connecting')}>
+            <div
+              className="flex items-center justify-center p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400"
+              title={t('downloads.connecting')}
+            >
               <Loader2 size={16} className="animate-spin" />
             </div>
           ) : (
-            <div className="flex items-center justify-center p-2 rounded-xl bg-zinc-800/80 border border-zinc-700/60 text-zinc-400" title={t('downloads.disconnected')}>
+            <div
+              className="flex items-center justify-center p-2 rounded-xl bg-zinc-800/80 border border-zinc-700/60 text-zinc-400"
+              title={t('downloads.disconnected')}
+            >
               <User size={16} />
             </div>
           )}
@@ -592,13 +616,20 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
               <span>Soulseek Lossless Music Network</span>
             </div>
             <h2 className="text-2xl font-bold text-white">{t('downloads.loginOrRegister')}</h2>
-            <p className="text-xs lg:text-sm text-zinc-300 leading-relaxed">{t('downloads.loginSubtitle')}</p>
+            <p className="text-xs lg:text-sm text-zinc-300 leading-relaxed">
+              {t('downloads.loginSubtitle')}
+            </p>
 
             <form onSubmit={handleLogin} className="space-y-4 pt-2 max-w-md">
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('downloads.username')}</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                  {t('downloads.username')}
+                </label>
                 <div className="relative">
-                  <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <User
+                    size={16}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500"
+                  />
                   <input
                     type="text"
                     required
@@ -611,9 +642,14 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">{t('downloads.password')}</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                  {t('downloads.password')}
+                </label>
                 <div className="relative">
-                  <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <Lock
+                    size={16}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500"
+                  />
                   <input
                     type="password"
                     required
@@ -650,7 +686,11 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
                 disabled={isLoggingIn}
                 className="w-full py-2.5 px-4 rounded-xl bg-theme-10 hover:bg-theme-10/90 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-lg shadow-theme-10/20 transition cursor-pointer disabled:opacity-50"
               >
-                {isLoggingIn ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                {isLoggingIn ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <CheckCircle2 size={16} />
+                )}
                 <span>{isLoggingIn ? t('downloads.connecting') : t('downloads.loginButton')}</span>
               </button>
             </form>
@@ -696,7 +736,9 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
                 {downloadsList.length > 0 && (
                   <span
                     className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                      activeDownloadsCount > 0 ? 'bg-emerald-500 text-white font-bold' : 'bg-white/20 text-zinc-200'
+                      activeDownloadsCount > 0
+                        ? 'bg-emerald-500 text-white font-bold'
+                        : 'bg-white/20 text-zinc-200'
                     }`}
                   >
                     {activeDownloadsCount > 0 ? activeDownloadsCount : downloadsList.length}
@@ -724,7 +766,10 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
               {/* SEARCH BAR */}
               <form onSubmit={handleSearch} className="flex gap-2 shrink-0">
                 <div className="relative flex-1">
-                  <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <Search
+                    size={17}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"
+                  />
                   <input
                     ref={searchInputRef}
                     type="text"
@@ -750,8 +795,14 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
                   title={t('downloads.searchButton')}
                   className="sys-btn px-6 py-2.5 rounded-2xl bg-theme-10 hover:bg-theme-10/90 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-theme-10/20 transition cursor-pointer disabled:opacity-50"
                 >
-                  {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                  <span className="btn-text">{isSearching ? t('downloads.searching') : t('downloads.searchButton')}</span>
+                  {isSearching ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Search size={16} />
+                  )}
+                  <span className="btn-text">
+                    {isSearching ? t('downloads.searching') : t('downloads.searchButton')}
+                  </span>
                 </button>
               </form>
 
@@ -808,7 +859,9 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
                           : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${onlyFreeSlots ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${onlyFreeSlots ? 'bg-emerald-400' : 'bg-zinc-600'}`}
+                      />
                       {t('downloads.filterFreeSlots')}
                     </button>
                   </div>
@@ -843,7 +896,9 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
                   <div className="flex flex-col items-center justify-center h-full py-20 text-zinc-500 space-y-3">
                     <Loader2 size={32} className="animate-spin text-theme-10" />
                     <p className="text-sm font-medium">{t('downloads.searching')}</p>
-                    <p className="text-xs text-zinc-600">Đang quét các peer trên mạng P2P Soulseek...</p>
+                    <p className="text-xs text-zinc-600">
+                      Đang quét các peer trên mạng P2P Soulseek...
+                    </p>
                   </div>
                 ) : searchError ? (
                   <div className="flex flex-col items-center justify-center h-full py-16 text-zinc-500 space-y-2">

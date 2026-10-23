@@ -320,9 +320,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
             </div>
           </div>
           <div className="text-2xl font-black text-amber-300 tracking-tight flex items-baseline gap-2">
-            <span>
-              {stats ? `${Math.round(stats.overview.losslessRatio * 100)}%` : '0%'}
-            </span>
+            <span>{stats ? `${Math.round(stats.overview.losslessRatio * 100)}%` : '0%'}</span>
             <span className="text-xs font-medium text-amber-400/90 uppercase tracking-wide">
               Lossless
             </span>
@@ -353,9 +351,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
           <div className="text-2xl font-black text-purple-300 tracking-tight">
             {stats ? `${Math.round(stats.overview.bitPerfectRatio * 100)}%` : '0%'}
           </div>
-          <p className="text-xs text-zinc-400 mt-1 truncate">
-            WASAPI Exclusive / ASIO Direct
-          </p>
+          <p className="text-xs text-zinc-400 mt-1 truncate">WASAPI Exclusive / ASIO Direct</p>
         </div>
       </div>
 
@@ -450,9 +446,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
             {stats &&
               stats.weekdayDistribution.map((count, dayIdx) => {
                 const heightPercent =
-                  maxWeekdayCount > 0
-                    ? Math.max(8, Math.round((count / maxWeekdayCount) * 100))
-                    : 8
+                  maxWeekdayCount > 0 ? Math.max(8, Math.round((count / maxWeekdayCount) * 100)) : 8
                 const isHovered = hoveredDay === dayIdx
                 return (
                   <div
@@ -463,8 +457,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
                   >
                     {isHovered && (
                       <div className="absolute -top-11 z-30 px-2 py-1 rounded-md bg-zinc-900 border border-zinc-700 text-[11px] font-semibold text-white whitespace-nowrap shadow-xl pointer-events-none">
-                        {weekdayFullLabels[dayIdx]}:{' '}
-                        <span className="text-sky-400">{count}</span> {t('analytics.playsCount')}
+                        {weekdayFullLabels[dayIdx]}: <span className="text-sky-400">{count}</span>{' '}
+                        {t('analytics.playsCount')}
                       </div>
                     )}
                     <div
@@ -549,7 +543,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
                 const maxDailyPlays = Math.max(...stats.dailyActivity.map((d) => d.plays), 1)
                 return stats.dailyActivity.map((dItem, idx) => {
                   const heightPercent = Math.max(6, Math.round((dItem.plays / maxDailyPlays) * 100))
-                  const dayLabel = typeof dItem?.date === 'string' ? dItem.date.split('-').slice(1).join('/') : ''
+                  const dayLabel =
+                    typeof dItem?.date === 'string' ? dItem.date.split('-').slice(1).join('/') : ''
                   return (
                     <div
                       key={idx}
@@ -710,11 +705,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
               stats.topGenres.map((genre, idx) => (
                 <div key={idx} className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-zinc-200 truncate pr-2">
-                      {genre.name}
-                    </span>
+                    <span className="font-semibold text-zinc-200 truncate pr-2">{genre.name}</span>
                     <span className="text-zinc-400 shrink-0 text-[11px]">
-                      <strong className="text-white">{genre.plays}</strong> ({genre.percentage.toFixed(1)}%)
+                      <strong className="text-white">{genre.plays}</strong> (
+                      {genre.percentage.toFixed(1)}%)
                     </span>
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
@@ -752,10 +746,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
               <tr className="border-b border-theme-30/30 text-zinc-500 uppercase tracking-wider text-[11px]">
                 <th className="py-2.5 px-3 w-10 text-center">#</th>
                 <th className="py-2.5 px-3">{language === 'vi' ? 'TÊN BÀI HÁT' : 'TITLE'}</th>
-                <th className="py-2.5 px-3 hidden sm:table-cell">{language === 'vi' ? 'ALBUM' : 'ALBUM'}</th>
-                <th className="py-2.5 px-3 text-center">{language === 'vi' ? 'ĐỊNH DẠNG' : 'FORMAT'}</th>
-                <th className="py-2.5 px-3 text-right">{language === 'vi' ? 'LƯỢT PHÁT' : 'PLAYS'}</th>
-                <th className="py-2.5 px-3 text-right hidden md:table-cell">{language === 'vi' ? 'THỜI LƯỢNG' : 'DURATION'}</th>
+                <th className="py-2.5 px-3 hidden sm:table-cell">
+                  {language === 'vi' ? 'ALBUM' : 'ALBUM'}
+                </th>
+                <th className="py-2.5 px-3 text-center">
+                  {language === 'vi' ? 'ĐỊNH DẠNG' : 'FORMAT'}
+                </th>
+                <th className="py-2.5 px-3 text-right">
+                  {language === 'vi' ? 'LƯỢT PHÁT' : 'PLAYS'}
+                </th>
+                <th className="py-2.5 px-3 text-right hidden md:table-cell">
+                  {language === 'vi' ? 'THỜI LƯỢNG' : 'DURATION'}
+                </th>
                 <th className="py-2.5 px-3 w-12 text-center"></th>
               </tr>
             </thead>
@@ -788,9 +790,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
                         {track.format}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-black text-white">
-                      {track.plays}
-                    </td>
+                    <td className="py-2.5 px-3 text-right font-black text-white">{track.plays}</td>
                     <td className="py-2.5 px-3 text-right text-zinc-400 hidden md:table-cell font-mono">
                       {formatTimeOnly(track.totalSeconds)}
                     </td>
@@ -812,7 +812,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
               ) : (
                 <tr>
                   <td colSpan={7} className="text-center py-8 text-zinc-500 italic">
-                    {language === 'vi' ? 'Chưa có dữ liệu bài hát nghe nhiều nhất' : 'No track data'}
+                    {language === 'vi'
+                      ? 'Chưa có dữ liệu bài hát nghe nhiều nhất'
+                      : 'No track data'}
                   </td>
                 </tr>
               )}

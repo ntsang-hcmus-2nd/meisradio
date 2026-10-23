@@ -1,6 +1,13 @@
 import { useEffect } from 'react'
-import { usePlayerStore, useLyricsStore, useSettingsStore, useUIStore, useLibraryStore } from '../stores'
+import {
+  usePlayerStore,
+  useLyricsStore,
+  useSettingsStore,
+  useUIStore,
+  useLibraryStore
+} from '../stores'
 import { useTranslation } from '../locales'
+import { getTrackKey } from '../utils/trackStateUtils'
 import type { LyricLine } from '../components/SyncedLyricsList'
 
 // Chuẩn hóa mọi dạng dữ liệu lời bài hát về chuỗi
@@ -119,30 +126,22 @@ export function useLyrics() {
     useLyricsStore()
   const appMode = useSettingsStore((s) => s.appMode)
   const isLyricsMaximized = useUIStore((s) => s.isLyricsMaximized)
-  const { trackLyricOffsets, setTrackLyricOffsets } = useLibraryStore()
+  const trackLyricOffsets = useLibraryStore((s) => s.trackLyricOffsets)
 
   const isLite = appMode === 'lite' || appMode === 'core'
 
   // Per-Track Lyric Offset: restore saved offset when track changes
+  // (toàn bộ offsets đã được App preload vào trackLyricOffsets qua getLyricOffsets)
   useEffect(() => {
     if (currentTrack) {
-      const trackKey = currentTrack.filePath || currentTrack.id
+      const trackKey = getTrackKey(currentTrack)
       if (trackKey && trackLyricOffsets[trackKey] !== undefined) {
         setLyricOffset(trackLyricOffsets[trackKey])
-      } else if (trackKey) {
-        ;(window.api as any)?.getLyricOffset?.(trackKey)?.then((savedOffset: number | null) => {
-          if (savedOffset !== null && savedOffset !== undefined) {
-            setLyricOffset(savedOffset)
-            setTrackLyricOffsets({ ...trackLyricOffsets, [trackKey]: savedOffset })
-          } else {
-            setLyricOffset(0)
-          }
-        })
       } else {
         setLyricOffset(0)
       }
     }
-  }, [currentTrack?.filePath, currentTrack?.id])
+  }, [currentTrack, currentTrack?.filePath, currentTrack?.id, setLyricOffset, trackLyricOffsets])
 
   // Fetch Original High-Res Cover for Fullscreen Lyrics
   useEffect(() => {
@@ -177,12 +176,14 @@ export function useLyrics() {
     }
   }, [
     isLyricsMaximized,
+    currentTrack,
     currentTrack?.id,
     currentTrack?.filePath,
     currentTrack?.coverArt,
     currentTrack?.coverArtHighRes,
     currentTrack?.isOnline,
     currentTrack?.isCloud,
+    setOriginalCover,
     isLite
   ])
 
@@ -277,16 +278,16 @@ export function useLyrics() {
     return () => {
       cancelled = true
     }
-  }, [currentTrack])
+  }, [currentTrack, isLite, setCurrentLyricIndex, setLyrics, t])
 
   const changeLyricOffset = (delta: number) => {
     setLyricOffset((prev) => {
       const next = Math.round((prev + delta) * 10) / 10
       try {
         localStorage.setItem('meis_lyric_offset', String(next))
-      } catch (e) {}
+      } catch {}
       if (currentTrack) {
-        const trackKey = currentTrack.filePath || currentTrack.id
+        const trackKey = getTrackKey(currentTrack)
         if (trackKey) {
           updateTrackLyricOffset(trackKey, next)
           window.api?.setLyricOffset?.(trackKey, next).catch(() => {})
@@ -301,9 +302,9 @@ export function useLyrics() {
     setLyricOffset(0)
     try {
       localStorage.setItem('meis_lyric_offset', '0')
-    } catch (e) {}
+    } catch {}
     if (currentTrack) {
-      const trackKey = currentTrack.filePath || currentTrack.id
+      const trackKey = getTrackKey(currentTrack)
       if (trackKey) {
         updateTrackLyricOffset(trackKey, 0)
         window.api?.setLyricOffset?.(trackKey, 0).catch(() => {})

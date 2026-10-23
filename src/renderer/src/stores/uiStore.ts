@@ -1,18 +1,18 @@
 import { create } from 'zustand'
 import { DialogOptions } from '../components/modals/CustomDialogModal'
 
-export type ActiveViewType = 
-  | 'home' 
-  | 'home-ytm' 
-  | 'home-soundcloud' 
-  | 'songs' 
-  | 'playlists' 
-  | 'artists' 
-  | 'genres' 
-  | 'user-playlists' 
+export type ActiveViewType =
+  | 'home'
+  | 'home-ytm'
+  | 'home-soundcloud'
+  | 'songs'
+  | 'playlists'
+  | 'artists'
+  | 'genres'
+  | 'user-playlists'
   | 'downloads'
   | 'analytics'
-  | 'settings' 
+  | 'settings'
   | 'drive'
 
 export interface UIState {
@@ -49,12 +49,24 @@ export interface UIState {
 
   // Actions
   setActiveView: (view: ActiveViewType | ((prev: ActiveViewType) => ActiveViewType)) => void
-  setViewMode: (mode: 'table' | 'grid' | 'compact' | ((prev: 'table' | 'grid' | 'compact') => 'table' | 'grid' | 'compact')) => void
+  setViewMode: (
+    mode:
+      | 'table'
+      | 'grid'
+      | 'compact'
+      | ((prev: 'table' | 'grid' | 'compact') => 'table' | 'grid' | 'compact')
+  ) => void
   setThemeColor: (color: string | ((prev: string) => string)) => void
-  setToast: (toast: { message: string; type: 'success' | 'error' | 'info'; visible: boolean } | ((prev: any) => any)) => void
+  setToast: (
+    toast:
+      | { message: string; type: 'success' | 'error' | 'info'; visible: boolean }
+      | ((prev: any) => any)
+  ) => void
   showToast: (message: string, type?: 'success' | 'error' | 'info', duration?: number) => void
   hideToast: () => void
-  setCustomDialog: (dialog: DialogOptions | null | ((prev: DialogOptions | null) => DialogOptions | null)) => void
+  setCustomDialog: (
+    dialog: DialogOptions | null | ((prev: DialogOptions | null) => DialogOptions | null)
+  ) => void
 
   setShowQueuePanel: (show: boolean | ((prev: boolean) => boolean)) => void
   setShowEQ: (show: boolean | ((prev: boolean) => boolean)) => void
@@ -71,7 +83,10 @@ export interface UIState {
 
   setShowCreateModal: (show: boolean | ((prev: boolean) => boolean)) => void
   setShowAddSongsModal: (show: boolean | ((prev: boolean) => boolean)) => void
-  setPlaylistRename: (rename: { isOpen: boolean; oldName: string; newName: string; id?: string } | ((prev: any) => any)) => void
+  setPlaylistRename: (
+    rename:
+      { isOpen: boolean; oldName: string; newName: string; id?: string } | ((prev: any) => any)
+  ) => void
 
   setShowCommandPalette: (show: boolean | ((prev: boolean) => boolean)) => void
   setShowInsightsModal: (show: boolean | ((prev: boolean) => boolean)) => void
@@ -120,36 +135,41 @@ export const useUIStore = create<UIState>((set) => ({
   showInsightsModal: false,
   showBackupModal: false,
 
-  setActiveView: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.activeView)
-    // Tự động thu nhỏ lyrics khi chuyển view
-    return { activeView: next, isLyricsMaximized: false }
-  }),
-  setViewMode: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.viewMode)
-    try { localStorage.setItem('meis_view_mode', next) } catch {}
-    return { viewMode: next }
-  }),
+  setActiveView: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.activeView)
+      // Tự động thu nhỏ lyrics khi chuyển view
+      return { activeView: next, isLyricsMaximized: false }
+    }),
+  setViewMode: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.viewMode)
+      try {
+        localStorage.setItem('meis_view_mode', next)
+      } catch {}
+      return { viewMode: next }
+    }),
   setThemeColor: (valOrFn) => set((s) => ({ themeColor: resolveVal(valOrFn, s.themeColor) })),
-  setToast: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.toast)
-    if (next.visible) {
-      if (toastTimer) {
-        clearTimeout(toastTimer)
-        toastTimer = null
+  setToast: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.toast)
+      if (next.visible) {
+        if (toastTimer) {
+          clearTimeout(toastTimer)
+          toastTimer = null
+        }
+        toastTimer = setTimeout(() => {
+          set((curr) => ({ toast: { ...curr.toast, visible: false } }))
+          toastTimer = null
+        }, 3500)
+      } else {
+        if (toastTimer) {
+          clearTimeout(toastTimer)
+          toastTimer = null
+        }
       }
-      toastTimer = setTimeout(() => {
-        set((curr) => ({ toast: { ...curr.toast, visible: false } }))
-        toastTimer = null
-      }, 3500)
-    } else {
-      if (toastTimer) {
-        clearTimeout(toastTimer)
-        toastTimer = null
-      }
-    }
-    return { toast: next }
-  }),
+      return { toast: next }
+    }),
   showToast: (message, type = 'info', duration = 3500) => {
     if (toastTimer) {
       clearTimeout(toastTimer)
@@ -170,24 +190,43 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setCustomDialog: (valOrFn) => set((s) => ({ customDialog: resolveVal(valOrFn, s.customDialog) })),
 
-  setShowQueuePanel: (valOrFn) => set((s) => ({ showQueuePanel: resolveVal(valOrFn, s.showQueuePanel) })),
+  setShowQueuePanel: (valOrFn) =>
+    set((s) => ({ showQueuePanel: resolveVal(valOrFn, s.showQueuePanel) })),
   setShowEQ: (valOrFn) => set((s) => ({ showEQ: resolveVal(valOrFn, s.showEQ) })),
-  setShowVisualizer: (valOrFn) => set((s) => ({ showVisualizer: resolveVal(valOrFn, s.showVisualizer) })),
-  setShowSpectrogramModal: (valOrFn) => set((s) => ({ showSpectrogramModal: resolveVal(valOrFn, s.showSpectrogramModal) })),
-  setShowLyricsPanel: (valOrFn) => set((s) => ({ showLyricsPanel: resolveVal(valOrFn, s.showLyricsPanel) })),
-  setIsLyricsMaximized: (valOrFn) => set((s) => ({ isLyricsMaximized: resolveVal(valOrFn, s.isLyricsMaximized) })),
+  setShowVisualizer: (valOrFn) =>
+    set((s) => ({ showVisualizer: resolveVal(valOrFn, s.showVisualizer) })),
+  setShowSpectrogramModal: (valOrFn) =>
+    set((s) => ({ showSpectrogramModal: resolveVal(valOrFn, s.showSpectrogramModal) })),
+  setShowLyricsPanel: (valOrFn) =>
+    set((s) => ({ showLyricsPanel: resolveVal(valOrFn, s.showLyricsPanel) })),
+  setIsLyricsMaximized: (valOrFn) =>
+    set((s) => ({ isLyricsMaximized: resolveVal(valOrFn, s.isLyricsMaximized) })),
   setIsMiniPlayer: (valOrFn) => set((s) => ({ isMiniPlayer: resolveVal(valOrFn, s.isMiniPlayer) })),
 
-  setShowCreateUserPlaylistModal: (valOrFn) => set((s) => ({ showCreateUserPlaylistModal: resolveVal(valOrFn, s.showCreateUserPlaylistModal) })),
-  setShowAddSongsToUserPlaylistModal: (valOrFn) => set((s) => ({ showAddSongsToUserPlaylistModal: resolveVal(valOrFn, s.showAddSongsToUserPlaylistModal) })),
-  setEditingUserPlaylist: (valOrFn) => set((s) => ({ editingUserPlaylist: resolveVal(valOrFn, s.editingUserPlaylist) })),
-  setShowEditUserPlaylistModal: (valOrFn) => set((s) => ({ showEditUserPlaylistModal: resolveVal(valOrFn, s.showEditUserPlaylistModal) })),
+  setShowCreateUserPlaylistModal: (valOrFn) =>
+    set((s) => ({
+      showCreateUserPlaylistModal: resolveVal(valOrFn, s.showCreateUserPlaylistModal)
+    })),
+  setShowAddSongsToUserPlaylistModal: (valOrFn) =>
+    set((s) => ({
+      showAddSongsToUserPlaylistModal: resolveVal(valOrFn, s.showAddSongsToUserPlaylistModal)
+    })),
+  setEditingUserPlaylist: (valOrFn) =>
+    set((s) => ({ editingUserPlaylist: resolveVal(valOrFn, s.editingUserPlaylist) })),
+  setShowEditUserPlaylistModal: (valOrFn) =>
+    set((s) => ({ showEditUserPlaylistModal: resolveVal(valOrFn, s.showEditUserPlaylistModal) })),
 
-  setShowCreateModal: (valOrFn) => set((s) => ({ showCreateModal: resolveVal(valOrFn, s.showCreateModal) })),
-  setShowAddSongsModal: (valOrFn) => set((s) => ({ showAddSongsModal: resolveVal(valOrFn, s.showAddSongsModal) })),
-  setPlaylistRename: (valOrFn) => set((s) => ({ playlistRename: resolveVal(valOrFn, s.playlistRename) })),
+  setShowCreateModal: (valOrFn) =>
+    set((s) => ({ showCreateModal: resolveVal(valOrFn, s.showCreateModal) })),
+  setShowAddSongsModal: (valOrFn) =>
+    set((s) => ({ showAddSongsModal: resolveVal(valOrFn, s.showAddSongsModal) })),
+  setPlaylistRename: (valOrFn) =>
+    set((s) => ({ playlistRename: resolveVal(valOrFn, s.playlistRename) })),
 
-  setShowCommandPalette: (valOrFn) => set((s) => ({ showCommandPalette: resolveVal(valOrFn, s.showCommandPalette) })),
-  setShowInsightsModal: (valOrFn) => set((s) => ({ showInsightsModal: resolveVal(valOrFn, s.showInsightsModal) })),
-  setShowBackupModal: (valOrFn) => set((s) => ({ showBackupModal: resolveVal(valOrFn, s.showBackupModal) }))
+  setShowCommandPalette: (valOrFn) =>
+    set((s) => ({ showCommandPalette: resolveVal(valOrFn, s.showCommandPalette) })),
+  setShowInsightsModal: (valOrFn) =>
+    set((s) => ({ showInsightsModal: resolveVal(valOrFn, s.showInsightsModal) })),
+  setShowBackupModal: (valOrFn) =>
+    set((s) => ({ showBackupModal: resolveVal(valOrFn, s.showBackupModal) }))
 }))

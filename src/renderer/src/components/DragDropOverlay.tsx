@@ -1,11 +1,13 @@
 import React from 'react'
 import { Music, UploadCloud } from 'lucide-react'
+import { useTranslation } from '../locales'
 
 interface DragDropOverlayProps {
   isDragging: boolean
 }
 
 export const DragDropOverlay: React.FC<DragDropOverlayProps> = ({ isDragging }) => {
+  const { t } = useTranslation()
   if (!isDragging) return null
 
   return (
@@ -15,15 +17,11 @@ export const DragDropOverlay: React.FC<DragDropOverlayProps> = ({ isDragging }) 
           <UploadCloud size={36} />
         </div>
         <div>
-          <h3 className="text-xl font-bold text-white mb-1">
-            Thả tệp âm thanh hoặc thư mục vào đây
-          </h3>
-          <p className="text-xs text-zinc-400 max-w-sm">
-            Hỗ trợ FLAC, MP3, WAV, M4A, OPUS, OGG... Tự động quét metadata và nạp vào danh sách phát
-          </p>
+          <h3 className="text-xl font-bold text-white mb-1">{t('dragDrop.title')}</h3>
+          <p className="text-xs text-zinc-400 max-w-sm">{t('dragDrop.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-emerald-400 font-medium bg-emerald-500/15 px-3 py-1 rounded-full border border-emerald-500/30">
-          <Music size={13} /> Sẵn sàng phát ngay lập tức
+          <Music size={13} /> {t('dragDrop.ready')}
         </div>
       </div>
     </div>

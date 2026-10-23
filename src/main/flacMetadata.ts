@@ -131,7 +131,8 @@ export function createVorbisCommentBlock(
 
   const keysToRemove = new Set<string>()
 
-  const isUpdatingArtist = tags.artist !== undefined || (Array.isArray(tags.artists) && tags.artists.length > 0)
+  const isUpdatingArtist =
+    tags.artist !== undefined || (Array.isArray(tags.artists) && tags.artists.length > 0)
   if (isUpdatingArtist) {
     keysToRemove.add('ARTIST')
     keysToRemove.add('ARTISTS')
@@ -274,7 +275,8 @@ export function createPictureBlock(
   const mimeBuf = Buffer.from(mimeType, 'utf-8')
   const descBuf = Buffer.from(description, 'utf-8')
 
-  const totalSize = 4 + 4 + mimeBuf.length + 4 + descBuf.length + 4 + 4 + 4 + 4 + 4 + imageBuffer.length
+  const totalSize =
+    4 + 4 + mimeBuf.length + 4 + descBuf.length + 4 + 4 + 4 + 4 + 4 + imageBuffer.length
   const result = Buffer.alloc(totalSize)
   let pos = 0
 
@@ -623,14 +625,18 @@ export function readFlacTags(filePath: string): FlacTagUpdate | null {
 
           if (key === 'TITLE' && !result.title) result.title = val
           else if (key === 'ALBUM' && !result.album) result.album = val
-          else if ((key === 'ALBUMARTIST' || key === 'ALBUM ARTIST') && !result.albumArtist) result.albumArtist = val
+          else if ((key === 'ALBUMARTIST' || key === 'ALBUM ARTIST') && !result.albumArtist)
+            result.albumArtist = val
           else if (key === 'GENRE' && !result.genre) result.genre = val
           else if ((key === 'DATE' || key === 'YEAR') && !result.year) {
             result.year = val
             result.date = val
-          } else if ((key === 'TRACKNUMBER' || key === 'TRACK') && !result.trackNumber) result.trackNumber = val
-          else if ((key === 'DISCNUMBER' || key === 'DISC') && !result.discNumber) result.discNumber = val
-          else if ((key === 'LYRICS' || key === 'UNSYNCEDLYRICS') && !result.lyrics) result.lyrics = val
+          } else if ((key === 'TRACKNUMBER' || key === 'TRACK') && !result.trackNumber)
+            result.trackNumber = val
+          else if ((key === 'DISCNUMBER' || key === 'DISC') && !result.discNumber)
+            result.discNumber = val
+          else if ((key === 'LYRICS' || key === 'UNSYNCEDLYRICS') && !result.lyrics)
+            result.lyrics = val
           else if (key === 'ARTIST') artists.push(val)
         }
         if (artists.length > 0) {

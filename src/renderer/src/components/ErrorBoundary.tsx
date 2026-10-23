@@ -47,7 +47,8 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <h2 className="text-xl font-bold mb-2">Đã xảy ra sự cố giao diện</h2>
             <p className="text-zinc-400 text-sm mb-4 leading-relaxed">
-              Ứng dụng phát hiện lỗi trong quá trình hiển thị. Bạn có thể thử khôi phục lại màn hình hoặc tải lại ứng dụng.
+              Ứng dụng phát hiện lỗi trong quá trình hiển thị. Bạn có thể thử khôi phục lại màn hình
+              hoặc tải lại ứng dụng.
             </p>
             {this.state.error?.message && (
               <div className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-left font-mono text-xs text-red-400/90 overflow-x-auto mb-6 max-h-32">

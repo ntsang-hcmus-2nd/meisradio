@@ -23,7 +23,10 @@ export function getTrackKey(track?: any): string | undefined {
   return track.id || track.filePath || undefined
 }
 
-const normalizeKey = (key?: string): string => String(key || '').replace(/\\/g, '/').toLowerCase()
+const normalizeKey = (key?: string): string =>
+  String(key || '')
+    .replace(/\\/g, '/')
+    .toLowerCase()
 
 /** Track có trùng với tập khóa cần xóa không (id hoặc filePath) */
 export function trackMatchesKeys(track: any, keys: Set<string> | string[]): boolean {
@@ -89,8 +92,8 @@ export async function removeTrackKeysFromStores(keys: string[]): Promise<void> {
     const rawIds = Array.isArray(pl.trackIds)
       ? pl.trackIds
       : Array.isArray(pl.tracks)
-      ? pl.tracks
-      : []
+        ? pl.tracks
+        : []
     return rawIds.map((item: any) => {
       const key = typeof item === 'string' ? item : getTrackKey(item)
       return normalizeKey(key)
@@ -127,8 +130,8 @@ export async function removeTrackKeysFromStores(keys: string[]): Promise<void> {
         const raw = Array.isArray(pl?.trackIds)
           ? pl.trackIds
           : Array.isArray(pl?.tracks)
-          ? pl.tracks
-          : []
+            ? pl.tracks
+            : []
         if (!raw.length) return pl
         const kept = raw.filter((item: any) => {
           const key = typeof item === 'string' ? item : getTrackKey(item)

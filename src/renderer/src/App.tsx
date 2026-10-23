@@ -1,18 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue } from 'react'
-import {
-  ArrowLeft,
-  Search,
-  X,
-  LayoutGrid,
-  Rows3,
-  List,
-  Sparkles,
-  Cloud
-} from 'lucide-react'
+import { ArrowLeft, Search, X, LayoutGrid, Rows3, List, Sparkles, Cloud } from 'lucide-react'
 
 // Modals & Panels (Lazy loaded for optimized bundle size & fast startup)
 const PlaylistRenameModal = React.lazy(() =>
-  import('./components/modals/PlaylistRenameModal').then((m) => ({ default: m.PlaylistRenameModal }))
+  import('./components/modals/PlaylistRenameModal').then((m) => ({
+    default: m.PlaylistRenameModal
+  }))
 )
 const EditPlaylistModal = React.lazy(() =>
   import('./components/modals/EditPlaylistModal').then((m) => ({ default: m.EditPlaylistModal }))
@@ -27,7 +20,9 @@ const TrackInfoModal = React.lazy(() =>
   import('./components/modals/TrackInfoModal').then((m) => ({ default: m.TrackInfoModal }))
 )
 const CreatePlaylistModal = React.lazy(() =>
-  import('./components/modals/CreatePlaylistModal').then((m) => ({ default: m.CreatePlaylistModal }))
+  import('./components/modals/CreatePlaylistModal').then((m) => ({
+    default: m.CreatePlaylistModal
+  }))
 )
 const AddSongsModal = React.lazy(() =>
   import('./components/modals/AddSongsModal').then((m) => ({ default: m.AddSongsModal }))
@@ -36,7 +31,9 @@ const SpectrogramModal = React.lazy(() =>
   import('./components/SpectrogramModal').then((m) => ({ default: m.SpectrogramModal }))
 )
 const CommandPaletteModal = React.lazy(() =>
-  import('./components/modals/CommandPaletteModal').then((m) => ({ default: m.CommandPaletteModal }))
+  import('./components/modals/CommandPaletteModal').then((m) => ({
+    default: m.CommandPaletteModal
+  }))
 )
 const MusicInsightsModal = React.lazy(() =>
   import('./components/modals/MusicInsightsModal').then((m) => ({ default: m.MusicInsightsModal }))
@@ -45,7 +42,9 @@ const BackupModal = React.lazy(() =>
   import('./components/modals/BackupModal').then((m) => ({ default: m.BackupModal }))
 )
 const DuplicateFinderModal = React.lazy(() =>
-  import('./components/modals/DuplicateFinderModal').then((m) => ({ default: m.DuplicateFinderModal }))
+  import('./components/modals/DuplicateFinderModal').then((m) => ({
+    default: m.DuplicateFinderModal
+  }))
 )
 const SmartPlaylistModal = React.lazy(() =>
   import('./components/modals/SmartPlaylistModal').then((m) => ({ default: m.SmartPlaylistModal }))
@@ -113,11 +112,13 @@ import { useTranslation, useLanguage } from './locales'
 import { formatAudioSource, extractRawFilePath } from './utils/urlUtils'
 import { sliderToGain } from './utils/audioUtils'
 import { isDsdTrack, formatDuration } from './utils/formatUtils'
-import { splitArtistString, removeAccents, matchesQuery, PRESERVED_ARTIST_NAMES } from './utils/textUtils'
-import { filterTracksByQuickFilter, getFilteredTracks, getSortedTracks } from './utils/trackFilterUtils'
+import { splitArtistString, removeAccents, matchesQuery } from './utils/textUtils'
+import {
+  filterTracksByQuickFilter,
+  getFilteredTracks,
+  getSortedTracks
+} from './utils/trackFilterUtils'
 import { fisherYatesShuffle } from './utils/arrayUtils'
-
-export { PRESERVED_ARTIST_NAMES, splitArtistString }
 
 export interface EQBand {
   id: string
@@ -144,6 +145,8 @@ export default function App() {
   const setCrossfadeEnabled = usePlayerStore((s) => s.setCrossfadeEnabled)
   const setCrossfadeDuration = usePlayerStore((s) => s.setCrossfadeDuration)
   const setBitPerfectEnabled = usePlayerStore((s) => s.setBitPerfectEnabled)
+  const setIsPlaying = usePlayerStore((s) => s.setIsPlaying)
+  const setBassOutParams = usePlayerStore((s) => s.setBassOutParams)
   const setIsShuffle = usePlayerStore((s) => s.setIsShuffle)
 
   const {
@@ -267,6 +270,16 @@ export default function App() {
     setMinimizeToTray,
     closeToTray,
     setCloseToTray,
+    loudnessNormalization,
+    setLoudnessNormalization,
+    replayGainMode,
+    setReplayGainMode,
+    crossfeedEnabled,
+    setCrossfeedEnabled,
+    gaplessEnabled,
+    setGaplessEnabled,
+    waveformSeekbarEnabled,
+    setWaveformSeekbarEnabled,
     setDiscordRpcEnabled,
     setDiscordClientId,
     setDiscordShowDetails,
@@ -286,6 +299,7 @@ export default function App() {
     setPreampGain,
     selectedDeviceId,
     setSelectedDeviceId,
+    bitPerfectType,
     setBitPerfectType
   } = useAudioStore()
 
@@ -356,23 +370,26 @@ export default function App() {
     }
   }, [t, showToast, setIsYtmLoggedIn, setDashboardData])
 
-  const fetchScDashboard = useCallback(async (genre?: string) => {
-    setIsScLoading(true)
-    const targetGenre = genre || selectedScGenre
-    // @ts-ignore
-    const res = await window.api?.getScDashboard?.(targetGenre)
-    if (res?.success) {
-      setScDashboardData(res.data)
-    }
-    // @ts-ignore
-    const userRes = await window.api?.getScUser?.()
-    if (userRes?.success) {
-      setScUser(userRes.user)
-    } else {
-      setScUser(null)
-    }
-    setIsScLoading(false)
-  }, [selectedScGenre, setIsScLoading, setScDashboardData, setScUser])
+  const fetchScDashboard = useCallback(
+    async (genre?: string) => {
+      setIsScLoading(true)
+      const targetGenre = genre || selectedScGenre
+      // @ts-ignore
+      const res = await window.api?.getScDashboard?.(targetGenre)
+      if (res?.success) {
+        setScDashboardData(res.data)
+      }
+      // @ts-ignore
+      const userRes = await window.api?.getScUser?.()
+      if (userRes?.success) {
+        setScUser(userRes.user)
+      } else {
+        setScUser(null)
+      }
+      setIsScLoading(false)
+    },
+    [selectedScGenre, setIsScLoading, setScDashboardData, setScUser]
+  )
 
   const handleScLogin = useCallback(async () => {
     // @ts-ignore
@@ -396,27 +413,36 @@ export default function App() {
     }
   }, [t, showToast, fetchScDashboard, setScUser])
 
-  const playAndGenerateRadio = useCallback((track: any) => {
-    setOriginalQueue([track])
-    setPlayQueue([track])
-    audioEngine.handlePlayTrack(track)
+  const playAndGenerateRadio = useCallback(
+    (track: any) => {
+      setOriginalQueue([track])
+      setPlayQueue([track])
+      audioEngine.handlePlayTrack(track)
 
-    if (track.platform === 'youtube' || (!track.platform && !String(track.id).startsWith('sc-'))) {
-      // @ts-ignore
-      window.api?.getUpNext?.(track.originalId)
-        ?.then((res: any) => {
-          if (res?.success && res.tracks && res.tracks.length > 0) {
-            const nextTracks = res.tracks.filter((trk: any) => trk.originalId !== track.originalId)
-            setPlayQueue((prev) => {
-              const currentIds = new Set(prev.map((p) => p.originalId || p.id))
-              const unique = nextTracks.filter((t: any) => !currentIds.has(t.originalId || t.id))
-              return [...prev, ...unique]
-            })
-          }
-        })
-        ?.catch(() => {})
-    }
-  }, [setOriginalQueue, setPlayQueue, audioEngine])
+      if (
+        track.platform === 'youtube' ||
+        (!track.platform && !String(track.id).startsWith('sc-'))
+      ) {
+        // @ts-ignore
+        window.api
+          ?.getUpNext?.(track.originalId)
+          ?.then((res: any) => {
+            if (res?.success && res.tracks && res.tracks.length > 0) {
+              const nextTracks = res.tracks.filter(
+                (trk: any) => trk.originalId !== track.originalId
+              )
+              setPlayQueue((prev) => {
+                const currentIds = new Set(prev.map((p) => p.originalId || p.id))
+                const unique = nextTracks.filter((t: any) => !currentIds.has(t.originalId || t.id))
+                return [...prev, ...unique]
+              })
+            }
+          })
+          ?.catch(() => {})
+      }
+    },
+    [setOriginalQueue, setPlayQueue, audioEngine]
+  )
 
   /**
    * Stream All (DriveView): phát trực tiếp toàn bộ file Google Drive vừa quét.
@@ -434,150 +460,179 @@ export default function App() {
     [setOriginalQueue, setPlayQueue, audioEngine]
   )
 
-  const handleDashboardItemClick = useCallback(async (item: any) => {
-    if (item.videoId && !item.isArtist) {
-      const track = {
-        id: `yt-${item.videoId}`,
-        originalId: item.videoId,
-        title: item.title,
-        artist: item.subtitle,
-        album: 'YouTube Music',
-        duration: 0,
-        format: 'STREAM',
-        isCloud: true,
-        isOnline: true,
-        platform: 'youtube',
-        coverArt: item.thumbnails?.[0]?.url || null,
-        coverArtHighRes: item.coverArtHighRes || null
-      }
-      playAndGenerateRadio(track)
-    } else if (item.isArtist) {
-      setActiveAlbum({ title: item.title, tracks: [] })
-      setIsAlbumLoading(true)
-      // @ts-ignore
-      const res = await window.api?.getYtmArtist?.(item.playlistId)
-      if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
-      else {
-        libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
-        setActiveAlbum(null)
-      }
-      setIsAlbumLoading(false)
-    } else if (item.playlistId) {
-      setActiveAlbum({ title: item.title, tracks: [] })
-      setIsAlbumLoading(true)
-      // @ts-ignore
-      const res = await window.api?.getYtmPlaylist?.(item.playlistId)
-      if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
-      else {
-        libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
-        setActiveAlbum(null)
-      }
-      setIsAlbumLoading(false)
-    }
-  }, [playAndGenerateRadio, setActiveAlbum, setIsAlbumLoading, libraryOps, t])
-
-  const handleScItemClick = useCallback(async (item: any) => {
-    if (item.isPlaylist || item.playlistId) {
-      setActiveAlbum({ title: item.title, tracks: [] })
-      setIsAlbumLoading(true)
-      // @ts-ignore
-      const res = await window.api?.getScPlaylist?.(item.playlistId)
-      if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
-      else {
-        libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
-        setActiveAlbum(null)
-      }
-      setIsAlbumLoading(false)
-    } else {
-      const track = {
-        id: item.id || `sc-${item.originalId}`,
-        originalId: item.originalId,
-        title: item.title,
-        artist: item.artist,
-        album: item.album || 'SoundCloud Single',
-        duration: item.duration || 0,
-        format: 'STREAM',
-        isCloud: true,
-        isOnline: true,
-        platform: 'soundcloud',
-        permalinkUrl: item.permalinkUrl,
-        coverArt: item.coverArt || item.thumbnails?.[0]?.url || null,
-        coverArtHighRes: item.coverArtHighRes || null
-      }
-      playAndGenerateRadio(track)
-    }
-  }, [setActiveAlbum, setIsAlbumLoading, playAndGenerateRadio, libraryOps, t])
-
-  const handleDashboardItemDownload = useCallback(async (item: any) => {
-    if (item.videoId || item.platform === 'soundcloud' || (item.originalId && !item.isPlaylist)) {
-      const track = {
-        originalId: item.originalId || item.videoId,
-        title: item.title,
-        artist: item.artist || item.subtitle,
-        album: item.album || item.subtitle || 'Singles',
-        platform: item.platform || 'youtube',
-        permalinkUrl: item.permalinkUrl
-      }
-
-      setIsDownloading(true)
-      setDownloadProgress({
-        current: 0,
-        total: 1,
-        fileName: `${t('toasts.downloadProgress')} ${item.title}`
-      })
-
-      // @ts-ignore
-      const res = await window.api?.downloadOnline?.(track)
-      setIsDownloading(false)
-      setDownloadProgress(null)
-
-      if (res?.success) {
-        showToast(t('toasts.downloadFinished', { title: item.title }), 'success')
-        libraryOps.loadLibrary()
-      } else if (!res?.canceled) {
-        libraryOps.showAlert({ title: t('common.error'), message: 'Download Error: ' + res?.error })
-      }
-    }
-  }, [t, setIsDownloading, setDownloadProgress, showToast, libraryOps])
-
-  const handleCloudAction = useCallback(async (action: 'stream' | 'download') => {
-    if (!cloudActionTrack) return
-    if (action === 'stream') {
-      audioEngine.handlePlayTrack(cloudActionTrack)
-      setCloudActionTrack(null)
-    } else {
-      setIsDownloading(true)
-      try {
-        const ext = cloudActionTrack.format ? cloudActionTrack.format.toLowerCase() : 'mp3'
+  const handleDashboardItemClick = useCallback(
+    async (item: any) => {
+      if (item.videoId && !item.isArtist) {
+        const track = {
+          id: `yt-${item.videoId}`,
+          originalId: item.videoId,
+          title: item.title,
+          artist: item.subtitle,
+          album: 'YouTube Music',
+          duration: 0,
+          format: 'STREAM',
+          isCloud: true,
+          isOnline: true,
+          platform: 'youtube',
+          coverArt: item.thumbnails?.[0]?.url || null,
+          coverArtHighRes: item.coverArtHighRes || null
+        }
+        playAndGenerateRadio(track)
+      } else if (item.isArtist) {
+        setActiveAlbum({ title: item.title, tracks: [] })
+        setIsAlbumLoading(true)
         // @ts-ignore
-        const result = await window.api?.downloadCloudFile?.(
-          cloudActionTrack.url,
-          `${cloudActionTrack.title}.${ext}`,
-          libraryTracks
-        )
-        if (result?.success) {
-          libraryOps.showAlert({
-            title: t('common.notice'),
-            message:
-              language === 'vi'
-                ? 'Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.'
-                : 'Download complete! Playback will begin from your computer.'
-          })
-          audioEngine.handlePlayTrack({ ...cloudActionTrack, filePath: result.localPath, isCloud: false })
+        const res = await window.api?.getYtmArtist?.(item.playlistId)
+        if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
+        else {
+          libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
+          setActiveAlbum(null)
+        }
+        setIsAlbumLoading(false)
+      } else if (item.playlistId) {
+        setActiveAlbum({ title: item.title, tracks: [] })
+        setIsAlbumLoading(true)
+        // @ts-ignore
+        const res = await window.api?.getYtmPlaylist?.(item.playlistId)
+        if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
+        else {
+          libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
+          setActiveAlbum(null)
+        }
+        setIsAlbumLoading(false)
+      }
+    },
+    [playAndGenerateRadio, setActiveAlbum, setIsAlbumLoading, libraryOps, t]
+  )
+
+  const handleScItemClick = useCallback(
+    async (item: any) => {
+      if (item.isPlaylist || item.playlistId) {
+        setActiveAlbum({ title: item.title, tracks: [] })
+        setIsAlbumLoading(true)
+        // @ts-ignore
+        const res = await window.api?.getScPlaylist?.(item.playlistId)
+        if (res?.success) setActiveAlbum({ title: item.title, tracks: res.tracks })
+        else {
+          libraryOps.showAlert({ title: t('common.error'), message: res?.error || 'Error' })
+          setActiveAlbum(null)
+        }
+        setIsAlbumLoading(false)
+      } else {
+        const track = {
+          id: item.id || `sc-${item.originalId}`,
+          originalId: item.originalId,
+          title: item.title,
+          artist: item.artist,
+          album: item.album || 'SoundCloud Single',
+          duration: item.duration || 0,
+          format: 'STREAM',
+          isCloud: true,
+          isOnline: true,
+          platform: 'soundcloud',
+          permalinkUrl: item.permalinkUrl,
+          coverArt: item.coverArt || item.thumbnails?.[0]?.url || null,
+          coverArtHighRes: item.coverArtHighRes || null
+        }
+        playAndGenerateRadio(track)
+      }
+    },
+    [setActiveAlbum, setIsAlbumLoading, playAndGenerateRadio, libraryOps, t]
+  )
+
+  const handleDashboardItemDownload = useCallback(
+    async (item: any) => {
+      if (item.videoId || item.platform === 'soundcloud' || (item.originalId && !item.isPlaylist)) {
+        const track = {
+          originalId: item.originalId || item.videoId,
+          title: item.title,
+          artist: item.artist || item.subtitle,
+          album: item.album || item.subtitle || 'Singles',
+          platform: item.platform || 'youtube',
+          permalinkUrl: item.permalinkUrl
+        }
+
+        setIsDownloading(true)
+        setDownloadProgress({
+          current: 0,
+          total: 1,
+          fileName: `${t('toasts.downloadProgress')} ${item.title}`
+        })
+
+        // @ts-ignore
+        const res = await window.api?.downloadOnline?.(track)
+        setIsDownloading(false)
+        setDownloadProgress(null)
+
+        if (res?.success) {
+          showToast(t('toasts.downloadFinished', { title: item.title }), 'success')
           libraryOps.loadLibrary()
-        } else if (!result?.canceled) {
+        } else if (!res?.canceled) {
           libraryOps.showAlert({
             title: t('common.error'),
-            message: (language === 'vi' ? 'Lỗi tải tệp: ' : 'File download error: ') + result?.error
+            message: 'Download Error: ' + res?.error
           })
         }
-      } catch (e) {
-        console.error('Lỗi tải tệp cloud:', e)
       }
-      setIsDownloading(false)
-      setCloudActionTrack(null)
-    }
-  }, [cloudActionTrack, libraryTracks, language, t, audioEngine, libraryOps, setIsDownloading, setCloudActionTrack])
+    },
+    [t, setIsDownloading, setDownloadProgress, showToast, libraryOps]
+  )
+
+  const handleCloudAction = useCallback(
+    async (action: 'stream' | 'download') => {
+      if (!cloudActionTrack) return
+      if (action === 'stream') {
+        audioEngine.handlePlayTrack(cloudActionTrack)
+        setCloudActionTrack(null)
+      } else {
+        setIsDownloading(true)
+        try {
+          const ext = cloudActionTrack.format ? cloudActionTrack.format.toLowerCase() : 'mp3'
+          // @ts-ignore
+          const result = await window.api?.downloadCloudFile?.(
+            cloudActionTrack.url,
+            `${cloudActionTrack.title}.${ext}`,
+            libraryTracks
+          )
+          if (result?.success) {
+            libraryOps.showAlert({
+              title: t('common.notice'),
+              message:
+                language === 'vi'
+                  ? 'Tải về thành công! Nhạc sẽ bắt đầu phát từ máy tính.'
+                  : 'Download complete! Playback will begin from your computer.'
+            })
+            audioEngine.handlePlayTrack({
+              ...cloudActionTrack,
+              filePath: result.localPath,
+              isCloud: false
+            })
+            libraryOps.loadLibrary()
+          } else if (!result?.canceled) {
+            libraryOps.showAlert({
+              title: t('common.error'),
+              message:
+                (language === 'vi' ? 'Lỗi tải tệp: ' : 'File download error: ') + result?.error
+            })
+          }
+        } catch (e) {
+          console.error('Lỗi tải tệp cloud:', e)
+        }
+        setIsDownloading(false)
+        setCloudActionTrack(null)
+      }
+    },
+    [
+      cloudActionTrack,
+      libraryTracks,
+      language,
+      t,
+      audioEngine,
+      libraryOps,
+      setIsDownloading,
+      setCloudActionTrack
+    ]
+  )
 
   // 4. NAVIGATION & TOGGLES
   const nav = useNavigationHistory({
@@ -596,6 +651,89 @@ export default function App() {
     // @ts-ignore
     window.api?.toggleMiniPlayer?.(nextState)
   }, [isMiniPlayer, setIsMiniPlayer, setIsLyricsMaximized])
+
+  // Chia sẻ với Command Palette: cùng luồng chuyển Bit-Perfect như SettingsView
+  // (giữ pendingSeek, pause <audio> khi bật, dọn WebAudio pipeline khi tắt PCM)
+  const handleToggleBitPerfect = useCallback(async () => {
+    const val = !bitPerfectEnabled
+    const prevTrack = currentTrack
+    // Chuẩn hóa về thời gian TƯƠNG ĐỐI của bài (pendingSeek/BASS seek đều cộng
+    // startTime CUE sau; HTML5 currentTime là tuyệt đối nên phải trừ đi).
+    const startOffset = prevTrack?.startTime || 0
+    const currentPlaybackTime = val
+      ? Math.max(0, (audioEngine.audioRef.current?.currentTime || 0) - startOffset)
+      : ((audioEngine.audioRef.current as any)?._currentTime ??
+        Math.max(0, (audioEngine.audioRef.current?.currentTime || 0) - startOffset))
+    const wasPlaying = isPlaying
+
+    try {
+      // @ts-ignore
+      await window.api.setBitPerfect(val, volume, bitPerfectType)
+    } catch (err: any) {
+      showToast(
+        `${language === 'vi' ? 'Không thể cấu hình Bit-perfect' : 'Could not configure Bit-perfect'}: ${err?.message || err}`,
+        'error'
+      )
+      return
+    }
+
+    if (currentPlaybackTime > 0) {
+      audioEngine.pendingSeekTimeRef.current = currentPlaybackTime
+    }
+    setBitPerfectEnabled(val)
+
+    if (prevTrack && prevTrack.filePath) {
+      if (val) {
+        if (audioEngine.audioRef.current) audioEngine.audioRef.current.pause()
+      } else {
+        if (isDsdTrack(prevTrack)) {
+          // @ts-ignore
+          await window.api.bassStop().catch(() => {})
+          setIsPlaying(false)
+          setBassOutParams(null)
+          showToast(
+            language === 'vi'
+              ? 'Đã dừng phát vì định dạng DSD yêu cầu bật chế độ Bit-Perfect (WASAPI / ASIO)!'
+              : 'Stopped playback because DSD format requires Bit-Perfect mode (WASAPI / ASIO)!',
+            'error'
+          )
+        } else {
+          // Nhạc PCM: Dừng BASS và giải phóng thiết bị độc quyền ngay lập tức
+          // @ts-ignore
+          await window.api.bassStop().catch(() => {})
+          await audioEngine.resetWebAudioPipeline()
+          setTimeout(() => {
+            if (audioEngine.audioRef.current) {
+              audioEngine.audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
+              audioEngine.audioRef.current.currentTime = startOffset + currentPlaybackTime
+              audioEngine.pendingSeekTimeRef.current = null
+              if (wasPlaying) {
+                if (
+                  audioEngine.audioCtxRef.current &&
+                  audioEngine.audioCtxRef.current.state === 'suspended'
+                ) {
+                  audioEngine.audioCtxRef.current.resume().catch(() => {})
+                }
+                audioEngine.audioRef.current.play().catch(console.warn)
+              }
+            }
+          }, 100)
+        }
+      }
+    }
+  }, [
+    bitPerfectEnabled,
+    currentTrack,
+    isPlaying,
+    volume,
+    bitPerfectType,
+    audioEngine,
+    setBitPerfectEnabled,
+    setIsPlaying,
+    setBassOutParams,
+    showToast,
+    language
+  ])
 
   const handleToggleLyrics = useCallback(() => {
     if (showLyricsPanel) {
@@ -651,7 +789,9 @@ export default function App() {
             : alb.tracks || [],
           coverArt:
             alb.coverArt ||
-            (alb.trackIds?.[0] ? libraryOps.libraryTrackMap.get(alb.trackIds[0])?.coverArt : null) ||
+            (alb.trackIds?.[0]
+              ? libraryOps.libraryTrackMap.get(alb.trackIds[0])?.coverArt
+              : null) ||
             a.coverArt,
           year: alb.year
         }))
@@ -927,7 +1067,16 @@ export default function App() {
       setActivePlaylist(null)
       setActiveUserPlaylist(null)
     },
-    [artistsData.artistsList, libraryTracks, setActiveArtist, setActiveView, setActiveAlbum, setActiveGenre, setActivePlaylist, setActiveUserPlaylist]
+    [
+      artistsData.artistsList,
+      libraryTracks,
+      setActiveArtist,
+      setActiveView,
+      setActiveAlbum,
+      setActiveGenre,
+      setActivePlaylist,
+      setActiveUserPlaylist
+    ]
   )
 
   // 6. MEMOS: FILTERED & SORTED TRACKS
@@ -964,58 +1113,80 @@ export default function App() {
   }, [activeUserPlaylist, libraryOps, deferredSearchQuery, sortField, sortOrder])
 
   // Drag and Drop Files
-  const handleDropFiles = useCallback(async (files: any[]) => {
-    const audioExtensions = [
-      '.mp3', '.flac', '.wav', '.m4a', '.ogg', '.opus',
-      '.aac', '.alac', '.aiff', '.wma', '.dsf', '.dff', '.dsd'
-    ]
-    const audioFiles = files.filter((file) => {
-      const name = file.path || file.name || (typeof file === 'string' ? file : '')
-      const lower = name.toLowerCase()
-      return audioExtensions.some((ext) => lower.endsWith(ext))
-    })
+  const handleDropFiles = useCallback(
+    async (files: any[]) => {
+      // Đồng bộ với SUPPORTED_AUDIO_EXTS ở backend (sharedContext.ts)
+      const audioExtensions = [
+        '.mp3',
+        '.flac',
+        '.wav',
+        '.m4a',
+        '.opus',
+        '.ogg',
+        '.aac',
+        '.alac',
+        '.aiff',
+        '.wma',
+        '.dsf',
+        '.dff',
+        '.dsd',
+        '.bin',
+        '.ape'
+      ]
+      const audioFiles = files.filter((file) => {
+        const name = file.path || file.name || (typeof file === 'string' ? file : '')
+        const lower = name.toLowerCase()
+        return audioExtensions.some((ext) => lower.endsWith(ext))
+      })
 
-    const droppedPaths: string[] = audioFiles
-      .map((f: any) => f.path || (window as any).api?.getFilePath?.(f) || (typeof f === 'string' ? f : ''))
-      .filter(Boolean)
+      const droppedPaths: string[] = audioFiles
+        .map(
+          (f: any) =>
+            f.path || (window as any).api?.getFilePath?.(f) || (typeof f === 'string' ? f : '')
+        )
+        .filter(Boolean)
 
-    if (droppedPaths.length === 0) {
-      showToast(
-        language === 'vi' ? 'Không tìm thấy tệp âm thanh hợp lệ' : 'No supported audio files found',
-        'error'
-      )
-      return
-    }
-
-    await (window as any).api?.registerDroppedFiles?.(droppedPaths)
-
-    const newTracks = droppedPaths.map((p) => {
-      const fileName = p.split(/[\\/]/).pop() || 'Unknown'
-      const title = fileName.replace(/\.[^/.]+$/, '')
-      const ext = p.split('.').pop()?.toLowerCase() || ''
-      const isDsd = ext === 'dsf' || ext === 'dff' || ext === 'dsd'
-      return {
-        id: p,
-        title,
-        artist: 'Unknown Artist',
-        album: 'Local Drops',
-        filePath: p,
-        duration: 0,
-        format: isDsd ? ext.toUpperCase() : ext.toUpperCase() || 'AUDIO',
-        bitDepth: isDsd ? 1 : undefined,
-        sampleRate: isDsd ? 2822400 : undefined,
-        lossless: isDsd || ['flac', 'wav', 'alac', 'aiff'].includes(ext)
+      if (droppedPaths.length === 0) {
+        showToast(
+          language === 'vi'
+            ? 'Không tìm thấy tệp âm thanh hợp lệ'
+            : 'No supported audio files found',
+          'error'
+        )
+        return
       }
-    })
 
-    setPlayQueue((prev) => [...prev, ...newTracks])
-    showToast(
-      language === 'vi'
-        ? `Đã thêm ${newTracks.length} bài hát vào hàng đợi`
-        : `Added ${newTracks.length} tracks to queue`,
-      'success'
-    )
-  }, [language, showToast, setPlayQueue])
+      await (window as any).api?.registerDroppedFiles?.(droppedPaths)
+
+      const newTracks = droppedPaths.map((p) => {
+        const fileName = p.split(/[\\/]/).pop() || 'Unknown'
+        const title = fileName.replace(/\.[^/.]+$/, '')
+        const ext = p.split('.').pop()?.toLowerCase() || ''
+        const isDsd = ext === 'dsf' || ext === 'dff' || ext === 'dsd'
+        return {
+          id: p,
+          title,
+          artist: 'Unknown Artist',
+          album: 'Local Drops',
+          filePath: p,
+          duration: 0,
+          format: isDsd ? ext.toUpperCase() : ext.toUpperCase() || 'AUDIO',
+          bitDepth: isDsd ? 1 : undefined,
+          sampleRate: isDsd ? 2822400 : undefined,
+          lossless: isDsd || ['flac', 'wav', 'alac', 'aiff'].includes(ext)
+        }
+      })
+
+      setPlayQueue((prev) => [...prev, ...newTracks])
+      showToast(
+        language === 'vi'
+          ? `Đã thêm ${newTracks.length} bài hát vào hàng đợi`
+          : `Added ${newTracks.length} tracks to queue`,
+        'success'
+      )
+    },
+    [language, showToast, setPlayQueue]
+  )
 
   const { isDraggingFile } = useAppShortcuts({
     audioRef: audioEngine.audioRef,
@@ -1072,13 +1243,21 @@ export default function App() {
       // Tôn trọng giá trị showVisualizer người dùng đã lưu (kể cả false).
       // Chỉ bật mặc định visualizer cho chế độ Default khi config chưa từng
       // lưu giá trị này, tránh ghi đè lựa chọn của người dùng mỗi lần khởi động.
-      if (cfg.showVisualizer !== undefined && !cfg.bitPerfectEnabled) setShowVisualizer(cfg.showVisualizer)
+      if (cfg.showVisualizer !== undefined && !cfg.bitPerfectEnabled)
+        setShowVisualizer(cfg.showVisualizer)
       else if (cfg.showVisualizer === undefined && !cfg.bitPerfectEnabled) {
         const isDefaultMode = cfg.appMode === 'default' || (!cfg.appMode && !cfg.liteMode)
         if (isDefaultMode) setShowVisualizer(true)
       }
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
+      if (cfg.loudnessNormalization !== undefined)
+        setLoudnessNormalization(cfg.loudnessNormalization)
+      if (cfg.replayGainMode !== undefined) setReplayGainMode(cfg.replayGainMode)
+      if (cfg.crossfeedEnabled !== undefined) setCrossfeedEnabled(cfg.crossfeedEnabled)
+      if (cfg.gaplessEnabled !== undefined) setGaplessEnabled(cfg.gaplessEnabled)
+      if (cfg.waveformSeekbarEnabled !== undefined)
+        setWaveformSeekbarEnabled(cfg.waveformSeekbarEnabled)
       if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
       else if (cfg.liteMode !== undefined) setAppMode(cfg.liteMode ? 'lite' : 'default')
       if (cfg.uiStyle !== undefined) setUiStyle(cfg.uiStyle)
@@ -1100,11 +1279,14 @@ export default function App() {
       if (cfg.discordRpc) {
         if (cfg.discordRpc.enabled !== undefined) setDiscordRpcEnabled(cfg.discordRpc.enabled)
         if (cfg.discordRpc.clientId !== undefined) setDiscordClientId(cfg.discordRpc.clientId)
-        if (cfg.discordRpc.showDetails !== undefined) setDiscordShowDetails(cfg.discordRpc.showDetails)
+        if (cfg.discordRpc.showDetails !== undefined)
+          setDiscordShowDetails(cfg.discordRpc.showDetails)
         if (cfg.discordRpc.showTime !== undefined) setDiscordShowTime(cfg.discordRpc.showTime)
         if (cfg.discordRpc.showCover !== undefined) setDiscordShowCover(cfg.discordRpc.showCover)
-        if (cfg.discordRpc.showQuality !== undefined) setDiscordShowQuality(cfg.discordRpc.showQuality)
-        if (cfg.discordRpc.showButtons !== undefined) setDiscordShowButtons(cfg.discordRpc.showButtons)
+        if (cfg.discordRpc.showQuality !== undefined)
+          setDiscordShowQuality(cfg.discordRpc.showQuality)
+        if (cfg.discordRpc.showButtons !== undefined)
+          setDiscordShowButtons(cfg.discordRpc.showButtons)
         if (cfg.discordRpc.showIdle !== undefined) setDiscordShowIdle(cfg.discordRpc.showIdle)
       }
       fetchScDashboard()
@@ -1126,21 +1308,33 @@ export default function App() {
       }
 
       if (window.api?.getFavorites) {
-        window.api.getFavorites().then((favs: any) => {
-          if (Array.isArray(favs)) setFavoriteTrackIds(favs)
-        }).catch(() => {})
+        window.api
+          .getFavorites()
+          .then((favs: any) => {
+            if (Array.isArray(favs)) setFavoriteTrackIds(favs)
+          })
+          .catch(() => {})
       }
       if (window.api?.getLyricOffsets) {
-        window.api.getLyricOffsets().then((offsets: any) => {
-          if (offsets && typeof offsets === 'object') setTrackLyricOffsets(offsets)
-        }).catch(() => {})
+        window.api
+          .getLyricOffsets()
+          .then((offsets: any) => {
+            if (offsets && typeof offsets === 'object') setTrackLyricOffsets(offsets)
+          })
+          .catch(() => {})
       }
       if (window.api?.getSmartPlaylists) {
-        window.api.getSmartPlaylists().then((spls: any) => {
-          if (Array.isArray(spls)) setSmartPlaylists(spls)
-        }).catch(() => {})
+        window.api
+          .getSmartPlaylists()
+          .then((spls: any) => {
+            if (Array.isArray(spls)) setSmartPlaylists(spls)
+          })
+          .catch(() => {})
       }
     })
+    // Chạy 1 lần khi mount: libraryOps/fetchDashboard đổi identity mỗi render,
+    // đưa vào deps sẽ lặp vô hạn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-save Config & Update Tray
@@ -1152,8 +1346,14 @@ export default function App() {
       crossfadeEnabled,
       crossfadeDuration,
       bitPerfectEnabled,
+      bitPerfectType,
       eqBands,
       isEqEnabled,
+      loudnessNormalization,
+      replayGainMode,
+      crossfeedEnabled,
+      gaplessEnabled,
+      waveformSeekbarEnabled,
       googleDriveApiKey,
       driveLink,
       selectedDeviceId,
@@ -1176,6 +1376,12 @@ export default function App() {
     crossfadeEnabled,
     crossfadeDuration,
     bitPerfectEnabled,
+    bitPerfectType,
+    loudnessNormalization,
+    replayGainMode,
+    crossfeedEnabled,
+    gaplessEnabled,
+    waveformSeekbarEnabled,
     eqBands,
     isEqEnabled,
     googleDriveApiKey,
@@ -1211,9 +1417,12 @@ export default function App() {
 
   // Auto-updater status check & listener
   useEffect(() => {
-    window.api?.updaterGetStatus?.()?.then((st: any) => {
-      if (st) setUpdaterStatus(st)
-    })?.catch(() => {})
+    window.api
+      ?.updaterGetStatus?.()
+      ?.then((st: any) => {
+        if (st) setUpdaterStatus(st)
+      })
+      ?.catch(() => {})
 
     const unlisten = window.api?.onUpdaterStatusChanged?.((st: any) => {
       setUpdaterStatus(st)
@@ -1243,14 +1452,18 @@ export default function App() {
           <div
             className={`custom-bg-layer ${!theming.isLite ? 'transition-all' : ''}`}
             style={{
-              backgroundImage: theming.bgLayerA ? `url("${theming.bgLayerA.replace(/"/g, '\\"')}")` : 'none',
+              backgroundImage: theming.bgLayerA
+                ? `url("${theming.bgLayerA.replace(/"/g, '\\"')}")`
+                : 'none',
               opacity: theming.activeBgLayer === 'A' && theming.bgLayerA ? customBgOpacity : 0
             }}
           />
           <div
             className={`custom-bg-layer ${!theming.isLite ? 'transition-all' : ''}`}
             style={{
-              backgroundImage: theming.bgLayerB ? `url("${theming.bgLayerB.replace(/"/g, '\\"')}")` : 'none',
+              backgroundImage: theming.bgLayerB
+                ? `url("${theming.bgLayerB.replace(/"/g, '\\"')}")`
+                : 'none',
               opacity: theming.activeBgLayer === 'B' && theming.bgLayerB ? customBgOpacity : 0
             }}
           />
@@ -1310,7 +1523,11 @@ export default function App() {
           data-mode={appMode}
           className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${theming.isLite ? '' : 'transition-colors duration-1000'}`}
           style={{
-            backgroundColor: theming.effectiveBgImage ? 'transparent' : theming.isCore ? '#121212' : themeColor
+            backgroundColor: theming.effectiveBgImage
+              ? 'transparent'
+              : theming.isCore
+                ? '#121212'
+                : themeColor
           }}
         >
           {!theming.isLite && !theming.effectiveBgImage && (
@@ -1406,6 +1623,7 @@ export default function App() {
                   'info'
                 )
                 clearSelectedTracks()
+                await (await import('./utils/trackStateUtils')).removeTrackKeysFromStores(paths)
                 libraryOps.loadLibrary(true, false)
               }
             }}
@@ -1416,6 +1634,7 @@ export default function App() {
             <React.Suspense fallback={null}>
               <DuplicateFinderModal
                 isOpen={showDuplicateFinder}
+                onPlayTrack={audioEngine.handlePlayTrack}
                 onClose={() => setShowDuplicateFinder(false)}
                 onDeleteTracks={async (trackPaths) => {
                   if (window.api?.deleteTrack) {
@@ -1430,7 +1649,10 @@ export default function App() {
                       }),
                       'info'
                     )
-                    libraryOps.loadLibrary(true, false)
+                    await (
+                      await import('./utils/trackStateUtils')
+                    ).removeTrackKeysFromStores(trackPaths)
+                    await libraryOps.loadLibrary(true, false)
                   }
                 }}
               />
@@ -1453,7 +1675,12 @@ export default function App() {
               />
 
               {libraryOps.infoTrack && (
-                <TrackInfoModal track={libraryOps.infoTrack} onClose={() => libraryOps.setInfoTrack(null)} />
+                <TrackInfoModal
+                  track={libraryOps.infoTrack}
+                  onClose={() => libraryOps.setInfoTrack(null)}
+                  onEditTags={libraryOps.openTagEditor}
+                  onPlayTrack={audioEngine.handlePlayTrack}
+                />
               )}
 
               {libraryOps.editingTrack && (
@@ -1554,6 +1781,8 @@ export default function App() {
                 onReloadLibrary={libraryOps.handleReloadLibrary}
                 onAddLibraryFolder={libraryOps.handleAddLibraryFolder}
                 onNavigateToArtist={navigateToArtist}
+                onToggleBitPerfect={handleToggleBitPerfect}
+                onToggleMiniPlayer={handleToggleMiniPlayer}
               />
               <MusicInsightsModal />
               <BackupModal />
@@ -1642,8 +1871,12 @@ export default function App() {
                   </div>
 
                   <div className="relative flex-1 max-w-md">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <Search
+                      size={16}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                    />
                     <input
+                      id="global-search-input"
                       type="text"
                       placeholder={
                         activeView === 'home' || activeView === 'home-ytm'
@@ -1724,21 +1957,21 @@ export default function App() {
                     <button
                       onClick={() => setViewMode('table')}
                       className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'table' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
-                      title={t('header.tableView')}
+                      title={t('viewOptions.table')}
                     >
                       <Rows3 size={15} />
                     </button>
                     <button
                       onClick={() => setViewMode('grid')}
                       className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'grid' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
-                      title={t('header.gridView')}
+                      title={t('viewOptions.grid')}
                     >
                       <LayoutGrid size={15} />
                     </button>
                     <button
                       onClick={() => setViewMode('compact')}
                       className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'compact' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
-                      title={t('header.compactView')}
+                      title={t('viewOptions.compact')}
                     >
                       <List size={15} />
                     </button>
@@ -1754,12 +1987,12 @@ export default function App() {
                     activeView === 'analytics'
                       ? 'overflow-y-auto no-scrollbar'
                       : activeView === 'settings' ||
-                        activeView === 'drive' ||
-                        activeView === 'home' ||
-                        (activeView === 'playlists' && !activePlaylist) ||
-                        activeView === 'artists' ||
-                        (activeView === 'genres' && !activeGenre) ||
-                        (activeView === 'user-playlists' && !activeUserPlaylist)
+                          activeView === 'drive' ||
+                          activeView === 'home' ||
+                          (activeView === 'playlists' && !activePlaylist) ||
+                          activeView === 'artists' ||
+                          (activeView === 'genres' && !activeGenre) ||
+                          (activeView === 'user-playlists' && !activeUserPlaylist)
                         ? 'overflow-y-auto'
                         : 'overflow-hidden'
                   }`}

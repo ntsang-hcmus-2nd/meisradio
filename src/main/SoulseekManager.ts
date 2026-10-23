@@ -1,4 +1,11 @@
-import { SlskClient, FileAttribute, Download, DownloadProgress, DownloadResult, DownloadStatus } from 'slsk-client'
+import {
+  SlskClient,
+  FileAttribute,
+  Download,
+  DownloadProgress,
+  DownloadResult,
+  DownloadStatus
+} from 'slsk-client'
 import { app, dialog, BrowserWindow, shell, safeStorage } from 'electron'
 import path from 'path'
 import fs from 'fs'
@@ -90,7 +97,11 @@ function checkIsLossless(file: string, attribs: any = {}): boolean {
     }
     const bitDepth = attribs[FileAttribute.BitDepth]
     const bitrate = attribs[FileAttribute.Bitrate]
-    if (bitDepth !== undefined && (bitDepth === 16 || bitDepth === 24) && (!bitrate || bitrate >= 600)) {
+    if (
+      bitDepth !== undefined &&
+      (bitDepth === 16 || bitDepth === 24) &&
+      (!bitrate || bitrate >= 600)
+    ) {
       return true
     }
   }
@@ -172,7 +183,10 @@ export class SoulseekManager {
     return false
   }
 
-  async login(user: string, pass: string): Promise<{ success: boolean; username?: string; error?: string }> {
+  async login(
+    user: string,
+    pass: string
+  ): Promise<{ success: boolean; username?: string; error?: string }> {
     const trimmedUser = user?.trim()
     if (!trimmedUser || !pass) {
       return { success: false, error: 'Tên đăng nhập và mật khẩu không được để trống' }
@@ -243,7 +257,8 @@ export class SoulseekManager {
 
       let msg = err.message || 'Không thể kết nối đến máy chủ Soulseek'
       if (msg.includes('INVALIDPASS')) {
-        msg = 'Mật khẩu không chính xác cho tài khoản này (hoặc tên đăng nhập đã được người khác sử dụng).'
+        msg =
+          'Mật khẩu không chính xác cho tài khoản này (hoặc tên đăng nhập đã được người khác sử dụng).'
       } else if (msg.includes('INVALIDUSERNAME')) {
         msg = 'Tên đăng nhập không hợp lệ hoặc chứa ký tự đặc biệt.'
       } else if (msg.includes('ETIMEDOUT') || msg.includes('timeout')) {
@@ -325,12 +340,18 @@ export class SoulseekManager {
     }
   }
 
-  async search(query: string, timeout = 4000): Promise<{ success: boolean; results?: SoulseekFormattedResult[]; error?: string }> {
+  async search(
+    query: string,
+    timeout = 4000
+  ): Promise<{ success: boolean; results?: SoulseekFormattedResult[]; error?: string }> {
     if (!this.client || !this.connected) {
       // Thử tự động kết nối lại nếu có thông tin lưu trữ
       const reconnected = await this.ensureConnected()
       if (!reconnected || !this.client || !this.connected) {
-        return { success: false, error: 'Chưa kết nối đến mạng Soulseek. Vui lòng đăng nhập trước khi tìm kiếm.' }
+        return {
+          success: false,
+          error: 'Chưa kết nối đến mạng Soulseek. Vui lòng đăng nhập trước khi tìm kiếm.'
+        }
       }
     }
 
@@ -507,7 +528,8 @@ export class SoulseekManager {
         if (prog.totalBytes) {
           downloadRecord.size = prog.totalBytes
         }
-        downloadRecord.progress = prog.progress ?? (downloadRecord.size > 0 ? prog.receivedBytes / downloadRecord.size : 0)
+        downloadRecord.progress =
+          prog.progress ?? (downloadRecord.size > 0 ? prog.receivedBytes / downloadRecord.size : 0)
         downloadRecord.status = 'downloading'
 
         const speedTracker = this.speedCalcIntervals.get(downloadId)

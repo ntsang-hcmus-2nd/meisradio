@@ -15,7 +15,8 @@ import {
   dirtyThemeColorKeys,
   saveMetadataCache,
   saveThemeColorsCache,
-  sanitizeDirectoryName
+  sanitizeDirectoryName,
+  registerAllowedDroppedFile
 } from './sharedContext'
 import { getAudioFilesInDirectoryRecursiveAsync } from './libraryScanner'
 import { fastExtractCover, fastReadMetadata } from '../fastAudioParser'
@@ -46,7 +47,7 @@ export function getUserPlaylists(): UserPlaylist[] {
             sqliteStorage.saveUserPlaylist(pl)
           }
         }
-      } catch (e) {}
+      } catch {}
       try {
         fs.renameSync(USER_PLAYLISTS_PATH, `${USER_PLAYLISTS_PATH}.migrated`)
       } catch {
@@ -59,7 +60,7 @@ export function getUserPlaylists(): UserPlaylist[] {
     if (sqliteLists) {
       return sqliteLists
     }
-  } catch (e) {}
+  } catch {}
   return []
 }
 
@@ -73,7 +74,7 @@ export function saveUserPlaylists(playlists: UserPlaylist[]): void {
     for (const pl of playlists) {
       sqliteStorage.saveUserPlaylist(pl)
     }
-  } catch (e) {}
+  } catch {}
 }
 
 export function createUserPlaylist(
@@ -177,7 +178,10 @@ export function updateUserPlaylist(
       fs.writeFileSync(plCentralThumbPath, resized.toJPEG(85))
       target.thumbnail = `${pathToFileURL(plCentralThumbPath).href}?t=${Date.now()}`
       ;(target as any).coverArt = target.thumbnail
-    } catch (e) {
+    } catch {
+      // Resize thất bại: giữ đường dẫn gốc nhưng phải đăng ký whitelist
+      // để streamServer không trả 403 khi DynamicCoverArt gọi /cover.
+      registerAllowedDroppedFile(updates.customImagePath)
       target.thumbnail = `${pathToFileURL(updates.customImagePath).href}?t=${Date.now()}`
       ;(target as any).coverArt = target.thumbnail
     }
@@ -436,7 +440,7 @@ export function addTrackToPlaylist(
         } catch {
           fs.copyFileSync(lrcSource, lrcDest)
         }
-      } catch (e) {}
+      } catch {}
     }
 
     return { success: true }
@@ -530,7 +534,7 @@ export async function setPlaylistThumbnail(
       const img = nativeImage.createFromPath(sourcePath)
       const resized = img.resize({ width: 200, height: 200, quality: 'good' })
       fs.writeFileSync(plCentralThumbPath, resized.toJPEG(80))
-    } catch (e) {}
+    } catch {}
 
     fs.copyFileSync(sourcePath, destPath)
     return { success: true }
@@ -727,7 +731,7 @@ export async function autoGeneratePlaylists(): Promise<{
           }
           movedCount++
         }
-      } catch (e) {}
+      } catch {}
     }
   }
   return { success: true, movedCount }
@@ -818,7 +822,7 @@ export async function deleteTrack(
           } catch (_err) {
             try {
               fs.unlinkSync(rawPath)
-            } catch (e) {}
+            } catch {}
           }
 
           const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
@@ -897,7 +901,7 @@ export async function deleteTrack(
       } catch (_err) {
         try {
           fs.unlinkSync(rawPath)
-        } catch (e) {}
+        } catch {}
       }
 
       const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
@@ -1005,6 +1009,7 @@ export function registerPlaylistManagerIpc(): void {
     })
     if (canceled || filePaths.length === 0) return { success: false, canceled: true }
     const imagePath = filePaths[0]
+    registerAllowedDroppedFile(imagePath)
     try {
       const img = nativeImage.createFromPath(imagePath)
       const resized = img.resize({ width: 300, height: 300, quality: 'good' })
@@ -1016,7 +1021,7 @@ export function registerPlaylistManagerIpc(): void {
         dataUrl,
         previewUrl: pathToFileURL(imagePath).href
       }
-    } catch (e) {
+    } catch {
       return {
         success: true,
         filePath: imagePath,
@@ -1040,6 +1045,8 @@ export function registerPlaylistManagerIpc(): void {
       const playlists = getUserPlaylists()
       const target = playlists.find((p) => p.id === playlistId)
       if (target) {
+        // Ảnh do người dùng chọn thủ công -> cho phép stream qua whitelist.
+        registerAllowedDroppedFile(imagePath)
         const playlistHash = crypto
           .createHash('md5')
           .update('user_pl_' + playlistId)
@@ -1065,7 +1072,7 @@ export function registerPlaylistManagerIpc(): void {
           fs.writeFileSync(plCentralThumbPath, resized.toJPEG(85))
           target.thumbnail = `${pathToFileURL(plCentralThumbPath).href}?t=${Date.now()}`
           ;(target as any).coverArt = target.thumbnail
-        } catch (e) {
+        } catch {
           target.thumbnail = `${pathToFileURL(imagePath).href}?t=${Date.now()}`
           ;(target as any).coverArt = target.thumbnail
         }

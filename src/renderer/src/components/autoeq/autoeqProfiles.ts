@@ -41,7 +41,9 @@ export function parsePeaceEqText(content: string): { preamp: number; bands: Auto
     // Ví dụ: "Filter 1: ON PK Fc 20 Hz Gain 1.2 dB Q 1.41"
     // hoặc: "Filter: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.71"
     // hoặc: "Filter 2: ON HSC Fc 10000 Hz Gain -2 dB Q 0.7"
-    const filterMatch = trimmed.match(/Filter(?:\s*\d+)?\s*:\s*(ON|OFF)?\s*([A-Z]+)\s+Fc\s+([0-9.]+)\s*Hz\s+Gain\s+([+-]?[0-9.]+)\s*dB\s+Q\s+([0-9.]+)/i)
+    const filterMatch = trimmed.match(
+      /Filter(?:\s*\d+)?\s*:\s*(ON|OFF)?\s*([A-Z]+)\s+Fc\s+([0-9.]+)\s*Hz\s+Gain\s+([+-]?[0-9.]+)\s*dB\s+Q\s+([0-9.]+)/i
+    )
     if (filterMatch) {
       const state = filterMatch[1]?.toUpperCase()
       if (state === 'OFF') continue // Bỏ qua nếu filter đang tắt
@@ -53,8 +55,10 @@ export function parsePeaceEqText(content: string): { preamp: number; bands: Auto
 
       let filterType: 'peaking' | 'lowshelf' | 'highshelf' | 'lowpass' | 'highpass' = 'peaking'
       if (rawType === 'PK' || rawType === 'PEAK' || rawType === 'PEAKING') filterType = 'peaking'
-      else if (rawType === 'LSC' || rawType === 'LS' || rawType === 'LOWSHELF') filterType = 'lowshelf'
-      else if (rawType === 'HSC' || rawType === 'HS' || rawType === 'HIGHSHELF') filterType = 'highshelf'
+      else if (rawType === 'LSC' || rawType === 'LS' || rawType === 'LOWSHELF')
+        filterType = 'lowshelf'
+      else if (rawType === 'HSC' || rawType === 'HS' || rawType === 'HIGHSHELF')
+        filterType = 'highshelf'
       else if (rawType === 'LP' || rawType === 'LOWPASS') filterType = 'lowpass'
       else if (rawType === 'HP' || rawType === 'HIGHPASS') filterType = 'highpass'
 
@@ -70,7 +74,9 @@ export function parsePeaceEqText(content: string): { preamp: number; bands: Auto
 
     // 3. Phân tích định dạng đơn giản (CSV / Tabular / AutoEQ fixed band):
     // Ví dụ: "31.5 2.5 1.4 PK" hoặc "100 -3.2"
-    const simpleMatch = trimmed.match(/^([0-9.]+)\s+([+-]?[0-9.]+)(?:\s+([0-9.]+))?(?:\s+([A-Z]+))?$/i)
+    const simpleMatch = trimmed.match(
+      /^([0-9.]+)\s+([+-]?[0-9.]+)(?:\s+([0-9.]+))?(?:\s+([A-Z]+))?$/i
+    )
     if (simpleMatch) {
       const freq = parseFloat(simpleMatch[1])
       const gain = parseFloat(simpleMatch[2])
@@ -380,7 +386,7 @@ export const BUILTIN_AUTOEQ_PROFILES: AutoEqProfile[] = [
   // --- TANGZU / 7HZ / TRUTHEAR / KZ ---
   {
     id: 'tangzu-waner',
-    name: 'Wan\'er S.G',
+    name: "Wan'er S.G",
     brand: 'Tangzu',
     category: 'In-ear',
     preamp: -3.0,

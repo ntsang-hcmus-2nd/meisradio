@@ -4,7 +4,8 @@ import fs from 'fs'
 import path from 'path'
 
 export interface UpdaterStatus {
-  status: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  status:
+    'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
   currentVersion: string
   latestVersion?: string
   releaseNotes?: string
@@ -70,7 +71,9 @@ export function initAutoUpdater(): void {
     if (typeof info.releaseNotes === 'string') {
       releaseNotesStr = info.releaseNotes
     } else if (Array.isArray(info.releaseNotes)) {
-      releaseNotesStr = info.releaseNotes.map((n) => (typeof n === 'string' ? n : n.note)).join('\n')
+      releaseNotesStr = info.releaseNotes
+        .map((n) => (typeof n === 'string' ? n : n.note))
+        .join('\n')
     }
 
     updaterStatus = {
@@ -160,7 +163,7 @@ export function initAutoUpdater(): void {
       updaterStatus = {
         ...updaterStatus,
         status: !app.isPackaged ? 'not-available' : 'error',
-        error: !app.isPackaged ? undefined : (err?.message || 'Check for updates failed')
+        error: !app.isPackaged ? undefined : err?.message || 'Check for updates failed'
       }
       broadcastStatus()
       return { success: !app.isPackaged, error: err?.message, status: updaterStatus }

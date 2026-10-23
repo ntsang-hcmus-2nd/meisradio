@@ -85,7 +85,7 @@ export function useListeningTracker(): void {
           // Nếu chưa đạt ngưỡng tối thiểu: bỏ qua (skip nhanh)
           if (roundedDur < threshold) return
 
-          const filePath = sess.track.filePath || sess.track.id || ''
+          const filePath = sess.track.id || sess.track.filePath || ''
           // Đánh dấu IPC đang bay TRƯỚC khi await để các nhịp heartbeat
           // và các lần flush khác thấy được trạng thái này
           sess.syncing = true

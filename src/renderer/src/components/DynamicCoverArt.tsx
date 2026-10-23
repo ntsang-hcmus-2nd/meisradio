@@ -3,7 +3,7 @@ import { ListMusic } from 'lucide-react'
 
 export type CoverTier = 'sm' | 'md' | 'lg' | 'xl' | 'original'
 
-export const TIER_SIZES: Record<CoverTier, number> = {
+const TIER_SIZES: Record<CoverTier, number> = {
   sm: 96, // List item (40-48px @ 2x DPR)
   md: 200, // Player bar (56px), Mini player (96px), small cards (120-140px)
   lg: 360, // Medium/large grid cards (160-260px @ 2x DPR)
@@ -45,20 +45,12 @@ export interface DynamicCoverArtProps {
   style?: React.CSSProperties
 }
 
-import {
-  getGlobalStreamPort,
-  setGlobalStreamPort,
-  onStreamPortChange,
-  extractRawFilePath,
-  formatImageSource
-} from '../utils/urlUtils'
-
-export { getGlobalStreamPort, setGlobalStreamPort }
+import { getGlobalStreamPort, onStreamPortChange, extractRawFilePath } from '../utils/urlUtils'
 
 /**
  * Trợ thủ tạo URL ảnh bìa đã scale linh hoạt từ backend streamServer hoặc high-res CDN
  */
-export function resolveCoverUrl({
+function resolveCoverUrl({
   track,
   src,
   highResSrc,
@@ -196,7 +188,7 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
         setCurrentPort(syncPort)
       }
       return unsub
-    }, [streamPort])
+    }, [streamPort, currentPort])
 
     const resolvedUrl = useMemo(() => {
       if (isLite) return null
@@ -209,20 +201,7 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
         tier,
         size
       })
-    }, [
-      isLite,
-      track?.id,
-      track?.filePath,
-      track?.coverArt,
-      track?.coverArtHighRes,
-      track?.isOnline,
-      src,
-      highResSrc,
-      trackPath,
-      currentPort,
-      tier,
-      size
-    ])
+    }, [isLite, track, src, highResSrc, trackPath, currentPort, tier, size])
 
     // Reset error state khi URL thay đổi
     useEffect(() => {
@@ -333,85 +312,3 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
 )
 
 DynamicCoverArt.displayName = 'DynamicCoverArt'
-
-// Chuẩn hóa đường dẫn hình ảnh cho Background (Hỗ trợ webSecurity: true và ký tự đặc biệt #, ?, %)
-export const normalizeImagePath = (input: string): string => {
-  return formatImageSource(input)
-}
-
-// Bộ nhớ đệm màu chủ đạo trong RAM (LRU Cache tối đa 50 bài hát gần nhất)
-export const MAX_DOMINANT_CACHE = 50
-export const dominantColorCache: Record<string, string> = {}
-
-// Khởi tạo và nạp trước Theme Colors Cache từ Main Process vào RAM
-if (typeof window !== 'undefined' && (window as any).api?.getThemeColorsCache) {
-  ;(window as any).api
-    .getThemeColorsCache()
-    .then((cached: Record<string, string>) => {
-      if (cached && typeof cached === 'object') {
-        Object.assign(dominantColorCache, cached)
-      }
-    })
-    .catch(() => {})
-}
-
-export const saveDominantColorToCache = (key: string, val: string) => {
-  if (!key) return
-  const keys = Object.keys(dominantColorCache)
-  if (keys.length >= MAX_DOMINANT_CACHE) {
-    const oldestKey = keys[0]
-    if (oldestKey) delete dominantColorCache[oldestKey]
-  }
-  dominantColorCache[key] = val
-}
-
-// Hàm phân tích màu chủ đạo bằng Canvas (Tối ưu Cache)
-export const getDominantColor = (imageSrc: string, callback: (color: string) => void) => {
-  if (!imageSrc) return
-  const normKey = normalizeImagePath(imageSrc)
-  const cached = dominantColorCache[imageSrc] || (normKey ? dominantColorCache[normKey] : undefined)
-  if (cached) {
-    callback(cached)
-    return
-  }
-  const img = new Image()
-  const safeSrc = formatImageSource(imageSrc)
-  const targetSrc = safeSrc || imageSrc
-  if (targetSrc.startsWith('http://') || targetSrc.startsWith('https://')) {
-    img.crossOrigin = 'Anonymous'
-  }
-  img.onload = () => {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    if (!ctx) return
-
-    // Tối ưu CPU/RAM: Thu nhỏ ảnh xuống 64x64 để quét siêu tốc
-    canvas.width = 64
-    canvas.height = 64
-    ctx.drawImage(img, 0, 0, 64, 64)
-
-    const data = ctx.getImageData(0, 0, 64, 64).data
-    let r = 0,
-      g = 0,
-      b = 0,
-      count = 0
-    for (let i = 0; i < data.length; i += 16) {
-      r += data[i]
-      g += data[i + 1]
-      b += data[i + 2]
-      count++
-    }
-    if (count === 0) count = 1
-    r = Math.floor(r / count)
-    g = Math.floor(g / count)
-    b = Math.floor(b / count)
-    const colorStr = `rgba(${Math.max(r - 30, 0)}, ${Math.max(g - 30, 0)}, ${Math.max(b - 30, 0)}, 0.4)`
-    saveDominantColorToCache(imageSrc, colorStr)
-    dominantColorCache[imageSrc] = colorStr
-    if (normKey && normKey !== imageSrc) {
-      dominantColorCache[normKey] = colorStr
-    }
-    callback(colorStr)
-  }
-  img.src = targetSrc
-}

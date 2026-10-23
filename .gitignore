@@ -158,3 +158,5 @@ tests/
 serverplan.md
 todo.md
 .vscode/
+touched.txt
+.eslint-warnings.json

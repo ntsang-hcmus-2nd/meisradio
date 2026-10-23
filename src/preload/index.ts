@@ -3,52 +3,83 @@ import { contextBridge, ipcRenderer, webFrame } from 'electron'
 const api = {
   getConfig: () => ipcRenderer.invoke('music:getConfig'),
   saveConfig: (data: any) => ipcRenderer.invoke('music:saveConfig', data),
-  registerDroppedFiles: (paths: string[]) => ipcRenderer.invoke('music:registerDroppedFiles', paths),
-  
-  updateTags: (filePath: string, tags: any, imagePath: string | null) => ipcRenderer.invoke('music:updateTags', filePath, tags, imagePath),
+  registerDroppedFiles: (paths: string[]) =>
+    ipcRenderer.invoke('music:registerDroppedFiles', paths),
+
+  updateTags: (filePath: string, tags: any, imagePath: string | null) =>
+    ipcRenderer.invoke('music:updateTags', filePath, tags, imagePath),
   getTrackDetails: (filePath: string) => ipcRenderer.invoke('music:getTrackDetails', filePath),
   selectImageFile: () => ipcRenderer.invoke('music:selectImageFile'),
 
   openMusicFolder: () => ipcRenderer.invoke('music:openFolder'),
-downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ipcRenderer.invoke('music:downloadCloudFile', url, filename, existingTracks),
-  downloadMultipleFiles: (files: any[], existingTracks?: any[]) => ipcRenderer.invoke('music:downloadMultipleFiles', files, existingTracks),
+  downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) =>
+    ipcRenderer.invoke('music:downloadCloudFile', url, filename, existingTracks),
+  downloadMultipleFiles: (files: any[], existingTracks?: any[]) =>
+    ipcRenderer.invoke('music:downloadMultipleFiles', files, existingTracks),
   fetchDriveFiles: (folderId: string) => ipcRenderer.invoke('music:fetchDriveFiles', folderId),
   setLibraryFolder: () => ipcRenderer.invoke('music:setLibraryFolder'),
   addLibraryFolder: () => ipcRenderer.invoke('music:addLibraryFolder'),
-  removeLibraryFolder: (folderPath: string) => ipcRenderer.invoke('music:removeLibraryFolder', folderPath),
-  updateLibraryFolder: (oldPath: string) => ipcRenderer.invoke('music:updateLibraryFolder', oldPath),
-  getLibrary: (forceRefresh?: boolean, hardRescan?: boolean) => ipcRenderer.invoke('music:getLibrary', forceRefresh, hardRescan),
-  renamePlaylist: (oldName: string, newName: string) => ipcRenderer.invoke('music:renamePlaylist', oldName, newName),
-  setPlaylistThumbnail: (playlistName: string) => ipcRenderer.invoke('music:setPlaylistThumbnail', playlistName),
+  removeLibraryFolder: (folderPath: string) =>
+    ipcRenderer.invoke('music:removeLibraryFolder', folderPath),
+  updateLibraryFolder: (oldPath: string) =>
+    ipcRenderer.invoke('music:updateLibraryFolder', oldPath),
+  getLibrary: (forceRefresh?: boolean, hardRescan?: boolean) =>
+    ipcRenderer.invoke('music:getLibrary', forceRefresh, hardRescan),
+  renamePlaylist: (oldName: string, newName: string) =>
+    ipcRenderer.invoke('music:renamePlaylist', oldName, newName),
+  setPlaylistThumbnail: (playlistName: string) =>
+    ipcRenderer.invoke('music:setPlaylistThumbnail', playlistName),
   autoGeneratePlaylists: () => ipcRenderer.invoke('music:autoGeneratePlaylists'),
-  
+
   // User Playlists (Virtual, Zero disk duplication)
   getUserPlaylists: () => ipcRenderer.invoke('music:getUserPlaylists'),
-  createUserPlaylist: (name: string, description?: string, thumbnail?: string | null) => ipcRenderer.invoke('music:createUserPlaylist', name, description, thumbnail),
-  deleteUserPlaylist: (playlistId: string) => ipcRenderer.invoke('music:deleteUserPlaylist', playlistId),
-  renameUserPlaylist: (playlistId: string, newName: string) => ipcRenderer.invoke('music:renameUserPlaylist', playlistId, newName),
-  updateUserPlaylist: (playlistId: string, updates: { name?: string; description?: string; thumbnail?: string | null; customImagePath?: string }) => ipcRenderer.invoke('music:updateUserPlaylist', playlistId, updates),
+  createUserPlaylist: (name: string, description?: string, thumbnail?: string | null) =>
+    ipcRenderer.invoke('music:createUserPlaylist', name, description, thumbnail),
+  deleteUserPlaylist: (playlistId: string) =>
+    ipcRenderer.invoke('music:deleteUserPlaylist', playlistId),
+  renameUserPlaylist: (playlistId: string, newName: string) =>
+    ipcRenderer.invoke('music:renameUserPlaylist', playlistId, newName),
+  updateUserPlaylist: (
+    playlistId: string,
+    updates: {
+      name?: string
+      description?: string
+      thumbnail?: string | null
+      customImagePath?: string
+    }
+  ) => ipcRenderer.invoke('music:updateUserPlaylist', playlistId, updates),
   pickImage: () => ipcRenderer.invoke('music:pickImage'),
-  setUserPlaylistThumbnail: (playlistId: string, customPath?: string) => ipcRenderer.invoke('music:setUserPlaylistThumbnail', playlistId, customPath),
-  addTracksToUserPlaylist: (playlistId: string, trackPaths: string[]) => ipcRenderer.invoke('music:addTracksToUserPlaylist', playlistId, trackPaths),
-  removeTrackFromUserPlaylist: (playlistId: string, trackPath: string) => ipcRenderer.invoke('music:removeTrackFromUserPlaylist', playlistId, trackPath),
-  reorderUserPlaylistTracks: (playlistId: string, trackIds: string[]) => ipcRenderer.invoke('music:reorderUserPlaylistTracks', playlistId, trackIds),
+  setUserPlaylistThumbnail: (playlistId: string, customPath?: string) =>
+    ipcRenderer.invoke('music:setUserPlaylistThumbnail', playlistId, customPath),
+  addTracksToUserPlaylist: (playlistId: string, trackPaths: string[]) =>
+    ipcRenderer.invoke('music:addTracksToUserPlaylist', playlistId, trackPaths),
+  removeTrackFromUserPlaylist: (playlistId: string, trackPath: string) =>
+    ipcRenderer.invoke('music:removeTrackFromUserPlaylist', playlistId, trackPath),
+  reorderUserPlaylistTracks: (playlistId: string, trackIds: string[]) =>
+    ipcRenderer.invoke('music:reorderUserPlaylistTracks', playlistId, trackIds),
   readLrcFile: (filePath: string) => ipcRenderer.invoke('music:read-lyrics', filePath),
-  readAudioBuffer: (filePath: string) => ipcRenderer.invoke('music:readAudioBuffer', filePath),
-  extractPlaylistThumbnail: (playlistName: string) => ipcRenderer.invoke('music:extractPlaylistThumbnail', playlistName),
-  fetchMusixmatchLyrics: (title: string, artist: string, album?: string, duration?: number) => ipcRenderer.invoke('music:fetchMusixmatchLyrics', title, artist, album, duration),
-  fetchLrclibLyrics: (title: string, artist: string, album?: string, duration?: number) => ipcRenderer.invoke('music:fetchLrclibLyrics', title, artist, album, duration),
-  importLocalFiles: (targetFolder?: string, existingTracks?: any[]) => ipcRenderer.invoke('music:importLocalFiles', targetFolder, existingTracks),
+  readAudioBuffer: (filePath: string, startTime?: number, endTime?: number) =>
+    ipcRenderer.invoke('music:readAudioBuffer', filePath, startTime, endTime),
+  extractPlaylistThumbnail: (playlistName: string) =>
+    ipcRenderer.invoke('music:extractPlaylistThumbnail', playlistName),
+  fetchMusixmatchLyrics: (title: string, artist: string, album?: string, duration?: number) =>
+    ipcRenderer.invoke('music:fetchMusixmatchLyrics', title, artist, album, duration),
+  fetchLrclibLyrics: (title: string, artist: string, album?: string, duration?: number) =>
+    ipcRenderer.invoke('music:fetchLrclibLyrics', title, artist, album, duration),
+  importLocalFiles: (targetFolder?: string, existingTracks?: any[]) =>
+    ipcRenderer.invoke('music:importLocalFiles', targetFolder, existingTracks),
   onGlobalShortcut: (callback: (action: string) => void) => {
     const handler = (_event: any, action: string) => callback(action)
     ipcRenderer.on('global-shortcut', handler)
     return () => ipcRenderer.removeListener('global-shortcut', handler)
   },
   getTrackCover: (filePath: string) => ipcRenderer.invoke('music:getTrackCover', filePath),
-  getOriginalTrackCover: (filePath: string, size?: number) => ipcRenderer.invoke('music:getOriginalTrackCover', filePath, size),
+  getOriginalTrackCover: (filePath: string, size?: number) =>
+    ipcRenderer.invoke('music:getOriginalTrackCover', filePath, size),
   getStreamPort: () => ipcRenderer.invoke('music:getStreamPort'),
   getStreamPortSync: () => ipcRenderer.sendSync('music:getStreamPortSync'),
-  checkLocalAudioFile: (filePath: string) => ipcRenderer.invoke('music:checkLocalAudioFile', filePath),
+  checkLocalAudioFile: (filePath: string) =>
+    ipcRenderer.invoke('music:checkLocalAudioFile', filePath),
   onDownloadProgress: (callback: (data: any) => void) => {
     const handler = (_event: any, data: any) => callback(data)
     ipcRenderer.on('download-progress', handler)
@@ -56,11 +87,15 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   },
   updateTrayConfig: (config: any) => ipcRenderer.invoke('music:updateTrayConfig', config),
   toggleMiniPlayer: (isMini: boolean) => ipcRenderer.invoke('music:toggleMiniPlayer', isMini),
-  createPlaylist: (playlistName: string) => ipcRenderer.invoke('music:createPlaylist', playlistName),
-  deletePlaylist: (playlistName: string) => ipcRenderer.invoke('music:deletePlaylist', playlistName),
-  deleteTrack: (trackPath: string, deletePermanently?: boolean) => ipcRenderer.invoke('music:deleteTrack', trackPath, deletePermanently),
+  createPlaylist: (playlistName: string) =>
+    ipcRenderer.invoke('music:createPlaylist', playlistName),
+  deletePlaylist: (playlistName: string) =>
+    ipcRenderer.invoke('music:deletePlaylist', playlistName),
+  deleteTrack: (trackPath: string, deletePermanently?: boolean) =>
+    ipcRenderer.invoke('music:deleteTrack', trackPath, deletePermanently),
   showInFolder: (filePath: string) => ipcRenderer.invoke('music:showInFolder', filePath),
-  addTrackToPlaylist: (playlistName: string, trackPath: string) => ipcRenderer.invoke('music:addTrackToPlaylist', playlistName, trackPath),
+  addTrackToPlaylist: (playlistName: string, trackPath: string) =>
+    ipcRenderer.invoke('music:addTrackToPlaylist', playlistName, trackPath),
   forceGC: () => ipcRenderer.invoke('music:forceGC'),
   searchOnline: (query: string) => ipcRenderer.invoke('music:searchOnline', query),
   getStreamUrl: (track: any) => ipcRenderer.invoke('music:getStreamUrl', track),
@@ -82,20 +117,30 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   preloadStream: (targetId: string) => ipcRenderer.invoke('music:preloadStream', targetId),
 
   // BASS & Bit-Perfect Audio API (WASAPI & ASIO + DSD Native)
-  bassPlay: (url: string, deviceIdOrCrossfade?: any, exclusive?: boolean, startTime?: number, endTime?: number) =>
-    ipcRenderer.invoke('bass:play', url, deviceIdOrCrossfade, exclusive, startTime, endTime),
+  bassPlay: (
+    url: string,
+    deviceIdOrCrossfade?: any,
+    exclusive?: boolean,
+    startTime?: number,
+    endTime?: number
+  ) => ipcRenderer.invoke('bass:play', url, deviceIdOrCrossfade, exclusive, startTime, endTime),
   bassSetGapless: (enabled: boolean) => ipcRenderer.invoke('bass:setGapless', enabled),
   bassPreloadNext: (filePath: string, startTime?: number, endTime?: number) =>
     ipcRenderer.invoke('bass:preloadNext', filePath, startTime, endTime),
   bassResume: () => ipcRenderer.invoke('bass:resume'),
   bassPause: () => ipcRenderer.invoke('bass:pause'),
   bassStop: () => ipcRenderer.invoke('bass:stop'),
-  bassSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') => ipcRenderer.invoke('bass:seek', pos, mode),
+  bassSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') =>
+    ipcRenderer.invoke('bass:seek', pos, mode),
   bassSetVolume: (vol: number) => ipcRenderer.invoke('bass:setVolume', vol),
-  bassSetEqualizer: (bands: any[], preamp?: number) => ipcRenderer.invoke('bass:setEqualizer', bands, preamp),
-  setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setBitPerfect', val, currentVol, outputType),
-  setBassBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setBitPerfect', val, currentVol, outputType),
-  setBitPerfectOutputType: (type: 'wasapi' | 'asio') => ipcRenderer.invoke('bass:setOutputType', type),
+  bassSetEqualizer: (bands: any[], preamp?: number) =>
+    ipcRenderer.invoke('bass:setEqualizer', bands, preamp),
+  setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') =>
+    ipcRenderer.invoke('bass:setBitPerfect', val, currentVol, outputType),
+  setBassBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') =>
+    ipcRenderer.invoke('bass:setBitPerfect', val, currentVol, outputType),
+  setBitPerfectOutputType: (type: 'wasapi' | 'asio') =>
+    ipcRenderer.invoke('bass:setOutputType', type),
   setAudioDevice: (deviceId: string) => ipcRenderer.invoke('music:setAudioDevice', deviceId),
   getAudioDevices: (type?: 'wasapi' | 'asio') => ipcRenderer.invoke('music:getAudioDevices', type),
 
@@ -170,9 +215,11 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   mpvResume: () => ipcRenderer.invoke('bass:resume'),
   mpvPause: () => ipcRenderer.invoke('bass:pause'),
   mpvStop: () => ipcRenderer.invoke('bass:stop'),
-  mpvSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') => ipcRenderer.invoke('bass:seek', pos, mode),
+  mpvSeek: (pos: number, mode: 'relative' | 'absolute' = 'absolute') =>
+    ipcRenderer.invoke('bass:seek', pos, mode),
   mpvSetVolume: (vol: number) => ipcRenderer.invoke('bass:setVolume', vol),
-  mpvSetEqualizer: (bands: any[], preamp?: number) => ipcRenderer.invoke('bass:setEqualizer', bands, preamp),
+  mpvSetEqualizer: (bands: any[], preamp?: number) =>
+    ipcRenderer.invoke('bass:setEqualizer', bands, preamp),
   onMpvTime: (callback: (val: number) => void) => {
     const handler = (_e: any, val: number) => callback(val)
     ipcRenderer.on('bass:time', handler)
@@ -204,7 +251,8 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     return () => ipcRenderer.removeListener('bass:audio-out-params', handler)
   },
   getThemeColorsCache: () => ipcRenderer.invoke('music:getThemeColorsCache'),
-  cacheThemeColors: (trackPath: string, colors: any) => ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),
+  cacheThemeColors: (trackPath: string, colors: any) =>
+    ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),
   clearMemoryCache: () => ipcRenderer.invoke('app:clearMemoryCache'),
   clearWebFrameCache: () => {
     try {
@@ -214,7 +262,7 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   forceRendererGC: () => {
     try {
       if (typeof (globalThis as any).gc === 'function') {
-        (globalThis as any).gc()
+        ;(globalThis as any).gc()
       }
     } catch (_) {}
   },
@@ -239,16 +287,20 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
   discordGetStatus: () => ipcRenderer.invoke('discord:getStatus'),
 
   // Soulseek Lossless Download Engine
-  soulseekLogin: (credentials: { user: string; pass: string; remember?: boolean }) => ipcRenderer.invoke('soulseek:login', credentials),
+  soulseekLogin: (credentials: { user: string; pass: string; remember?: boolean }) =>
+    ipcRenderer.invoke('soulseek:login', credentials),
   soulseekLogout: () => ipcRenderer.invoke('soulseek:logout'),
   soulseekGetStatus: () => ipcRenderer.invoke('soulseek:getStatus'),
-  soulseekSearch: (query: string, timeout?: number) => ipcRenderer.invoke('soulseek:search', query, timeout),
+  soulseekSearch: (query: string, timeout?: number) =>
+    ipcRenderer.invoke('soulseek:search', query, timeout),
   soulseekDownload: (item: any) => ipcRenderer.invoke('soulseek:download', item),
   soulseekCancelDownload: (id: string) => ipcRenderer.invoke('soulseek:cancelDownload', id),
   soulseekSelectDownloadFolder: () => ipcRenderer.invoke('soulseek:selectDownloadFolder'),
-  soulseekSetDownloadFolder: (folder: string) => ipcRenderer.invoke('soulseek:setDownloadFolder', folder),
+  soulseekSetDownloadFolder: (folder: string) =>
+    ipcRenderer.invoke('soulseek:setDownloadFolder', folder),
   soulseekOpenDownloadFolder: () => ipcRenderer.invoke('soulseek:openDownloadFolder'),
-  soulseekClearCompletedDownloads: (): Promise<any> => ipcRenderer.invoke('soulseek:clearCompletedDownloads'),
+  soulseekClearCompletedDownloads: (): Promise<any> =>
+    ipcRenderer.invoke('soulseek:clearCompletedDownloads'),
   onSoulseekStatusChanged: (callback: (status: any) => void) => {
     const handler = (_event: any, status: any) => callback(status)
     ipcRenderer.on('soulseek:status-changed', handler)
@@ -279,13 +331,15 @@ downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => ip
     const handler = (_event: any, status: any) => callback(status)
     ipcRenderer.on('updater:status-changed', handler)
     return () => ipcRenderer.removeListener('updater:status-changed', handler)
-  },
+  }
 }
 
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('api', api)
-  } catch (error) { console.error(error) }
+  } catch (error) {
+    console.error(error)
+  }
 } else {
   // @ts-ignore
   window.api = api

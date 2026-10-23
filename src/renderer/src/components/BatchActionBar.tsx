@@ -4,10 +4,7 @@ import { useTranslation } from '../locales'
 import { useLibraryStore } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
 import { useUIStore } from '../stores/uiStore'
-import {
-  trackMatchesKeys,
-  removeTrackKeysFromStores
-} from '../utils/trackStateUtils'
+import { trackMatchesKeys, removeTrackKeysFromStores } from '../utils/trackStateUtils'
 
 export interface BatchActionBarProps {
   selectedTrackIds?: string[]
@@ -53,9 +50,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
   const getMatchedTracks = () => {
     const idSet = new Set(selectedIds)
-    return libraryTracks.filter(
-      (t) => idSet.has(t.id) || (t.filePath && idSet.has(t.filePath))
-    )
+    return libraryTracks.filter((t) => idSet.has(t.id) || (t.filePath && idSet.has(t.filePath)))
   }
 
   const handlePlaySelected = () => {
@@ -69,7 +64,10 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       usePlayerStore.getState().setPlayQueue(matched)
       usePlayerStore.getState().setCurrentTrack(matched[0])
       usePlayerStore.getState().setIsPlaying(true)
-      showToast(`${t('batchActions.playSelected')}: ${matched.length} ${t('common.tracks')}`, 'success')
+      showToast(
+        `${t('batchActions.playSelected')}: ${matched.length} ${t('common.tracks')}`,
+        'success'
+      )
     }
   }
 
@@ -83,7 +81,10 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     if (matched.length > 0) {
       const currentQueue = usePlayerStore.getState().playQueue || []
       usePlayerStore.getState().setPlayQueue([...currentQueue, ...matched])
-      showToast(t('toasts.addedToQueue', { title: `${matched.length} ${t('common.tracks')}` }), 'success')
+      showToast(
+        t('toasts.addedToQueue', { title: `${matched.length} ${t('common.tracks')}` }),
+        'success'
+      )
     }
   }
 
@@ -132,7 +133,10 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
         .getState()
         .setLibraryTracks((prev) => prev.filter((trk) => !trackMatchesKeys(trk, keySet)))
       await removeTrackKeysFromStores(paths)
-      showToast(t('toasts.movedToTrash', { title: `${paths.length} ${t('common.tracks')}` }), 'info')
+      showToast(
+        t('toasts.movedToTrash', { title: `${paths.length} ${t('common.tracks')}` }),
+        'info'
+      )
       handleClear()
     }
   }
@@ -145,7 +149,10 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       <div className="flex items-center gap-1.5 pr-2 border-r border-zinc-700/60 shrink-0">
         <CheckSquare size={15} className="text-theme-10" />
         <span className="font-semibold text-white">
-          {count} <span className="text-zinc-400 font-normal">{t('batchActions.selectedCount') || 'selected'}</span>
+          {count}{' '}
+          <span className="text-zinc-400 font-normal">
+            {t('batchActions.selectedCount') || 'selected'}
+          </span>
         </span>
       </div>
 
@@ -166,7 +173,9 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 transition cursor-pointer"
         >
           <ListPlus size={14} className="text-theme-10" />
-          <span className="hidden sm:inline">{t('batchActions.addSelectedToQueue') || 'Queue'}</span>
+          <span className="hidden sm:inline">
+            {t('batchActions.addSelectedToQueue') || 'Queue'}
+          </span>
         </button>
 
         {/* Add to Favorites */}

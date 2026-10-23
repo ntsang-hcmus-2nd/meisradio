@@ -26,7 +26,7 @@ export const CustomSelect: React.FC<SelectProps> = ({ options, value, onChange }
           </option>
         ))}
       </select>
-      
+
       {/* Mũi tên tùy chỉnh phía bên phải */}
       <div className="absolute inset-y-0 right-0 flex items-center px-2.5 pointer-events-none text-zinc-400">
         <ChevronDown size={14} />

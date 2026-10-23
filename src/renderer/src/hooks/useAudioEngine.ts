@@ -10,6 +10,7 @@ import {
 import { useTranslation, useLanguage } from '../locales'
 import { sliderToGain } from '../utils/audioUtils'
 import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUtils'
+import { isSameTrack } from '../utils/trackStateUtils'
 import { fisherYatesShuffle } from '../utils/arrayUtils'
 
 export const getBrowserSinkId = (deviceId: string | null | undefined): string => {
@@ -104,10 +105,7 @@ export function useAudioEngine() {
     setCloudActionTrack
   } = useSettingsStore()
 
-  const {
-    libraryTracks,
-    setRecentlyPlayed
-  } = useLibraryStore()
+  const { libraryTracks, setRecentlyPlayed } = useLibraryStore()
 
   const { showToast, setCustomDialog } = useUIStore()
   const { lyrics, setCurrentLyricIndex } = useLyricsStore()
@@ -136,33 +134,36 @@ export function useAudioEngine() {
     selectedDeviceRef.current = selectedDeviceId
   }, [selectedDeviceId])
 
-  const showAlert = (options: {
-    title?: string
-    message: string | React.ReactNode
-    confirmText?: string
-    onConfirm?: () => void
-  }) => {
-    setCustomDialog({
-      isOpen: true,
-      type: 'alert',
-      title: options.title,
-      message: options.message,
-      confirmText: options.confirmText || 'OK',
-      onConfirm: () => {
-        setCustomDialog(null)
-        options.onConfirm?.()
-      },
-      onCancel: () => {
-        setCustomDialog(null)
-      }
-    })
-  }
+  const showAlert = useCallback(
+    (options: {
+      title?: string
+      message: string | React.ReactNode
+      confirmText?: string
+      onConfirm?: () => void
+    }) => {
+      setCustomDialog({
+        isOpen: true,
+        type: 'alert',
+        title: options.title,
+        message: options.message,
+        confirmText: options.confirmText || 'OK',
+        onConfirm: () => {
+          setCustomDialog(null)
+          options.onConfirm?.()
+        },
+        onCancel: () => {
+          setCustomDialog(null)
+        }
+      })
+    },
+    [setCustomDialog]
+  )
 
   const resetWebAudioPipeline = useCallback(async () => {
     if (audioCtxRef.current) {
       try {
         await audioCtxRef.current.close()
-      } catch (e) {}
+      } catch {}
       audioCtxRef.current = null
     }
     sourceNodeRef.current = null
@@ -185,19 +186,22 @@ export function useAudioEngine() {
     crossfeedNodesRef.current.forEach((node) => {
       try {
         node.disconnect()
-      } catch (e) {}
+      } catch {}
     })
     crossfeedNodesRef.current = []
-    if (crossfeedGainNodeRef.current && crossfeedGainNodeRef.current !== crossfeedMergerNodeRef.current) {
+    if (
+      crossfeedGainNodeRef.current &&
+      crossfeedGainNodeRef.current !== crossfeedMergerNodeRef.current
+    ) {
       try {
         crossfeedGainNodeRef.current.disconnect()
-      } catch (e) {}
+      } catch {}
     }
     if (crossfeedMergerNodeRef.current) {
       try {
         // Ngắt connection crossfeedMerger → analyser của lần setup trước
         crossfeedMergerNodeRef.current.disconnect()
-      } catch (e) {}
+      } catch {}
     }
     crossfeedGainNodeRef.current = null
     crossfeedMergerNodeRef.current = null
@@ -209,11 +213,7 @@ export function useAudioEngine() {
       try {
         if (window.api && (window.api as any).getAudioDevices) {
           const res = await (window.api as any).getAudioDevices()
-          const devs = Array.isArray(res)
-            ? res
-            : Array.isArray(res?.devices)
-              ? res.devices
-              : []
+          const devs = Array.isArray(res) ? res : Array.isArray(res?.devices) ? res.devices : []
           setAvailableAudioDevices(devs)
         }
       } catch (e) {
@@ -256,9 +256,7 @@ export function useAudioEngine() {
     if (!currentTrack || !playQueue || playQueue.length === 0) return
 
     const currentIndex = playQueue.findIndex(
-      (t) =>
-        (t.filePath === currentTrack.filePath || t.id === currentTrack.id) &&
-        t.startTime === currentTrack.startTime
+      (t) => isSameTrack(t, currentTrack) && t.startTime === currentTrack.startTime
     )
     if (currentIndex === -1) return
 
@@ -279,11 +277,7 @@ export function useAudioEngine() {
       : null
     if (nextTrack && nextTrack.filePath && preloadKey && preloadedRef.current !== preloadKey) {
       preloadedRef.current = preloadKey
-      window.api?.bassPreloadNext?.(
-        nextTrack.filePath,
-        nextTrack.startTime,
-        nextTrack.endTime
-      )
+      window.api?.bassPreloadNext?.(nextTrack.filePath, nextTrack.startTime, nextTrack.endTime)
     }
   }, [currentTrack, playQueue, repeatMode, gaplessEnabled, bitPerfectEnabled])
 
@@ -306,7 +300,7 @@ export function useAudioEngine() {
       ) {
         try {
           await audioCtxRef.current.close()
-        } catch (e) {}
+        } catch {}
         if (isCancelled) return
         audioCtxRef.current = null
         sourceNodeRef.current = null
@@ -324,7 +318,7 @@ export function useAudioEngine() {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
         try {
           audioCtxRef.current = new AudioContextClass({ sampleRate: currentSampleRate })
-        } catch (e) {
+        } catch {
           audioCtxRef.current = new AudioContextClass()
         }
 
@@ -343,7 +337,7 @@ export function useAudioEngine() {
         try {
           if (!audioRef.current || !(audioRef.current instanceof HTMLAudioElement)) return
           sourceNodeRef.current = ctx.createMediaElementSource(audioRef.current)
-        } catch (e) {
+        } catch {
           return
         }
       }
@@ -364,22 +358,22 @@ export function useAudioEngine() {
 
       try {
         sourceNodeRef.current?.disconnect()
-      } catch (e) {}
+      } catch {}
       try {
         preampNodeRef.current?.disconnect()
-      } catch (e) {}
+      } catch {}
       try {
         analyserNodeRef.current?.disconnect()
-      } catch (e) {}
+      } catch {}
       try {
         compressorNodeRef.current?.disconnect()
-      } catch (e) {}
+      } catch {}
       filterNodesRef.current.forEach((node) => {
         try {
           node.disconnect()
           node.frequency.cancelScheduledValues(0)
           node.gain.cancelScheduledValues(0)
-        } catch (e) {}
+        } catch {}
       })
       filterNodesRef.current = []
       teardownCrossfeed()
@@ -387,10 +381,14 @@ export function useAudioEngine() {
       let replayGainMultiplier = 1.0
       if (!bitPerfectEnabled && replayGainMode !== 'off' && currentTrack) {
         let rgDb = 0
-        if (replayGainMode === 'track' && typeof (currentTrack as any).replayGainTrack === 'number') {
+        if (
+          replayGainMode === 'track' &&
+          typeof (currentTrack as any).replayGainTrack === 'number'
+        ) {
           rgDb = (currentTrack as any).replayGainTrack
         } else if (replayGainMode === 'album') {
-          rgDb = (currentTrack as any)?.replayGainAlbum ?? (currentTrack as any)?.replayGainTrack ?? 0
+          rgDb =
+            (currentTrack as any)?.replayGainAlbum ?? (currentTrack as any)?.replayGainTrack ?? 0
         }
         if (rgDb) {
           const linearRg = Math.pow(10, rgDb / 20)
@@ -491,6 +489,9 @@ export function useAudioEngine() {
     return () => {
       isCancelled = true
     }
+    // Deps cố ý thu gọn: rebuild graph nặng chỉ khi thêm/bớt band (length),
+    // đổi giá trị gain dùng realtime-effect bên dưới để không rè tiếng.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isEqEnabled,
     currentSampleRate,
@@ -512,10 +513,14 @@ export function useAudioEngine() {
       let replayGainMultiplier = 1.0
       if (!bitPerfectEnabled && replayGainMode !== 'off' && currentTrack) {
         let rgDb = 0
-        if (replayGainMode === 'track' && typeof (currentTrack as any).replayGainTrack === 'number') {
+        if (
+          replayGainMode === 'track' &&
+          typeof (currentTrack as any).replayGainTrack === 'number'
+        ) {
           rgDb = (currentTrack as any).replayGainTrack
         } else if (replayGainMode === 'album') {
-          rgDb = (currentTrack as any)?.replayGainAlbum ?? (currentTrack as any)?.replayGainTrack ?? 0
+          rgDb =
+            (currentTrack as any)?.replayGainAlbum ?? (currentTrack as any)?.replayGainTrack ?? 0
         }
         if (rgDb) {
           const linearRg = Math.pow(10, rgDb / 20)
@@ -631,9 +636,7 @@ export function useAudioEngine() {
     const unGapless = window.api?.onBassGaplessTransition
       ? window.api.onBassGaplessTransition(({ nextPath }) => {
           const currentIndex = playQueue.findIndex(
-            (t) =>
-              (t.filePath === currentTrack?.filePath || t.id === currentTrack?.id) &&
-              t.startTime === currentTrack?.startTime
+            (t) => isSameTrack(t, currentTrack) && t.startTime === currentTrack?.startTime
           )
           let candidateTrack: any = null
           if (repeatMode === 2) {
@@ -667,12 +670,14 @@ export function useAudioEngine() {
         })
       : undefined
 
-    const onParamsFn = (window.api as any)?.onBassAudioOutParams || (window.api as any)?.onBassAudioParams
-    const unParams = typeof onParamsFn === 'function'
-      ? onParamsFn((params: any) => {
-          setBassOutParams(params)
-        })
-      : undefined
+    const onParamsFn =
+      (window.api as any)?.onBassAudioOutParams || (window.api as any)?.onBassAudioParams
+    const unParams =
+      typeof onParamsFn === 'function'
+        ? onParamsFn((params: any) => {
+            setBassOutParams(params)
+          })
+        : undefined
 
     return () => {
       if (typeof unTime === 'function') unTime()
@@ -699,7 +704,10 @@ export function useAudioEngine() {
     setCurrentLyricIndex,
     setIsPlaying,
     setBassOutParams,
-    setCurrentTrack
+    setCurrentTrack,
+    setSleepTimerMode,
+    setSleepTimerRemaining,
+    showAlert
   ])
 
   // Watch BASS Play / Stop
@@ -776,6 +784,9 @@ export function useAudioEngine() {
         }
       }
     }
+    // Deps cố ý thu gọn: isPlaying bị loại trừ để pause/resume đi qua
+    // bassResume/bassPause thay vì mở lại stream BASS từ đầu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack, bitPerfectEnabled, bitPerfectType])
 
   // Watch EQ & Preamp for BASS
@@ -896,7 +907,10 @@ export function useAudioEngine() {
         const probe = await window.api?.checkLocalAudioFile?.(trackToPlay.filePath)
         if (probe && !probe.exists) {
           isSwitchingTrackRef.current = false
-          console.warn('[Audio] Bỏ qua phát — file nguồn không còn tồn tại:', probe.path || trackToPlay.filePath)
+          console.warn(
+            '[Audio] Bỏ qua phát — file nguồn không còn tồn tại:',
+            probe.path || trackToPlay.filePath
+          )
           showToast(t('player.fileMissingToast'), 'error')
           return
         }
@@ -958,7 +972,7 @@ export function useAudioEngine() {
               fadeAudio.load()
             }
           }, 50)
-        } catch (e) {}
+        } catch {}
       }
 
       // Khi crossfade đã bắt đầu và src sắp được thay bằng bài mới: giữ thẻ chính
@@ -1003,7 +1017,7 @@ export function useAudioEngine() {
       ].slice(0, 50)
       try {
         localStorage.setItem('meis_recent_played', JSON.stringify(updated))
-      } catch (e) {}
+      } catch {}
       return updated
     })
 
@@ -1037,7 +1051,7 @@ export function useAudioEngine() {
       return
     }
 
-    const currentIndex = playQueue.findIndex((t) => t.id === currentTrack.id)
+    const currentIndex = playQueue.findIndex((t) => isSameTrack(t, currentTrack))
     let nextIndex = currentIndex + 1
 
     if (nextIndex >= playQueue.length) {
@@ -1063,7 +1077,8 @@ export function useAudioEngine() {
           return
         } else {
           setIsPlaying(false)
-          if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api?.bassStop?.().catch(() => {})
+          if (bitPerfectEnabled || isDsdTrack(currentTrack))
+            window.api?.bassStop?.().catch(() => {})
           return
         }
       } else {
@@ -1136,7 +1151,7 @@ export function useAudioEngine() {
     }
     if (!playQueue || playQueue.length === 0) return
 
-    const currentIndex = playQueue.findIndex((t) => t.id === currentTrack.id)
+    const currentIndex = playQueue.findIndex((t) => isSameTrack(t, currentTrack))
     let prevIndex = currentIndex - 1
 
     if (prevIndex < 0) {
@@ -1227,18 +1242,21 @@ export function useAudioEngine() {
     handlePlayTrackRef.current = handlePlayTrack
   })
 
-  const handleRowClick = useCallback(async (track: any, contextList?: any[]) => {
-    if (contextList) {
-      setOriginalQueue(contextList)
-      const shuffleState = usePlayerStore.getState().isShuffle
-      setPlayQueue(shuffleState ? fisherYatesShuffle(contextList) : contextList)
-    }
-    if (track.isCloud && !track.isOnline) {
-      setCloudActionTrack(track)
-    } else {
-      handlePlayTrackRef.current(track)
-    }
-  }, [setOriginalQueue, setPlayQueue, setCloudActionTrack])
+  const handleRowClick = useCallback(
+    async (track: any, contextList?: any[]) => {
+      if (contextList) {
+        setOriginalQueue(contextList)
+        const shuffleState = usePlayerStore.getState().isShuffle
+        setPlayQueue(shuffleState ? fisherYatesShuffle(contextList) : contextList)
+      }
+      if (track.isCloud && !track.isOnline) {
+        setCloudActionTrack(track)
+      } else {
+        handlePlayTrackRef.current(track)
+      }
+    },
+    [setOriginalQueue, setPlayQueue, setCloudActionTrack]
+  )
 
   const handleVolumeUp = () => {
     const newVol = Math.min(1, volume + 0.05)
@@ -1264,8 +1282,10 @@ export function useAudioEngine() {
     setIsShuffle(newShuffle)
     if (newShuffle) {
       const current = currentTrack
-      const otherTracks = playQueue.filter((t) => t.id !== current?.id)
-      const shuffled = current ? [current, ...fisherYatesShuffle(otherTracks)] : fisherYatesShuffle(playQueue)
+      const otherTracks = playQueue.filter((t) => !isSameTrack(t, current))
+      const shuffled = current
+        ? [current, ...fisherYatesShuffle(otherTracks)]
+        : fisherYatesShuffle(playQueue)
       setPlayQueue(shuffled)
     } else {
       setPlayQueue(originalQueue)
@@ -1304,7 +1324,9 @@ export function useAudioEngine() {
       : libraryTracks
 
     const radioQueue = [track]
-    let pool = [...candidatePool.filter((t) => (t.id || t.filePath) !== (track.id || track.filePath))]
+    let pool = [
+      ...candidatePool.filter((t) => (t.id || t.filePath) !== (track.id || track.filePath))
+    ]
 
     while (radioQueue.length < 30 && pool.length > 0) {
       const last = radioQueue[radioQueue.length - 1]
@@ -1460,7 +1482,8 @@ export function useAudioEngine() {
     console.error(
       `[Audio Error] ${codeName} code=${code}`,
       mediaError.message || '(không có message từ trình duyệt)',
-      'src=', src ? src.slice(0, 300) : '(trống)'
+      'src=',
+      src ? src.slice(0, 300) : '(trống)'
     )
 
     setIsPlaying(false)
@@ -1479,7 +1502,10 @@ export function useAudioEngine() {
           return
         }
         if (probe && !probe.serving) {
-          console.error('[Audio Error] File nguồn tồn tại nhưng bị từ chối stream (HTTP 403):', probe.path)
+          console.error(
+            '[Audio Error] File nguồn tồn tại nhưng bị từ chối stream (HTTP 403):',
+            probe.path
+          )
         }
       } catch (_) {
         // Không xác minh được nguyên nhân → giữ thông báo chung chung phía dưới
@@ -1522,4 +1548,3 @@ export function useAudioEngine() {
     setSelectedDeviceId
   }
 }
-

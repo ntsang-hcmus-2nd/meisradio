@@ -101,47 +101,56 @@ export class DiscordRpcManager {
   private fetchAppInfo(clientId: string): void {
     try {
       // 1. Fetch RPC info to get Application Icon URL from Discord CDN
-      https.get(`https://discord.com/api/v10/applications/${clientId}/rpc`, res => {
-        let raw = ''
-        res.on('data', chunk => raw += chunk)
-        res.on('end', () => {
-          try {
-            const data = JSON.parse(raw)
-            if (data.icon) {
-              this.appIconUrl = `https://cdn.discordapp.com/app-icons/${clientId}/${data.icon}.png`
-              this.refreshPresence()
-            }
-          } catch (e) {}
+      https
+        .get(`https://discord.com/api/v10/applications/${clientId}/rpc`, (res) => {
+          let raw = ''
+          res.on('data', (chunk) => (raw += chunk))
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(raw)
+              if (data.icon) {
+                this.appIconUrl = `https://cdn.discordapp.com/app-icons/${clientId}/${data.icon}.png`
+                this.refreshPresence()
+              }
+            } catch {}
+          })
         })
-      }).on('error', () => {})
+        .on('error', () => {})
 
       // 2. Fetch Art Assets
-      https.get(`https://discord.com/api/v10/oauth2/applications/${clientId}/assets`, res => {
-        let raw = ''
-        res.on('data', chunk => raw += chunk)
-        res.on('end', () => {
-          try {
-            const list = JSON.parse(raw)
-            if (Array.isArray(list)) {
-              this.availableAssets = new Set(list.map((a: any) => a.name))
-              this.refreshPresence()
-            }
-          } catch (e) {}
+      https
+        .get(`https://discord.com/api/v10/oauth2/applications/${clientId}/assets`, (res) => {
+          let raw = ''
+          res.on('data', (chunk) => (raw += chunk))
+          res.on('end', () => {
+            try {
+              const list = JSON.parse(raw)
+              if (Array.isArray(list)) {
+                this.availableAssets = new Set(list.map((a: any) => a.name))
+                this.refreshPresence()
+              }
+            } catch {}
+          })
         })
-      }).on('error', () => {})
-    } catch (e) {}
+        .on('error', () => {})
+    } catch {}
   }
 
   private connect(): void {
     if (this.isConnected || this.isConnecting || !this.config.enabled) return
 
-    const targetClientId = (this.config.clientId && this.config.clientId.trim()) ? this.config.clientId.trim() : DEFAULT_DISCORD_CLIENT_ID
+    const targetClientId =
+      this.config.clientId && this.config.clientId.trim()
+        ? this.config.clientId.trim()
+        : DEFAULT_DISCORD_CLIENT_ID
     this.isConnecting = true
     this.fetchAppInfo(targetClientId)
 
     try {
       if (this.client) {
-        try { this.client.destroy() } catch (e) {}
+        try {
+          this.client.destroy()
+        } catch {}
         this.client = null
       }
 
@@ -169,7 +178,7 @@ export class DiscordRpcManager {
       this.client.login().catch(() => {
         this.handleDisconnect()
       })
-    } catch (err) {
+    } catch {
       this.handleDisconnect()
     }
   }
@@ -178,7 +187,9 @@ export class DiscordRpcManager {
     this.isConnected = false
     this.isConnecting = false
     if (this.client) {
-      try { this.client.destroy() } catch (e) {}
+      try {
+        this.client.destroy()
+      } catch {}
       this.client = null
     }
 
@@ -212,7 +223,7 @@ export class DiscordRpcManager {
           this.client.user.clearActivity().catch(() => {})
         }
         this.client.destroy()
-      } catch (e) {}
+      } catch {}
       this.client = null
     }
   }
@@ -300,8 +311,12 @@ export class DiscordRpcManager {
 
     // 1. Details & State
     if (showDetails) {
-      activity.details = title ? (title.length > 120 ? title.substring(0, 117) + '...' : title) : 'Unknown Title'
-      
+      activity.details = title
+        ? title.length > 120
+          ? title.substring(0, 117) + '...'
+          : title
+        : 'Unknown Title'
+
       let stateStr = ''
       if (artist && artist !== 'Unknown' && artist !== 'Unknown Artist') {
         stateStr = `by ${artist}`
@@ -314,7 +329,7 @@ export class DiscordRpcManager {
       }
       activity.state = stateStr.length > 120 ? stateStr.substring(0, 117) + '...' : stateStr
     } else {
-      activity.details = "Listening to Music"
+      activity.details = 'Listening to Music'
       activity.state = "Mei's Radio"
     }
 
@@ -325,7 +340,11 @@ export class DiscordRpcManager {
 
     // 3. Large Image (Cover Art or App Icon)
     let largeImage: string | undefined = undefined
-    if (showCover && coverArt && (coverArt.startsWith('http://') || coverArt.startsWith('https://'))) {
+    if (
+      showCover &&
+      coverArt &&
+      (coverArt.startsWith('http://') || coverArt.startsWith('https://'))
+    ) {
       largeImage = coverArt
     } else if (this.appIconUrl) {
       largeImage = this.appIconUrl
@@ -339,13 +358,16 @@ export class DiscordRpcManager {
 
     if (largeImage) {
       activity.largeImageKey = largeImage
-      activity.largeImageText = album && album !== 'Unknown' ? album : (title || "Mei's Radio")
+      activity.largeImageText = album && album !== 'Unknown' ? album : title || "Mei's Radio"
     }
 
     // 4. Small Image (Status & Audio Quality)
     const qualityParts: string[] = []
     if (showQuality) {
-      const isDsd = (format && /^(dsd|dsf|dff|dsdiff)/i.test(format)) || (sampleRate && sampleRate >= 2000000) || bitDepth === 1
+      const isDsd =
+        (format && /^(dsd|dsf|dff|dsdiff)/i.test(format)) ||
+        (sampleRate && sampleRate >= 2000000) ||
+        bitDepth === 1
       if (isDsd) {
         let dsdLabel = 'DSD'
         if (sampleRate) {
@@ -362,7 +384,11 @@ export class DiscordRpcManager {
         if (format) qualityParts.push(format.toUpperCase())
         if (bitDepth && bitDepth > 0) qualityParts.push(`${bitDepth}-bit`)
         if (sampleRate && sampleRate > 0) {
-          qualityParts.push(sampleRate >= 1000 ? `${(sampleRate / 1000).toFixed(1).replace('.0', '')}kHz` : `${sampleRate}Hz`)
+          qualityParts.push(
+            sampleRate >= 1000
+              ? `${(sampleRate / 1000).toFixed(1).replace('.0', '')}kHz`
+              : `${sampleRate}Hz`
+          )
         }
         if (bitrate && bitrate > 0 && !bitDepth) {
           qualityParts.push(`${Math.round(bitrate / 1000)}kbps`)
@@ -390,13 +416,17 @@ export class DiscordRpcManager {
     // 5. Buttons (Max 2 buttons allowed by Discord)
     const buttons: { label: string; url: string }[] = []
     if (showButtons) {
-      if (isOnline && onlineUrl && (onlineUrl.startsWith('http://') || onlineUrl.startsWith('https://'))) {
+      if (
+        isOnline &&
+        onlineUrl &&
+        (onlineUrl.startsWith('http://') || onlineUrl.startsWith('https://'))
+      ) {
         let label = 'Listen Along'
         if (platform === 'youtube') label = 'YouTube Music'
         else if (platform === 'soundcloud') label = 'SoundCloud'
         buttons.push({ label, url: onlineUrl })
       }
-      
+
       buttons.push({
         label: "Mei's Radio",
         url: 'https://github.com/subzerofroze/meisradio'
@@ -409,7 +439,7 @@ export class DiscordRpcManager {
 
     try {
       this.client.user.setActivity(activity).catch(() => {})
-    } catch (e) {}
+    } catch {}
   }
 
   private sendIdlePresence(): void {
@@ -417,7 +447,7 @@ export class DiscordRpcManager {
 
     try {
       const idleActivity: any = {
-        details: "Browsing Library",
+        details: 'Browsing Library',
         state: "Mei's Radio",
         instance: false,
         buttons: [
@@ -441,7 +471,7 @@ export class DiscordRpcManager {
       }
 
       this.client.user.setActivity(idleActivity).catch(() => {})
-    } catch (e) {}
+    } catch {}
   }
 
   public destroy(): void {

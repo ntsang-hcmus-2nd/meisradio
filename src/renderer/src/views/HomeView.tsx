@@ -122,9 +122,7 @@ export function HomeView({
             <h2 className="text-2xl lg:text-3xl font-extrabold text-white truncate">
               {t('home.dashboardTitle')}
             </h2>
-            <p className="text-xs text-zinc-400 truncate">
-              {t('home.dashboardSubtitle')}
-            </p>
+            <p className="text-xs text-zinc-400 truncate">{t('home.dashboardSubtitle')}</p>
           </div>
         </div>
 
@@ -132,10 +130,7 @@ export function HomeView({
           <button
             onClick={() => {
               if (dashboardRecommendations.length > 0) {
-                handleRowClick(
-                  dashboardRecommendations[0],
-                  dashboardRecommendations
-                )
+                handleRowClick(dashboardRecommendations[0], dashboardRecommendations)
               } else if (libraryTracks.length > 0) {
                 handleRowClick(libraryTracks[0], libraryTracks)
               }
@@ -202,9 +197,7 @@ export function HomeView({
             <p className="text-2xl font-black text-white group-hover:text-blue-400 transition">
               {playlists.length + userPlaylists.length}
             </p>
-            <p className="text-xs text-zinc-400 truncate">
-              {t('home.statsPlaylists')}
-            </p>
+            <p className="text-xs text-zinc-400 truncate">{t('home.statsPlaylists')}</p>
           </div>
         </div>
 
@@ -219,9 +212,7 @@ export function HomeView({
             <p className="text-2xl font-black text-white group-hover:text-purple-400 transition">
               {uniqueArtistsCount}
             </p>
-            <p className="text-xs text-zinc-400 truncate">
-              {t('home.statsArtists')}
-            </p>
+            <p className="text-xs text-zinc-400 truncate">{t('home.statsArtists')}</p>
           </div>
         </div>
 
@@ -230,12 +221,8 @@ export function HomeView({
             <History size={22} />
           </div>
           <div className="min-w-0">
-            <p className="text-2xl font-black text-white">
-              {recentlyPlayed.length}
-            </p>
-            <p className="text-xs text-zinc-400 truncate">
-              {t('home.statsRecent')}
-            </p>
+            <p className="text-2xl font-black text-white">{recentlyPlayed.length}</p>
+            <p className="text-xs text-zinc-400 truncate">{t('home.statsRecent')}</p>
           </div>
         </div>
       </div>
@@ -248,22 +235,14 @@ export function HomeView({
               <Sparkles size={18} className="text-theme-10 shrink-0" />
               <span className="truncate">{t('home.forYouTitle')}</span>
             </h3>
-            <p className="text-xs text-zinc-400 mt-0.5 truncate">
-              {t('home.forYouSubtitle')}
-            </p>
+            <p className="text-xs text-zinc-400 mt-0.5 truncate">{t('home.forYouSubtitle')}</p>
           </div>
           {dashboardRecommendations.length > 0 && (
             <button
-              onClick={() =>
-                handleRowClick(
-                  dashboardRecommendations[0],
-                  dashboardRecommendations
-                )
-              }
+              onClick={() => handleRowClick(dashboardRecommendations[0], dashboardRecommendations)}
               className="text-xs font-medium text-theme-10 hover:underline flex items-center gap-1 transition shrink-0 cursor-pointer"
             >
-              <Play size={12} className="fill-current" />{' '}
-              {t('userPlaylistsView.playAll')}
+              <Play size={12} className="fill-current" /> {t('userPlaylistsView.playAll')}
             </button>
           )}
         </div>
@@ -272,8 +251,7 @@ export function HomeView({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {dashboardRecommendations.map((track, idx) => {
               const isCurrent =
-                currentTrack?.id === track.id ||
-                currentTrack?.filePath === track.filePath
+                currentTrack?.id === track.id || currentTrack?.filePath === track.filePath
               return (
                 <div
                   key={track.id || track.filePath || idx}
@@ -299,10 +277,7 @@ export function HomeView({
                       {isCurrent && isPlaying ? (
                         <span className="w-3.5 h-3.5 rounded-full bg-theme-10 animate-pulse"></span>
                       ) : (
-                        <Play
-                          size={16}
-                          className="text-white fill-current ml-0.5"
-                        />
+                        <Play size={16} className="text-white fill-current ml-0.5" />
                       )}
                     </div>
                   </div>
@@ -352,8 +327,7 @@ export function HomeView({
               onClick={() => handleRowClick(recentlyPlayed[0], recentlyPlayed)}
               className="text-xs font-medium text-theme-10 hover:underline flex items-center gap-1 transition shrink-0 cursor-pointer"
             >
-              <Play size={12} className="fill-current" />{' '}
-              {t('userPlaylistsView.playAll')}
+              <Play size={12} className="fill-current" /> {t('userPlaylistsView.playAll')}
             </button>
           )}
         </div>
@@ -362,8 +336,7 @@ export function HomeView({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {(recentlyPlayed || []).slice(0, 12).map((track, idx) => {
               const isCurrent =
-                currentTrack?.id === track.id ||
-                currentTrack?.filePath === track.filePath
+                currentTrack?.id === track.id || currentTrack?.filePath === track.filePath
               return (
                 <div
                   key={track.id || track.filePath || idx}
@@ -432,8 +405,7 @@ export function HomeView({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {randomDiscoverTracks.map((track, idx) => {
               const isCurrent =
-                currentTrack?.id === track.id ||
-                currentTrack?.filePath === track.filePath
+                currentTrack?.id === track.id || currentTrack?.filePath === track.filePath
               return (
                 <div
                   key={track.id || track.filePath || idx}
@@ -459,10 +431,7 @@ export function HomeView({
                       {isCurrent && isPlaying ? (
                         <span className="w-3.5 h-3.5 rounded-full bg-theme-10 animate-pulse"></span>
                       ) : (
-                        <Play
-                          size={16}
-                          className="text-white fill-current ml-0.5"
-                        />
+                        <Play size={16} className="text-white fill-current ml-0.5" />
                       )}
                     </div>
                   </div>

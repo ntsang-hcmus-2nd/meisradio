@@ -317,8 +317,7 @@ export async function fetchMusixmatchLyricsInternal(
     const rawBody = lyricsObj?.lyrics_body
     if (typeof rawBody === 'string') {
       const cleaned = mxmCleanPlainLyrics(rawBody)
-      if (cleaned)
-        return { success: true, lyrics: cleaned, isSynced: false, source: 'musixmatch' }
+      if (cleaned) return { success: true, lyrics: cleaned, isSynced: false, source: 'musixmatch' }
     }
   }
 
@@ -359,10 +358,10 @@ async function lrclibFetch(
   const timer = setTimeout(() => controller.abort(), MXM_TIMEOUT_MS)
   try {
     const baseUrl = getLrclibBase()
-    const res = await fetch(
-      `${baseUrl}/${endpoint}?${new URLSearchParams(params).toString()}`,
-      { headers: LRCLIB_HEADERS, signal: controller.signal }
-    )
+    const res = await fetch(`${baseUrl}/${endpoint}?${new URLSearchParams(params).toString()}`, {
+      headers: LRCLIB_HEADERS,
+      signal: controller.signal
+    })
 
     if (res.status === 503 || res.status === 429) {
       if (retries > 0) {
@@ -522,7 +521,9 @@ export async function fetchNetEaseLyrics(
 
       const artistOk =
         wantArtists.length === 0 ||
-        wantArtists.some((wa) => songArtists.some((sa: string) => sa.includes(wa) || wa.includes(sa)))
+        wantArtists.some((wa) =>
+          songArtists.some((sa: string) => sa.includes(wa) || wa.includes(sa))
+        )
       if (!artistOk) continue
 
       if (

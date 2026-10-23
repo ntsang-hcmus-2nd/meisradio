@@ -16,8 +16,6 @@ let mainWindow: BrowserWindow | null = null
 let isInMiniPlayer = false
 let preMiniPlayerState: any = null
 
-
-
 export const saveWindowState = () => {
   if (!mainWindow || isInMiniPlayer) return
   const bounds = mainWindow.getBounds()
@@ -37,7 +35,7 @@ export const performDeepMemoryTrim = async () => {
     setTimeout(() => {
       trimNativeMemory()
     }, 300)
-  } catch (e) {}
+  } catch {}
 }
 
 export interface WindowManagerOptions {

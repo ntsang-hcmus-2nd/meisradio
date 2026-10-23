@@ -139,8 +139,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
                   className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
                   title={t('artistsView.shuffle')}
                 >
-                  <Shuffle size={16} />{' '}
-                  <span className="btn-text">{t('artistsView.shuffle')}</span>
+                  <Shuffle size={16} /> <span className="btn-text">{t('artistsView.shuffle')}</span>
                 </button>
               </div>
             </div>
@@ -199,8 +198,8 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
         {/* Section: Tất cả bài hát / Singles */}
         <div className="space-y-3 min-h-[500px]">
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <Music size={18} className="text-theme-10" />{' '}
-            {t('artistsView.singlesAndTracks')} ({activeArtist.tracks.length})
+            <Music size={18} className="text-theme-10" /> {t('artistsView.singlesAndTracks')} (
+            {activeArtist.tracks.length})
           </h3>
           <div className="w-full h-[540px]">
             <TrackTable
@@ -226,8 +225,8 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
             {searchQuery ? t('artistsView.searchResults') : t('artistsView.title')}
           </h2>
           <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
-            {artistsData.artistsList.length} {t('artistsView.artistCount')} •{' '}
-            {libraryTracks.length} {t('common.songs')}
+            {artistsData.artistsList.length} {t('artistsView.artistCount')} • {libraryTracks.length}{' '}
+            {t('common.songs')}
           </span>
         </div>
       </div>
@@ -238,9 +237,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
           <button
             key={grp.letter}
             onClick={() => {
-              const grpIdx = artistsData.alphabetGroups.findIndex(
-                (g) => g.letter === grp.letter
-              )
+              const grpIdx = artistsData.alphabetGroups.findIndex((g) => g.letter === grp.letter)
               if (grpIdx !== -1) {
                 const target = chunkedAlphabetGroups[grpIdx]
                 if (target?.isCollapsed) {
@@ -263,8 +260,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
             }}
             className="px-2.5 py-1 text-xs font-bold rounded-lg bg-theme-60/40 hover:bg-theme-10 hover:text-white text-zinc-400 transition shrink-0"
           >
-            {grp.letter}{' '}
-            <span className="text-[10px] opacity-60">({grp.count})</span>
+            {grp.letter} <span className="text-[10px] opacity-60">({grp.count})</span>
           </button>
         ))}
       </div>
@@ -280,11 +276,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
 
           if (filteredArtists) {
             if (filteredArtists.length === 0) {
-              return (
-                <p className="text-zinc-500 text-center mt-10">
-                  {t('artistsView.noArtists')}
-                </p>
-              )
+              return <p className="text-zinc-500 text-center mt-10">{t('artistsView.noArtists')}</p>
             }
             return (
               <VirtuosoGrid
@@ -306,9 +298,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
                           trackPath={artist.tracks?.[0]?.filePath}
                           tier="sm"
                           isLite={isLite}
-                          fallbackIcon={
-                            <Mic2 size={24} className="text-theme-10" />
-                          }
+                          fallbackIcon={<Mic2 size={24} className="text-theme-10" />}
                           className="w-full h-full"
                           imageClassName="group-hover:scale-105 transition duration-300"
                         />
@@ -318,8 +308,8 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
                           {artist.name}
                         </h3>
                         <p className="text-xs text-zinc-400 mt-1">
-                          {artist.albumCount} {t('artistsView.albumCount')} •{' '}
-                          {artist.trackCount} {t('artistsView.trackCount')}
+                          {artist.albumCount} {t('artistsView.albumCount')} • {artist.trackCount}{' '}
+                          {t('artistsView.trackCount')}
                         </p>
                       </div>
                     </div>
@@ -339,11 +329,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
           }
 
           if (artistsData.alphabetGroups.length === 0) {
-            return (
-              <p className="text-zinc-500 text-center mt-10">
-                {t('artistsView.noArtists')}
-              </p>
-            )
+            return <p className="text-zinc-500 text-center mt-10">{t('artistsView.noArtists')}</p>
           }
 
           return (
@@ -418,9 +404,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
                               trackPath={artist.tracks?.[0]?.filePath}
                               tier="sm"
                               isLite={isLite}
-                              fallbackIcon={
-                                <Mic2 size={24} className="text-theme-10" />
-                              }
+                              fallbackIcon={<Mic2 size={24} className="text-theme-10" />}
                               className="w-full h-full"
                               imageClassName="group-hover:scale-105 transition duration-300"
                             />

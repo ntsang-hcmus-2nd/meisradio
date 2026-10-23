@@ -124,9 +124,7 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
     map.forEach((tracks, key) => {
       if (tracks.length > 1) {
         // Sort tracks within the group: highest quality first
-        const sorted = [...tracks].sort(
-          (a, b) => getAudioQualityScore(b) - getAudioQualityScore(a)
-        )
+        const sorted = [...tracks].sort((a, b) => getAudioQualityScore(b) - getAudioQualityScore(a))
         groups.push({
           id: key,
           title: sorted[0].title || sorted[0].filePath?.split(/[/\\]/).pop() || 'Untitled',
@@ -154,7 +152,7 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
     })
     setSelectedPaths(nextSelected)
     showToast(
-      `${t('duplicateFinder.keepHighestQuality') || 'Selected lower quality duplicates'}: ${nextSelected.size} files`,
+      `${t('duplicateFinder.keepHighestQuality')}: ${nextSelected.size} ${t('common.files')}`,
       'info'
     )
   }
@@ -238,15 +236,12 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <span>{t('duplicateFinder.duplicateFinder') || 'Duplicate Track Finder'}</span>
+                <span>{t('duplicateFinder.duplicateFinder')}</span>
                 <span className="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                  {duplicateGroups.length} groups
+                  {duplicateGroups.length} {t('duplicateFinder.groups')}
                 </span>
               </h2>
-              <p className="text-xs text-zinc-400">
-                {t('duplicateFinder.duplicateFinderDesc') ||
-                  'Scan your library for duplicate songs by title, artist, duration, or audio quality'}
-              </p>
+              <p className="text-xs text-zinc-400">{t('duplicateFinder.duplicateFinderDesc')}</p>
             </div>
           </div>
 
@@ -285,11 +280,12 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
           <div className="text-zinc-400 font-medium">
             {selectedPaths.size > 0 ? (
               <span className="text-amber-400 font-bold">
-                {selectedPaths.size} {t('batchActions.selectedCount') || 'selected for removal'}
+                {selectedPaths.size} {t('batchActions.selectedCount')}
               </span>
             ) : (
               <span>
-                {duplicateGroups.reduce((acc, g) => acc + g.tracks.length, 0)} total duplicates
+                {duplicateGroups.reduce((acc, g) => acc + g.tracks.length, 0)}{' '}
+                {t('duplicateFinder.totalDuplicates')}
               </span>
             )}
           </div>
@@ -301,10 +297,10 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
             <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-3">
               <CheckCircle2 size={44} className="text-emerald-400 opacity-80" />
               <p className="text-sm font-semibold text-white">
-                {t('duplicateFinder.noDuplicatesFound') || 'No duplicate tracks found in your library!'}
+                {t('duplicateFinder.noDuplicatesFound')}
               </p>
               <p className="text-xs text-zinc-500 max-w-sm">
-                Your music library is clean and well-organized. No songs with identical titles or matching file hashes were found.
+                {t('duplicateFinder.noDuplicatesDesc')}
               </p>
             </div>
           ) : (
@@ -320,7 +316,7 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                     <p className="text-[11px] text-zinc-400">{group.artist}</p>
                   </div>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/50">
-                    {group.tracks.length} copies
+                    {group.tracks.length} {t('duplicateFinder.copies')}
                   </span>
                 </div>
 
@@ -340,8 +336,8 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                           isSelected
                             ? 'bg-amber-500/10'
                             : isHighest
-                            ? 'bg-zinc-900/30'
-                            : 'hover:bg-zinc-900/40'
+                              ? 'bg-zinc-900/30'
+                              : 'hover:bg-zinc-900/40'
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -360,11 +356,11 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                           {/* Highest Quality Badge */}
                           {isHighest ? (
                             <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
-                              Highest Quality
+                              {t('duplicateFinder.highestQuality')}
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700/50 text-[10px] shrink-0 font-mono">
-                              Duplicate #{idx}
+                              {t('duplicateFinder.duplicateNum', { idx })}
                             </span>
                           )}
 
@@ -374,10 +370,10 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                               fmtDisplay.isDsd
                                 ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
                                 : fmtDisplay.isHiRes
-                                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                                : fmtDisplay.isLossless
-                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                                : 'bg-zinc-800 text-zinc-400 border-zinc-700/50'
+                                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                  : fmtDisplay.isLossless
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                    : 'bg-zinc-800 text-zinc-400 border-zinc-700/50'
                             }`}
                           >
                             {fmtDisplay.badgeLabel}
@@ -386,7 +382,9 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                           {/* Track Details */}
                           <div className="min-w-0 flex-1 text-zinc-400 text-[11px] truncate flex items-center gap-2">
                             {track.sampleRate && (
-                              <span className="font-mono">{formatAudioSampleRate(track.sampleRate)}</span>
+                              <span className="font-mono">
+                                {formatAudioSampleRate(track.sampleRate)}
+                              </span>
                             )}
                             {track.bitDepth && !fmtDisplay.isDsd && (
                               <span className="font-mono">{track.bitDepth}-bit</span>
@@ -395,10 +393,14 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                               <span className="font-mono">{formatBitrate(track.bitrate)}</span>
                             )}
                             {track.duration && (
-                              <span className="tabular-nums">({formatDuration(track.duration)})</span>
+                              <span className="tabular-nums">
+                                ({formatDuration(track.duration)})
+                              </span>
                             )}
                             {track.fileSize && (
-                              <span className="text-zinc-500">[{formatFileSize(track.fileSize)}]</span>
+                              <span className="text-zinc-500">
+                                [{formatFileSize(track.fileSize)}]
+                              </span>
                             )}
                             <span
                               className="text-zinc-500 truncate text-[10px] font-mono"
@@ -414,7 +416,7 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                           {window.api?.showInFolder && track.filePath && (
                             <button
                               onClick={() => window.api.showInFolder(track.filePath)}
-                              title="Show in Folder"
+                              title={t('duplicateFinder.showInFolder')}
                               className="p-1 rounded text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
                             >
                               <FolderOpen size={14} />
@@ -422,7 +424,7 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
                           )}
                           <button
                             onClick={() => handlePlay(track)}
-                            title="Play Track"
+                            title={t('duplicateFinder.playTrack')}
                             className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
                           >
                             <Play size={12} className="fill-current" />
@@ -442,7 +444,7 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
           <div className="text-xs text-zinc-500">
             {selectedPaths.size > 0 && (
               <span>
-                {selectedPaths.size} {t('common.files') || 'files'} will be moved to Recycle Bin
+                {selectedPaths.size} {t('common.files')} {t('duplicateFinder.moveToTrash')}
               </span>
             )}
           </div>

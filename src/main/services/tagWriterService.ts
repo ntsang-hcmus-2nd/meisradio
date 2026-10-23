@@ -29,7 +29,8 @@ export async function updateTags(
   newImagePath: string | null
 ): Promise<{ success: boolean; coverUrl?: string | null; error?: string }> {
   try {
-    let rawPath = filePath.replace(/^file:\/\/\/?/, '')
+    const cleanFilePath = filePath.includes('#track-') ? filePath.split('#track-')[0] : filePath
+    let rawPath = cleanFilePath.replace(/^file:\/\/\/?/, '')
     if (process.platform === 'win32') {
       rawPath = decodeURIComponent(rawPath)
       if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
@@ -48,7 +49,7 @@ export async function updateTags(
     if (rawImagePath && rawImagePath.startsWith('file://')) {
       try {
         rawImagePath = fileURLToPath(rawImagePath)
-      } catch (e) {}
+      } catch {}
     }
 
     let picBuffer: Buffer | null = null
@@ -57,9 +58,8 @@ export async function updateTags(
       try {
         picBuffer = fs.readFileSync(rawImagePath)
         const ext = path.extname(rawImagePath).toLowerCase()
-        picMime =
-          ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg'
-      } catch (e) {}
+        picMime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg'
+      } catch {}
     } else if (
       newTags?.coverArt &&
       typeof newTags.coverArt === 'string' &&
@@ -151,9 +151,7 @@ export async function updateTags(
           newTags.discNumber !== undefined && newTags.discNumber !== null
             ? String(newTags.discNumber)
             : undefined,
-        unsynchronisedLyrics: newTags.lyrics
-          ? { language: 'eng', text: newTags.lyrics }
-          : undefined
+        unsynchronisedLyrics: newTags.lyrics ? { language: 'eng', text: newTags.lyrics } : undefined
       }
       if (picBuffer) {
         tags.image = {
@@ -306,14 +304,14 @@ export async function updateTags(
         const jpegBuf = resized.toJPEG(80)
         try {
           fs.writeFileSync(centralThumbPath, jpegBuf)
-        } catch (e) {}
+        } catch {}
         try {
           const dir = path.dirname(localThumbPath)
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
           fs.writeFileSync(localThumbPath, jpegBuf)
-        } catch (e) {}
+        } catch {}
         coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
-      } catch (err) {}
+      } catch {}
     } else if (rawImagePath && fs.existsSync(rawImagePath)) {
       try {
         const img = nativeImage.createFromPath(rawImagePath)
@@ -321,32 +319,30 @@ export async function updateTags(
         const jpegBuf = resized.toJPEG(80)
         try {
           fs.writeFileSync(centralThumbPath, jpegBuf)
-        } catch (e) {}
+        } catch {}
         try {
           const dir = path.dirname(localThumbPath)
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
           fs.writeFileSync(localThumbPath, jpegBuf)
-        } catch (e) {}
+        } catch {}
         coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
-      } catch (err) {}
+      } catch {}
     } else {
       try {
         const freshMeta = await mm.parseFile(rawPath)
         if (freshMeta.common.picture && freshMeta.common.picture.length > 0) {
-          const img = nativeImage.createFromBuffer(
-            Buffer.from(freshMeta.common.picture[0].data)
-          )
+          const img = nativeImage.createFromBuffer(Buffer.from(freshMeta.common.picture[0].data))
           const resized = img.resize({ width: 128, height: 128, quality: 'good' })
           const jpegBuf = resized.toJPEG(80)
           try {
             fs.writeFileSync(centralThumbPath, jpegBuf)
-          } catch (e) {}
+          } catch {}
           try {
             fs.writeFileSync(localThumbPath, jpegBuf)
-          } catch (e) {}
+          } catch {}
           coverUrl = `${pathToFileURL(centralThumbPath).href}?t=${Date.now()}`
         }
-      } catch (err) {}
+      } catch {}
     }
 
     if (!coverUrl) {
@@ -367,9 +363,7 @@ export async function updateTags(
       newTags.albumArtist !== undefined ? newTags.albumArtist : existingCached.albumArtist
     const finalGenre = newTags.genre !== undefined ? newTags.genre : existingCached.genre
     const finalYear =
-      newTags.year !== undefined
-        ? Number(newTags.year) || existingCached.year
-        : existingCached.year
+      newTags.year !== undefined ? Number(newTags.year) || existingCached.year : existingCached.year
     const finalTrackNo =
       newTags.trackNumber !== undefined && newTags.trackNumber !== null
         ? Number(newTags.trackNumber)
@@ -468,7 +462,7 @@ export async function getTrackDetails(trackPath: string): Promise<any> {
     if (process.platform === 'win32') {
       try {
         rawPath = decodeURIComponent(rawPath)
-      } catch (e) {}
+      } catch {}
       if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
       rawPath = rawPath.replace(/\//g, '\\')
     }
@@ -484,7 +478,7 @@ export async function getTrackDetails(trackPath: string): Promise<any> {
     let meta: any = null
     try {
       meta = await mm.parseFile(rawPath, { skipCovers: true })
-    } catch (err) {}
+    } catch {}
 
     let lrcContent: string | null = null
     const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')

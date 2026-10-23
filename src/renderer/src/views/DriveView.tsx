@@ -16,7 +16,12 @@ interface DriveViewProps {
   }) => void
 }
 
-export function DriveView({ loadLibrary, processedLibraryTracks = [], onStreamAll, showAlert }: DriveViewProps) {
+export function DriveView({
+  loadLibrary,
+  processedLibraryTracks = [],
+  onStreamAll,
+  showAlert
+}: DriveViewProps) {
   const { t } = useTranslation()
   const { language } = useLanguage()
 
@@ -66,10 +71,12 @@ export function DriveView({ loadLibrary, processedLibraryTracks = [], onStreamAl
       } else {
         showAlert({
           title: t('common.error'),
-          message: (language === 'vi' ? 'Lỗi từ hệ thống: ' : 'System error: ') + (result?.error || 'Unknown')
+          message:
+            (language === 'vi' ? 'Lỗi từ hệ thống: ' : 'System error: ') +
+            (result?.error || 'Unknown')
         })
       }
-    } catch (err) {
+    } catch {
       showAlert({
         title: t('common.error'),
         message: language === 'vi' ? 'Lỗi kết nối tới hệ thống!' : 'Failed to connect to system!'
@@ -109,7 +116,7 @@ export function DriveView({ loadLibrary, processedLibraryTracks = [], onStreamAl
       } else {
         showToast(t('toasts.systemError') + (result?.error || ''), 'error')
       }
-    } catch (e) {
+    } catch {
       showToast(t('toasts.downloadError'), 'error')
     }
     setIsDownloading(false)
@@ -189,8 +196,7 @@ export function DriveView({ loadLibrary, processedLibraryTracks = [], onStreamAl
                   title={t('driveView.streamAll')}
                   className="sys-btn flex items-center gap-2 bg-theme-10/10 text-theme-10 hover:bg-theme-10/20 px-4 py-2 rounded-lg text-sm font-medium transition cursor-pointer"
                 >
-                  <Wifi size={16} />{' '}
-                  <span className="btn-text">{t('driveView.streamAll')}</span>
+                  <Wifi size={16} /> <span className="btn-text">{t('driveView.streamAll')}</span>
                 </button>
                 <button
                   onClick={handleDriveDownload}
@@ -203,9 +209,7 @@ export function DriveView({ loadLibrary, processedLibraryTracks = [], onStreamAl
                   ) : (
                     <>
                       <Download size={16} />{' '}
-                      <span className="btn-text">
-                        {t('driveView.downloadLossless')}
-                      </span>
+                      <span className="btn-text">{t('driveView.downloadLossless')}</span>
                     </>
                   )}
                 </button>
@@ -227,14 +231,10 @@ export function DriveView({ loadLibrary, processedLibraryTracks = [], onStreamAl
                       <ListMusic size={18} />
                     </div>
                     <div className="flex-1 truncate">
-                      <p className="font-semibold text-white truncate text-sm">
-                        {f.title}
-                      </p>
+                      <p className="font-semibold text-white truncate text-sm">{f.title}</p>
                       <p className="text-xs text-zinc-500 mt-0.5">
                         {t('driveView.originalFormat')}:{' '}
-                        <span className="text-theme-10/80 uppercase">
-                          {f.format}
-                        </span>
+                        <span className="text-theme-10/80 uppercase">{f.format}</span>
                       </p>
                     </div>
                     <button

@@ -20,7 +20,7 @@ export function handlePlayAudio(
     if (rawPath.startsWith('file://')) {
       try {
         rawPath = fileURLToPath(rawPath)
-      } catch (e) {
+      } catch {
         rawPath = decodeURIComponent(rawPath.replace(/^file:\/\/\/?/, ''))
       }
     } else if (rawPath.includes('/local-audio?path=')) {
@@ -101,8 +101,14 @@ export function setupBassEvents(
  * Đăng ký toàn bộ các kênh IPC điều khiển phát nhạc của BASS / MPV
  */
 export function registerAudioPlaybackIpc(bassManager: BassManager): void {
-  const playHandler = (_: any, url: string, devOrCf?: any, excl: boolean = true, st?: number, et?: number) =>
-    handlePlayAudio(bassManager, _, url, devOrCf, excl, st, et)
+  const playHandler = (
+    _: any,
+    url: string,
+    devOrCf?: any,
+    excl: boolean = true,
+    st?: number,
+    et?: number
+  ) => handlePlayAudio(bassManager, _, url, devOrCf, excl, st, et)
 
   ipcMain.handle('bass:play', playHandler)
   ipcMain.handle('mpv:play', playHandler)

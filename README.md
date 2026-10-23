@@ -21,9 +21,10 @@
 
 ## Overview
 
-**Mei's Radio** (`meisradio`) is a next-generation desktop media player engineered for music enthusiasts and audiophiles alike. 
+**Mei's Radio** (`meisradio`) is a next-generation desktop media player engineered for music enthusiasts and audiophiles alike.
 
 Most modern desktop music players force a compromise:
+
 - **Commercial streaming apps** (Spotify, Apple Music, YouTube Music) deliver sleek visuals and synchronized lyrics, but suffer from high memory consumption, poor local file support, and an inability to bypass Windows Audio Mixer resampling.
 - **Traditional audiophile players** (Foobar2000, AIMP, MusicBee) offer bit-perfect playback and low latency, but often have complex, dated user interfaces, minimal streaming integration, and lack modern convenience features.
 
@@ -104,9 +105,9 @@ Mei's Radio provides two independent, high-fidelity playback pipelines:
   - Eliminates thousands of cached thumbnail files on disk ($0\text{ bytes}$ wasted disk space).
 - **Multi-Level Resource Optimization:**
   - **3 Performance Modes:**
-    - *Default Mode:* Full dynamic ambient backdrops, spinning vinyl animations, and WebGL visualizations.
-    - *Lite Mode:* Disables heavy graphical effects to minimize CPU and GPU load.
-    - *Core Mode:* Ultra-lightweight profile with stripped Web Audio nodes for minimum RAM consumption on resource-constrained systems.
+    - _Default Mode:_ Full dynamic ambient backdrops, spinning vinyl animations, and WebGL visualizations.
+    - _Lite Mode:_ Disables heavy graphical effects to minimize CPU and GPU load.
+    - _Core Mode:_ Ultra-lightweight profile with stripped Web Audio nodes for minimum RAM consumption on resource-constrained systems.
   - **Deep Memory Trimming:** Win32 `SetProcessWorkingSetSize` invocation trims idle memory across all processes (Main, Renderer, GPU, Audio) down to minimal footprints without audio interruption.
   - **Full-Viewport Virtualization:** `react-virtuoso` renders 50,000+ tracks smoothly at 60 FPS by keeping fewer than 50 DOM nodes mounted.
 
@@ -167,19 +168,19 @@ Mei's Radio provides two independent, high-fidelity playback pipelines:
 
 ## Tech Stack
 
-| Domain | Technology / Library |
-| :--- | :--- |
-| **Runtime & Framework** | Electron `^39.2.6`, Node.js (integrated) |
-| **Frontend & UI** | React `^19.2.1`, TypeScript `^5.9.3`, Tailwind CSS `^4.3.3`, Lucide React |
-| **Build & Tooling** | Vite `^7.2.6`, `electron-vite` `^5.0.0`, `electron-builder` `^26.0.12` |
-| **Audio Core** | BASS Audio Library (WASAPI, ASIO, DSD, FLAC, OPUS, ALAC), Web Audio API |
-| **Native Interop** | `koffi` `^3.3.3` (High-performance C-FFI bridge) |
-| **Embedded Database** | SQLite3 C-API (`sqlite3.dll` / `winsqlite3.dll` via Koffi) |
-| **Virtualization & DnD** | `react-virtuoso` `^4.18.11`, `@dnd-kit/core`, `@dnd-kit/sortable` |
-| **State Management** | `zustand` `^5.0.15` (Modular atomic stores) |
-| **Metadata & Media** | `music-metadata`, `node-id3`, custom TypeScript FLAC Vorbis writer |
-| **Online & Downloads** | `slsk-client` (Soulseek P2P), `yt-dlp-exec`, `node-youtube-music`, `axios` |
-| **Integrations** | `@xhayper/discord-rpc`, Windows Media Session API |
+| Domain                   | Technology / Library                                                       |
+| :----------------------- | :------------------------------------------------------------------------- |
+| **Runtime & Framework**  | Electron `^39.2.6`, Node.js (integrated)                                   |
+| **Frontend & UI**        | React `^19.2.1`, TypeScript `^5.9.3`, Tailwind CSS `^4.3.3`, Lucide React  |
+| **Build & Tooling**      | Vite `^7.2.6`, `electron-vite` `^5.0.0`, `electron-builder` `^26.0.12`     |
+| **Audio Core**           | BASS Audio Library (WASAPI, ASIO, DSD, FLAC, OPUS, ALAC), Web Audio API    |
+| **Native Interop**       | `koffi` `^3.3.3` (High-performance C-FFI bridge)                           |
+| **Embedded Database**    | SQLite3 C-API (`sqlite3.dll` / `winsqlite3.dll` via Koffi)                 |
+| **Virtualization & DnD** | `react-virtuoso` `^4.18.11`, `@dnd-kit/core`, `@dnd-kit/sortable`          |
+| **State Management**     | `zustand` `^5.0.15` (Modular atomic stores)                                |
+| **Metadata & Media**     | `music-metadata`, `node-id3`, custom TypeScript FLAC Vorbis writer         |
+| **Online & Downloads**   | `slsk-client` (Soulseek P2P), `yt-dlp-exec`, `node-youtube-music`, `axios` |
+| **Integrations**         | `@xhayper/discord-rpc`, Windows Media Session API                          |
 
 ---
 
@@ -194,12 +195,14 @@ Mei's Radio provides two independent, high-fidelity playback pipelines:
 ### Installation
 
 1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/subzerofroze/meisradio.git
    cd meisradio
    ```
 
 2. **Install dependencies:**
+
    ```bash
    npm install
    ```
@@ -213,34 +216,34 @@ Mei's Radio provides two independent, high-fidelity playback pipelines:
 
 ## Available Scripts
 
-| Command | Description |
-| :--- | :--- |
-| `npm run dev` | Starts the application in development mode with HMR via `electron-vite`. |
-| `npm run build` | Runs TypeScript type checking and compiles the project. |
-| `npm run typecheck` | Validates TypeScript types across both Node (Main/Preload) and Web (Renderer). |
-| `npm test` | Executes unit and integration tests using `vitest`. |
-| `npm run lint` | Lints the codebase using ESLint 9. |
-| `npm run format` | Formats all code files with Prettier. |
-| `npm run build:win` | Builds and packages the production Windows installer (`.exe` NSIS installer) in `dist/`. |
-| `npm run build:unpack` | Compiles and outputs an unpacked executable directory for quick testing. |
+| Command                | Description                                                                              |
+| :--------------------- | :--------------------------------------------------------------------------------------- |
+| `npm run dev`          | Starts the application in development mode with HMR via `electron-vite`.                 |
+| `npm run build`        | Runs TypeScript type checking and compiles the project.                                  |
+| `npm run typecheck`    | Validates TypeScript types across both Node (Main/Preload) and Web (Renderer).           |
+| `npm test`             | Executes unit and integration tests using `vitest`.                                      |
+| `npm run lint`         | Lints the codebase using ESLint 9.                                                       |
+| `npm run format`       | Formats all code files with Prettier.                                                    |
+| `npm run build:win`    | Builds and packages the production Windows installer (`.exe` NSIS installer) in `dist/`. |
+| `npm run build:unpack` | Compiles and outputs an unpacked executable directory for quick testing.                 |
 
 ---
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-| :--- | :--- |
-| `Space` | Play / Pause |
-| `Ctrl + Right Arrow` / `MediaNext` | Next Track |
-| `Ctrl + Left Arrow` / `MediaPrev` | Previous Track |
-| `Ctrl + Up Arrow` | Increase Volume (+5%) |
-| `Ctrl + Down Arrow` | Decrease Volume (-5%) |
-| `Ctrl + K` / `Cmd + K` | Open Spotlight Command Palette |
-| `Ctrl + S` | Toggle Shuffle |
-| `Ctrl + R` | Cycle Repeat Mode (Off / All / One) |
-| `Ctrl + M` | Toggle Mute |
-| `Ctrl + L` | Toggle Fullscreen Lyrics & Vinyl View |
-| `Escape` | Close active modal, popup, or full-screen view |
+| Shortcut                           | Action                                         |
+| :--------------------------------- | :--------------------------------------------- |
+| `Space`                            | Play / Pause                                   |
+| `Ctrl + Right Arrow` / `MediaNext` | Next Track                                     |
+| `Ctrl + Left Arrow` / `MediaPrev`  | Previous Track                                 |
+| `Ctrl + Up Arrow`                  | Increase Volume (+5%)                          |
+| `Ctrl + Down Arrow`                | Decrease Volume (-5%)                          |
+| `Ctrl + K` / `Cmd + K`             | Open Spotlight Command Palette                 |
+| `Ctrl + S`                         | Toggle Shuffle                                 |
+| `Ctrl + R`                         | Cycle Repeat Mode (Off / All / One)            |
+| `Ctrl + M`                         | Toggle Mute                                    |
+| `Ctrl + L`                         | Toggle Fullscreen Lyrics & Vinyl View          |
+| `Escape`                           | Close active modal, popup, or full-screen view |
 
 ---
 

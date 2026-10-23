@@ -19,14 +19,17 @@ export async function getSoundCloudClientId(): Promise<string> {
     // 1. Tải trang chủ SoundCloud để lấy danh sách script URLs
     const htmlRes = await axios.get('https://soundcloud.com', {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
       },
       timeout: 8000
     })
 
     // 2. Tìm tất cả các script app-*.js
-    const scriptUrls = (htmlRes.data.match(/https:\/\/a-v2\.sndcdn\.com\/assets\/[a-zA-Z0-9-]+\.js/g) || []) as string[]
-    
+    const scriptUrls = (htmlRes.data.match(
+      /https:\/\/a-v2\.sndcdn\.com\/assets\/[a-zA-Z0-9-]+\.js/g
+    ) || []) as string[]
+
     // Quét các file script từ cuối lên (thường client_id nằm trong file app hoặc vendor)
     for (const url of scriptUrls.slice(-10)) {
       try {
@@ -38,7 +41,7 @@ export async function getSoundCloudClientId(): Promise<string> {
           clientIdExpires = Date.now() + 3600 * 1000 * 12 // Cache 12 tiếng
           return foundId
         }
-      } catch (e) {}
+      } catch {}
     }
   } catch (e) {
     console.warn('[SoundCloud] Không lấy được Client ID động, thử phương án dự phòng...', e)
@@ -56,9 +59,10 @@ export async function getSoundCloudClientId(): Promise<string> {
  */
 function getScHeaders(oauthToken?: string) {
   const headers: any = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Origin': 'https://soundcloud.com',
-    'Referer': 'https://soundcloud.com/'
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    Origin: 'https://soundcloud.com',
+    Referer: 'https://soundcloud.com/'
   }
   if (oauthToken) {
     headers['Authorization'] = `OAuth ${oauthToken}`
@@ -215,9 +219,11 @@ export async function getScTrendingCharts(genre: string = 'all-music', limit: nu
       headers: getScHeaders(),
       timeout: 6000
     })
-    const collection = Array.isArray(recentRes.data) ? recentRes.data : recentRes.data?.collection || []
+    const collection = Array.isArray(recentRes.data)
+      ? recentRes.data
+      : recentRes.data?.collection || []
     return collection.map((c: any) => formatScTrack(c)).filter(Boolean)
-  } catch (e) {
+  } catch {
     return []
   }
 }
@@ -238,22 +244,26 @@ export async function getScMixedSelections(): Promise<any[]> {
     const sections: any[] = []
 
     for (const sel of collection) {
-      const items = (sel.items?.collection || []).map((pl: any) => {
-        if (!pl || !pl.id || !pl.title) return null
-        const cover = pl.artwork_url || pl.user?.avatar_url || ''
-        const highResCover = cover ? cover.replace('-large.', '-t500x500.').replace('-badge.', '-t500x500.') : ''
-        return {
-          id: `sc-pl-${pl.id}`,
-          playlistId: String(pl.id),
-          title: pl.title,
-          subtitle: `${pl.user?.username || 'SoundCloud'} • ${pl.track_count || 0} bài hát`,
-          thumbnails: [{ url: highResCover || cover }],
-          coverArt: highResCover || cover,
-          isPlaylist: true,
-          platform: 'soundcloud',
-          style: 'CARD'
-        }
-      }).filter(Boolean)
+      const items = (sel.items?.collection || [])
+        .map((pl: any) => {
+          if (!pl || !pl.id || !pl.title) return null
+          const cover = pl.artwork_url || pl.user?.avatar_url || ''
+          const highResCover = cover
+            ? cover.replace('-large.', '-t500x500.').replace('-badge.', '-t500x500.')
+            : ''
+          return {
+            id: `sc-pl-${pl.id}`,
+            playlistId: String(pl.id),
+            title: pl.title,
+            subtitle: `${pl.user?.username || 'SoundCloud'} • ${pl.track_count || 0} bài hát`,
+            thumbnails: [{ url: highResCover || cover }],
+            coverArt: highResCover || cover,
+            isPlaylist: true,
+            platform: 'soundcloud',
+            style: 'CARD'
+          }
+        })
+        .filter(Boolean)
 
       if (items.length > 0) {
         sections.push({
@@ -283,15 +293,17 @@ export async function getScUserStream(oauthToken: string, limit: number = 30) {
   })
 
   const collection = res.data.collection || []
-  return collection
-    .map((item: any) => formatScTrack(item.track || item))
-    .filter(Boolean)
+  return collection.map((item: any) => formatScTrack(item.track || item)).filter(Boolean)
 }
 
 /**
  * 4. Lấy danh sách bài hát yêu thích (Liked Tracks)
  */
-export async function getScUserLikes(userId: number | string, oauthToken: string, limit: number = 50) {
+export async function getScUserLikes(
+  userId: number | string,
+  oauthToken: string,
+  limit: number = 50
+) {
   const clientId = await getSoundCloudClientId()
   const res = await axios.get(`${SC_API_V2}/users/${userId}/likes`, {
     params: {
@@ -302,9 +314,7 @@ export async function getScUserLikes(userId: number | string, oauthToken: string
   })
 
   const collection = res.data.collection || []
-  return collection
-    .map((item: any) => formatScTrack(item.track || item))
-    .filter(Boolean)
+  return collection.map((item: any) => formatScTrack(item.track || item)).filter(Boolean)
 }
 
 /**
@@ -402,7 +412,11 @@ export async function getScPlaylistTracks(playlistId: string, oauthToken?: strin
 /**
  * 8. Phân giải Stream URL âm thanh trực tiếp (Direct Audio URL) của SoundCloud
  */
-export async function resolveScStreamUrl(trackId: string | number, permalinkUrl?: string, oauthToken?: string): Promise<string> {
+export async function resolveScStreamUrl(
+  trackId: string | number,
+  permalinkUrl?: string,
+  oauthToken?: string
+): Promise<string> {
   const clientId = await getSoundCloudClientId()
 
   try {
@@ -413,14 +427,21 @@ export async function resolveScStreamUrl(trackId: string | number, permalinkUrl?
     })
 
     const transcodings = res.data.media?.transcodings || []
-    
+
     // Ưu tiên: Progressive MP3 trước (dễ play trực tiếp nhất), sau đó đến HLS MP3 / Opus
-    let selectedTranscoding = transcodings.find((t: any) => t.format?.protocol === 'progressive' && t.format?.mime_type?.includes('audio/mpeg'))
+    let selectedTranscoding = transcodings.find(
+      (t: any) =>
+        t.format?.protocol === 'progressive' && t.format?.mime_type?.includes('audio/mpeg')
+    )
     if (!selectedTranscoding) {
-      selectedTranscoding = transcodings.find((t: any) => t.format?.protocol === 'hls' && t.format?.mime_type?.includes('audio/mpeg'))
+      selectedTranscoding = transcodings.find(
+        (t: any) => t.format?.protocol === 'hls' && t.format?.mime_type?.includes('audio/mpeg')
+      )
     }
     if (!selectedTranscoding) {
-      selectedTranscoding = transcodings.find((t: any) => t.format?.protocol === 'hls' && t.format?.mime_type?.includes('audio/ogg'))
+      selectedTranscoding = transcodings.find(
+        (t: any) => t.format?.protocol === 'hls' && t.format?.mime_type?.includes('audio/ogg')
+      )
     }
     if (!selectedTranscoding) {
       selectedTranscoding = transcodings[0]

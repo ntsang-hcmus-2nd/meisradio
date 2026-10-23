@@ -244,7 +244,8 @@ export const vi: TranslationDictionary = {
       customColorPicker: 'Chọn mã màu tùy ý',
       wallpaperTitle: 'Hình nền ứng dụng',
       waveformSeekbar: 'Thanh tiến trình dạng sóng âm',
-      waveformSeekbarDesc: 'Hiển thị biểu đồ biên độ sóng âm trực tiếp trên thanh tiến trình phát nhạc'
+      waveformSeekbarDesc:
+        'Hiển thị biểu đồ biên độ sóng âm trực tiếp trên thanh tiến trình phát nhạc'
     },
     library: {
       title: 'Thư mục nhạc',
@@ -336,7 +337,8 @@ export const vi: TranslationDictionary = {
       'Loại bỏ khoảng lặng giữa các bài hát liên tiếp. Ở chế độ nguyên bản, chỉ áp dụng khi bài tiếp theo có cùng tần số lấy mẫu và độ sâu bit để không làm biến đổi tín hiệu',
     gaplessBitPerfectNotice: 'Bảo toàn tín hiệu nguyên bản tuyệt đối: Không nội suy tần số',
     waveformSeekbar: 'Thanh tiến trình dạng sóng âm',
-    waveformSeekbarDesc: 'Hiển thị biểu đồ biên độ sóng âm trực tiếp trên thanh tiến trình phát nhạc'
+    waveformSeekbarDesc:
+      'Hiển thị biểu đồ biên độ sóng âm trực tiếp trên thanh tiến trình phát nhạc'
   },
   player: {
     noTrack: 'Chưa có bài hát đang phát',
@@ -381,7 +383,8 @@ export const vi: TranslationDictionary = {
     sleepTimerMinsToast: 'Hẹn giờ tắt nhạc sau {mins} phút',
     sleepTimerStoppedToast: 'Hẹn giờ: Đã dừng phát nhạc',
     audioErrorToast: 'Không phát được bài này (lỗi nguồn hoặc định dạng không hỗ trợ)',
-    fileMissingToast: 'File nhạc không còn tồn tại — có thể đã bị xóa hoặc di chuyển bên ngoài ứng dụng',
+    fileMissingToast:
+      'File nhạc không còn tồn tại — có thể đã bị xóa hoặc di chuyển bên ngoài ứng dụng',
     sleepTimerRemainingTitle: 'Hẹn giờ tắt: còn {time}',
     sleepTimerStopEndTitle: 'Hẹn giờ: Dừng khi hết bài',
     abLoop: 'Lặp đoạn A-B',
@@ -489,7 +492,8 @@ export const vi: TranslationDictionary = {
       releaseYear: 'Năm phát hành',
       trackNumber: 'Số thứ tự bài',
       discNumber: 'Số thứ tự đĩa',
-      dsdTagSupportNotice: 'Hỗ trợ chỉnh sửa thông tin cho FLAC, MP3, DSD (.dsf/.dff), M4A, OGG, OPUS, WAV'
+      dsdTagSupportNotice:
+        'Hỗ trợ chỉnh sửa thông tin cho FLAC, MP3, DSD (.dsf/.dff), M4A, OGG, OPUS, WAV'
     },
     trackInfo: {
       title: 'Thông tin chi tiết bài hát',
@@ -806,7 +810,8 @@ export const vi: TranslationDictionary = {
     likedSongs: 'Bài hát yêu thích',
     addToFavorites: 'Thêm vào yêu thích',
     removeFromFavorites: 'Bỏ khỏi yêu thích',
-    noFavoriteTracks: 'Chưa có bài hát yêu thích nào. Hãy nhấn vào biểu tượng trái tim trên bài hát để lưu vào đây.'
+    noFavoriteTracks:
+      'Chưa có bài hát yêu thích nào. Hãy nhấn vào biểu tượng trái tim trên bài hát để lưu vào đây.'
   },
   abLoop: {
     abLoop: 'Lặp đoạn A-B',
@@ -850,10 +855,21 @@ export const vi: TranslationDictionary = {
   },
   duplicateFinder: {
     duplicateFinder: 'Tìm bài hát trùng lặp',
-    duplicateFinderDesc: 'Quét thư viện để tìm các bản nhạc bị trùng theo tên bài, nghệ sĩ, thời lượng và chất lượng âm thanh',
+    duplicateFinderDesc:
+      'Quét thư viện để tìm các bản nhạc bị trùng theo tên bài, nghệ sĩ, thời lượng và chất lượng âm thanh',
     noDuplicatesFound: 'Không tìm thấy bài hát trùng lặp nào trong thư viện!',
+    noDuplicatesDesc:
+      'Thư viện nhạc của bạn sạch sẽ và gọn gàng. Không tìm thấy bài hát trùng tên hoặc trùng mã băm tệp.',
     keepHighestQuality: 'Chọn các bản chất lượng thấp hơn',
-    deleteDuplicates: 'Chuyển các bản trùng đã chọn vào thùng rác'
+    deleteDuplicates: 'Chuyển các bản trùng đã chọn vào thùng rác',
+    groups: 'nhóm',
+    totalDuplicates: 'bản trùng tổng cộng',
+    copies: 'bản sao',
+    highestQuality: 'Chất Lượng Cao Nhất',
+    duplicateNum: 'Trùng #{idx}',
+    showInFolder: 'Mở thư mục chứa',
+    playTrack: 'Phát bài này',
+    moveToTrash: 'sẽ được chuyển vào Thùng rác'
   },
   smartPlaylists: {
     smartPlaylists: 'Danh sách phát thông minh',
@@ -863,7 +879,103 @@ export const vi: TranslationDictionary = {
     ruleField: 'Trường dữ liệu',
     ruleOperator: 'Điều kiện',
     ruleValue: 'Giá trị',
-    addRule: 'Thêm điều kiện'
+    addRule: 'Thêm điều kiện',
+    needOneRule: 'Danh sách thông minh phải có ít nhất một điều kiện',
+    needName: 'Vui lòng nhập tên cho danh sách thông minh',
+    noMatch: 'Không có bài hát nào khớp danh sách thông minh này',
+    editPlaylist: 'Sửa danh sách',
+    createNew: 'Tạo mới',
+    fieldFormat: 'Định dạng (FLAC, DSD, MP3...)',
+    fieldSampleRate: 'Tần số mẫu (Hz)',
+    fieldBitDepth: 'Độ sâu bit',
+    fieldGenre: 'Thể loại',
+    fieldArtist: 'Nghệ sĩ',
+    fieldAlbum: 'Album',
+    fieldTitle: 'Tên bài hát',
+    fieldYear: 'Năm phát hành',
+    fieldFavorite: 'Trạng thái yêu thích',
+    heartedSongs: 'Bài đã thả tim',
+    unheartedSongs: 'Bài chưa thả tim',
+    playNow: 'Phát ngay',
+    noPlaylistsYet: 'Chưa tạo danh sách thông minh nào',
+    matchesAll: 'Khớp tất cả:',
+    matchesAny: 'Khớp bất kỳ:',
+    savePlaylist: 'Lưu danh sách thông minh',
+    desc: 'Danh sách động theo điều kiện, tự cập nhật khi thư viện thay đổi',
+    savedTab: 'Đã lưu ({count})',
+    listPlaceholder: 'vd. Tuyển tập FLAC Hi-Res, Rock 80s, Yêu thích...',
+    matchAllBtn: 'Khớp tất cả (AND)',
+    matchAnyBtn: 'Khớp bất kỳ (OR)',
+    rulesTitle: 'Điều kiện ({count})',
+    searchPlaceholder: 'Giá trị tìm kiếm...',
+    matchedCount: '{count} bài khớp trong thư viện',
+    moreMatches: '+ {count} bài khớp khác',
+    noCriteriaMatch: 'Hiện chưa có bài nào khớp các tiêu chí đã cho.',
+    emptyDesc:
+      'Danh sách thông minh tự gom bài từ thư viện theo định dạng Hi-Res, thể loại, năm hoặc lượt yêu thích.',
+    createFirst: 'Tạo danh sách thông minh đầu tiên',
+    tracksBadge: '{count} bài',
+    footerCount: '{count} bài sẽ được đưa vào danh sách thông minh này',
+    savedToast: 'Đã lưu danh sách thông minh "{name}"!',
+    deletedToast: 'Đã xóa danh sách thông minh "{name}"',
+    playingToast: 'Đang phát {count} bài',
+    deleteConfirm: 'Xóa danh sách thông minh "{name}"?',
+    opIs: 'là',
+    opIsNot: 'không phải là',
+    opContains: 'chứa',
+    opEquals: 'bằng',
+    opNotContains: 'không chứa',
+    opInFavorites: 'có trong Yêu thích',
+    opNotInFavorites: 'không trong Yêu thích'
+  },
+  backup: {
+    title: 'Sao lưu & Quản lý Playlist',
+    subtitle: 'Xuất/nhập danh sách chuẩn .m3u8 và sao lưu an toàn toàn bộ dữ liệu',
+    m3u8Title: 'Định dạng Playlist Tiêu chuẩn (.m3u8)',
+    m3u8Desc:
+      'Tương thích hoàn toàn với các phần mềm âm nhạc phổ biến khác (Foobar2000, VLC, MusicBee).',
+    noPlaylist: 'Chưa chọn danh sách phát để xuất',
+    emptyExport: 'Danh sách "{name}" không có bài hát nào để xuất (.m3u8)',
+    exportSuccess: 'Đã xuất danh sách "{name}" ({count} bài) sang tệp .m3u8 thành công',
+    invalidM3u8: 'Tệp .m3u8 không chứa đường dẫn bài hát hợp lệ',
+    importSuccess: 'Đã nhập danh sách "{name}" ({count} bài) thành công',
+    createFailed: 'Không thể tạo danh sách phát mới',
+    importError: 'Lỗi khi nhập tệp m3u8: {msg}',
+    exportM3u8: 'Xuất .m3u8',
+    importLabel: 'Nhập playlist có sẵn từ máy tính:',
+    importM3u8: 'Nhập tệp .m3u8',
+    jsonTitle: 'Bản sao lưu Toàn bộ Cấu hình (.json)',
+    jsonDesc:
+      'Lưu giữ toàn bộ User Playlists, cấu hình Equalizer tùy biến, lịch sử nghe và thiết lập cá nhân.',
+    backupConfig: 'Sao lưu toàn bộ cấu hình',
+    restoreBackup: 'Khôi phục từ bản sao lưu',
+    backupSuccess: 'Đã xuất bản sao lưu cấu hình toàn bộ thành công',
+    restoreSuccess: 'Đã khôi phục dữ liệu từ tệp sao lưu thành công!',
+    restoreError: 'Lỗi khi khôi phục bản sao lưu: {msg}'
+  },
+  insights: {
+    personalBadge: 'Thống kê cá nhân',
+    subtitle: 'Tổng quan về thói quen thưởng thức và thư viện âm nhạc của bạn',
+    musicLibrary: 'Thư viện nhạc',
+    tracksReady: 'bài hát sẵn sàng',
+    totalDuration: 'Tổng thời lượng',
+    nonstop: 'nghe nhạc không ngừng',
+    flacWavFiles: 'tệp FLAC/WAV',
+    dsdFiles: 'tệp DSD',
+    libraryQuality: 'Chất lượng âm thanh thư viện',
+    qualityBreakdown: '{l}% Lossless • {m}% MP3 • {o}% Định dạng khác',
+    otherFormat: 'Định dạng khác',
+    topArtists: 'Top Nghệ sĩ phổ biến nhất',
+    noArtistData: 'Chưa đủ dữ liệu nghệ sĩ',
+    tracksSuffix: 'bài',
+    topGenres: 'Top Thể loại yêu thích',
+    noGenreData: 'Chưa có thông tin thể loại'
+  },
+  dragDrop: {
+    title: 'Thả tệp âm thanh hoặc thư mục vào đây',
+    subtitle:
+      'Hỗ trợ FLAC, MP3, WAV, M4A, OPUS, OGG... Tự động quét metadata và nạp vào danh sách phát',
+    ready: 'Sẵn sàng phát ngay lập tức'
   },
   analytics: {
     title: 'Thống Kê Nghe Nhạc Chuyên Sâu',
@@ -894,8 +1006,8 @@ export const vi: TranslationDictionary = {
     topGenres: 'Top Thể Loại Yêu Thích',
     mostPlayedTracks: 'Bảng Xếp Hạng Bài Hát Nghe Nhiều Nhất',
     noData: 'Chưa có dữ liệu nghe nhạc',
-    noDataDesc: 'Hãy thưởng thức một vài bản nhạc yêu thích để hệ thống ghi nhận thống kê chuyên sâu!',
+    noDataDesc:
+      'Hãy thưởng thức một vài bản nhạc yêu thích để hệ thống ghi nhận thống kê chuyên sâu!',
     playsCount: 'lượt phát'
   }
 }
-

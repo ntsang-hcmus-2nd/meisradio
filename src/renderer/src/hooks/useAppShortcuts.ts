@@ -7,11 +7,7 @@ import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUt
  * kẹp phạm vi theo [startTime, endTime] của track CUE thay vì [0, duration]
  * của cả tệp vật lý.
  */
-const seekAudioBy = (
-  audio: HTMLAudioElement,
-  track: any,
-  delta: number
-) => {
+const seekAudioBy = (audio: HTMLAudioElement, track: any, delta: number) => {
   const range = getTrackSeekRange(track, audio.duration)
   audio.currentTime = clampSeekRange(audio.currentTime + delta, range)
 }
@@ -161,7 +157,9 @@ export function useAppShortcuts({
       // / or Ctrl+F -> Focus Search
       if ((e.code === 'Slash' && !e.ctrlKey && !e.shiftKey) || (e.ctrlKey && e.code === 'KeyF')) {
         e.preventDefault()
-        const searchEl = document.querySelector('header input[type="text"]') as HTMLInputElement
+        const searchEl = document.querySelector(
+          '#global-search-input, header input[type="text"]'
+        ) as HTMLInputElement
         if (searchEl) {
           searchEl.focus()
           searchEl.select()

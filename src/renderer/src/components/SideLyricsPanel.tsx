@@ -75,11 +75,7 @@ export const SideLyricsPanel: React.FC<SideLyricsPanelProps> = ({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
-        <SyncedLyricsList
-          lyrics={lyrics}
-          audioRef={audioRef}
-          noLyricsText={t('lyrics.noLyrics')}
-        />
+        <SyncedLyricsList lyrics={lyrics} audioRef={audioRef} noLyricsText={t('lyrics.noLyrics')} />
       </div>
       <div className="p-3 border-t border-theme-30/50 bg-zinc-950/40 h-16 shrink-0 w-full overflow-hidden flex items-center justify-center">
         {bitPerfectEnabled || isDsdTrack(currentTrack) ? (

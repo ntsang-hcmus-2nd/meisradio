@@ -1,20 +1,21 @@
 import React from 'react'
-import {
-  ArrowLeft,
-  Disc,
-  Play,
-  Shuffle,
-  Activity,
-  Cloud,
-  RefreshCw,
-  Download
-} from 'lucide-react'
+import { ArrowLeft, Disc, Play, Shuffle, Activity, Cloud, RefreshCw, Download } from 'lucide-react'
 import { DynamicCoverArt } from '../components/DynamicCoverArt'
 import { TrackTable } from '../components/TrackTable'
-import { SC_GENRES } from '../components/TrackListComponents'
 import { fisherYatesShuffle } from '../utils/arrayUtils'
 import { useTranslation } from '../locales'
 import { useSettingsStore, useUIStore, usePlayerStore } from '../stores'
+
+const SC_GENRES = [
+  { id: 'all-music', key: 'all' },
+  { id: 'electronic', key: 'electronic' },
+  { id: 'hiphoprap', key: 'hiphoprap' },
+  { id: 'pop', key: 'pop' },
+  { id: 'chill', key: 'chill' },
+  { id: 'rock', key: 'rock' },
+  { id: 'ambient', key: 'ambient' },
+  { id: 'danceedm', key: 'danceedm' }
+]
 
 /**
  * Chuẩn hóa 1 raw item trên dashboard SoundCloud thành track format nội bộ
@@ -120,9 +121,7 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                       src={(activeAlbum as any).thumbnail}
                       tier="lg"
                       isLite={isLite}
-                      fallbackIcon={
-                        <Disc size={48} className="text-amber-500/50" />
-                      }
+                      fallbackIcon={<Disc size={48} className="text-amber-500/50" />}
                       className="w-full h-full"
                     />
                   </div>
@@ -140,13 +139,10 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                   {activeAlbum.tracks && activeAlbum.tracks.length > 0 && (
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() =>
-                          handleRowClick(activeAlbum.tracks[0], activeAlbum.tracks)
-                        }
+                        onClick={() => handleRowClick(activeAlbum.tracks[0], activeAlbum.tracks)}
                         className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-amber-500/20 cursor-pointer"
                       >
-                        <Play size={16} className="fill-current" />{' '}
-                        {t('userPlaylistsView.playAll')}
+                        <Play size={16} className="fill-current" /> {t('userPlaylistsView.playAll')}
                       </button>
                       <button
                         onClick={() => {
@@ -167,9 +163,7 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
           {isAlbumLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center">
               <Activity size={40} className="text-amber-500 mb-4 animate-bounce" />
-              <p className="text-amber-400 animate-pulse font-medium">
-                {t('home.extractingSc')}
-              </p>
+              <p className="text-amber-400 animate-pulse font-medium">{t('home.extractingSc')}</p>
             </div>
           ) : (
             <TrackTable
@@ -227,12 +221,8 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                     </div>
                   )}
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-white">
-                      {scUser.username}
-                    </span>
-                    <span className="text-[10px] text-amber-400">
-                      {t('home.scMember')}
-                    </span>
+                    <span className="text-xs font-semibold text-white">{scUser.username}</span>
+                    <span className="text-[10px] text-amber-400">{t('home.scMember')}</span>
                   </div>
                   <button
                     onClick={handleScLogout}
@@ -257,10 +247,7 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                 className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
                 title={t('home.refreshSc')}
               >
-                <RefreshCw
-                  size={16}
-                  className={isScLoading ? 'animate-spin text-amber-400' : ''}
-                />
+                <RefreshCw size={16} className={isScLoading ? 'animate-spin text-amber-400' : ''} />
               </button>
             </div>
           </div>
@@ -292,10 +279,7 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
           <div className="flex-1 overflow-y-auto pr-4 space-y-10 pb-20">
             {isScLoading && scDashboardData.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center mt-20 text-zinc-500">
-                <Activity
-                  size={40}
-                  className="text-amber-500 animate-bounce mb-3"
-                />
+                <Activity size={40} className="text-amber-500 animate-bounce mb-3" />
                 <p className="text-sm font-medium text-amber-400 animate-pulse">
                   {t('home.loadingSc')}
                 </p>
@@ -371,8 +355,7 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                                     {
                                       id: 'sc-dl',
                                       label: t('contextMenu.downloadToLib'),
-                                      onClick: () =>
-                                        handleDashboardItemDownload(item)
+                                      onClick: () => handleDashboardItemDownload(item)
                                     }
                                   ]
                                 })
@@ -387,16 +370,10 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                                     className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                                   />
                                 ) : (
-                                  <Cloud
-                                    size={20}
-                                    className="m-auto mt-3 text-amber-500/50"
-                                  />
+                                  <Cloud size={20} className="m-auto mt-3 text-amber-500/50" />
                                 )}
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <Play
-                                    size={18}
-                                    className="text-amber-400 fill-current ml-0.5"
-                                  />
+                                  <Play size={18} className="text-amber-400 fill-current ml-0.5" />
                                 </div>
                               </div>
                               <div className="flex-1 truncate">
@@ -428,18 +405,14 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                             onClick={() => handleScItemClick(item)}
                           >
                             <div className="w-40 h-40 bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-lg">
-                              {item.coverArt ||
-                              (item.thumbnails && item.thumbnails.length > 0) ? (
+                              {item.coverArt || (item.thumbnails && item.thumbnails.length > 0) ? (
                                 <img
                                   loading="lazy"
                                   src={item.coverArt || item.thumbnails[0].url}
                                   className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                                 />
                               ) : (
-                                <Cloud
-                                  size={40}
-                                  className="m-auto mt-16 text-amber-500/40"
-                                />
+                                <Cloud size={40} className="m-auto mt-16 text-amber-500/40" />
                               )}
                               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                 <button

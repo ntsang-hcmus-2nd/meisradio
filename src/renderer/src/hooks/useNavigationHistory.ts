@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import { useUIStore, useLibraryStore } from '../stores'
 
 interface UseNavigationHistoryProps {
@@ -6,7 +6,10 @@ interface UseNavigationHistoryProps {
   fetchScDashboard?: () => void
 }
 
-export function useNavigationHistory({ fetchDashboard, fetchScDashboard }: UseNavigationHistoryProps = {}) {
+export function useNavigationHistory({
+  fetchDashboard,
+  fetchScDashboard
+}: UseNavigationHistoryProps = {}) {
   const { activeView, setActiveView } = useUIStore()
   const {
     activeAlbum,
@@ -29,16 +32,28 @@ export function useNavigationHistory({ fetchDashboard, fetchScDashboard }: UseNa
   const navForwardRef = useRef<any[]>([])
   const isNavigatingRef = useRef(false)
 
-  const captureNavState = () => ({
-    activeView,
-    activeAlbum,
-    activeArtist,
-    activeGenre,
-    activePlaylist,
-    activeUserPlaylist,
-    searchQuery,
-    searchInput
-  })
+  const captureNavState = useCallback(
+    () => ({
+      activeView,
+      activeAlbum,
+      activeArtist,
+      activeGenre,
+      activePlaylist,
+      activeUserPlaylist,
+      searchQuery,
+      searchInput
+    }),
+    [
+      activeView,
+      activeAlbum,
+      activeArtist,
+      activeGenre,
+      activePlaylist,
+      activeUserPlaylist,
+      searchQuery,
+      searchInput
+    ]
+  )
 
   useEffect(() => {
     if (isNavigatingRef.current) {
@@ -70,10 +85,11 @@ export function useNavigationHistory({ fetchDashboard, fetchScDashboard }: UseNa
     activeGenre,
     activePlaylist,
     activeUserPlaylist,
-    searchQuery
+    searchQuery,
+    captureNavState
   ])
 
-  const handleNavBack = () => {
+  const handleNavBack = useCallback(() => {
     if (activeAlbum) {
       setActiveAlbum(null)
       return
@@ -123,9 +139,28 @@ export function useNavigationHistory({ fetchDashboard, fetchScDashboard }: UseNa
         setSearchInput(prevState.searchInput)
       }
     }
-  }
+  }, [
+    activeAlbum,
+    activeArtist,
+    activeGenre,
+    activePlaylist,
+    activeUserPlaylist,
+    activeView,
+    searchQuery,
+    searchInput,
+    setActiveView,
+    setActiveAlbum,
+    setActiveArtist,
+    setActiveGenre,
+    setActivePlaylist,
+    setActiveUserPlaylist,
+    setSearchQuery,
+    setSearchInput,
+    fetchDashboard,
+    fetchScDashboard
+  ])
 
-  const handleNavForward = () => {
+  const handleNavForward = useCallback(() => {
     if (navForwardRef.current.length > 0) {
       const nextState = navForwardRef.current.pop()
       if (nextState) {
@@ -141,7 +176,16 @@ export function useNavigationHistory({ fetchDashboard, fetchScDashboard }: UseNa
         setSearchInput(nextState.searchInput)
       }
     }
-  }
+  }, [
+    setActiveView,
+    setActiveAlbum,
+    setActiveArtist,
+    setActiveGenre,
+    setActivePlaylist,
+    setActiveUserPlaylist,
+    setSearchQuery,
+    setSearchInput
+  ])
 
   useEffect(() => {
     const handleMouseUp = (e: MouseEvent) => {
@@ -170,16 +214,7 @@ export function useNavigationHistory({ fetchDashboard, fetchScDashboard }: UseNa
       if (typeof unlistenBack === 'function') unlistenBack()
       if (typeof unlistenForward === 'function') unlistenForward()
     }
-  }, [
-    activeAlbum,
-    activeArtist,
-    activeGenre,
-    activePlaylist,
-    activeUserPlaylist,
-    searchQuery,
-    searchInput,
-    activeView
-  ])
+  }, [handleNavBack, handleNavForward])
 
   return {
     handleNavBack,

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
@@ -165,7 +164,6 @@ class KoffiSqlite3 {
   private _column_type: any
   private _column_text: any
   private _column_double: any
-  private _column_int: any
   private _column_int64: any
   private _bind_text: any
   private _bind_double: any
@@ -198,7 +196,6 @@ class KoffiSqlite3 {
     this._column_type = this.lib.func('int sqlite3_column_type(void *stmt, int iCol)')
     this._column_text = this.lib.func('const char *sqlite3_column_text(void *stmt, int iCol)')
     this._column_double = this.lib.func('double sqlite3_column_double(void *stmt, int iCol)')
-    this._column_int = this.lib.func('int sqlite3_column_int(void *stmt, int iCol)')
     this._column_int64 = this.lib.func('int64 sqlite3_column_int64(void *stmt, int iCol)')
     this._bind_text = this.lib.func(
       'int sqlite3_bind_text(void *stmt, int iCol, const char *val, int nByte, intptr_t destructor)'
@@ -319,9 +316,6 @@ class KoffiSqlite3 {
   public _colDouble(stmt: any, i: number): number {
     return this._column_double(stmt, i)
   }
-  public _colInt(stmt: any, i: number): number {
-    return this._column_int(stmt, i)
-  }
   public _colInt64(stmt: any, i: number): number {
     return this._column_int64(stmt, i)
   }
@@ -372,69 +366,84 @@ class KoffiPreparedStatement {
   public run(...params: any[]): { changes: number } {
     if (this.isFinalized) throw new Error('Statement is finalized')
     this.bindParams(params)
-    const rc = this.driver._stepStmt(this.stmt)
-    // SQLITE_DONE (101) or SQLITE_ROW (100)
-    if (rc !== 101 && rc !== 100 && rc !== 0) {
-      throw new Error(
-        `[PreparedStatement.run] Error rc=${rc}: ${this.driver.getErrmsg()} (SQL: ${this.sql})`
-      )
+    try {
+      const rc = this.driver._stepStmt(this.stmt)
+      // SQLITE_DONE (101) or SQLITE_ROW (100)
+      if (rc !== 101 && rc !== 100 && rc !== 0) {
+        throw new Error(
+          `[PreparedStatement.run] Error rc=${rc}: ${this.driver.getErrmsg()} (SQL: ${this.sql})`
+        )
+      }
+      return { changes: this.driver.getChanges() }
+    } finally {
+      this.driver._resetStmt(this.stmt)
+      this.driver._clearStmt(this.stmt)
     }
-    return { changes: this.driver.getChanges() }
   }
 
   public get<T = any>(...params: any[]): T | null {
     if (this.isFinalized) throw new Error('Statement is finalized')
     this.bindParams(params)
-    const rc = this.driver._stepStmt(this.stmt)
-    if (rc === 100) {
-      // SQLITE_ROW
-      const colCount = this.driver._colCount(this.stmt)
-      const row: any = {}
-      for (let i = 0; i < colCount; i++) {
-        const name = this.driver._colName(this.stmt, i)
-        const type = this.driver._colType(this.stmt, i)
-        if (type === 5) {
-          // SQLITE_NULL
-          row[name] = null
-        } else if (type === 1) {
-          // SQLITE_INTEGER
-          row[name] = Number(this.driver._colInt64(this.stmt, i))
-        } else if (type === 2) {
-          // SQLITE_FLOAT
-          row[name] = this.driver._colDouble(this.stmt, i)
-        } else {
-          // SQLITE_TEXT or other
-          row[name] = this.driver._colText(this.stmt, i)
+    try {
+      const rc = this.driver._stepStmt(this.stmt)
+      if (rc === 100) {
+        // SQLITE_ROW
+        const colCount = this.driver._colCount(this.stmt)
+        const row: any = {}
+        for (let i = 0; i < colCount; i++) {
+          const name = this.driver._colName(this.stmt, i)
+          const type = this.driver._colType(this.stmt, i)
+          if (type === 5) {
+            // SQLITE_NULL
+            row[name] = null
+          } else if (type === 1) {
+            // SQLITE_INTEGER
+            row[name] = Number(this.driver._colInt64(this.stmt, i))
+          } else if (type === 2) {
+            // SQLITE_FLOAT
+            row[name] = this.driver._colDouble(this.stmt, i)
+          } else {
+            // SQLITE_TEXT or other
+            row[name] = this.driver._colText(this.stmt, i)
+          }
         }
+        return row as T
       }
-      return row as T
+      return null
+    } finally {
+      this.driver._resetStmt(this.stmt)
+      this.driver._clearStmt(this.stmt)
     }
-    return null
   }
 
   public all<T = any>(...params: any[]): T[] {
     if (this.isFinalized) throw new Error('Statement is finalized')
     this.bindParams(params)
-    const rows: T[] = []
-    const colCount = this.driver._colCount(this.stmt)
-    while (this.driver._stepStmt(this.stmt) === 100) {
-      const row: any = {}
-      for (let i = 0; i < colCount; i++) {
-        const name = this.driver._colName(this.stmt, i)
-        const type = this.driver._colType(this.stmt, i)
-        if (type === 5) {
-          row[name] = null
-        } else if (type === 1) {
-          row[name] = Number(this.driver._colInt64(this.stmt, i))
-        } else if (type === 2) {
-          row[name] = this.driver._colDouble(this.stmt, i)
-        } else {
-          row[name] = this.driver._colText(this.stmt, i)
+    try {
+      const rows: T[] = []
+      const colCount = this.driver._colCount(this.stmt)
+      while (this.driver._stepStmt(this.stmt) === 100) {
+        const row: any = {}
+        for (let i = 0; i < colCount; i++) {
+          const name = this.driver._colName(this.stmt, i)
+          const type = this.driver._colType(this.stmt, i)
+          if (type === 5) {
+            row[name] = null
+          } else if (type === 1) {
+            row[name] = Number(this.driver._colInt64(this.stmt, i))
+          } else if (type === 2) {
+            row[name] = this.driver._colDouble(this.stmt, i)
+          } else {
+            row[name] = this.driver._colText(this.stmt, i)
+          }
         }
+        rows.push(row as T)
       }
-      rows.push(row as T)
+      return rows
+    } finally {
+      this.driver._resetStmt(this.stmt)
+      this.driver._clearStmt(this.stmt)
     }
-    return rows
   }
 
   public finalize(): void {
@@ -3266,6 +3275,10 @@ export class SqliteStorage {
         this.stmtGetPlayEventById?.finalize()
         this.stmtIncrementPlayStat?.finalize()
         this.stmtUpdatePlayStatDuration?.finalize()
+
+        try {
+          this.checkpoint('TRUNCATE')
+        } catch (_) {}
 
         this.db.close()
       } catch {

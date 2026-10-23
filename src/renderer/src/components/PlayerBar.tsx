@@ -25,6 +25,7 @@ import {
 } from '../stores'
 import { useTranslation, useLanguage } from '../locales'
 import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate } from '../utils/formatUtils'
+import { getTrackKey } from '../utils/trackStateUtils'
 
 interface PlayerBarProps {
   audioRef: React.RefObject<HTMLAudioElement | null>
@@ -202,7 +203,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             type="button"
             onClick={async (e) => {
               e.stopPropagation()
-              const trackKey = currentTrack.filePath || currentTrack.id
+              const trackKey = getTrackKey(currentTrack)
               if (!trackKey) return
               const isFav = favoriteTrackIds.includes(trackKey)
               toggleFavoriteId(trackKey)
@@ -218,12 +219,12 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               )
             }}
             className={`p-1.5 rounded-full transition-all shrink-0 cursor-pointer ${
-              favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
+              getTrackKey(currentTrack) && favoriteTrackIds.includes(getTrackKey(currentTrack)!)
                 ? 'text-rose-500 hover:text-rose-400 bg-rose-500/10'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
             }`}
             title={
-              favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
+              getTrackKey(currentTrack) && favoriteTrackIds.includes(getTrackKey(currentTrack)!)
                 ? t('favorites.removeFromFavorites') || 'Bỏ yêu thích'
                 : t('favorites.addToFavorites') || 'Yêu thích'
             }
@@ -231,7 +232,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             <Heart
               size={18}
               className={
-                favoriteTrackIds.includes(currentTrack.filePath || currentTrack.id)
+                getTrackKey(currentTrack) && favoriteTrackIds.includes(getTrackKey(currentTrack)!)
                   ? 'fill-rose-500'
                   : ''
               }

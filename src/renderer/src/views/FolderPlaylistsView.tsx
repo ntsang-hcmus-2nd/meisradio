@@ -1,13 +1,5 @@
 import React from 'react'
-import {
-  Plus,
-  Sparkles,
-  ArrowLeft,
-  Play,
-  Shuffle,
-  Upload,
-  FolderPlus
-} from 'lucide-react'
+import { Plus, Sparkles, ArrowLeft, Play, Shuffle, Upload, FolderPlus } from 'lucide-react'
 import { DynamicCoverArt } from '../components/DynamicCoverArt'
 import { TrackTable } from '../components/TrackTable'
 import { QuickFilterChips } from '../components/QuickFilterChips'
@@ -124,16 +116,12 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
                   <button
                     onClick={() => {
                       if (processedPlaylistTracks.length > 0) {
-                        handleRowClick(
-                          processedPlaylistTracks[0],
-                          processedPlaylistTracks
-                        )
+                        handleRowClick(processedPlaylistTracks[0], processedPlaylistTracks)
                       }
                     }}
                     className="flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
                   >
-                    <Play size={16} className="fill-current" />{' '}
-                    {t('userPlaylistsView.playAll')}
+                    <Play size={16} className="fill-current" /> {t('userPlaylistsView.playAll')}
                   </button>
                   <button
                     onClick={() => {
@@ -158,9 +146,7 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
                 className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-zinc-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
               >
                 <Plus size={16} />{' '}
-                <span className="btn-text">
-                  {t('playlistsView.addExistingSongs')}
-                </span>
+                <span className="btn-text">{t('playlistsView.addExistingSongs')}</span>
               </button>
               <button
                 onClick={handleImportFiles}
@@ -168,9 +154,7 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
                 className="sys-btn flex items-center gap-2 bg-theme-10 hover:bg-theme-10 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
               >
                 <Upload size={16} />{' '}
-                <span className="btn-text">
-                  {t('playlistsView.importFromComputer')}
-                </span>
+                <span className="btn-text">{t('playlistsView.importFromComputer')}</span>
               </button>
             </div>
           </div>
@@ -200,9 +184,7 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
       <div className="flex items-center justify-between mb-6 sm:mb-8 gap-3 flex-wrap">
         <div className="flex items-end gap-3 min-w-0 flex-1">
           <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">
-            {searchQuery
-              ? t('playlistsView.searchResults')
-              : t('playlistsView.title')}
+            {searchQuery ? t('playlistsView.searchResults') : t('playlistsView.title')}
           </h2>
           <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
             {playlists.length} {t('userPlaylistsView.playlistCount')}
@@ -248,12 +230,8 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
                   <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
                     <div className="col-span-1 text-center">#</div>
                     <div className="col-span-7">{t('playlistsView.title')}</div>
-                    <div className="col-span-2 text-center">
-                      {t('common.songs')}
-                    </div>
-                    <div className="col-span-2 text-right">
-                      {t('trackTable.actions')}
-                    </div>
+                    <div className="col-span-2 text-center">{t('common.songs')}</div>
+                    <div className="col-span-2 text-right">{t('trackTable.actions')}</div>
                   </div>
                   <div className="divide-y divide-theme-30/20">
                     {visiblePlaylists.map((pl, idx) => (
@@ -311,9 +289,7 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
                   ref={playlistsLoadMoreRef}
                   className="w-full py-6 flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer transition"
                   onClick={() =>
-                    setPlaylistsRenderLimit((prev) =>
-                      Math.min(prev + 36, matchedPlaylists.length)
-                    )
+                    setPlaylistsRenderLimit((prev) => Math.min(prev + 36, matchedPlaylists.length))
                   }
                 >
                   <span>
@@ -350,13 +326,11 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
             </div>
           )}
 
-          {searchQuery &&
-            matchedPlaylists.length === 0 &&
-            processedLibraryTracks.length === 0 && (
-              <p className="text-zinc-500 mt-8 text-center">
-                {t('playlistsView.noResults', { query: searchQuery })}
-              </p>
-            )}
+          {searchQuery && matchedPlaylists.length === 0 && processedLibraryTracks.length === 0 && (
+            <p className="text-zinc-500 mt-8 text-center">
+              {t('playlistsView.noResults', { query: searchQuery })}
+            </p>
+          )}
         </div>
       )}
     </>

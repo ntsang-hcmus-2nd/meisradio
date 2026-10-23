@@ -21,8 +21,12 @@ function computeFFT(re: Float32Array, im: Float32Array, n: number) {
   let j = 0
   for (let i = 0; i < n - 1; i++) {
     if (i < j) {
-      let temp = re[i]; re[i] = re[j]; re[j] = temp
-      temp = im[i]; im[i] = im[j]; im[j] = temp
+      let temp = re[i]
+      re[i] = re[j]
+      re[j] = temp
+      temp = im[i]
+      im[i] = im[j]
+      im[j] = temp
     }
     let k = n >> 1
     while (k <= j) {
@@ -62,526 +66,567 @@ function computeFFT(re: Float32Array, im: Float32Array, n: number) {
 // Spek / Audacity style color palette
 function getColor(norm: number): [number, number, number] {
   if (norm <= 0.02) return [10, 10, 24] // Black / Navy background
-  
+
   if (norm < 0.2) {
     const t = norm / 0.2
-    return [
-      Math.floor(10 + t * 40),
-      Math.floor(10 + t * 20),
-      Math.floor(24 + t * 140)
-    ] // Deep Indigo
+    return [Math.floor(10 + t * 40), Math.floor(10 + t * 20), Math.floor(24 + t * 140)] // Deep Indigo
   } else if (norm < 0.4) {
     const t = (norm - 0.2) / 0.2
-    return [
-      Math.floor(50 + t * 10),
-      Math.floor(30 + t * 160),
-      Math.floor(164 - t * 40)
-    ] // Cyan / Teal
+    return [Math.floor(50 + t * 10), Math.floor(30 + t * 160), Math.floor(164 - t * 40)] // Cyan / Teal
   } else if (norm < 0.65) {
     const t = (norm - 0.4) / 0.25
-    return [
-      Math.floor(60 + t * 195),
-      Math.floor(190 + t * 50),
-      Math.floor(124 - t * 124)
-    ] // Green / Lime
+    return [Math.floor(60 + t * 195), Math.floor(190 + t * 50), Math.floor(124 - t * 124)] // Green / Lime
   } else if (norm < 0.85) {
     const t = (norm - 0.65) / 0.2
-    return [
-      255,
-      Math.floor(240 - t * 160),
-      0
-    ] // Yellow / Orange
+    return [255, Math.floor(240 - t * 160), 0] // Yellow / Orange
   } else {
     const t = (norm - 0.85) / 0.15
-    return [
-      255,
-      Math.floor(80 + t * 175),
-      Math.floor(t * 255)
-    ] // Orange / Red / White
+    return [255, Math.floor(80 + t * 175), Math.floor(t * 255)] // Orange / Red / White
   }
 }
 
 // In-memory cache for analyzed spectrograms
 const spectrogramCache = new Map<string, ImageData>()
 
-export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(({
-  isOpen,
-  onClose,
-  currentTrack,
-  audioRef,
-  isPlaying
-}) => {
-  const { t, language } = useTranslation()
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [loading, setLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [hoverInfo, setHoverInfo] = useState<{ x: number; y: number; time: string; freq: string } | null>(null)
-  const [detectedSampleRate, setDetectedSampleRate] = useState<number>(currentTrack?.sampleRate || 44100)
-  const [detectedBitDepth, setDetectedBitDepth] = useState<number | undefined>(currentTrack?.bitDepth)
+export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
+  ({ isOpen, onClose, currentTrack, audioRef, isPlaying }) => {
+    const { t, language } = useTranslation()
+    const canvasRef = useRef<HTMLCanvasElement>(null)
+    const [loading, setLoading] = useState(false)
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
+    const [currentTime, setCurrentTime] = useState(0)
+    const [duration, setDuration] = useState(0)
+    const [hoverInfo, setHoverInfo] = useState<{
+      x: number
+      y: number
+      time: string
+      freq: string
+    } | null>(null)
+    const [detectedSampleRate, setDetectedSampleRate] = useState<number>(
+      currentTrack?.sampleRate || 44100
+    )
+    const [detectedBitDepth, setDetectedBitDepth] = useState<number | undefined>(
+      currentTrack?.bitDepth
+    )
 
-  const activeSampleRate = detectedSampleRate || currentTrack?.sampleRate || 44100
-  // Dải tần số cực đại theo định lý Nyquist là Sample Rate / 2 (ví dụ 96kHz -> 48kHz, 48kHz -> 24kHz)
-  const nyquistFreq = Math.round(activeSampleRate / 2)
+    const activeSampleRate = detectedSampleRate || currentTrack?.sampleRate || 44100
+    // Dải tần số cực đại theo định lý Nyquist là Sample Rate / 2 (ví dụ 96kHz -> 48kHz, 48kHz -> 24kHz)
+    const nyquistFreq = Math.round(activeSampleRate / 2)
 
-  // Cập nhật khi currentTrack thay đổi
-  useEffect(() => {
-    if (currentTrack?.sampleRate) {
-      setDetectedSampleRate(currentTrack.sampleRate)
-    }
-    if (currentTrack?.bitDepth) {
-      setDetectedBitDepth(currentTrack.bitDepth)
-    }
-  }, [currentTrack?.sampleRate, currentTrack?.bitDepth, currentTrack?.id])
-
-  // Giải phóng tức thì bộ nhớ RAM và Cache khi đóng Spectrogram Modal
-  const releaseSpectrogramMemory = () => {
-    spectrogramCache.clear()
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d')
-      if (ctx) {
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    // Cập nhật khi currentTrack thay đổi
+    useEffect(() => {
+      if (currentTrack?.sampleRate) {
+        setDetectedSampleRate(currentTrack.sampleRate)
       }
-      canvasRef.current.width = 1
-      canvasRef.current.height = 1
-    }
-    if (typeof (window as any).api?.clearMemoryCache === 'function') {
-      (window as any).api.clearMemoryCache()
-    }
-    if (typeof (window as any).api?.forceGC === 'function') {
-      (window as any).api.forceGC()
-    }
-  }
+      if (currentTrack?.bitDepth) {
+        setDetectedBitDepth(currentTrack.bitDepth)
+      }
+    }, [currentTrack?.sampleRate, currentTrack?.bitDepth, currentTrack?.id])
 
-  useEffect(() => {
-    return () => {
+    // Giải phóng tức thì bộ nhớ RAM và Cache khi đóng Spectrogram Modal
+    const releaseSpectrogramMemory = () => {
+      spectrogramCache.clear()
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d')
+        if (ctx) {
+          ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+        }
+        canvasRef.current.width = 1
+        canvasRef.current.height = 1
+      }
+      if (typeof (window as any).api?.clearMemoryCache === 'function') {
+        ;(window as any).api.clearMemoryCache()
+      }
+      if (typeof (window as any).api?.forceGC === 'function') {
+        ;(window as any).api.forceGC()
+      }
+    }
+
+    useEffect(() => {
+      return () => {
+        releaseSpectrogramMemory()
+      }
+    }, [])
+
+    const handleModalClose = () => {
       releaseSpectrogramMemory()
+      onClose()
     }
-  }, [])
 
-  const handleModalClose = () => {
-    releaseSpectrogramMemory()
-    onClose()
-  }
+    // Track playback time for playhead
+    useEffect(() => {
+      if (!isOpen) return
 
-  // Track playback time for playhead
-  useEffect(() => {
-    if (!isOpen) return
+      const bitPerfectEnabled = usePlayerStore.getState().bitPerfectEnabled
+      const useBass = Boolean(bitPerfectEnabled || isDsdTrack(currentTrack))
 
-    const bitPerfectEnabled = usePlayerStore.getState().bitPerfectEnabled
-    const useBass = Boolean(bitPerfectEnabled || isDsdTrack(currentTrack))
-
-    const updatePlayhead = (overrideTime?: number) => {
-      let cur = 0
-      if (typeof overrideTime === 'number') {
-        cur = overrideTime
-      } else if (useBass) {
-        cur = (audioRef?.current as any)?._currentTime ?? 0
-      } else {
-        cur = Math.max(0, (audioRef?.current?.currentTime ?? 0) - (currentTrack?.startTime || 0))
+      const updatePlayhead = (overrideTime?: number) => {
+        let cur = 0
+        if (typeof overrideTime === 'number') {
+          cur = overrideTime
+        } else if (useBass) {
+          cur = (audioRef?.current as any)?._currentTime ?? 0
+        } else {
+          cur = Math.max(0, (audioRef?.current?.currentTime ?? 0) - (currentTrack?.startTime || 0))
+        }
+        setCurrentTime(cur)
+        setDuration(currentTrack?.duration || audioRef?.current?.duration || 0)
       }
-      setCurrentTime(cur)
-      setDuration(currentTrack?.duration || audioRef?.current?.duration || 0)
-    }
 
-    let cleanupBass: (() => void) | undefined
-    if (useBass) {
-      const onTimeListener = (window as any).api?.onBassTime
-      if (typeof onTimeListener === 'function') {
-        cleanupBass = onTimeListener((val: number) => {
-          updatePlayhead(val)
-        })
+      let cleanupBass: (() => void) | undefined
+      if (useBass) {
+        const onTimeListener = (window as any).api?.onBassTime
+        if (typeof onTimeListener === 'function') {
+          cleanupBass = onTimeListener((val: number) => {
+            updatePlayhead(val)
+          })
+        }
       }
-    }
 
-    const interval = setInterval(() => updatePlayhead(), 200)
-    updatePlayhead()
-    return () => {
-      clearInterval(interval)
-      if (typeof cleanupBass === 'function') cleanupBass()
-    }
-  }, [isOpen, audioRef, currentTrack])
+      const interval = setInterval(() => updatePlayhead(), 200)
+      updatePlayhead()
+      return () => {
+        clearInterval(interval)
+        if (typeof cleanupBass === 'function') cleanupBass()
+      }
+    }, [isOpen, audioRef, currentTrack])
 
-  // Full-track STFT Spectrogram Generator
-  useEffect(() => {
-    if (!isOpen || !currentTrack) return
+    // Full-track STFT Spectrogram Generator
+    useEffect(() => {
+      if (!isOpen || !currentTrack) return
 
-    const trackKey = currentTrack.filePath || currentTrack.id
-    if (!trackKey) return
+      const trackKey = currentTrack.id || currentTrack.filePath
+      if (!trackKey) return
 
-    let isCancelled = false
+      // Đoạn CUE cần dựng (undefined = cả file); main chỉ cắt khi file >150MB,
+      // file nhỏ decode full rồi slice ở renderer.
+      const cueSegStart =
+        currentTrack.startTime && currentTrack.startTime > 0 ? currentTrack.startTime : undefined
+      const cueSegEnd =
+        currentTrack.endTime && currentTrack.endTime > 0 ? currentTrack.endTime : undefined
 
-    const loadAudioData = async (key: string): Promise<{ buffer: ArrayBuffer; sampleRate?: number; bitDepth?: number }> => {
-      // 1. Thử qua IPC electron bridge trước để lấy buffer + metadata gốc
-      if (typeof (window as any).api?.readAudioBuffer === 'function') {
+      let isCancelled = false
+
+      const loadAudioData = async (
+        key: string
+      ): Promise<{
+        buffer: ArrayBuffer
+        sampleRate?: number
+        bitDepth?: number
+        segmented?: boolean
+      }> => {
+        // 1. Thử qua IPC electron bridge trước để lấy buffer + metadata gốc
+        if (typeof (window as any).api?.readAudioBuffer === 'function') {
+          try {
+            const res = await (window as any).api.readAudioBuffer(key, cueSegStart, cueSegEnd)
+            if (res && res.success && res.buffer) {
+              return {
+                buffer: res.buffer,
+                sampleRate: res.sampleRate,
+                bitDepth: res.bitDepth,
+                segmented: res.segmented === true
+              }
+            }
+          } catch (ipcErr) {
+            console.warn('[Spectrogram] IPC readAudioBuffer failed:', ipcErr)
+          }
+        }
+
+        // 2. Fallback: Đọc bằng fetch trực tiếp với URL được stream an toàn qua HTTP Stream Server
+        const url = formatAudioSource(key)
+
+        const response = await fetch(url)
+        if (!response.ok) {
+          throw new Error(`Không thể đọc file (${response.status} ${response.statusText})`)
+        }
+        const buffer = await response.arrayBuffer()
+        return { buffer }
+      }
+
+      const generateSpectrogram = async () => {
+        const canvas = canvasRef.current
+        if (!canvas) return
+
+        const W = 1024
+        const H = 400
+        canvas.width = W
+        canvas.height = H
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+
+        if (spectrogramCache.has(trackKey)) {
+          ctx.putImageData(spectrogramCache.get(trackKey)!, 0, 0)
+          setLoading(false)
+          return
+        }
+
+        setLoading(true)
+        setErrorMsg(null)
+
+        if (isDsdTrack(currentTrack)) {
+          setErrorMsg(
+            language === 'vi'
+              ? 'Định dạng DSD (Direct Stream Digital 1-bit) là luồng bitstream nguyên bản cho DAC phần cứng, không hỗ trợ dựng phổ tần số qua Web Audio.'
+              : 'DSD (Direct Stream Digital 1-bit) is a raw bitstream for hardware DACs and does not support browser Web Audio spectrogram rendering.'
+          )
+          setLoading(false)
+          return
+        }
+
         try {
-          const res = await (window as any).api.readAudioBuffer(key)
-          if (res && res.success && res.buffer) {
-            return {
-              buffer: res.buffer,
-              sampleRate: res.sampleRate,
-              bitDepth: res.bitDepth
+          // 1. Lấy dữ liệu file âm thanh và sampleRate gốc từ metadata
+          const audioData = await loadAudioData(trackKey)
+          if (isCancelled || !audioData?.buffer) return
+
+          const fileSampleRate = audioData.sampleRate || currentTrack.sampleRate || 44100
+          if (audioData.sampleRate) setDetectedSampleRate(audioData.sampleRate)
+          if (audioData.bitDepth) setDetectedBitDepth(audioData.bitDepth)
+
+          // 2. Decode AudioBuffer qua OfflineAudioContext để bảo toàn sample rate gốc (không bị Chromium downsample về 48kHz)
+          let audioBuffer: AudioBuffer
+          try {
+            const OfflineCtxClass =
+              window.OfflineAudioContext || (window as any).webkitOfflineAudioContext
+            const decodeCtx = new OfflineCtxClass(1, 1, fileSampleRate)
+            audioBuffer = await decodeCtx.decodeAudioData(audioData.buffer.slice(0))
+          } catch (_offlineErr) {
+            const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext
+            const tempCtx = new AudioCtxClass()
+            audioBuffer = await tempCtx.decodeAudioData(audioData.buffer.slice(0))
+            try {
+              tempCtx.close()
+            } catch (_c) {}
+          }
+
+          if (isCancelled) return
+
+          const actualSampleRate = audioBuffer.sampleRate || fileSampleRate
+          setDetectedSampleRate(actualSampleRate)
+
+          const channelDataFull = audioBuffer.getChannelData(0)
+          // CUE Sheet: chỉ dựng phổ đoạn [startTime, endTime] của track hiện tại
+          // thay vì cả file album lớn (trackKey dạng file://...#track-N).
+          // Nếu main đã cắt sẵn (file >150MB) thì buffer chính là đoạn cần dựng.
+          let channelData = channelDataFull
+          let segmentDuration = audioBuffer.duration
+          if (!audioData.segmented) {
+            const cueStart = currentTrack.startTime || 0
+            const cueEnd = currentTrack.endTime || 0
+            if (cueStart > 0 || (cueEnd > 0 && cueEnd < audioBuffer.duration)) {
+              const startSample = Math.max(0, Math.floor(cueStart * actualSampleRate))
+              const endSample = Math.min(
+                channelDataFull.length,
+                cueEnd > 0 ? Math.ceil(cueEnd * actualSampleRate) : channelDataFull.length
+              )
+              if (endSample > startSample) {
+                channelData = channelDataFull.slice(startSample, endSample)
+                segmentDuration = (endSample - startSample) / actualSampleRate
+              }
             }
           }
-        } catch (ipcErr) {
-          console.warn('[Spectrogram] IPC readAudioBuffer failed:', ipcErr)
-        }
-      }
+          const totalSamples = channelData.length
+          const trackDuration = segmentDuration
+          setDuration(trackDuration)
 
-      // 2. Fallback: Đọc bằng fetch trực tiếp với URL được stream an toàn qua HTTP Stream Server
-      const url = formatAudioSource(key)
-
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error(`Không thể đọc file (${response.status} ${response.statusText})`)
-      }
-      const buffer = await response.arrayBuffer()
-      return { buffer }
-    }
-
-    const generateSpectrogram = async () => {
-      const canvas = canvasRef.current
-      if (!canvas) return
-
-      const W = 1024
-      const H = 400
-      canvas.width = W
-      canvas.height = H
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-
-      if (spectrogramCache.has(trackKey)) {
-        ctx.putImageData(spectrogramCache.get(trackKey)!, 0, 0)
-        setLoading(false)
-        return
-      }
-
-      setLoading(true)
-      setErrorMsg(null)
-
-      if (isDsdTrack(currentTrack)) {
-        setErrorMsg(
-          language === 'vi' 
-            ? 'Định dạng DSD (Direct Stream Digital 1-bit) là luồng bitstream nguyên bản cho DAC phần cứng, không hỗ trợ dựng phổ tần số qua Web Audio.'
-            : 'DSD (Direct Stream Digital 1-bit) is a raw bitstream for hardware DACs and does not support browser Web Audio spectrogram rendering.'
-        )
-        setLoading(false)
-        return
-      }
-
-      try {
-        // 1. Lấy dữ liệu file âm thanh và sampleRate gốc từ metadata
-        const audioData = await loadAudioData(trackKey)
-        if (isCancelled || !audioData?.buffer) return
-
-        const fileSampleRate = audioData.sampleRate || currentTrack.sampleRate || 44100
-        if (audioData.sampleRate) setDetectedSampleRate(audioData.sampleRate)
-        if (audioData.bitDepth) setDetectedBitDepth(audioData.bitDepth)
-
-        // 2. Decode AudioBuffer qua OfflineAudioContext để bảo toàn sample rate gốc (không bị Chromium downsample về 48kHz)
-        let audioBuffer: AudioBuffer
-        try {
-          const OfflineCtxClass = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext
-          const decodeCtx = new OfflineCtxClass(1, 1, fileSampleRate)
-          audioBuffer = await decodeCtx.decodeAudioData(audioData.buffer.slice(0))
-        } catch (_offlineErr) {
-          const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext
-          const tempCtx = new AudioCtxClass()
-          audioBuffer = await tempCtx.decodeAudioData(audioData.buffer.slice(0))
-          try { tempCtx.close() } catch (_c) {}
-        }
-
-        if (isCancelled) return
-
-        const actualSampleRate = audioBuffer.sampleRate || fileSampleRate
-        setDetectedSampleRate(actualSampleRate)
-
-        const channelData = audioBuffer.getChannelData(0)
-        const totalSamples = channelData.length
-        const trackDuration = audioBuffer.duration
-        setDuration(trackDuration)
-
-        // 3. Chuẩn bị STFT
-        const fftSize = 2048
-        const halfFFT = fftSize / 2
-        const hanning = new Float32Array(fftSize)
-        for (let i = 0; i < fftSize; i++) {
-          hanning[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)))
-        }
-
-        const imageData = ctx.createImageData(W, H)
-        const pixels = imageData.data
-
-        const re = new Float32Array(fftSize)
-        const im = new Float32Array(fftSize)
-
-        // Phân tích từng cột dọc (Column-wise STFT)
-        for (let x = 0; x < W; x++) {
-          const sampleCenter = Math.floor((x / W) * (totalSamples - fftSize))
-          if (sampleCenter < 0 || sampleCenter + fftSize > totalSamples) continue
-
-          // Áp dụng cửa sổ Hanning
+          // 3. Chuẩn bị STFT
+          const fftSize = 2048
+          const halfFFT = fftSize / 2
+          const hanning = new Float32Array(fftSize)
           for (let i = 0; i < fftSize; i++) {
-            re[i] = channelData[sampleCenter + i] * hanning[i]
-            im[i] = 0
+            hanning[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)))
           }
 
-          computeFFT(re, im, fftSize)
+          const imageData = ctx.createImageData(W, H)
+          const pixels = imageData.data
 
-          // Vẽ các điểm ảnh từ dưới lên: Y = 0 (đỉnh) là Nyquist (actualSampleRate / 2), Y = H - 1 (đáy) là 0 Hz
-          for (let y = 0; y < H; y++) {
-            const binFloat = ((H - 1 - y) / (H - 1)) * (halfFFT - 1)
-            const binStart = Math.max(0, Math.floor(binFloat))
-            const binEnd = Math.min(halfFFT - 1, Math.ceil(((H - y) / (H - 1)) * (halfFFT - 1)))
+          const re = new Float32Array(fftSize)
+          const im = new Float32Array(fftSize)
 
-            let maxMag = 0
-            for (let b = binStart; b <= binEnd; b++) {
-              const mag = Math.sqrt(re[b] * re[b] + im[b] * im[b])
-              if (mag > maxMag) maxMag = mag
+          // Phân tích từng cột dọc (Column-wise STFT)
+          for (let x = 0; x < W; x++) {
+            const sampleCenter = Math.floor((x / W) * (totalSamples - fftSize))
+            if (sampleCenter < 0 || sampleCenter + fftSize > totalSamples) continue
+
+            // Áp dụng cửa sổ Hanning
+            for (let i = 0; i < fftSize; i++) {
+              re[i] = channelData[sampleCenter + i] * hanning[i]
+              im[i] = 0
             }
 
-            // Chuẩn hóa năng lượng với Coherent Gain của cửa sổ Hanning (0.5)
-            const normalizedMag = maxMag / (halfFFT * 0.5)
-            const dB = 20 * Math.log10(normalizedMag + 1e-6)
-            // Chuẩn hóa dải động từ -95dB đến 0dB
-            const norm = Math.max(0, Math.min(1, (dB + 95) / 95))
+            computeFFT(re, im, fftSize)
 
-            const [r, g, b] = getColor(norm)
-            const pixelIndex = (y * W + x) * 4
-            pixels[pixelIndex] = r
-            pixels[pixelIndex + 1] = g
-            pixels[pixelIndex + 2] = b
-            pixels[pixelIndex + 3] = 255
+            // Vẽ các điểm ảnh từ dưới lên: Y = 0 (đỉnh) là Nyquist (actualSampleRate / 2), Y = H - 1 (đáy) là 0 Hz
+            for (let y = 0; y < H; y++) {
+              const binFloat = ((H - 1 - y) / (H - 1)) * (halfFFT - 1)
+              const binStart = Math.max(0, Math.floor(binFloat))
+              const binEnd = Math.min(halfFFT - 1, Math.ceil(((H - y) / (H - 1)) * (halfFFT - 1)))
+
+              let maxMag = 0
+              for (let b = binStart; b <= binEnd; b++) {
+                const mag = Math.sqrt(re[b] * re[b] + im[b] * im[b])
+                if (mag > maxMag) maxMag = mag
+              }
+
+              // Chuẩn hóa năng lượng với Coherent Gain của cửa sổ Hanning (0.5)
+              const normalizedMag = maxMag / (halfFFT * 0.5)
+              const dB = 20 * Math.log10(normalizedMag + 1e-6)
+              // Chuẩn hóa dải động từ -95dB đến 0dB
+              const norm = Math.max(0, Math.min(1, (dB + 95) / 95))
+
+              const [r, g, b] = getColor(norm)
+              const pixelIndex = (y * W + x) * 4
+              pixels[pixelIndex] = r
+              pixels[pixelIndex + 1] = g
+              pixels[pixelIndex + 2] = b
+              pixels[pixelIndex + 3] = 255
+            }
+          }
+
+          if (!isCancelled) {
+            ctx.putImageData(imageData, 0, 0)
+            if (spectrogramCache.size >= 8) {
+              const oldest = spectrogramCache.keys().next().value
+              if (oldest) spectrogramCache.delete(oldest)
+            }
+            spectrogramCache.set(trackKey, imageData)
+            setLoading(false)
+          }
+        } catch (err: any) {
+          if (!isCancelled) {
+            console.error('[Spectrogram] Lỗi phân tích:', err)
+            setErrorMsg(err.message || 'Lỗi dựng phổ tần số')
+            setLoading(false)
           }
         }
-
-        if (!isCancelled) {
-          ctx.putImageData(imageData, 0, 0)
-          if (spectrogramCache.size >= 8) {
-            const oldest = spectrogramCache.keys().next().value
-            if (oldest) spectrogramCache.delete(oldest)
-          }
-          spectrogramCache.set(trackKey, imageData)
-          setLoading(false)
-        }
-      } catch (err: any) {
-        if (!isCancelled) {
-          console.error('[Spectrogram] Lỗi phân tích:', err)
-          setErrorMsg(err.message || 'Lỗi dựng phổ tần số')
-          setLoading(false)
-        }
       }
-    }
 
-    generateSpectrogram()
+      generateSpectrogram()
 
-    return () => {
-      isCancelled = true
-    }
-  }, [isOpen, currentTrack?.id, currentTrack?.filePath, currentTrack?.sampleRate])
-
-  if (!isOpen) return null
-
-  const formatTime = (secs: number) => {
-    if (!secs || isNaN(secs)) return '0:00'
-    const m = Math.floor(secs / 60)
-    const s = Math.floor(secs % 60)
-    return `${m}:${s < 10 ? '0' : ''}${s}`
-  }
-
-  // Xử lý click/tua bài hát trực tiếp trên Spectrogram
-  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const clickRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    const targetSeconds = clickRatio * (duration || currentTrack?.duration || 0)
-    
-    const useBass = Boolean(usePlayerStore.getState().bitPerfectEnabled || isDsdTrack(currentTrack))
-    if (useBass) {
-      ;(window as any).api?.bassSeek?.(targetSeconds, 'absolute')
-      if (audioRef?.current) {
-        ;(audioRef.current as any)._currentTime = targetSeconds
+      return () => {
+        isCancelled = true
       }
-    } else if (audioRef?.current) {
-      audioRef.current.currentTime = (currentTrack?.startTime || 0) + targetSeconds
-    }
-    setCurrentTime(targetSeconds)
-  }
+    }, [
+      isOpen,
+      currentTrack,
+      currentTrack?.id,
+      currentTrack?.filePath,
+      currentTrack?.sampleRate,
+      language
+    ])
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const rx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    const ry = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
-    const timeSecs = rx * (duration || currentTrack?.duration || 0)
-    const freqHz = Math.round((1 - ry) * nyquistFreq)
-    setHoverInfo({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      time: formatTime(timeSecs),
-      freq: freqHz >= 1000 ? `${(freqHz / 1000).toFixed(1)} kHz` : `${freqHz} Hz`
+    if (!isOpen) return null
+
+    const formatTime = (secs: number) => {
+      if (!secs || isNaN(secs)) return '0:00'
+      const m = Math.floor(secs / 60)
+      const s = Math.floor(secs % 60)
+      return `${m}:${s < 10 ? '0' : ''}${s}`
+    }
+
+    // Xử lý click/tua bài hát trực tiếp trên Spectrogram
+    const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const clickRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+      const targetSeconds = clickRatio * (duration || currentTrack?.duration || 0)
+
+      const useBass = Boolean(
+        usePlayerStore.getState().bitPerfectEnabled || isDsdTrack(currentTrack)
+      )
+      if (useBass) {
+        ;(window as any).api?.bassSeek?.(targetSeconds, 'absolute')
+        if (audioRef?.current) {
+          ;(audioRef.current as any)._currentTime = targetSeconds
+        }
+      } else if (audioRef?.current) {
+        audioRef.current.currentTime = (currentTrack?.startTime || 0) + targetSeconds
+      }
+      setCurrentTime(targetSeconds)
+    }
+
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const rx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+      const ry = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height))
+      const timeSecs = rx * (duration || currentTrack?.duration || 0)
+      const freqHz = Math.round((1 - ry) * nyquistFreq)
+      setHoverInfo({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+        time: formatTime(timeSecs),
+        freq: freqHz >= 1000 ? `${(freqHz / 1000).toFixed(1)} kHz` : `${freqHz} Hz`
+      })
+    }
+
+    const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
+
+    // 8 mốc tần số từ Tần số Nyquist về 0 Hz (chuẩn Audacity / Spek)
+    const numTicks = 8
+    const yTicks = Array.from({ length: numTicks }, (_, i) => {
+      const ratio = (numTicks - 1 - i) / (numTicks - 1)
+      const freqHz = Math.round(ratio * nyquistFreq)
+      if (freqHz === 0) return '0 Hz'
+      if (freqHz >= 1000) {
+        const khz = freqHz / 1000
+        return Number.isInteger(khz) ? `${khz} kHz` : `${khz.toFixed(1)} kHz`
+      }
+      return `${freqHz} Hz`
     })
-  }
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
-
-  // 8 mốc tần số từ Tần số Nyquist về 0 Hz (chuẩn Audacity / Spek)
-  const numTicks = 8
-  const yTicks = Array.from({ length: numTicks }, (_, i) => {
-    const ratio = (numTicks - 1 - i) / (numTicks - 1)
-    const freqHz = Math.round(ratio * nyquistFreq)
-    if (freqHz === 0) return '0 Hz'
-    if (freqHz >= 1000) {
-      const khz = freqHz / 1000
-      return Number.isInteger(khz) ? `${khz} kHz` : `${khz.toFixed(1)} kHz`
-    }
-    return `${freqHz} Hz`
-  })
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-fade-in">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl h-[88vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
-        
-        {/* MODAL HEADER */}
-        <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-theme-10/10 text-theme-10 rounded-xl">
-              <Radio size={22} />
-            </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-lg font-bold text-white">{t('modals.spectrogram.title')}</h2>
-                {currentTrack && (() => {
-                  const isDsd = isDsdTrack(currentTrack)
-                  return (
-                    <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
-                      <span className={`font-bold uppercase ${isDsd ? 'text-amber-400' : 'text-theme-10'}`}>
-                        {isDsd ? getDsdRateLabel(currentTrack.sampleRate || activeSampleRate) : (currentTrack.lossless ? 'Lossless' : (currentTrack.format || 'MP3'))}
-                      </span>
-                      {(isDsd || detectedBitDepth || currentTrack.bitDepth) && (
-                        <span className="text-blue-400 font-bold">
-                          {isDsd ? '1-BIT' : `${detectedBitDepth || currentTrack.bitDepth}-BIT`}
-                        </span>
-                      )}
-                      <span className="text-zinc-400">
-                        {formatAudioSampleRate(activeSampleRate)}
-                      </span>
-                    </div>
-                  )
-                })()}
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-fade-in">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl h-[88vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+          {/* MODAL HEADER */}
+          <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-theme-10/10 text-theme-10 rounded-xl">
+                <Radio size={22} />
               </div>
-              <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
-                {currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : t('modals.spectrogram.noTrack')}
-              </p>
-            </div>
-          </div>
-
-          <button 
-            onClick={handleModalClose} 
-            className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
-            title={t('modals.spectrogram.closeWindow')}
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* SPECTROGRAM DISPLAY AREA */}
-        <div className="flex-1 min-h-[220px] relative flex bg-black overflow-hidden select-none">
-          
-          {/* Y-AXIS FREQUENCY LABELS (0Hz to Sample Rate) */}
-          <div className="w-18 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[11px] text-zinc-400 font-mono text-center z-10 shrink-0">
-            {yTicks.map((label, idx) => (
-              <span key={idx} className={idx === 0 ? "text-theme-10 font-bold" : ""}>
-                {label}
-              </span>
-            ))}
-          </div>
-
-          {/* MAIN INTERACTIVE SPECTROGRAM CANVAS CONTAINER */}
-          <div 
-            className="flex-1 relative h-full cursor-crosshair overflow-hidden group"
-            onClick={handleCanvasClick}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={() => setHoverInfo(null)}
-          >
-            <canvas 
-              ref={canvasRef} 
-              className="w-full h-full block bg-[#0a0a18]" 
-            />
-
-            {/* LOADING SPINNER */}
-            {loading && (
-              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
-                <Loader2 size={36} className="text-theme-10 animate-spin" />
-                <span className="text-zinc-300 text-sm font-medium">{t('modals.spectrogram.generating')}</span>
-              </div>
-            )}
-
-            {/* ERROR MESSAGE */}
-            {errorMsg && (
-              <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 z-30 p-6 text-center">
-                <span className="text-rose-400 text-sm font-semibold">{t('modals.spectrogram.errorPrefix')}{errorMsg}</span>
-                <span className="text-zinc-500 text-xs">{t('modals.spectrogram.ensureLocalFile')}</span>
-              </div>
-            )}
-
-            {/* REAL-TIME PLAYHEAD LINE */}
-            {!loading && !errorMsg && duration > 0 && (
-              <div 
-                className="absolute top-0 bottom-0 w-[2px] bg-white shadow-[0_0_10px_#ffffff] pointer-events-none z-20 transition-all duration-75"
-                style={{ left: `${progressPercent}%` }}
-              >
-                <div className="absolute -top-1 -translate-x-1/2 bg-white text-zinc-950 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
-                  {formatTime(currentTime)}
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-bold text-white">{t('modals.spectrogram.title')}</h2>
+                  {currentTrack &&
+                    (() => {
+                      const isDsd = isDsdTrack(currentTrack)
+                      return (
+                        <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
+                          <span
+                            className={`font-bold uppercase ${isDsd ? 'text-amber-400' : 'text-theme-10'}`}
+                          >
+                            {isDsd
+                              ? getDsdRateLabel(currentTrack.sampleRate || activeSampleRate)
+                              : currentTrack.lossless
+                                ? 'Lossless'
+                                : currentTrack.format || 'MP3'}
+                          </span>
+                          {(isDsd || detectedBitDepth || currentTrack.bitDepth) && (
+                            <span className="text-blue-400 font-bold">
+                              {isDsd ? '1-BIT' : `${detectedBitDepth || currentTrack.bitDepth}-BIT`}
+                            </span>
+                          )}
+                          <span className="text-zinc-400">
+                            {formatAudioSampleRate(activeSampleRate)}
+                          </span>
+                        </div>
+                      )
+                    })()}
                 </div>
+                <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
+                  {currentTrack
+                    ? `${currentTrack.title} — ${currentTrack.artist}`
+                    : t('modals.spectrogram.noTrack')}
+                </p>
               </div>
-            )}
+            </div>
 
-            {/* HOVER TOOLTIP & CROSSHAIR */}
-            {hoverInfo && !loading && (
-              <>
-                <div 
-                  className="absolute top-0 bottom-0 w-[1px] bg-white/30 pointer-events-none z-10"
-                  style={{ left: `${hoverInfo.x}px` }}
-                />
-                <div 
-                  className="absolute left-0 right-0 h-[1px] bg-white/30 pointer-events-none z-10"
-                  style={{ top: `${hoverInfo.y}px` }}
-                />
-                <div 
-                  className="absolute bg-zinc-900/90 text-white border border-zinc-700 text-[11px] font-mono px-2 py-1 rounded pointer-events-none z-30 shadow-lg"
-                  style={{ 
-                    left: Math.min(hoverInfo.x + 12, 750), 
-                    top: Math.max(hoverInfo.y - 30, 10) 
-                  }}
+            <button
+              onClick={handleModalClose}
+              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
+              title={t('modals.spectrogram.closeWindow')}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* SPECTROGRAM DISPLAY AREA */}
+          <div className="flex-1 min-h-[220px] relative flex bg-black overflow-hidden select-none">
+            {/* Y-AXIS FREQUENCY LABELS (0Hz to Sample Rate) */}
+            <div className="w-18 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[11px] text-zinc-400 font-mono text-center z-10 shrink-0">
+              {yTicks.map((label, idx) => (
+                <span key={idx} className={idx === 0 ? 'text-theme-10 font-bold' : ''}>
+                  {label}
+                </span>
+              ))}
+            </div>
+
+            {/* MAIN INTERACTIVE SPECTROGRAM CANVAS CONTAINER */}
+            <div
+              className="flex-1 relative h-full cursor-crosshair overflow-hidden group"
+              onClick={handleCanvasClick}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={() => setHoverInfo(null)}
+            >
+              <canvas ref={canvasRef} className="w-full h-full block bg-[#0a0a18]" />
+
+              {/* LOADING SPINNER */}
+              {loading && (
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
+                  <Loader2 size={36} className="text-theme-10 animate-spin" />
+                  <span className="text-zinc-300 text-sm font-medium">
+                    {t('modals.spectrogram.generating')}
+                  </span>
+                </div>
+              )}
+
+              {/* ERROR MESSAGE */}
+              {errorMsg && (
+                <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 z-30 p-6 text-center">
+                  <span className="text-rose-400 text-sm font-semibold">
+                    {t('modals.spectrogram.errorPrefix')}
+                    {errorMsg}
+                  </span>
+                  <span className="text-zinc-500 text-xs">
+                    {t('modals.spectrogram.ensureLocalFile')}
+                  </span>
+                </div>
+              )}
+
+              {/* REAL-TIME PLAYHEAD LINE */}
+              {!loading && !errorMsg && duration > 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-[2px] bg-white shadow-[0_0_10px_#ffffff] pointer-events-none z-20 transition-all duration-75"
+                  style={{ left: `${progressPercent}%` }}
                 >
-                  ⏱ {hoverInfo.time} | ⚡ {hoverInfo.freq}
+                  <div className="absolute -top-1 -translate-x-1/2 bg-white text-zinc-950 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+                    {formatTime(currentTime)}
+                  </div>
                 </div>
-              </>
-            )}
+              )}
+
+              {/* HOVER TOOLTIP & CROSSHAIR */}
+              {hoverInfo && !loading && (
+                <>
+                  <div
+                    className="absolute top-0 bottom-0 w-[1px] bg-white/30 pointer-events-none z-10"
+                    style={{ left: `${hoverInfo.x}px` }}
+                  />
+                  <div
+                    className="absolute left-0 right-0 h-[1px] bg-white/30 pointer-events-none z-10"
+                    style={{ top: `${hoverInfo.y}px` }}
+                  />
+                  <div
+                    className="absolute bg-zinc-900/90 text-white border border-zinc-700 text-[11px] font-mono px-2 py-1 rounded pointer-events-none z-30 shadow-lg"
+                    style={{
+                      left: Math.min(hoverInfo.x + 12, 750),
+                      top: Math.max(hoverInfo.y - 30, 10)
+                    }}
+                  >
+                    ⏱ {hoverInfo.time} | ⚡ {hoverInfo.freq}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* X-AXIS TIME SCALE */}
+          <div className="h-6 bg-zinc-950 border-t border-zinc-800/80 flex items-center justify-between px-16 text-[10px] text-zinc-500 font-mono shrink-0">
+            <span>0:00</span>
+            <span>{formatTime(duration * 0.25)}</span>
+            <span>{formatTime(duration * 0.5)}</span>
+            <span>{formatTime(duration * 0.75)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+
+          {/* AUDIO SIGNAL FLOW (PIPELINE) */}
+          <AudioSignalPath
+            currentTrack={currentTrack}
+            activeSampleRate={activeSampleRate}
+            detectedBitDepth={detectedBitDepth}
+            isPlaying={isPlaying}
+          />
         </div>
-
-        {/* X-AXIS TIME SCALE */}
-        <div className="h-6 bg-zinc-950 border-t border-zinc-800/80 flex items-center justify-between px-16 text-[10px] text-zinc-500 font-mono shrink-0">
-          <span>0:00</span>
-          <span>{formatTime(duration * 0.25)}</span>
-          <span>{formatTime(duration * 0.5)}</span>
-          <span>{formatTime(duration * 0.75)}</span>
-          <span>{formatTime(duration)}</span>
-        </div>
-
-        {/* AUDIO SIGNAL FLOW (PIPELINE) */}
-        <AudioSignalPath
-          currentTrack={currentTrack}
-          activeSampleRate={activeSampleRate}
-          detectedBitDepth={detectedBitDepth}
-          isPlaying={isPlaying}
-        />
-
-
       </div>
-    </div>
-  )
-})
+    )
+  }
+)
 
 SpectrogramModal.displayName = 'SpectrogramModal'

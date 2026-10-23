@@ -132,13 +132,13 @@ export function getTrackFormatDisplay(track: any): TrackFormatDisplayInfo {
     (track?.bitDepth && track.bitDepth >= 24)
   )
 
-  const badgeLabel = isDsd
-    ? dsdRate
-    : (track?.format ? track.format.toUpperCase() : 'MP3')
+  const badgeLabel = isDsd ? dsdRate : track?.format ? track.format.toUpperCase() : 'MP3'
 
   const bitDepthLabel = isDsd
     ? '1-BIT'
-    : (track?.bitDepth && track.bitDepth > 0 ? `${track.bitDepth}-BIT` : undefined)
+    : track?.bitDepth && track.bitDepth > 0
+      ? `${track.bitDepth}-BIT`
+      : undefined
 
   const sampleRateLabel = formatAudioSampleRate(track?.sampleRate)
 

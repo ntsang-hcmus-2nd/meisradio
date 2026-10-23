@@ -1,5 +1,14 @@
 import React, { useMemo, useEffect } from 'react'
-import { Image as ImageIcon, Music, Disc, Layers, Calendar, Hash, FileText, Info } from 'lucide-react'
+import {
+  Image as ImageIcon,
+  Music,
+  Disc,
+  Layers,
+  Calendar,
+  Hash,
+  FileText,
+  Info
+} from 'lucide-react'
 import { useTranslation } from '../../locales'
 import { splitArtistString } from '../../utils/textUtils'
 import { formatImageSource } from '../../utils/urlUtils'
@@ -61,7 +70,8 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
 
   const isFlac = pathLower.endsWith('.flac') || fmt === 'FLAC'
   const isMp3 = pathLower.endsWith('.mp3') || fmt === 'MP3'
-  const isM4a = pathLower.endsWith('.m4a') || pathLower.endsWith('.aac') || fmt === 'M4A' || fmt === 'AAC'
+  const isM4a =
+    pathLower.endsWith('.m4a') || pathLower.endsWith('.aac') || fmt === 'M4A' || fmt === 'AAC'
   const isWav = pathLower.endsWith('.wav') || fmt === 'WAV'
   const isOgg = pathLower.endsWith('.ogg') || fmt === 'OGG'
   const isOpus = pathLower.endsWith('.opus') || fmt === 'OPUS'
@@ -99,8 +109,8 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
               isDsd
                 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                 : isFlac
-                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                : 'bg-theme-10/10 text-theme-10 border-theme-10/20'
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  : 'bg-theme-10/10 text-theme-10 border-theme-10/20'
             }`}
           >
             {getFormatBadge()}
@@ -210,7 +220,9 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={tags?.albumArtist !== undefined ? tags.albumArtist : track?.albumArtist || ''}
+                    value={
+                      tags?.albumArtist !== undefined ? tags.albumArtist : track?.albumArtist || ''
+                    }
                     onChange={(e) => setTags({ ...tags, albumArtist: e.target.value })}
                     className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10"
                     placeholder="e.g. Various Artists"
@@ -239,7 +251,13 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={tags?.year !== undefined ? String(tags.year) : track?.year ? String(track.year) : ''}
+                    value={
+                      tags?.year !== undefined
+                        ? String(tags.year)
+                        : track?.year
+                          ? String(track.year)
+                          : ''
+                    }
                     onChange={(e) => setTags({ ...tags, year: e.target.value })}
                     className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10"
                     placeholder="YYYY (e.g. 2024)"
@@ -259,7 +277,7 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
                     value={
                       tags?.trackNumber !== undefined
                         ? String(tags.trackNumber)
-                        : track?.trackNumber ?? track?.trackNo ?? ''
+                        : (track?.trackNumber ?? track?.trackNo ?? '')
                     }
                     onChange={(e) => setTags({ ...tags, trackNumber: e.target.value })}
                     className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10 font-mono"
@@ -276,7 +294,7 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
                     value={
                       tags?.discNumber !== undefined
                         ? String(tags.discNumber)
-                        : track?.discNumber ?? track?.diskNumber ?? ''
+                        : (track?.discNumber ?? track?.diskNumber ?? '')
                     }
                     onChange={(e) => setTags({ ...tags, discNumber: e.target.value })}
                     className="w-full bg-zinc-950 border border-zinc-700/70 rounded-lg p-2 text-white focus:outline-none focus:border-theme-10 font-mono"

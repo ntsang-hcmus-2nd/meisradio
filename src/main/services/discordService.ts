@@ -1,9 +1,5 @@
 import { ipcMain } from 'electron'
-import {
-  DiscordRpcManager,
-  DiscordRpcConfig,
-  DiscordPresencePayload
-} from '../DiscordRpcManager'
+import { DiscordRpcManager, DiscordRpcConfig, DiscordPresencePayload } from '../DiscordRpcManager'
 import { getConfig, saveConfig } from './sharedContext'
 
 let discordRpcManager: DiscordRpcManager | null = null

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { Language, TranslationDictionary } from './types'
 import { en } from './en'
 import { vi } from './vi'
@@ -8,14 +8,16 @@ const dictionaries: Record<Language, TranslationDictionary> = {
   vi
 }
 
-interface LanguageContextType {
+export interface LanguageContextType {
   language: Language
   setLanguage: (lang: Language) => void
   t: (path: string, params?: Record<string, string | number>) => string
   dict: TranslationDictionary
 }
 
-const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
+// Chia sẻ cho useLanguage.ts — context object buộc phải export khỏi file component.
+// eslint-disable-next-line react-refresh/only-export-components
+export const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
 
 const STORAGE_KEY = 'app_language'
 
@@ -33,14 +35,17 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Sync with electron config if available
   useEffect(() => {
     if ((window as any).api?.getConfig) {
-      ;(window as any).api.getConfig().then((cfg: any) => {
-        if (cfg && (cfg.language === 'en' || cfg.language === 'vi')) {
-          setLanguageState(cfg.language)
-          try {
-            localStorage.setItem(STORAGE_KEY, cfg.language)
-          } catch {}
-        }
-      }).catch(() => {})
+      ;(window as any).api
+        .getConfig()
+        .then((cfg: any) => {
+          if (cfg && (cfg.language === 'en' || cfg.language === 'vi')) {
+            setLanguageState(cfg.language)
+            try {
+              localStorage.setItem(STORAGE_KEY, cfg.language)
+            } catch {}
+          }
+        })
+        .catch(() => {})
     }
   }, [])
 
@@ -102,16 +107,4 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   )
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>
-}
-
-export const useLanguage = (): LanguageContextType => {
-  const context = useContext(LanguageContext)
-  if (!context) {
-    throw new Error('useLanguage must be used within a LanguageProvider')
-  }
-  return context
-}
-
-export const useTranslation = () => {
-  return useLanguage()
 }

@@ -300,7 +300,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
           req.on('close', () => {
             try {
               ffmpegProcess.kill()
-            } catch (e) {}
+            } catch {}
           })
           return
         }
@@ -374,7 +374,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         })
         res.on('error', () => proxyRes.data.destroy())
         req.on('close', () => proxyRes.data.destroy())
-      } catch (e) {
+      } catch {
         if (!res.headersSent) res.writeHead(500).end()
       }
     }
@@ -450,6 +450,9 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
           if (!cleanedUp) {
             cleanedUp = true
             try {
+              try {
+                fileStream.destroy()
+              } catch (_) {}
               if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath)
             } catch {}
           }
@@ -483,7 +486,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
         imgRes.data.pipe(fileStream)
         imgRes.data.pipe(res)
-      } catch (e) {
+      } catch {
         if (!res.headersSent) res.writeHead(500).end()
       }
     }
@@ -844,7 +847,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         })
         res.end(rawBuffer)
         return
-      } catch (e) {
+      } catch {
         if (!res.headersSent) res.writeHead(500).end()
       }
     }
@@ -870,13 +873,19 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
       }
 
       if (!isAllowedLocalPath(targetPath)) {
-        console.warn('[StreamServer] /local-audio 403 — đường dẫn không hợp lệ/không trong whitelist:', targetPath)
+        console.warn(
+          '[StreamServer] /local-audio 403 — đường dẫn không hợp lệ/không trong whitelist:',
+          targetPath
+        )
         res.writeHead(403).end('Truy cập bị từ chối: Đường dẫn không hợp lệ')
         return
       }
 
       if (!fs.existsSync(targetPath)) {
-        console.warn('[StreamServer] /local-audio 404 — file không tồn tại (đã bị xóa/di chuyển?):', targetPath)
+        console.warn(
+          '[StreamServer] /local-audio 404 — file không tồn tại (đã bị xóa/di chuyển?):',
+          targetPath
+        )
         res.writeHead(404).end('File không tồn tại')
         return
       }
@@ -1024,7 +1033,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             if (!res.headersSent) res.writeHead(500).end()
           })
         }
-      } catch (err) {
+      } catch {
         if (!res.headersSent) res.writeHead(500).end()
       }
     }
@@ -1088,7 +1097,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         fileStream.on('error', () => {
           if (!res.headersSent) res.writeHead(500).end()
         })
-      } catch (err) {
+      } catch {
         if (!res.headersSent) res.writeHead(500).end()
       }
     }
@@ -1198,7 +1207,7 @@ export function registerStreamServerIpc(): void {
         fs.writeFileSync(thumbPath, resized.toJPEG(80))
         return pathToFileURL(thumbPath).href
       }
-    } catch (e) {}
+    } catch {}
     return null
   })
 
@@ -1219,7 +1228,7 @@ export function registerStreamServerIpc(): void {
 
       const sizeQuery = typeof size === 'number' && size > 0 ? `&size=${Math.round(size)}` : ''
       return `http://127.0.0.1:${currentStreamPort}/cover?path=${encodeURIComponent(rawPath)}${sizeQuery}`
-    } catch (e) {}
+    } catch {}
     return null
   })
 }

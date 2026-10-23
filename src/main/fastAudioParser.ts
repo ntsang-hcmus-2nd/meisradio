@@ -53,25 +53,154 @@ export interface FastAudioMetadata {
  * Standard ID3v1 Genre lookup table
  */
 export const ID3V1_GENRES = [
-  'Blues', 'Classic Rock', 'Country', 'Dance', 'Disco', 'Funk', 'Grunge', 'Hip-Hop', 'Jazz', 'Metal',
-  'New Age', 'Oldies', 'Other', 'Pop', 'R&B', 'Rap', 'Reggae', 'Rock', 'Techno', 'Industrial',
-  'Alternative', 'Ska', 'Death Metal', 'Pranks', 'Soundtrack', 'Euro-Techno', 'Ambient', 'Trip-Hop',
-  'Vocal', 'Jazz+Funk', 'Fusion', 'Trance', 'Classical', 'Instrumental', 'Acid', 'House', 'Game',
-  'Sound Clip', 'Gospel', 'Noise', 'AlternRock', 'Bass', 'Soul', 'Punk', 'Space', 'Meditative',
-  'Instrumental Pop', 'Instrumental Rock', 'Ethnic', 'Gothic', 'Darkwave', 'Techno-Industrial',
-  'Electronic', 'Pop-Folk', 'Eurodance', 'Dream', 'Southern Rock', 'Comedy', 'Cult', 'Gangsta',
-  'Top 40', 'Christian Rap', 'Pop/Funk', 'Jungle', 'Native American', 'Cabaret', 'New Wave',
-  'Psychadelic', 'Rave', 'Showtunes', 'Trailer', 'Lo-Fi', 'Tribal', 'Acid Punk', 'Acid Jazz',
-  'Polka', 'Retro', 'Musical', 'Rock & Roll', 'Hard Rock', 'Folk', 'Folk-Rock', 'National Folk',
-  'Swing', 'Fast Fusion', 'Bebob', 'Latin', 'Revival', 'Celtic', 'Bluegrass', 'Avantgarde',
-  'Gothic Rock', 'Progressive Rock', 'Psychedelic Rock', 'Symphonic Rock', 'Slow Rock', 'Big Band',
-  'Chorus', 'Easy Listening', 'Acoustic', 'Humour', 'Speech', 'Chanson', 'Opera', 'Chamber Music',
-  'Sonata', 'Symphony', 'Booty Bass', 'Primus', 'Porn Groove', 'Satire', 'Slow Jam', 'Club',
-  'Tango', 'Samba', 'Folklore', 'Ballad', 'Power Ballad', 'Rhythmic Soul', 'Freestyle', 'Duet',
-  'Punk Rock', 'Drum Solo', 'A capella', 'Euro-House', 'Dance Hall', 'Goa', 'Drum & Bass',
-  'Club-House', 'Hardcore', 'Terror', 'Indie', 'BritPop', 'Afro-Punk', 'Polsk Punk', 'Beat',
-  'Christian Gangsta Rap', 'Heavy Metal', 'Black Metal', 'Crossover', 'Contemporary Christian',
-  'Christian Rock', 'Merengue', 'Salsa', 'Thrash Metal', 'Anime', 'JPop', 'Synthpop'
+  'Blues',
+  'Classic Rock',
+  'Country',
+  'Dance',
+  'Disco',
+  'Funk',
+  'Grunge',
+  'Hip-Hop',
+  'Jazz',
+  'Metal',
+  'New Age',
+  'Oldies',
+  'Other',
+  'Pop',
+  'R&B',
+  'Rap',
+  'Reggae',
+  'Rock',
+  'Techno',
+  'Industrial',
+  'Alternative',
+  'Ska',
+  'Death Metal',
+  'Pranks',
+  'Soundtrack',
+  'Euro-Techno',
+  'Ambient',
+  'Trip-Hop',
+  'Vocal',
+  'Jazz+Funk',
+  'Fusion',
+  'Trance',
+  'Classical',
+  'Instrumental',
+  'Acid',
+  'House',
+  'Game',
+  'Sound Clip',
+  'Gospel',
+  'Noise',
+  'AlternRock',
+  'Bass',
+  'Soul',
+  'Punk',
+  'Space',
+  'Meditative',
+  'Instrumental Pop',
+  'Instrumental Rock',
+  'Ethnic',
+  'Gothic',
+  'Darkwave',
+  'Techno-Industrial',
+  'Electronic',
+  'Pop-Folk',
+  'Eurodance',
+  'Dream',
+  'Southern Rock',
+  'Comedy',
+  'Cult',
+  'Gangsta',
+  'Top 40',
+  'Christian Rap',
+  'Pop/Funk',
+  'Jungle',
+  'Native American',
+  'Cabaret',
+  'New Wave',
+  'Psychadelic',
+  'Rave',
+  'Showtunes',
+  'Trailer',
+  'Lo-Fi',
+  'Tribal',
+  'Acid Punk',
+  'Acid Jazz',
+  'Polka',
+  'Retro',
+  'Musical',
+  'Rock & Roll',
+  'Hard Rock',
+  'Folk',
+  'Folk-Rock',
+  'National Folk',
+  'Swing',
+  'Fast Fusion',
+  'Bebob',
+  'Latin',
+  'Revival',
+  'Celtic',
+  'Bluegrass',
+  'Avantgarde',
+  'Gothic Rock',
+  'Progressive Rock',
+  'Psychedelic Rock',
+  'Symphonic Rock',
+  'Slow Rock',
+  'Big Band',
+  'Chorus',
+  'Easy Listening',
+  'Acoustic',
+  'Humour',
+  'Speech',
+  'Chanson',
+  'Opera',
+  'Chamber Music',
+  'Sonata',
+  'Symphony',
+  'Booty Bass',
+  'Primus',
+  'Porn Groove',
+  'Satire',
+  'Slow Jam',
+  'Club',
+  'Tango',
+  'Samba',
+  'Folklore',
+  'Ballad',
+  'Power Ballad',
+  'Rhythmic Soul',
+  'Freestyle',
+  'Duet',
+  'Punk Rock',
+  'Drum Solo',
+  'A capella',
+  'Euro-House',
+  'Dance Hall',
+  'Goa',
+  'Drum & Bass',
+  'Club-House',
+  'Hardcore',
+  'Terror',
+  'Indie',
+  'BritPop',
+  'Afro-Punk',
+  'Polsk Punk',
+  'Beat',
+  'Christian Gangsta Rap',
+  'Heavy Metal',
+  'Black Metal',
+  'Crossover',
+  'Contemporary Christian',
+  'Christian Rock',
+  'Merengue',
+  'Salsa',
+  'Thrash Metal',
+  'Anime',
+  'JPop',
+  'Synthpop'
 ]
 
 /**
@@ -135,7 +264,11 @@ export const PRESERVED_ARTIST_NAMES = [
 export function splitArtistNames(raw: string): string[] {
   if (!raw || typeof raw !== 'string') return []
   const trimmed = raw.trim()
-  if (!trimmed || trimmed.toLowerCase() === 'unknown' || trimmed.toLowerCase() === 'unknown artist') {
+  if (
+    !trimmed ||
+    trimmed.toLowerCase() === 'unknown' ||
+    trimmed.toLowerCase() === 'unknown artist'
+  ) {
     return []
   }
 
@@ -820,7 +953,13 @@ function enrichCommonMetadata(metadata: mm.IAudioMetadata): void {
       if (Array.isArray(tagList)) {
         for (const t of tagList) {
           const tid = String(t.id).toUpperCase()
-          if (tid === 'TPE2' || tid === 'ALBUMARTIST' || tid === 'ALBUM ARTIST' || tid === 'ENSEMBLE' || tid === 'aART') {
+          if (
+            tid === 'TPE2' ||
+            tid === 'ALBUMARTIST' ||
+            tid === 'ALBUM ARTIST' ||
+            tid === 'ENSEMBLE' ||
+            tid === 'aART'
+          ) {
             if (t.value) {
               common.albumartist = String(t.value).trim()
               break
@@ -839,7 +978,13 @@ function enrichCommonMetadata(metadata: mm.IAudioMetadata): void {
       if (Array.isArray(tagList)) {
         for (const t of tagList) {
           const tid = String(t.id).toUpperCase()
-          if (tid === 'TCON' || tid === 'GENRE' || tid === '©GEN' || tid === 'WM/GENRE' || tid === 'GEN') {
+          if (
+            tid === 'TCON' ||
+            tid === 'GENRE' ||
+            tid === '©GEN' ||
+            tid === 'WM/GENRE' ||
+            tid === 'GEN'
+          ) {
             if (t.value) {
               const val = Array.isArray(t.value) ? t.value.map(String) : [String(t.value)]
               const clean = val.map((g) => resolveGenreString(g)).filter(Boolean) as string[]
@@ -865,7 +1010,13 @@ function enrichCommonMetadata(metadata: mm.IAudioMetadata): void {
       if (Array.isArray(tagList)) {
         for (const t of tagList) {
           const tid = String(t.id).toUpperCase()
-          if (tid === 'TYER' || tid === 'TDRC' || tid === 'DATE' || tid === 'YEAR' || tid === '©DAY') {
+          if (
+            tid === 'TYER' ||
+            tid === 'TDRC' ||
+            tid === 'DATE' ||
+            tid === 'YEAR' ||
+            tid === '©DAY'
+          ) {
             if (t.value) {
               const strVal = String(t.value).trim()
               const yearMatch = strVal.match(/\b\d{4}\b/)
@@ -896,7 +1047,7 @@ function enrichCommonMetadata(metadata: mm.IAudioMetadata): void {
               if (match) {
                 common.track = {
                   no: parseInt(match[1], 10),
-                  of: match[2] ? parseInt(match[2], 10) : common.track?.of ?? null
+                  of: match[2] ? parseInt(match[2], 10) : (common.track?.of ?? null)
                 }
                 break
               }
@@ -1126,7 +1277,8 @@ export async function fastReadMetadata(
           const samplingFrequency = headerBuf.readUInt32LE(56)
           const bitsPerSample = headerBuf.readUInt32LE(60) || 1
           const sampleCount = headerBuf.readBigUInt64LE(64)
-          const duration = samplingFrequency > 0 ? Number(sampleCount) / samplingFrequency : undefined
+          const duration =
+            samplingFrequency > 0 ? Number(sampleCount) / samplingFrequency : undefined
           const bitrate = bitsPerSample * samplingFrequency * channelNum
 
           let dsfMeta: mm.IAudioMetadata | null = null
@@ -1284,7 +1436,12 @@ export async function parseFastAudioMetadata(
     totalDiscs,
     comment: common.comment ? common.comment.join(' ') : undefined,
     composer: common.composer ? common.composer.join(', ') : undefined,
-    lyrics: common.lyrics && common.lyrics.length > 0 ? (typeof common.lyrics[0] === 'string' ? common.lyrics[0] : (common.lyrics[0] as any).text) : undefined,
+    lyrics:
+      common.lyrics && common.lyrics.length > 0
+        ? typeof common.lyrics[0] === 'string'
+          ? common.lyrics[0]
+          : (common.lyrics[0] as any).text
+        : undefined,
     duration: fmt.duration,
     sampleRate: fmt.sampleRate || (isDsd ? 2822400 : undefined),
     bitsPerSample: fmt.bitsPerSample || (isDsd ? 1 : undefined),

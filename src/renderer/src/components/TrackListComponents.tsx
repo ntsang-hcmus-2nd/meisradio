@@ -20,26 +20,14 @@ import { CSS } from '@dnd-kit/utilities'
 import thumbnailHolder from '../../../../resources/HoT_Chibi_Emoji.png'
 import { DynamicCoverArt } from './DynamicCoverArt'
 import { splitArtistString } from '../utils/textUtils'
-import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate, formatDuration } from '../utils/formatUtils'
+import {
+  isDsdTrack,
+  getDsdRateLabel,
+  formatAudioSampleRate,
+  formatDuration
+} from '../utils/formatUtils'
 import { useLibraryStore, useSettingsStore } from '../stores'
 import { useTranslation } from '../locales'
-
-export const VirtuosoComponents = {
-  Table: ({ style, ...props }: any) => (
-    <table
-      {...props}
-      className="w-full text-left text-sm table-fixed"
-      style={{ ...style, borderCollapse: 'collapse' }}
-    />
-  ),
-  TableHead: React.forwardRef((props: any, ref: any) => <thead {...props} ref={ref} />),
-  TableRow: (props: any) => (
-    <tr
-      {...props}
-      className="group border-b border-theme-30/20 transition-colors cursor-pointer hover:bg-white/5"
-    />
-  )
-}
 
 // Thành phần hiển thị danh sách nghệ sĩ có thể nhấp để điều hướng
 export const ArtistLinks = React.memo(
@@ -108,13 +96,7 @@ ArtistLinks.displayName = 'ArtistLinks'
 
 // Huy hiệu định dạng âm thanh (DSD / Lossless / Bit depth)
 export const AudioFormatBadge = React.memo(
-  ({
-    track,
-    variant = 'table'
-  }: {
-    track: any
-    variant?: 'table' | 'grid' | 'compact'
-  }) => {
+  ({ track, variant = 'table' }: { track: any; variant?: 'table' | 'grid' | 'compact' }) => {
     const isDsd = isDsdTrack(track)
 
     if (isDsd) {
@@ -585,7 +567,7 @@ export const PlaylistItemCard = React.memo(
               onRename(pl.name)
             }}
             className="text-zinc-500 hover:text-theme-10 opacity-0 group-hover:opacity-100 transition p-1 cursor-pointer"
-            title={t('modals.playlistRename.title')}
+            title={t('modals.renamePlaylist.title')}
           >
             <Edit2 size={14} />
           </button>
@@ -598,7 +580,17 @@ PlaylistItemCard.displayName = 'PlaylistItemCard'
 
 // Item Playlist dạng Bảng Hàng (Table Row)
 export const PlaylistItemRow = React.memo(
-  ({ pl, idx, isLite, onOpen, onPlay, onContextMenu, onChangeImage: _onChangeImage, onRename: _onRename, t }: any) => {
+  ({
+    pl,
+    idx,
+    isLite,
+    onOpen,
+    onPlay,
+    onContextMenu,
+    onChangeImage: _onChangeImage,
+    onRename: _onRename,
+    t
+  }: any) => {
     return (
       <div
         onClick={() => onOpen(pl)}
@@ -659,7 +651,7 @@ export const PlaylistItemRow = React.memo(
               _onRename(pl.name)
             }}
             className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100 cursor-pointer"
-            title={t('modals.playlistRename.title')}
+            title={t('modals.renamePlaylist.title')}
           >
             <Edit2 size={15} />
           </button>
@@ -804,19 +796,8 @@ export const SortableQueueItem = React.memo(
 )
 SortableQueueItem.displayName = 'SortableQueueItem'
 
-export const SC_GENRES = [
-  { id: 'all-music', key: 'all' },
-  { id: 'electronic', key: 'electronic' },
-  { id: 'hiphoprap', key: 'hiphoprap' },
-  { id: 'pop', key: 'pop' },
-  { id: 'chill', key: 'chill' },
-  { id: 'rock', key: 'rock' },
-  { id: 'ambient', key: 'ambient' },
-  { id: 'danceedm', key: 'danceedm' }
-]
-
-export const DownloadProgressToast: React.FC<{ t: (key: string, params?: any) => string }> = React.memo(
-  ({ t }) => {
+export const DownloadProgressToast: React.FC<{ t: (key: string, params?: any) => string }> =
+  React.memo(({ t }) => {
     const isDownloading = useSettingsStore((s) => s.isDownloading)
     const downloadProgress = useSettingsStore((s) => s.downloadProgress)
 
@@ -850,6 +831,5 @@ export const DownloadProgressToast: React.FC<{ t: (key: string, params?: any) =>
         </div>
       </div>
     )
-  }
-)
+  })
 DownloadProgressToast.displayName = 'DownloadProgressToast'

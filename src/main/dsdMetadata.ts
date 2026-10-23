@@ -54,7 +54,10 @@ function mergeId3Tags(existingTags: any, updates: DsdTagUpdate): Buffer {
   }
 
   if (updates.artists && updates.artists.length > 0) {
-    merged.artist = updates.artists.map((a) => a.trim()).filter(Boolean).join(', ')
+    merged.artist = updates.artists
+      .map((a) => a.trim())
+      .filter(Boolean)
+      .join(', ')
   } else if (updates.artist !== undefined) {
     if (updates.artist.trim()) merged.artist = updates.artist.trim()
     else delete merged.artist

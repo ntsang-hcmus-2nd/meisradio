@@ -1,15 +1,22 @@
-let globalStreamPort = (typeof window !== 'undefined' && (window as any).api?.getStreamPortSync?.()) || 0
+let globalStreamPort =
+  (typeof window !== 'undefined' && (window as any).api?.getStreamPortSync?.()) || 0
 const portListeners = new Set<(port: number) => void>()
 
 export function setGlobalStreamPort(port: number): void {
   globalStreamPort = port
-  portListeners.forEach(fn => {
-    try { fn(port) } catch (_) {}
+  portListeners.forEach((fn) => {
+    try {
+      fn(port)
+    } catch (_) {}
   })
 }
 
 export function getGlobalStreamPort(): number {
-  if (globalStreamPort <= 0 && typeof window !== 'undefined' && (window as any).api?.getStreamPortSync) {
+  if (
+    globalStreamPort <= 0 &&
+    typeof window !== 'undefined' &&
+    (window as any).api?.getStreamPortSync
+  ) {
     try {
       globalStreamPort = (window as any).api.getStreamPortSync() || 0
     } catch (_) {}
@@ -41,7 +48,11 @@ export function extractRawFilePath(input: string | undefined | null): string {
   }
 
   // Nếu là URL local stream của Mei's Radio từ phiên chạy trước hoặc hiện tại
-  if (clean.includes('/local-audio?path=') || clean.includes('/local-file?path=') || clean.includes('/cover?path=')) {
+  if (
+    clean.includes('/local-audio?path=') ||
+    clean.includes('/local-file?path=') ||
+    clean.includes('/cover?path=')
+  ) {
     try {
       const u = new URL(clean)
       const p = u.searchParams.get('path')
@@ -73,20 +84,25 @@ export function extractRawFilePath(input: string | undefined | null): string {
  * - Tương thích 100% với webSecurity: true
  * - Hỗ trợ CORS và HTTP 206 Range requests (tua nhạc tức thì)
  */
-export function formatAudioSource(filePath: string | undefined | null, streamPort?: number): string {
+export function formatAudioSource(
+  filePath: string | undefined | null,
+  streamPort?: number
+): string {
   if (!filePath || typeof filePath !== 'string') return ''
   const trimmed = filePath.trim()
 
   // Giữ nguyên các URL streaming trực tuyến (YouTube, SoundCloud, Icecast stream...)
-  if ((trimmed.startsWith('http://') || trimmed.startsWith('https://')) && 
-      !trimmed.includes('/local-audio?path=') &&
-      !trimmed.includes('127.0.0.1') &&
-      !trimmed.includes('localhost')) {
+  if (
+    (trimmed.startsWith('http://') || trimmed.startsWith('https://')) &&
+    !trimmed.includes('/local-audio?path=') &&
+    !trimmed.includes('127.0.0.1') &&
+    !trimmed.includes('localhost')
+  ) {
     return trimmed
   }
 
   const rawPath = extractRawFilePath(trimmed)
-  const port = (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
+  const port = streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
 
   if (port > 0 && rawPath) {
     return `http://127.0.0.1:${port}/local-audio?path=${encodeURIComponent(rawPath)}`
@@ -100,7 +116,10 @@ export function formatAudioSource(filePath: string | undefined | null, streamPor
  * - Khắc phục chặn Same-Origin khi bật webSecurity: true
  * - Không bị cắt đứt khi tên file có dấu #, ?, %
  */
-export function formatImageSource(filePath: string | undefined | null, streamPort?: number): string {
+export function formatImageSource(
+  filePath: string | undefined | null,
+  streamPort?: number
+): string {
   if (!filePath || typeof filePath !== 'string') return ''
   const trimmed = filePath.trim()
 
@@ -109,7 +128,7 @@ export function formatImageSource(filePath: string | undefined | null, streamPor
     return trimmed
   }
 
-  const port = (streamPort && streamPort > 0) ? streamPort : getGlobalStreamPort()
+  const port = streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
 
   // 2. Nếu đã là URL stream /cover nội bộ, bảo toàn endpoint /cover và các tham số query (size=...)
   if (trimmed.includes('/cover?')) {
@@ -128,9 +147,11 @@ export function formatImageSource(filePath: string | undefined | null, streamPor
   }
 
   // 4. Giữ nguyên các URL trực tuyến thật (YouTube, SoundCloud, v.v., KHÔNG phải localhost/127.0.0.1)
-  if ((trimmed.startsWith('http://') || trimmed.startsWith('https://')) && 
-      !trimmed.includes('127.0.0.1') && 
-      !trimmed.includes('localhost')) {
+  if (
+    (trimmed.startsWith('http://') || trimmed.startsWith('https://')) &&
+    !trimmed.includes('127.0.0.1') &&
+    !trimmed.includes('localhost')
+  ) {
     return trimmed
   }
 
@@ -139,7 +160,21 @@ export function formatImageSource(filePath: string | undefined | null, streamPor
 
   if (port > 0) {
     // Nếu là file âm thanh (FLAC, MP3, WAV, DSD, M4A...), chuyển qua /cover để trích xuất ảnh bìa chất lượng cao
-    const audioExts = ['.flac', '.mp3', '.wav', '.m4a', '.ogg', '.opus', '.dsf', '.dff', '.dsd', '.aac', '.alac', '.aiff', '.wma']
+    const audioExts = [
+      '.flac',
+      '.mp3',
+      '.wav',
+      '.m4a',
+      '.ogg',
+      '.opus',
+      '.dsf',
+      '.dff',
+      '.dsd',
+      '.aac',
+      '.alac',
+      '.aiff',
+      '.wma'
+    ]
     const dotIdx = rawPath.lastIndexOf('.')
     const ext = dotIdx !== -1 ? rawPath.slice(dotIdx).toLowerCase() : ''
     if (audioExts.includes(ext)) {

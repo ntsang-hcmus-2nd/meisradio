@@ -60,16 +60,14 @@ export const SongsView: React.FC<SongsViewProps> = ({
             className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-white px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer"
             title={t('songsView.randomPlay')}
           >
-            <Shuffle size={15} />{' '}
-            <span className="btn-text">{t('songsView.randomPlay')}</span>
+            <Shuffle size={15} /> <span className="btn-text">{t('songsView.randomPlay')}</span>
           </button>
           <button
             onClick={handleImportFiles}
             className="sys-btn flex items-center gap-1.5 sm:gap-2 bg-theme-10 hover:bg-theme-10 text-white px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition shadow-lg shadow-theme-10/20 cursor-pointer"
             title={t('songsView.addMusic')}
           >
-            <Plus size={16} />{' '}
-            <span className="btn-text">{t('songsView.addMusic')}</span>
+            <Plus size={16} /> <span className="btn-text">{t('songsView.addMusic')}</span>
           </button>
         </div>
       </div>

@@ -132,12 +132,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
     if (waveformSeekbarEnabled && isLocal && window.api?.getWaveformPeaks) {
       window.api
-        .getWaveformPeaks(
-          currentTrack.filePath,
-          140,
-          currentTrack.startTime,
-          currentTrack.endTime
-        )
+        .getWaveformPeaks(currentTrack.filePath, 140, currentTrack.startTime, currentTrack.endTime)
         .then((fetchedPeaks: number[]) => {
           if (isMounted && Array.isArray(fetchedPeaks) && fetchedPeaks.length > 0) {
             waveformPeaksCache.set(cacheKey, fetchedPeaks)
@@ -153,6 +148,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       isMounted = false
     }
   }, [
+    currentTrack,
     currentTrack?.id,
     currentTrack?.filePath,
     currentTrack?.startTime,
@@ -173,7 +169,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
           // Enforce A-B Loop in BASS mode
           if (la !== null && lb !== null && lb > la && val >= lb) {
             if (window.api?.bassSeek) {
-              window.api.bassSeek(la)
+              window.api.bassSeek(la, 'absolute')
             }
             setCurrentTime(la)
             return
@@ -256,7 +252,14 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       if (cleanupListeners) cleanupListeners()
       if (intervalId) clearInterval(intervalId)
     }
-  }, [audioRef, useBassTime, isPlaying, currentTrack?.id, currentTrack?.filePath, currentTrack?.startTime])
+  }, [
+    audioRef,
+    useBassTime,
+    isPlaying,
+    currentTrack?.id,
+    currentTrack?.filePath,
+    currentTrack?.startTime
+  ])
 
   // --- Seek Commit Handler ---
   const commitSeek = useCallback(
@@ -264,7 +267,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
       const clamped = Math.max(0, Math.min(duration, targetTime))
       if (useBassTime) {
         if (window.api?.bassSeek) {
-          window.api.bassSeek(clamped)
+          window.api.bassSeek(clamped, 'absolute')
         }
       } else if (audioRef.current) {
         const trackStart = currentTrack?.startTime || 0
@@ -536,6 +539,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
               onMouseUp={handleRangeCommit}
               onTouchStart={() => setIsDragging(true)}
               onTouchEnd={handleRangeCommit}
+              onKeyUp={handleRangeCommit}
               disabled={!currentTrack}
               className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10 transition-all z-1"
               style={{
@@ -561,8 +565,8 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
             hasActiveLoop
               ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/20'
               : loopA !== null
-              ? 'bg-theme-10/20 text-theme-10 border-theme-10/40'
-              : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border-zinc-700/50'
+                ? 'bg-theme-10/20 text-theme-10 border-theme-10/40'
+                : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border-zinc-700/50'
           }`}
         >
           <Repeat size={10} className={hasActiveLoop ? 'text-amber-400 animate-pulse' : ''} />

@@ -38,7 +38,7 @@ import {
 } from '../stores'
 import { useTranslation } from '../locales'
 
-export const PRESET_ACCENT_COLORS = [
+const PRESET_ACCENT_COLORS = [
   { name: 'Emerald', color: '#10b981' },
   { name: 'Cyan', color: '#06b6d4' },
   { name: 'Blue', color: '#3b82f6' },
@@ -82,7 +82,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const { t, language, setLanguage } = useTranslation()
   const customBgImage = useSettingsStore((state) => state.customBgImage)
-  const [bgImageInput, setBgImageInput] = useState(() => extractRawFilePath(customBgImage) || customBgImage || '')
+  const [bgImageInput, setBgImageInput] = useState(
+    () => extractRawFilePath(customBgImage) || customBgImage || ''
+  )
 
   useEffect(() => {
     if (customBgImage) {
@@ -242,18 +244,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <span className="font-bold text-white flex items-center gap-2 text-sm">
                     <LayoutTemplate
                       size={16}
-                      className={
-                        uiStyle === 'classic' ? 'text-theme-10' : 'text-zinc-400'
-                      }
+                      className={uiStyle === 'classic' ? 'text-theme-10' : 'text-zinc-400'}
                     />
                     {t('settings.customBg.classicMode')}
                   </span>
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center ${uiStyle === 'classic' ? 'border-theme-10 bg-theme-10/20' : 'border-zinc-700'}`}
                   >
-                    {uiStyle === 'classic' && (
-                      <div className="w-2 h-2 rounded-full bg-theme-10" />
-                    )}
+                    {uiStyle === 'classic' && <div className="w-2 h-2 rounded-full bg-theme-10" />}
                   </div>
                 </div>
               </div>
@@ -288,18 +286,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <span className="font-bold text-white flex items-center gap-2 text-sm">
                     <Sparkles
                       size={16}
-                      className={
-                        uiStyle === 'sleek' ? 'text-theme-10' : 'text-zinc-400'
-                      }
+                      className={uiStyle === 'sleek' ? 'text-theme-10' : 'text-zinc-400'}
                     />
                     {t('settings.customBg.sleekMode')}
                   </span>
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center ${uiStyle === 'sleek' ? 'border-theme-10 bg-theme-10/20' : 'border-zinc-700'}`}
                   >
-                    {uiStyle === 'sleek' && (
-                      <div className="w-2 h-2 rounded-full bg-theme-10" />
-                    )}
+                    {uiStyle === 'sleek' && <div className="w-2 h-2 rounded-full bg-theme-10" />}
                   </div>
                 </div>
               </div>
@@ -322,9 +316,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <Plus size={13} />
                 </div>
                 <span className="text-[11px] text-emerald-400 font-medium ml-1">
-                  {language === 'vi'
-                    ? '✓ Giữ nguyên tên bài hát'
-                    : '✓ Preserves song text'}
+                  {language === 'vi' ? '✓ Giữ nguyên tên bài hát' : '✓ Preserves song text'}
                 </span>
               </div>
             </div>
@@ -362,9 +354,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <Disc
                           size={16}
                           className={
-                            accentColorMode === 'track'
-                              ? 'text-theme-10'
-                              : 'text-zinc-400'
+                            accentColorMode === 'track' ? 'text-theme-10' : 'text-zinc-400'
                           }
                         />
                         {t('settings.customBg.accentTrack')}
@@ -397,9 +387,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <ImageIcon
                           size={16}
                           className={
-                            accentColorMode === 'background'
-                              ? 'text-theme-10'
-                              : 'text-zinc-400'
+                            accentColorMode === 'background' ? 'text-theme-10' : 'text-zinc-400'
                           }
                         />
                         {t('settings.customBg.accentBg')}
@@ -432,9 +420,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <Palette
                           size={16}
                           className={
-                            accentColorMode === 'custom'
-                              ? 'text-theme-10'
-                              : 'text-zinc-400'
+                            accentColorMode === 'custom' ? 'text-theme-10' : 'text-zinc-400'
                           }
                         />
                         {t('settings.customBg.accentCustom')}
@@ -461,8 +447,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       {PRESET_ACCENT_COLORS.map((preset) => {
                         const isSelected =
-                          customAccentColor.toLowerCase() ===
-                          preset.color.toLowerCase()
+                          customAccentColor.toLowerCase() === preset.color.toLowerCase()
                         return (
                           <button
                             key={preset.color}
@@ -476,9 +461,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             }`}
                             style={{ backgroundColor: preset.color }}
                           >
-                            {isSelected && (
-                              <Check size={14} className="text-white drop-shadow" />
-                            )}
+                            {isSelected && <Check size={14} className="text-white drop-shadow" />}
                           </button>
                         )
                       })}
@@ -552,7 +535,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           const cleanPath = extractRawFilePath(trimmed) || trimmed
                           setBgImageInput(cleanPath)
                           setCustomBgImage(cleanPath)
-                          if (!cleanPath.startsWith('http://') && !cleanPath.startsWith('https://')) {
+                          if (
+                            !cleanPath.startsWith('http://') &&
+                            !cleanPath.startsWith('https://')
+                          ) {
                             // @ts-ignore
                             window.api?.registerDroppedFiles?.([cleanPath])
                           }
@@ -562,9 +548,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       title={t('settings.customBg.applyLink')}
                     >
                       <Check size={15} />
-                      <span className="btn-text">
-                        {t('settings.customBg.applyLink')}
-                      </span>
+                      <span className="btn-text">{t('settings.customBg.applyLink')}</span>
                     </button>
                     <button
                       onClick={async () => {
@@ -581,9 +565,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       title={t('settings.customBg.chooseImage')}
                     >
                       <ImageIcon size={15} />
-                      <span className="btn-text">
-                        {t('settings.customBg.chooseImage')}
-                      </span>
+                      <span className="btn-text">{t('settings.customBg.chooseImage')}</span>
                     </button>
                     <button
                       onClick={() => {
@@ -594,9 +576,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       title={t('settings.customBg.removeBg')}
                     >
                       <Trash2 size={15} />
-                      <span className="btn-text">
-                        {t('settings.customBg.removeBg')}
-                      </span>
+                      <span className="btn-text">{t('settings.customBg.removeBg')}</span>
                     </button>
                   </div>
                 )}
@@ -612,18 +592,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       max="1"
                       step="0.05"
                       value={customBgOpacity}
-                      onChange={(e) =>
-                        setCustomBgOpacity(parseFloat(e.target.value))
-                      }
+                      onChange={(e) => setCustomBgOpacity(parseFloat(e.target.value))}
                       onWheel={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
                         const delta = e.deltaY < 0 ? 0.05 : -0.05
                         setCustomBgOpacity((prev) =>
-                          Math.max(
-                            0,
-                            Math.min(1, Math.round((prev + delta) * 100) / 100)
-                          )
+                          Math.max(0, Math.min(1, Math.round((prev + delta) * 100) / 100))
                         )
                       }}
                       className="flex-1 accent-theme-10"
@@ -647,9 +622,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         e.preventDefault()
                         e.stopPropagation()
                         const delta = e.deltaY < 0 ? 2 : -2
-                        setCustomBgBlur((prev) =>
-                          Math.max(0, Math.min(100, prev + delta))
-                        )
+                        setCustomBgBlur((prev) => Math.max(0, Math.min(100, prev + delta)))
                       }}
                       className="flex-1 accent-theme-10"
                     />
@@ -716,8 +689,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </h3>
           </div>
           <span className="text-xs text-zinc-400 px-3 py-1 rounded-full bg-zinc-900/80 border border-zinc-800">
-            {libraryPaths.length} {t('settings.library.folderCount')} •{' '}
-            {libraryTracks.length} {t('common.songs')}
+            {libraryPaths.length} {t('settings.library.folderCount')} • {libraryTracks.length}{' '}
+            {t('common.songs')}
           </span>
         </div>
 
@@ -734,9 +707,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <Folder size={18} className="text-theme-10 shrink-0" />
-                  <span className="text-sm text-zinc-200 truncate font-mono">
-                    {fPath}
-                  </span>
+                  <span className="text-sm text-zinc-200 truncate font-mono">{fPath}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
@@ -812,10 +783,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               onChange={async (e) => {
                 const val = e.target.checked
                 const prevTrack = currentTrack
-                const currentPlaybackTime =
-                  (audioRef.current as any)?._currentTime ||
-                  audioRef.current?.currentTime ||
-                  0
+                // Chuẩn hóa về thời gian TƯƠNG ĐỐI của bài: BASS _currentTime đã
+                // tương đối, còn HTML5 currentTime là tuyệt đối trong file nên phải
+                // trừ startTime của CUE Sheet (pendingSeek/BASS seek đều cộng lại sau).
+                const startOffset = prevTrack?.startTime || 0
+                const currentPlaybackTime = val
+                  ? Math.max(0, (audioRef.current?.currentTime || 0) - startOffset)
+                  : ((audioRef.current as any)?._currentTime ??
+                    Math.max(0, (audioRef.current?.currentTime || 0) - startOffset))
                 const wasPlaying = isPlaying
 
                 try {
@@ -853,16 +828,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       await resetWebAudioPipeline()
                       setTimeout(() => {
                         if (audioRef.current) {
-                          audioRef.current.volume = Math.max(
-                            0,
-                            Math.min(1, sliderToGain(volume))
-                          )
-                          audioRef.current.currentTime = currentPlaybackTime
+                          audioRef.current.volume = Math.max(0, Math.min(1, sliderToGain(volume)))
+                          audioRef.current.currentTime = startOffset + currentPlaybackTime
+                          pendingSeekTimeRef.current = null
                           if (wasPlaying) {
-                            if (
-                              audioCtxRef.current &&
-                              audioCtxRef.current.state === 'suspended'
-                            ) {
+                            if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
                               audioCtxRef.current.resume().catch(() => {})
                             }
                             audioRef.current.play().catch(console.warn)
@@ -892,11 +862,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onClick={async () => {
                     if (bitPerfectType === 'wasapi') return
                     const currentPlaybackTime =
-                      (audioRef.current as any)?._currentTime ||
-                      audioRef.current?.currentTime ||
-                      0
-                    if (currentPlaybackTime > 0)
-                      pendingSeekTimeRef.current = currentPlaybackTime
+                      (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
+                    if (currentPlaybackTime > 0) pendingSeekTimeRef.current = currentPlaybackTime
                     setBitPerfectType('wasapi')
                     await window.api.setBitPerfectOutputType('wasapi')
                     const res = await window.api.getAudioDevices('wasapi')
@@ -928,11 +895,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onClick={async () => {
                     if (bitPerfectType === 'asio') return
                     const currentPlaybackTime =
-                      (audioRef.current as any)?._currentTime ||
-                      audioRef.current?.currentTime ||
-                      0
-                    if (currentPlaybackTime > 0)
-                      pendingSeekTimeRef.current = currentPlaybackTime
+                      (audioRef.current as any)?._currentTime || audioRef.current?.currentTime || 0
+                    if (currentPlaybackTime > 0) pendingSeekTimeRef.current = currentPlaybackTime
                     setBitPerfectType('asio')
                     await window.api.setBitPerfectOutputType('asio')
                     const res = await window.api.getAudioDevices('asio')
@@ -1058,9 +1022,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-4 border-t border-theme-30/40">
           <div className="flex flex-col pr-4">
             <span className="text-zinc-300 text-sm font-medium">
-              ReplayGain {bitPerfectEnabled && (
+              ReplayGain{' '}
+              {bitPerfectEnabled && (
                 <span className="text-xs text-zinc-500 font-normal">
-                  ({language === 'vi' ? 'Bỏ qua khi bật Bit-Perfect' : 'Bypassed in Bit-Perfect mode'})
+                  (
+                  {language === 'vi'
+                    ? 'Bỏ qua khi bật Bit-Perfect'
+                    : 'Bypassed in Bit-Perfect mode'}
+                  )
                 </span>
               )}
             </span>
@@ -1077,8 +1046,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             className="bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-theme-10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
           >
             <option value="off">{language === 'vi' ? 'Tắt (Off)' : 'Off'}</option>
-            <option value="track">{language === 'vi' ? 'Theo bài (Track Gain)' : 'Track Gain'}</option>
-            <option value="album">{language === 'vi' ? 'Theo Album (Album Gain)' : 'Album Gain'}</option>
+            <option value="track">
+              {language === 'vi' ? 'Theo bài (Track Gain)' : 'Track Gain'}
+            </option>
+            <option value="album">
+              {language === 'vi' ? 'Theo Album (Album Gain)' : 'Album Gain'}
+            </option>
           </select>
         </div>
       </div>
@@ -1110,15 +1083,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span className="font-bold text-white flex items-center gap-2">
               <Sparkles
                 size={16}
-                className={
-                  appMode === 'default' ? 'text-theme-10' : 'text-zinc-400'
-                }
+                className={appMode === 'default' ? 'text-theme-10' : 'text-zinc-400'}
               />
               {t('settings.appMode.standard')}
             </span>
-            {appMode === 'default' && (
-              <span className="w-2 h-2 rounded-full bg-theme-10" />
-            )}
+            {appMode === 'default' && <span className="w-2 h-2 rounded-full bg-theme-10" />}
           </div>
 
           {/* 2. Tiết kiệm (Lite) */}
@@ -1129,8 +1098,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               setShowLyricsPanel(false)
               setIsLyricsMaximized(false)
               // @ts-ignore
-              if (window.api && window.api.forceGC)
-                setTimeout(() => window.api.forceGC(), 100)
+              if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
             }}
             className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
               appMode === 'lite'
@@ -1139,15 +1107,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }`}
           >
             <span className="font-bold text-white flex items-center gap-2">
-              <Leaf
-                size={16}
-                className={appMode === 'lite' ? 'text-theme-10' : 'text-zinc-400'}
-              />
+              <Leaf size={16} className={appMode === 'lite' ? 'text-theme-10' : 'text-zinc-400'} />
               {t('settings.appMode.lite')}
             </span>
-            {appMode === 'lite' && (
-              <span className="w-2 h-2 rounded-full bg-theme-10" />
-            )}
+            {appMode === 'lite' && <span className="w-2 h-2 rounded-full bg-theme-10" />}
           </div>
 
           {/* 3. Cốt lõi (Core) */}
@@ -1168,8 +1131,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 setActiveView('songs')
               }
               // @ts-ignore
-              if (window.api && window.api.forceGC)
-                setTimeout(() => window.api.forceGC(), 100)
+              if (window.api && window.api.forceGC) setTimeout(() => window.api.forceGC(), 100)
             }}
             className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
               appMode === 'core'
@@ -1178,15 +1140,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }`}
           >
             <span className="font-bold text-white flex items-center gap-2">
-              <Cpu
-                size={16}
-                className={appMode === 'core' ? 'text-theme-10' : 'text-zinc-400'}
-              />
+              <Cpu size={16} className={appMode === 'core' ? 'text-theme-10' : 'text-zinc-400'} />
               {t('settings.appMode.core')}
             </span>
-            {appMode === 'core' && (
-              <span className="w-2 h-2 rounded-full bg-theme-10" />
-            )}
+            {appMode === 'core' && <span className="w-2 h-2 rounded-full bg-theme-10" />}
           </div>
         </div>
       </div>
@@ -1290,9 +1247,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="checkbox"
                   checked={discordShowDetails}
-                  onChange={(e) =>
-                    updateDiscordSettings({ showDetails: e.target.checked })
-                  }
+                  onChange={(e) => updateDiscordSettings({ showDetails: e.target.checked })}
                   className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
                 />
               </label>
@@ -1305,9 +1260,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="checkbox"
                   checked={discordShowTime}
-                  onChange={(e) =>
-                    updateDiscordSettings({ showTime: e.target.checked })
-                  }
+                  onChange={(e) => updateDiscordSettings({ showTime: e.target.checked })}
                   className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
                 />
               </label>
@@ -1320,9 +1273,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="checkbox"
                   checked={discordShowCover}
-                  onChange={(e) =>
-                    updateDiscordSettings({ showCover: e.target.checked })
-                  }
+                  onChange={(e) => updateDiscordSettings({ showCover: e.target.checked })}
                   className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
                 />
               </label>
@@ -1335,9 +1286,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="checkbox"
                   checked={discordShowQuality}
-                  onChange={(e) =>
-                    updateDiscordSettings({ showQuality: e.target.checked })
-                  }
+                  onChange={(e) => updateDiscordSettings({ showQuality: e.target.checked })}
                   className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
                 />
               </label>
@@ -1350,9 +1299,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="checkbox"
                   checked={discordShowButtons}
-                  onChange={(e) =>
-                    updateDiscordSettings({ showButtons: e.target.checked })
-                  }
+                  onChange={(e) => updateDiscordSettings({ showButtons: e.target.checked })}
                   className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
                 />
               </label>
@@ -1365,9 +1312,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="checkbox"
                   checked={discordShowIdle}
-                  onChange={(e) =>
-                    updateDiscordSettings({ showIdle: e.target.checked })
-                  }
+                  onChange={(e) => updateDiscordSettings({ showIdle: e.target.checked })}
                   className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
                 />
               </label>
@@ -1404,9 +1349,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Database size={20} />
           </div>
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
-            {language === 'vi'
-              ? 'Dữ liệu, Thống kê & Sao lưu'
-              : 'Data, Insights & Backup'}
+            {language === 'vi' ? 'Dữ liệu, Thống kê & Sao lưu' : 'Data, Insights & Backup'}
           </h3>
         </div>
 
@@ -1432,17 +1375,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             type="button"
             onClick={() => setShowInsightsModal(true)}
             className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-10/20 text-white hover:text-theme-10 border border-zinc-700 hover:border-theme-10/50 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
-            title={
-              language === 'vi'
-                ? 'Xem thống kê nghe nhạc (Insights)'
-                : 'View Music Insights'
-            }
+            title={language === 'vi' ? 'Xem thống kê nghe nhạc (Insights)' : 'View Music Insights'}
           >
             <BarChart2 size={16} className="shrink-0" />
             <span className="btn-text">
-              {language === 'vi'
-                ? 'Xem thống kê nghe nhạc (Insights)'
-                : 'View Music Insights'}
+              {language === 'vi' ? 'Xem thống kê nghe nhạc (Insights)' : 'View Music Insights'}
             </span>
           </button>
         </div>
@@ -1456,8 +1393,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <RefreshCw
                 size={20}
                 className={
-                  updaterStatus?.status === 'checking' ||
-                  updaterStatus?.status === 'downloading'
+                  updaterStatus?.status === 'checking' || updaterStatus?.status === 'downloading'
                     ? 'animate-spin'
                     : ''
                 }
@@ -1480,28 +1416,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     ? 'Đang kiểm tra bản cập nhật mới...'
                     : 'Checking for updates...'
                   : updaterStatus?.status === 'available'
-                  ? language === 'vi'
-                    ? `Có bản cập nhật mới: v${updaterStatus?.latestVersion || ''}`
-                    : `New update available: v${updaterStatus?.latestVersion || ''}`
-                  : updaterStatus?.status === 'downloading'
-                  ? language === 'vi'
-                    ? `Đang tải: ${updaterStatus?.progressPercent || 0}%`
-                    : `Downloading: ${updaterStatus?.progressPercent || 0}%`
-                  : updaterStatus?.status === 'downloaded'
-                  ? language === 'vi'
-                    ? 'Sẵn sàng cài đặt'
-                    : 'Ready to install'
-                  : updaterStatus?.status === 'not-available'
-                  ? language === 'vi'
-                    ? 'Đã là phiên bản mới nhất'
-                    : 'You are on the latest version'
-                  : updaterStatus?.status === 'error'
-                  ? language === 'vi'
-                    ? `Lỗi: ${updaterStatus?.error || 'Không thể kiểm tra'}`
-                    : `Error: ${updaterStatus?.error || 'Failed to check'}`
-                  : language === 'vi'
-                  ? 'Tự động kiểm tra và cập nhật phiên bản mới'
-                  : 'Check for and install new updates'}
+                    ? language === 'vi'
+                      ? `Có bản cập nhật mới: v${updaterStatus?.latestVersion || ''}`
+                      : `New update available: v${updaterStatus?.latestVersion || ''}`
+                    : updaterStatus?.status === 'downloading'
+                      ? language === 'vi'
+                        ? `Đang tải: ${updaterStatus?.progressPercent || 0}%`
+                        : `Downloading: ${updaterStatus?.progressPercent || 0}%`
+                      : updaterStatus?.status === 'downloaded'
+                        ? language === 'vi'
+                          ? 'Sẵn sàng cài đặt'
+                          : 'Ready to install'
+                        : updaterStatus?.status === 'not-available'
+                          ? language === 'vi'
+                            ? 'Đã là phiên bản mới nhất'
+                            : 'You are on the latest version'
+                          : updaterStatus?.status === 'error'
+                            ? language === 'vi'
+                              ? `Lỗi: ${updaterStatus?.error || 'Không thể kiểm tra'}`
+                              : `Error: ${updaterStatus?.error || 'Failed to check'}`
+                            : language === 'vi'
+                              ? 'Tự động kiểm tra và cập nhật phiên bản mới'
+                              : 'Check for and install new updates'}
               </p>
             </div>
           </div>
@@ -1510,8 +1446,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <button
               type="button"
               disabled={
-                updaterStatus?.status === 'checking' ||
-                updaterStatus?.status === 'downloading'
+                updaterStatus?.status === 'checking' || updaterStatus?.status === 'downloading'
               }
               onClick={async () => {
                 try {
@@ -1535,9 +1470,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 size={16}
                 className={`shrink-0 ${updaterStatus?.status === 'checking' ? 'animate-spin' : ''}`}
               />
-              <span>
-                {language === 'vi' ? 'Kiểm tra cập nhật' : 'Check for Updates'}
-              </span>
+              <span>{language === 'vi' ? 'Kiểm tra cập nhật' : 'Check for Updates'}</span>
             </button>
 
             {updaterStatus?.status === 'available' && (
@@ -1559,9 +1492,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="sys-btn flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-sm font-medium transition cursor-pointer"
               >
                 <Download size={16} className="shrink-0" />
-                <span>
-                  {language === 'vi' ? 'Tải bản cập nhật' : 'Download Update'}
-                </span>
+                <span>{language === 'vi' ? 'Tải bản cập nhật' : 'Download Update'}</span>
               </button>
             )}
 
@@ -1574,11 +1505,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="sys-btn flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-sm font-medium transition cursor-pointer animate-pulse"
               >
                 <RefreshCw size={16} className="shrink-0" />
-                <span>
-                  {language === 'vi'
-                    ? 'Khởi động lại & Cài đặt'
-                    : 'Restart & Install'}
-                </span>
+                <span>{language === 'vi' ? 'Khởi động lại & Cài đặt' : 'Restart & Install'}</span>
               </button>
             )}
           </div>
@@ -1587,9 +1514,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {updaterStatus?.status === 'downloading' && (
           <div className="space-y-1.5 pt-1">
             <div className="flex justify-between text-xs text-zinc-400">
-              <span>
-                {language === 'vi' ? 'Tiến trình tải xuống' : 'Download progress'}
-              </span>
+              <span>{language === 'vi' ? 'Tiến trình tải xuống' : 'Download progress'}</span>
               <span>{updaterStatus?.progressPercent || 0}%</span>
             </div>
             <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">

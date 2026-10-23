@@ -11,14 +11,16 @@ interface VolumeSliderProps {
   bitPerfectEnabled?: boolean
 }
 
-export const VolumeSlider: React.FC<VolumeSliderProps> = ({ 
-  volume: propVolume, 
-  setVolume: propSetVolume, 
-  audioRef, 
-  bitPerfectEnabled: propBitPerfect 
+export const VolumeSlider: React.FC<VolumeSliderProps> = ({
+  volume: propVolume,
+  setVolume: propSetVolume,
+  audioRef,
+  bitPerfectEnabled: propBitPerfect
 }) => {
   const storeVolume = usePlayerStore((s) => s.volume)
   const storeSetVolume = usePlayerStore((s) => s.setVolume)
+  const prevVolume = usePlayerStore((s) => s.prevVolume)
+  const setPrevVolume = usePlayerStore((s) => s.setPrevVolume)
   const storeBitPerfect = usePlayerStore((s) => s.bitPerfectEnabled)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
 
@@ -28,13 +30,13 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
   const useBass = Boolean(bitPerfectEnabled || isDsdTrack(currentTrack))
   const setHardwareVolume = (v: number) => {
     if ((window as any).api?.bassSetVolume) {
-      (window as any).api.bassSetVolume(v)
+      ;(window as any).api.bassSetVolume(v)
     }
   }
 
   const toggleMute = () => {
     if (volume === 0) {
-      const prev = parseFloat(localStorage.getItem('player_volume_prev') || '1')
+      const prev = prevVolume || 0.5
       setVolume(prev)
       const gain = sliderToGain(prev)
       if (audioRef.current) audioRef.current.volume = gain
@@ -42,7 +44,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
         setHardwareVolume(gain)
       }
     } else {
-      localStorage.setItem('player_volume_prev', volume.toString())
+      setPrevVolume(volume)
       setVolume(0)
       if (audioRef.current) audioRef.current.volume = 0
       if (useBass) {
@@ -66,15 +68,19 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
 
   return (
     <div className="flex items-center gap-2 w-32" onWheel={handleWheel}>
-      <button onClick={toggleMute} className="hover:text-white transition cursor-pointer" title={volume === 0 ? "Bật tiếng" : "Tắt tiếng"}>
+      <button
+        onClick={toggleMute}
+        className="hover:text-white transition cursor-pointer"
+        title={volume === 0 ? 'Unmute / Bật tiếng' : 'Mute / Tắt tiếng'}
+      >
         {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </button>
-      <input 
-        type="range" 
-        min="0" 
-        max="1" 
-        step="0.01" 
-        value={volume} 
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        value={volume}
         onChange={(e) => {
           const val = parseFloat(e.target.value)
           setVolume(val)
@@ -85,8 +91,10 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({
           }
         }}
         onWheel={handleWheel}
-        className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10" 
-        style={{ background: `linear-gradient(to right, var(--theme-10) ${volume * 100}%, var(--theme-30) ${volume * 100}%)` }} 
+        className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10 hover:accent-theme-10"
+        style={{
+          background: `linear-gradient(to right, var(--theme-10) ${volume * 100}%, var(--theme-30) ${volume * 100}%)`
+        }}
         title={`${Math.round(volume * 100)}%`}
       />
     </div>

@@ -39,35 +39,30 @@ interface WebGLSpectrogramProps {
   className?: string
 }
 
-export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
-  analyserNodeRef,
-  isPlaying,
-  isLite = false,
-  showSpectrogram = true,
-  className
-}) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const isPlayingRef = useRef(isPlaying)
-  const reqAnimRef = useRef<number | null>(null)
-  const startDrawLoopRef = useRef<(() => void) | null>(null)
+export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(
+  ({ analyserNodeRef, isPlaying, isLite = false, showSpectrogram = true, className }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null)
+    const isPlayingRef = useRef(isPlaying)
+    const reqAnimRef = useRef<number | null>(null)
+    const startDrawLoopRef = useRef<(() => void) | null>(null)
 
-  useEffect(() => {
-    isPlayingRef.current = isPlaying
-    if (isPlaying) {
-      startDrawLoopRef.current?.()
-    }
-  }, [isPlaying])
+    useEffect(() => {
+      isPlayingRef.current = isPlaying
+      if (isPlaying) {
+        startDrawLoopRef.current?.()
+      }
+    }, [isPlaying])
 
-  useEffect(() => {
-    if (isLite || !showSpectrogram || !canvasRef.current || !analyserNodeRef.current) return
+    useEffect(() => {
+      if (isLite || !showSpectrogram || !canvasRef.current || !analyserNodeRef.current) return
 
-    const canvas = canvasRef.current
-    const gl = canvas.getContext('webgl', { alpha: false, antialias: true })
-    if (!gl) return
+      const canvas = canvasRef.current
+      const gl = canvas.getContext('webgl', { alpha: false, antialias: true })
+      if (!gl) return
 
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
 
-    const vsSource = `
+      const vsSource = `
       attribute vec2 a_position;
       varying vec2 v_uv;
       void main() {
@@ -76,7 +71,7 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
       }
     `
 
-    const fsSource = `
+      const fsSource = `
       precision mediump float;
       varying vec2 v_uv;
       uniform sampler2D u_history;
@@ -116,141 +111,156 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(({
       }
     `
 
-    const programInfo = createWebGLProgram(gl, vsSource, fsSource)
-    if (!programInfo) return
-    const { program, vs, fs } = programInfo
-    gl.useProgram(program)
+      const programInfo = createWebGLProgram(gl, vsSource, fsSource)
+      if (!programInfo) return
+      const { program, vs, fs } = programInfo
+      gl.useProgram(program)
 
-    const positionBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW)
-    const positionLoc = gl.getAttribLocation(program, 'a_position')
-    gl.enableVertexAttribArray(positionLoc)
-    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0)
+      const positionBuffer = gl.createBuffer()
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW)
+      const positionLoc = gl.getAttribLocation(program, 'a_position')
+      gl.enableVertexAttribArray(positionLoc)
+      gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0)
 
-    const analyser = analyserNodeRef.current
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
+      const analyser = analyserNodeRef.current
+      const bufferLength = analyser.frequencyBinCount
+      const dataArray = new Uint8Array(bufferLength)
 
-    const textureWidth = 1024
-    const textureHeight = bufferLength 
-    
-    const texture = gl.createTexture()
-    gl.bindTexture(gl.TEXTURE_2D, texture)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, textureWidth, textureHeight, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, null)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT) 
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      const textureWidth = 1024
+      const textureHeight = bufferLength
 
-    const offsetLoc = gl.getUniformLocation(program, 'u_offset')
-    
-    let lastDrawTime = performance.now()
-    const fpsInterval = 1000 / 40 // 40 FPS waterfall
-    let currentColumn = 0
+      const texture = gl.createTexture()
+      gl.bindTexture(gl.TEXTURE_2D, texture)
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.LUMINANCE,
+        textureWidth,
+        textureHeight,
+        0,
+        gl.LUMINANCE,
+        gl.UNSIGNED_BYTE,
+        null
+      )
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 
-    const updateCanvasSize = (w: number, h: number) => {
-      const dpr = window.devicePixelRatio || 1
-      const targetW = Math.floor(w * dpr)
-      const targetH = Math.floor(h * dpr)
-      if (targetW > 0 && targetH > 0 && (canvas.width !== targetW || canvas.height !== targetH)) {
-        canvas.width = targetW
-        canvas.height = targetH
-        gl.viewport(0, 0, targetW, targetH)
-      }
-    }
+      const offsetLoc = gl.getUniformLocation(program, 'u_offset')
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.contentRect) {
-          updateCanvasSize(entry.contentRect.width, entry.contentRect.height)
+      let lastDrawTime = performance.now()
+      const fpsInterval = 1000 / 40 // 40 FPS waterfall
+      let currentColumn = 0
+
+      const updateCanvasSize = (w: number, h: number) => {
+        const dpr = window.devicePixelRatio || 1
+        const targetW = Math.floor(w * dpr)
+        const targetH = Math.floor(h * dpr)
+        if (targetW > 0 && targetH > 0 && (canvas.width !== targetW || canvas.height !== targetH)) {
+          canvas.width = targetW
+          canvas.height = targetH
+          gl.viewport(0, 0, targetW, targetH)
         }
       }
-    })
-    resizeObserver.observe(canvas)
-    if (canvas.clientWidth && canvas.clientHeight) {
-      updateCanvasSize(canvas.clientWidth, canvas.clientHeight)
-    }
 
-    const draw = (now: number) => {
-      if (!isPlayingRef.current || document.hidden) {
-        reqAnimRef.current = null
-        return
+      const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect) {
+            updateCanvasSize(entry.contentRect.width, entry.contentRect.height)
+          }
+        }
+      })
+      resizeObserver.observe(canvas)
+      if (canvas.clientWidth && canvas.clientHeight) {
+        updateCanvasSize(canvas.clientWidth, canvas.clientHeight)
       }
 
-      const elapsed = now - lastDrawTime
-      if (elapsed < fpsInterval) {
-        reqAnimRef.current = requestAnimationFrame(draw)
-        return
-      }
-      lastDrawTime = now - (elapsed % fpsInterval)
+      const draw = (now: number) => {
+        if (!isPlayingRef.current || document.hidden) {
+          reqAnimRef.current = null
+          return
+        }
 
-      if (analyserNodeRef.current) {
-        analyserNodeRef.current.getByteFrequencyData(dataArray)
+        const elapsed = now - lastDrawTime
+        if (elapsed < fpsInterval) {
+          reqAnimRef.current = requestAnimationFrame(draw)
+          return
+        }
+        lastDrawTime = now - (elapsed % fpsInterval)
 
-        gl.bindTexture(gl.TEXTURE_2D, texture)
-        gl.texSubImage2D(gl.TEXTURE_2D, 0, currentColumn, 0, 1, bufferLength, gl.LUMINANCE, gl.UNSIGNED_BYTE, dataArray)
+        if (analyserNodeRef.current) {
+          analyserNodeRef.current.getByteFrequencyData(dataArray)
 
-        currentColumn = (currentColumn + 1) % textureWidth
-      }
+          gl.bindTexture(gl.TEXTURE_2D, texture)
+          gl.texSubImage2D(
+            gl.TEXTURE_2D,
+            0,
+            currentColumn,
+            0,
+            1,
+            bufferLength,
+            gl.LUMINANCE,
+            gl.UNSIGNED_BYTE,
+            dataArray
+          )
 
-      const offset = currentColumn / textureWidth
-      gl.uniform1f(offsetLoc, offset)
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+          currentColumn = (currentColumn + 1) % textureWidth
+        }
 
-      if (isPlayingRef.current && !document.hidden) {
-        reqAnimRef.current = requestAnimationFrame(draw)
-      } else {
-        reqAnimRef.current = null
-      }
-    }
+        const offset = currentColumn / textureWidth
+        gl.uniform1f(offsetLoc, offset)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
-    const startDrawLoop = () => {
-      if (!reqAnimRef.current && isPlayingRef.current && !document.hidden) {
-        reqAnimRef.current = requestAnimationFrame(draw)
-      }
-    }
-    startDrawLoopRef.current = startDrawLoop
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        if (reqAnimRef.current) {
-          cancelAnimationFrame(reqAnimRef.current)
+        if (isPlayingRef.current && !document.hidden) {
+          reqAnimRef.current = requestAnimationFrame(draw)
+        } else {
           reqAnimRef.current = null
         }
-      } else if (isPlayingRef.current) {
-        startDrawLoop()
       }
-    }
 
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    startDrawLoop()
+      const startDrawLoop = () => {
+        if (!reqAnimRef.current && isPlayingRef.current && !document.hidden) {
+          reqAnimRef.current = requestAnimationFrame(draw)
+        }
+      }
+      startDrawLoopRef.current = startDrawLoop
 
-    return () => {
-      startDrawLoopRef.current = null
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      resizeObserver.disconnect()
-      if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
-      reqAnimRef.current = null
-      try {
-        gl.detachShader(program, vs)
-        gl.deleteShader(vs)
-        gl.detachShader(program, fs)
-        gl.deleteShader(fs)
-        gl.deleteProgram(program)
-      } catch (e) {}
-      if (texture) gl.deleteTexture(texture)
-      if (positionBuffer) gl.deleteBuffer(positionBuffer)
-    }
-  }, [isLite, showSpectrogram, analyserNodeRef])
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          if (reqAnimRef.current) {
+            cancelAnimationFrame(reqAnimRef.current)
+            reqAnimRef.current = null
+          }
+        } else if (isPlayingRef.current) {
+          startDrawLoop()
+        }
+      }
 
-  if (isLite || !showSpectrogram) return null
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+      startDrawLoop()
 
-  return (
-    <canvas 
-      ref={canvasRef} 
-      className={className || "w-full h-full block bg-black"} 
-    />
-  )
-})
+      return () => {
+        startDrawLoopRef.current = null
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+        resizeObserver.disconnect()
+        if (reqAnimRef.current) cancelAnimationFrame(reqAnimRef.current)
+        reqAnimRef.current = null
+        try {
+          gl.detachShader(program, vs)
+          gl.deleteShader(vs)
+          gl.detachShader(program, fs)
+          gl.deleteShader(fs)
+          gl.deleteProgram(program)
+        } catch {}
+        if (texture) gl.deleteTexture(texture)
+        if (positionBuffer) gl.deleteBuffer(positionBuffer)
+      }
+    }, [isLite, showSpectrogram, analyserNodeRef])
 
+    if (isLite || !showSpectrogram) return null
+
+    return <canvas ref={canvasRef} className={className || 'w-full h-full block bg-black'} />
+  }
+)

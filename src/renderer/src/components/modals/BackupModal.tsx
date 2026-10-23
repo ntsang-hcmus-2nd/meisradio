@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { X, Download, Upload, FileText, ShieldCheck, Database } from 'lucide-react'
+import { useTranslation } from '../../locales'
 import { useUIStore } from '../../stores/uiStore'
 import { useLibraryStore } from '../../stores/libraryStore'
 import { usePlayerStore } from '../../stores/playerStore'
@@ -63,6 +64,7 @@ const resolvePlaylistTracks = (pl: any, libraryTracks: any[]): any[] => {
 }
 
 export const BackupModal: React.FC = () => {
+  const { t } = useTranslation()
   const show = useUIStore((s) => s.showBackupModal)
   const setShow = useUIStore((s) => s.setShowBackupModal)
   const showToast = useUIStore((s) => s.showToast)
@@ -78,15 +80,15 @@ export const BackupModal: React.FC = () => {
 
   // 1. Xuất Playlist sang .m3u8
   const handleExportM3U8 = () => {
-    const pl = userPlaylists.find(p => p.id === selectedPlaylistId) || userPlaylists[0]
+    const pl = userPlaylists.find((p) => p.id === selectedPlaylistId) || userPlaylists[0]
     if (!pl) {
-      showToast('Chưa chọn danh sách phát để xuất', 'error')
+      showToast(t('backup.noPlaylist'), 'error')
       return
     }
 
     const tracksToExport = resolvePlaylistTracks(pl, libraryTracks)
     if (tracksToExport.length === 0) {
-      showToast(`Danh sách "${pl.name}" không có bài hát nào để xuất (.m3u8)`, 'error')
+      showToast(t('backup.emptyExport', { name: pl.name }), 'error')
       return
     }
 
@@ -110,7 +112,7 @@ export const BackupModal: React.FC = () => {
     a.click()
     URL.revokeObjectURL(url)
 
-    showToast(`Đã xuất danh sách "${pl.name}" (${tracksToExport.length} bài) sang tệp .m3u8 thành công`, 'success')
+    showToast(t('backup.exportSuccess', { name: pl.name, count: tracksToExport.length }), 'success')
   }
 
   // 2. Nhập Playlist từ .m3u8
@@ -139,20 +141,30 @@ export const BackupModal: React.FC = () => {
         }
 
         if (trackPaths.length === 0) {
-          showToast('Tệp .m3u8 không chứa đường dẫn bài hát hợp lệ', 'error')
+          showToast(t('backup.invalidM3u8'), 'error')
           return
         }
 
         // Tạo User Playlist mới
-        const newPl = await window.api.createUserPlaylist(playlistName, 'Nhập từ tệp .m3u8', null)
-        if (newPl && newPl.id) {
-          await window.api.addTracksToUserPlaylist(newPl.id, trackPaths)
+        const newPl: any = await window.api.createUserPlaylist(
+          playlistName,
+          'Nhập từ tệp .m3u8',
+          null
+        )
+        const playlistId = newPl?.playlist?.id || newPl?.id
+        if (playlistId) {
+          await window.api.addTracksToUserPlaylist(playlistId, trackPaths)
           const updated = await window.api.getUserPlaylists()
           useLibraryStore.getState().setUserPlaylists(updated)
-          showToast(`Đã nhập danh sách "${playlistName}" (${trackPaths.length} bài) thành công`, 'success')
+          showToast(
+            t('backup.importSuccess', { name: playlistName, count: trackPaths.length }),
+            'success'
+          )
+        } else {
+          showToast(newPl?.error || t('backup.createFailed'), 'error')
         }
       } catch (err: any) {
-        showToast('Lỗi khi nhập tệp m3u8: ' + err.message, 'error')
+        showToast(t('backup.importError', { msg: err.message }), 'error')
       }
     }
     reader.readAsText(file)
@@ -183,7 +195,7 @@ export const BackupModal: React.FC = () => {
     a.click()
     URL.revokeObjectURL(url)
 
-    showToast('Đã xuất bản sao lưu cấu hình toàn bộ thành công', 'success')
+    showToast(t('backup.backupSuccess'), 'success')
   }
 
   // 4. Khôi phục cấu hình từ file JSON Backup
@@ -201,10 +213,15 @@ export const BackupModal: React.FC = () => {
         if (Array.isArray(data.userPlaylists)) {
           // Lưu lại vào backend
           for (const pl of data.userPlaylists) {
-            const existing = userPlaylists.find(p => p.id === pl.id)
+            const existing = userPlaylists.find((p) => p.id === pl.id)
             if (!existing) {
-              const created = await window.api.createUserPlaylist(pl.name, pl.description, pl.thumbnail)
-              if (created) {
+              const created: any = await window.api.createUserPlaylist(
+                pl.name,
+                pl.description,
+                pl.thumbnail
+              )
+              const createdId = created?.playlist?.id || created?.id
+              if (createdId) {
                 // Fallback: bản sao lưu cũ có thể chỉ chứa `tracks` thay vì `trackIds`
                 const trackIds = Array.isArray(pl.trackIds)
                   ? pl.trackIds
@@ -214,7 +231,7 @@ export const BackupModal: React.FC = () => {
                         .filter(Boolean)
                     : []
                 if (trackIds.length > 0) {
-                  await window.api.addTracksToUserPlaylist(created.id, trackIds)
+                  await window.api.addTracksToUserPlaylist(createdId, trackIds)
                 }
               }
             }
@@ -228,10 +245,10 @@ export const BackupModal: React.FC = () => {
           useAudioStore.getState().setPreampGain(data.eqPreset.preampGain || 0)
         }
 
-        showToast('Đã khôi phục dữ liệu từ tệp sao lưu thành công!', 'success')
+        showToast(t('backup.restoreSuccess'), 'success')
         setShow(false)
       } catch (err: any) {
-        showToast('Lỗi khi khôi phục bản sao lưu: ' + err.message, 'error')
+        showToast(t('backup.restoreError', { msg: err.message }), 'error')
       }
     }
     reader.readAsText(file)
@@ -239,11 +256,11 @@ export const BackupModal: React.FC = () => {
   }
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
       onClick={() => setShow(false)}
     >
-      <div 
+      <div
         className="w-[580px] max-w-full bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6 animate-scale-up"
         onClick={(e) => e.stopPropagation()}
       >
@@ -254,11 +271,11 @@ export const BackupModal: React.FC = () => {
               <Database size={22} />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Sao lưu & Quản lý Playlist</h2>
-              <p className="text-xs text-zinc-400">Xuất/nhập danh sách chuẩn .m3u8 và sao lưu an toàn toàn bộ dữ liệu</p>
+              <h2 className="text-lg font-bold text-white">{t('backup.title')}</h2>
+              <p className="text-xs text-zinc-400">{t('backup.subtitle')}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setShow(false)}
             className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
           >
@@ -272,23 +289,23 @@ export const BackupModal: React.FC = () => {
           <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl space-y-3">
             <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-2">
               <FileText size={15} className="text-emerald-400" />
-              Định dạng Playlist Tiêu chuẩn (.m3u8)
+              {t('backup.m3u8Title')}
             </h3>
-            <p className="text-[11px] text-zinc-400 leading-relaxed">
-              Tương thích hoàn toàn với các phần mềm âm nhạc phổ biến khác (Foobar2000, VLC, MusicBee).
-            </p>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">{t('backup.m3u8Desc')}</p>
 
             <div className="flex gap-2 items-center pt-1">
-              <select 
-                value={selectedPlaylistId} 
+              <select
+                value={selectedPlaylistId}
                 onChange={(e) => setSelectedPlaylistId(e.target.value)}
                 className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
               >
                 {userPlaylists.length === 0 ? (
-                  <option value="">Chưa có Playlist người dùng nào</option>
+                  <option value="">{t('backup.noPlaylist')}</option>
                 ) : (
-                  userPlaylists.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.trackIds?.length || p.tracks?.length || 0} bài)</option>
+                  userPlaylists.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.trackIds?.length || p.tracks?.length || 0} {t('common.tracks')})
+                    </option>
                   ))
                 )}
               </select>
@@ -298,15 +315,20 @@ export const BackupModal: React.FC = () => {
                 disabled={userPlaylists.length === 0}
                 className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
               >
-                <Download size={14} /> Xuất .m3u8
+                <Download size={14} /> {t('backup.exportM3u8')}
               </button>
             </div>
 
             <div className="pt-2 border-t border-zinc-900 flex justify-between items-center">
-              <span className="text-[11px] text-zinc-500">Nhập playlist có sẵn từ máy tính:</span>
+              <span className="text-[11px] text-zinc-500">{t('backup.importLabel')}</span>
               <label className="cursor-pointer px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition">
-                <Upload size={13} /> Nhập tệp .m3u8
-                <input type="file" accept=".m3u,.m3u8" onChange={handleImportM3U8} className="hidden" />
+                <Upload size={13} /> {t('backup.importM3u8')}
+                <input
+                  type="file"
+                  accept=".m3u,.m3u8"
+                  onChange={handleImportM3U8}
+                  className="hidden"
+                />
               </label>
             </div>
           </div>
@@ -315,23 +337,26 @@ export const BackupModal: React.FC = () => {
           <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl space-y-3">
             <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-2">
               <ShieldCheck size={15} className="text-purple-400" />
-              Bản sao lưu Toàn bộ Cấu hình (.json)
+              {t('backup.jsonTitle')}
             </h3>
-            <p className="text-[11px] text-zinc-400 leading-relaxed">
-              Lưu giữ toàn bộ User Playlists, cấu hình Equalizer tùy biến, lịch sử nghe và thiết lập cá nhân.
-            </p>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">{t('backup.jsonDesc')}</p>
 
             <div className="flex gap-3 pt-1">
               <button
                 onClick={handleExportFullBackup}
                 className="flex-1 py-2.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs font-semibold flex items-center justify-center gap-2 transition"
               >
-                <Download size={15} /> Sao lưu toàn bộ cấu hình
+                <Download size={15} /> {t('backup.backupConfig')}
               </button>
 
               <label className="flex-1 cursor-pointer py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition">
-                <Upload size={15} /> Khôi phục từ bản sao lưu
-                <input type="file" accept=".json" onChange={handleRestoreBackup} className="hidden" />
+                <Upload size={15} /> {t('backup.restoreBackup')}
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleRestoreBackup}
+                  className="hidden"
+                />
               </label>
             </div>
           </div>
@@ -343,7 +368,7 @@ export const BackupModal: React.FC = () => {
             onClick={() => setShow(false)}
             className="px-5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition"
           >
-            Đóng
+            {t('common.close')}
           </button>
         </div>
       </div>

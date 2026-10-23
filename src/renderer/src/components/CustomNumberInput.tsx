@@ -14,7 +14,7 @@ export const CustomNumberInput: React.FC<NumberInputProps> = ({
   onChange,
   min = 0,
   max = 100,
-  step = 1,
+  step = 1
 }) => {
   return (
     <div className="inline-flex items-center bg-zinc-900 border border-zinc-700/80 rounded-lg overflow-hidden focus-within:border-theme-10 transition-all">

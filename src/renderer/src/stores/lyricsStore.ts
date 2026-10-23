@@ -28,6 +28,8 @@ export const useLyricsStore = create<LyricsState>((set) => ({
   originalCover: null,
 
   setLyrics: (valOrFn) => set((s) => ({ lyrics: resolveVal(valOrFn, s.lyrics) })),
-  setCurrentLyricIndex: (valOrFn) => set((s) => ({ currentLyricIndex: resolveVal(valOrFn, s.currentLyricIndex) })),
-  setOriginalCover: (valOrFn) => set((s) => ({ originalCover: resolveVal(valOrFn, s.originalCover) }))
+  setCurrentLyricIndex: (valOrFn) =>
+    set((s) => ({ currentLyricIndex: resolveVal(valOrFn, s.currentLyricIndex) })),
+  setOriginalCover: (valOrFn) =>
+    set((s) => ({ originalCover: resolveVal(valOrFn, s.originalCover) }))
 }))

@@ -22,23 +22,48 @@ export interface MeisRadioApi {
 
   // User Playlists
   getUserPlaylists: () => Promise<any[]>
-  createUserPlaylist: (name: string, description?: string, thumbnail?: string | null) => Promise<any>
+  createUserPlaylist: (
+    name: string,
+    description?: string,
+    thumbnail?: string | null
+  ) => Promise<any>
   deleteUserPlaylist: (playlistId: string) => Promise<any>
   renameUserPlaylist: (playlistId: string, newName: string) => Promise<any>
   updateUserPlaylist: (
     playlistId: string,
-    updates: { name?: string; description?: string; thumbnail?: string | null; customImagePath?: string }
+    updates: {
+      name?: string
+      description?: string
+      thumbnail?: string | null
+      customImagePath?: string
+    }
   ) => Promise<any>
-  pickImage: () => Promise<{ success: boolean; canceled?: boolean; filePath?: string; dataUrl?: string; previewUrl?: string }>
+  pickImage: () => Promise<{
+    success: boolean
+    canceled?: boolean
+    filePath?: string
+    dataUrl?: string
+    previewUrl?: string
+  }>
   setUserPlaylistThumbnail: (playlistId: string, customPath?: string) => Promise<any>
   addTracksToUserPlaylist: (playlistId: string, trackPaths: string[]) => Promise<any>
   removeTrackFromUserPlaylist: (playlistId: string, trackPath: string) => Promise<any>
   reorderUserPlaylistTracks: (playlistId: string, trackIds: string[]) => Promise<any>
   readLrcFile: (filePath: string) => Promise<string | null>
-  readAudioBuffer: (filePath: string) => Promise<any>
+  readAudioBuffer: (filePath: string, startTime?: number, endTime?: number) => Promise<any>
   extractPlaylistThumbnail: (playlistName: string) => Promise<any>
-  fetchMusixmatchLyrics: (title: string, artist: string, album?: string, duration?: number) => Promise<any>
-  fetchLrclibLyrics: (title: string, artist: string, album?: string, duration?: number) => Promise<any>
+  fetchMusixmatchLyrics: (
+    title: string,
+    artist: string,
+    album?: string,
+    duration?: number
+  ) => Promise<any>
+  fetchLrclibLyrics: (
+    title: string,
+    artist: string,
+    album?: string,
+    duration?: number
+  ) => Promise<any>
   importLocalFiles: (targetFolder?: string, existingTracks?: any[]) => Promise<any>
   onGlobalShortcut: (callback: (action: string) => void) => () => void
   getTrackCover: (filePath: string) => Promise<any>
@@ -76,7 +101,13 @@ export interface MeisRadioApi {
   preloadStream: (targetId: string) => Promise<any>
 
   // BASS & Bit-Perfect Audio API (WASAPI & ASIO + DSD Native)
-  bassPlay: (url: string, deviceIdOrCrossfade?: any, exclusive?: boolean, startTime?: number, endTime?: number) => Promise<any>
+  bassPlay: (
+    url: string,
+    deviceIdOrCrossfade?: any,
+    exclusive?: boolean,
+    startTime?: number,
+    endTime?: number
+  ) => Promise<any>
   bassSetGapless: (enabled: boolean) => Promise<any>
   bassPreloadNext: (filePath: string, startTime?: number, endTime?: number) => Promise<any>
   bassResume: () => Promise<any>
@@ -86,10 +117,18 @@ export interface MeisRadioApi {
   bassSetVolume: (vol: number) => Promise<any>
   bassSetEqualizer: (bands: any[], preamp?: number) => Promise<any>
   setBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => Promise<any>
-  setBassBitPerfect: (val: boolean, currentVol?: number, outputType?: 'wasapi' | 'asio') => Promise<any>
+  setBassBitPerfect: (
+    val: boolean,
+    currentVol?: number,
+    outputType?: 'wasapi' | 'asio'
+  ) => Promise<any>
   setBitPerfectOutputType: (type: 'wasapi' | 'asio') => Promise<any>
   setAudioDevice: (deviceId: string) => Promise<any>
-  getAudioDevices: (type?: 'wasapi' | 'asio') => Promise<{ success: boolean; devices: { name: string; description: string; type?: 'wasapi' | 'asio' }[]; error?: string }>
+  getAudioDevices: (type?: 'wasapi' | 'asio') => Promise<{
+    success: boolean
+    devices: { name: string; description: string; type?: 'wasapi' | 'asio' }[]
+    error?: string
+  }>
 
   onBassTime: (callback: (val: number) => void) => () => void
   onBassDuration: (callback: (val: number) => void) => () => void
@@ -97,10 +136,17 @@ export interface MeisRadioApi {
   onBassEnded: (callback: () => void) => () => void
   onBassError: (callback: (err: string) => void) => () => void
   onBassAudioParams: (callback: (params: any) => void) => () => void
-  onBassGaplessTransition: (callback: (data: { nextPath: string; nextInfo: any }) => void) => () => void
+  onBassGaplessTransition: (
+    callback: (data: { nextPath: string; nextInfo: any }) => void
+  ) => () => void
 
   // SQLite QoL & Library Features
-  getWaveformPeaks: (filePath: string, numPeaks?: number, startTime?: number, endTime?: number) => Promise<number[]>
+  getWaveformPeaks: (
+    filePath: string,
+    numPeaks?: number,
+    startTime?: number,
+    endTime?: number
+  ) => Promise<number[]>
   convertAudioTrack: (
     track: {
       filePath: string
@@ -120,7 +166,9 @@ export interface MeisRadioApi {
   saveSmartPlaylist: (playlist: any) => Promise<any>
   deleteSmartPlaylist: (id: string) => Promise<any>
   saveUserPlaylist: (playlist: any) => Promise<any>
-  onLibraryFsChanged: (callback: (data: { eventType: string; filename: string }) => void) => () => void
+  onLibraryFsChanged: (
+    callback: (data: { eventType: string; filename: string }) => void
+  ) => () => void
 
   // Legacy aliases
   mpvPlay?: (url: string, crossfade: number) => Promise<any>
@@ -152,10 +200,17 @@ export interface MeisRadioApi {
   discordGetStatus: () => Promise<any>
 
   // Soulseek Lossless Download Engine
-  soulseekLogin: (credentials: { user: string; pass: string; remember?: boolean }) => Promise<{ success: boolean; username?: string; error?: string }>
+  soulseekLogin: (credentials: {
+    user: string
+    pass: string
+    remember?: boolean
+  }) => Promise<{ success: boolean; username?: string; error?: string }>
   soulseekLogout: () => Promise<{ success: boolean }>
   soulseekGetStatus: () => Promise<any>
-  soulseekSearch: (query: string, timeout?: number) => Promise<{ success: boolean; results?: any[]; error?: string }>
+  soulseekSearch: (
+    query: string,
+    timeout?: number
+  ) => Promise<{ success: boolean; results?: any[]; error?: string }>
   soulseekDownload: (item: any) => Promise<{ success: boolean; id?: string; error?: string }>
   soulseekCancelDownload: (id: string) => Promise<boolean>
   soulseekSelectDownloadFolder: () => Promise<string | null>

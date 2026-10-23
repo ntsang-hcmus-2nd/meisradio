@@ -39,14 +39,14 @@ export const DATA_FOLDER = resolveDataFolder()
 if (!fs.existsSync(DATA_FOLDER)) {
   try {
     fs.mkdirSync(DATA_FOLDER, { recursive: true })
-  } catch (err) {}
+  } catch {}
 }
 
 export const IMAGE_CACHE_DIR = join(DATA_FOLDER, '.image_cache')
 if (!fs.existsSync(IMAGE_CACHE_DIR)) {
   try {
     fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true })
-  } catch (err) {}
+  } catch {}
 }
 
 export const CONFIG_PATH = join(DATA_FOLDER, 'music-config.json')
@@ -81,7 +81,7 @@ export function getConfig() {
               config[key] = safeStorage.decryptString(
                 Buffer.from(value.replace('ENC:', ''), 'base64')
               )
-            } catch (e) {}
+            } catch {}
           }
         }
       }
@@ -109,7 +109,7 @@ export function getConfig() {
 
       return config
     }
-  } catch (e) {}
+  } catch {}
   return {
     libraryPath: null,
     libraryPaths: [],
@@ -483,7 +483,7 @@ export function saveMetadataCache(immediate: boolean = false) {
         sqliteStorage.batchSetMetadata(items)
       }
       dirtyMetadataKeys.clear()
-    } catch (e) {}
+    } catch {}
   }
 
   if (immediate) {
@@ -533,7 +533,7 @@ export function saveThemeColorsCache(immediate: boolean = false) {
         sqliteStorage.batchSetThemeColors(items)
       }
       dirtyThemeColorKeys.clear()
-    } catch (e) {}
+    } catch {}
   }
 
   if (immediate) {

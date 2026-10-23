@@ -61,8 +61,8 @@ export const GenresView: React.FC<GenresViewProps> = ({
                 {activeGenre.name}
               </h2>
               <p className="text-sm text-zinc-400 mb-4">
-                {activeGenre.tracks.length} {t('common.songs')} •{' '}
-                {activeGenre.artistCount} {t('artistsView.artistCount')}
+                {activeGenre.tracks.length} {t('common.songs')} • {activeGenre.artistCount}{' '}
+                {t('artistsView.artistCount')}
               </p>
               <div className="flex items-center gap-3">
                 <button
@@ -87,8 +87,7 @@ export const GenresView: React.FC<GenresViewProps> = ({
                   className="sys-btn flex items-center gap-2 bg-theme-30 hover:bg-theme-30/80 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer"
                   title={t('artistsView.shuffle')}
                 >
-                  <Shuffle size={16} />{' '}
-                  <span className="btn-text">{t('artistsView.shuffle')}</span>
+                  <Shuffle size={16} /> <span className="btn-text">{t('artistsView.shuffle')}</span>
                 </button>
               </div>
             </div>
@@ -97,9 +96,7 @@ export const GenresView: React.FC<GenresViewProps> = ({
           {/* Top nghệ sĩ trong thể loại */}
           {Array.isArray(activeGenre.artists) && activeGenre.artists.length > 0 && (
             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              <span className="text-xs text-zinc-500 shrink-0">
-                {t('genresView.topArtists')}:
-              </span>
+              <span className="text-xs text-zinc-500 shrink-0">{t('genresView.topArtists')}:</span>
               {(activeGenre.artists || []).slice(0, 10).map((art: string) => (
                 <span
                   key={art}
@@ -137,8 +134,8 @@ export const GenresView: React.FC<GenresViewProps> = ({
             {searchQuery ? t('genresView.searchResults') : t('genresView.title')}
           </h2>
           <span className="text-zinc-500 text-xs sm:text-sm mb-1 whitespace-nowrap hidden sm:inline">
-            {genresData.length} {t('genresView.genreCount')} •{' '}
-            {libraryTracks.length} {t('common.songs')}
+            {genresData.length} {t('genresView.genreCount')} • {libraryTracks.length}{' '}
+            {t('common.songs')}
           </span>
         </div>
       </div>
@@ -152,11 +149,7 @@ export const GenresView: React.FC<GenresViewProps> = ({
             : genresData
 
           if (filteredGenres.length === 0) {
-            return (
-              <p className="text-zinc-500 text-center mt-10">
-                {t('genresView.noGenres')}
-              </p>
-            )
+            return <p className="text-zinc-500 text-center mt-10">{t('genresView.noGenres')}</p>
           }
 
           if (viewMode === 'table') {
@@ -171,12 +164,8 @@ export const GenresView: React.FC<GenresViewProps> = ({
                         <div className="col-span-1 text-center">#</div>
                         <div className="col-span-5">{t('genresView.title')}</div>
                         <div className="col-span-4">{t('genresView.topArtists')}</div>
-                        <div className="col-span-1 text-center">
-                          {t('common.songs')}
-                        </div>
-                        <div className="col-span-1 text-right">
-                          {t('player.play')}
-                        </div>
+                        <div className="col-span-1 text-center">{t('common.songs')}</div>
+                        <div className="col-span-1 text-right">{t('player.play')}</div>
                       </div>
                     )
                   }}
@@ -269,8 +258,8 @@ export const GenresView: React.FC<GenresViewProps> = ({
                       </div>
                       <div className="flex items-center gap-4 shrink-0">
                         <span className="text-xs text-zinc-400 font-mono">
-                          {genre.trackCount} {t('common.songs')} •{' '}
-                          {genre.artistCount} {t('artistsView.artistCount')}
+                          {genre.trackCount} {t('common.songs')} • {genre.artistCount}{' '}
+                          {t('artistsView.artistCount')}
                         </span>
                         <button
                           onClick={(e) => {
@@ -323,8 +312,7 @@ export const GenresView: React.FC<GenresViewProps> = ({
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          if (genre.tracks.length > 0)
-                            handleRowClick(genre.tracks[0], genre.tracks)
+                          if (genre.tracks.length > 0) handleRowClick(genre.tracks[0], genre.tracks)
                         }}
                         className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition"
                       >

@@ -44,8 +44,11 @@ export const CustomDialogModal: React.FC<CustomDialogModalProps> = ({ dialog, on
   const isDanger = dialog.type === 'danger'
   const isInfo = dialog.type === 'info'
 
-  const title = dialog.title || (isDanger ? t('common.warning') : isAlert ? t('common.notice') : t('common.confirm'))
-  const confirmText = dialog.confirmText || (isDanger ? t('common.delete') : isAlert ? 'OK' : t('common.confirm'))
+  const title =
+    dialog.title ||
+    (isDanger ? t('common.warning') : isAlert ? t('common.notice') : t('common.confirm'))
+  const confirmText =
+    dialog.confirmText || (isDanger ? t('common.delete') : isAlert ? 'OK' : t('common.confirm'))
   const cancelText = dialog.cancelText || t('common.cancel')
 
   const renderIcon = () => {
@@ -95,7 +98,7 @@ export const CustomDialogModal: React.FC<CustomDialogModalProps> = ({ dialog, on
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-fade-in select-none">
-      <div 
+      <div
         className="bg-zinc-900/95 border border-zinc-800/90 rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/80 flex flex-col transition-all transform scale-100"
         onClick={(e) => e.stopPropagation()}
       >
@@ -107,7 +110,7 @@ export const CustomDialogModal: React.FC<CustomDialogModalProps> = ({ dialog, on
               <h3 className="text-lg font-bold text-white tracking-wide">{title}</h3>
             </div>
           </div>
-          <button 
+          <button
             onClick={handleCancel}
             className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-white/5 transition"
           >
@@ -127,7 +130,7 @@ export const CustomDialogModal: React.FC<CustomDialogModalProps> = ({ dialog, on
         {/* Action buttons */}
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800/70">
           {!isAlert && (
-            <button 
+            <button
               type="button"
               onClick={handleCancel}
               className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 rounded-xl transition cursor-pointer"
@@ -136,13 +139,13 @@ export const CustomDialogModal: React.FC<CustomDialogModalProps> = ({ dialog, on
             </button>
           )}
 
-          <button 
+          <button
             type="button"
             onClick={handleConfirm}
             autoFocus
             className={`px-6 py-2 text-sm font-semibold text-white rounded-xl transition shadow-lg cursor-pointer flex items-center justify-center ${
-              isDanger 
-                ? 'bg-red-600 hover:bg-red-500 shadow-red-600/20 active:scale-95' 
+              isDanger
+                ? 'bg-red-600 hover:bg-red-500 shadow-red-600/20 active:scale-95'
                 : 'bg-theme-10 hover:brightness-110 shadow-theme-10/20 active:scale-95'
             }`}
           >

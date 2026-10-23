@@ -58,11 +58,7 @@ export interface SmartPlaylistModalProps {
   onPlayPlaylist?: (tracks: any[]) => void
 }
 
-export function evaluateRule(
-  track: any,
-  rule: SmartPlaylistRule,
-  favSet: Set<string>
-): boolean {
+function evaluateRule(track: any, rule: SmartPlaylistRule, favSet: Set<string>): boolean {
   switch (rule.field) {
     case 'format': {
       const isDsd = isDsdTrack(track)
@@ -124,8 +120,7 @@ export function evaluateRule(
       return year === target
     }
     case 'isFavorite': {
-      const isFav =
-        favSet.has(track.id) || Boolean(track.filePath && favSet.has(track.filePath))
+      const isFav = favSet.has(track.id) || Boolean(track.filePath && favSet.has(track.filePath))
       return rule.operator === 'is_false' ? !isFav : isFav
     }
     default:
@@ -133,7 +128,7 @@ export function evaluateRule(
   }
 }
 
-export function filterTracksByRules(
+function filterTracksByRules(
   tracks: any[],
   rules: SmartPlaylistRule[],
   matchAll: boolean,
@@ -211,15 +206,13 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
     operator: SmartPlaylistOperator,
     value: string
   ) => {
-    setRules((prev) =>
-      prev.map((r) => (r.id === ruleId ? { ...r, field, operator, value } : r))
-    )
+    setRules((prev) => prev.map((r) => (r.id === ruleId ? { ...r, field, operator, value } : r)))
   }
 
   // Delete rule row
   const handleDeleteRule = (ruleId: string) => {
     if (rules.length <= 1) {
-      showToast('A smart playlist must have at least one rule', 'info')
+      showToast(t('smartPlaylists.needOneRule'), 'info')
       return
     }
     setRules((prev) => prev.filter((r) => r.id !== ruleId))
@@ -229,7 +222,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
   const handleSave = async () => {
     const trimmedName = playlistName.trim()
     if (!trimmedName) {
-      showToast('Please enter a name for the smart playlist', 'error')
+      showToast(t('smartPlaylists.needName'), 'error')
       return
     }
 
@@ -254,7 +247,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
       return [playlistObj, ...filtered]
     })
 
-    showToast(`Smart Playlist "${trimmedName}" saved!`, 'success')
+    showToast(t('smartPlaylists.savedToast', { name: trimmedName }), 'success')
     setActiveTab('list')
     setEditingId(null)
     setPlaylistName('')
@@ -263,7 +256,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
   // Play matching tracks
   const handlePlayMatching = (tracksToPlay: any[]) => {
     if (tracksToPlay.length === 0) {
-      showToast('No tracks matched this smart playlist', 'info')
+      showToast(t('smartPlaylists.noMatch'), 'info')
       return
     }
 
@@ -274,7 +267,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
       usePlayerStore.getState().setCurrentTrack(tracksToPlay[0])
       usePlayerStore.getState().setIsPlaying(true)
     }
-    showToast(`Playing ${tracksToPlay.length} tracks`, 'success')
+    showToast(t('smartPlaylists.playingToast', { count: tracksToPlay.length }), 'success')
     onClose()
   }
 
@@ -289,7 +282,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
 
   // Delete existing smart playlist
   const handleDeletePlaylist = async (id: string, name: string) => {
-    if (!window.confirm(`Delete smart playlist "${name}"?`)) return
+    if (!window.confirm(t('smartPlaylists.deleteConfirm', { name }))) return
 
     if (window.api?.deleteSmartPlaylist) {
       try {
@@ -300,7 +293,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
     }
 
     setSmartPlaylists((prev) => prev.filter((p) => p.id !== id))
-    showToast(`Deleted smart playlist "${name}"`, 'info')
+    showToast(t('smartPlaylists.deletedToast', { name }), 'info')
   }
 
   if (!isOpen) return null
@@ -316,14 +309,12 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <span>{t('smartPlaylists.smartPlaylists') || 'Smart Playlists'}</span>
+                <span>{t('smartPlaylists.smartPlaylists')}</span>
                 <span className="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/60">
                   {smartPlaylists.length}
                 </span>
               </h2>
-              <p className="text-xs text-zinc-400">
-                Rule-based dynamic playlists that update automatically as your library changes
-              </p>
+              <p className="text-xs text-zinc-400">{t('smartPlaylists.desc')}</p>
             </div>
           </div>
 
@@ -350,7 +341,9 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                {editingId ? 'Edit Playlist' : t('smartPlaylists.createSmartPlaylist') || 'Create New'}
+                {editingId
+                  ? t('smartPlaylists.editPlaylist')
+                  : t('smartPlaylists.createSmartPlaylist')}
               </button>
               <button
                 onClick={() => setActiveTab('list')}
@@ -360,7 +353,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                Saved ({smartPlaylists.length})
+                {t('smartPlaylists.savedTab', { count: smartPlaylists.length })}
               </button>
             </div>
 
@@ -380,20 +373,20 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
               <div className="sm:col-span-2">
                 <label className="text-xs text-zinc-400 font-medium mb-1 block">
-                  {t('smartPlaylists.smartPlaylistName') || 'Playlist Name'}
+                  {t('smartPlaylists.smartPlaylistName')}
                 </label>
                 <input
                   type="text"
                   value={playlistName}
                   onChange={(e) => setPlaylistName(e.target.value)}
-                  placeholder="e.g. Hi-Res FLAC Collection, 80s Rock, Favorites..."
+                  placeholder={t('smartPlaylists.listPlaceholder')}
                   className="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-theme-10 font-medium"
                 />
               </div>
 
               <div>
                 <label className="text-xs text-zinc-400 font-medium mb-1 block">
-                  {t('smartPlaylists.matchAllRules') || 'Rule Matching'}
+                  {t('smartPlaylists.matchAllRules')}
                 </label>
                 <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-700/80 text-xs">
                   <button
@@ -403,7 +396,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                       matchAll ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    Match All (AND)
+                    {t('smartPlaylists.matchAllBtn')}
                   </button>
                   <button
                     type="button"
@@ -412,7 +405,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                       !matchAll ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    Match Any (OR)
+                    {t('smartPlaylists.matchAnyBtn')}
                   </button>
                 </div>
               </div>
@@ -422,7 +415,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                  Rules ({rules.length})
+                  {t('smartPlaylists.rulesTitle', { count: rules.length })}
                 </label>
                 <button
                   type="button"
@@ -430,7 +423,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                   className="flex items-center gap-1 text-xs font-semibold text-theme-10 hover:brightness-110 bg-theme-10/10 border border-theme-10/30 px-2.5 py-1 rounded-lg transition cursor-pointer"
                 >
                   <Plus size={13} />
-                  <span>{t('smartPlaylists.addRule') || 'Add Rule'}</span>
+                  <span>{t('smartPlaylists.addRule')}</span>
                 </button>
               </div>
 
@@ -467,15 +460,15 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                       }}
                       className="bg-zinc-900 border border-zinc-700/80 rounded-lg px-2.5 py-1.5 text-zinc-200 focus:outline-none focus:border-theme-10 font-medium cursor-pointer"
                     >
-                      <option value="format">Format (FLAC, DSD, MP3...)</option>
-                      <option value="sampleRate">Sample Rate (Hz)</option>
-                      <option value="bitDepth">Bit Depth</option>
-                      <option value="genre">Genre</option>
-                      <option value="artist">Artist</option>
-                      <option value="album">Album</option>
-                      <option value="title">Song Title</option>
-                      <option value="year">Release Year</option>
-                      <option value="isFavorite">Favorites Status</option>
+                      <option value="format">{t('smartPlaylists.fieldFormat')}</option>
+                      <option value="sampleRate">{t('smartPlaylists.fieldSampleRate')}</option>
+                      <option value="bitDepth">{t('smartPlaylists.fieldBitDepth')}</option>
+                      <option value="genre">{t('smartPlaylists.fieldGenre')}</option>
+                      <option value="artist">{t('smartPlaylists.fieldArtist')}</option>
+                      <option value="album">{t('smartPlaylists.fieldAlbum')}</option>
+                      <option value="title">{t('smartPlaylists.fieldTitle')}</option>
+                      <option value="year">{t('smartPlaylists.fieldYear')}</option>
+                      <option value="isFavorite">{t('smartPlaylists.fieldFavorite')}</option>
                     </select>
 
                     {/* Operator Selector */}
@@ -493,8 +486,8 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                     >
                       {rule.field === 'format' ? (
                         <>
-                          <option value="is">is</option>
-                          <option value="is_not">is not</option>
+                          <option value="is">{t('smartPlaylists.opIs')}</option>
+                          <option value="is_not">{t('smartPlaylists.opIsNot')}</option>
                         </>
                       ) : rule.field === 'sampleRate' ||
                         rule.field === 'bitDepth' ||
@@ -506,14 +499,16 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                         </>
                       ) : rule.field === 'isFavorite' ? (
                         <>
-                          <option value="is_true">is in Favorites</option>
-                          <option value="is_false">is not in Favorites</option>
+                          <option value="is_true">{t('smartPlaylists.opInFavorites')}</option>
+                          <option value="is_false">{t('smartPlaylists.opNotInFavorites')}</option>
                         </>
                       ) : (
                         <>
-                          <option value="contains">contains</option>
-                          <option value="equals">equals</option>
-                          <option value="does_not_contain">does not contain</option>
+                          <option value="contains">{t('smartPlaylists.opContains')}</option>
+                          <option value="equals">{t('smartPlaylists.opEquals')}</option>
+                          <option value="does_not_contain">
+                            {t('smartPlaylists.opNotContains')}
+                          </option>
                         </>
                       )}
                     </select>
@@ -567,7 +562,9 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                       </select>
                     ) : rule.field === 'isFavorite' ? (
                       <div className="flex-1 text-zinc-500 italic px-2">
-                        {rule.operator === 'is_true' ? 'Hearted songs' : 'Unhearted songs'}
+                        {rule.operator === 'is_true'
+                          ? t('smartPlaylists.heartedSongs')
+                          : t('smartPlaylists.unheartedSongs')}
                       </div>
                     ) : (
                       <input
@@ -576,7 +573,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                         onChange={(e) =>
                           handleUpdateRule(rule.id, rule.field, rule.operator, e.target.value)
                         }
-                        placeholder="Search value..."
+                        placeholder={t('smartPlaylists.searchPlaceholder')}
                         className="bg-zinc-900 border border-zinc-700/80 rounded-lg px-2.5 py-1.5 text-zinc-200 focus:outline-none focus:border-theme-10 flex-1 font-medium"
                       />
                     )}
@@ -600,7 +597,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                 <div className="flex items-center gap-2">
                   <CheckCircle2 size={16} className="text-theme-10" />
                   <span className="text-xs font-bold text-white">
-                    {matchingTracks.length} tracks matched in library
+                    {t('smartPlaylists.matchedCount', { count: matchingTracks.length })}
                   </span>
                 </div>
                 {matchingTracks.length > 0 && (
@@ -609,7 +606,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                     className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-theme-10 text-white hover:brightness-110 transition cursor-pointer"
                   >
                     <Play size={12} className="fill-white" />
-                    <span>Play Now</span>
+                    <span>{t('smartPlaylists.playNow')}</span>
                   </button>
                 )}
               </div>
@@ -644,13 +641,13 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                   })}
                   {matchingTracks.length > 15 && (
                     <div className="pt-1.5 text-center text-zinc-500 text-[10px] italic">
-                      + {matchingTracks.length - 15} more matching tracks
+                      {t('smartPlaylists.moreMatches', { count: matchingTracks.length - 15 })}
                     </div>
                   )}
                 </div>
               ) : (
                 <p className="text-xs text-zinc-500 italic py-2">
-                  No tracks currently match all the specified criteria.
+                  {t('smartPlaylists.noCriteriaMatch')}
                 </p>
               )}
             </div>
@@ -661,15 +658,15 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
             {smartPlaylists.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-3">
                 <FolderPlus size={44} className="text-zinc-600" />
-                <p className="text-sm font-semibold text-white">No smart playlists created yet</p>
-                <p className="text-xs text-zinc-500 max-w-sm">
-                  Smart playlists automatically gather songs from your library based on high resolution audio formats, genres, years, or favorite ratings.
+                <p className="text-sm font-semibold text-white">
+                  {t('smartPlaylists.noPlaylistsYet')}
                 </p>
+                <p className="text-xs text-zinc-500 max-w-sm">{t('smartPlaylists.emptyDesc')}</p>
                 <button
                   onClick={() => setActiveTab('create')}
                   className="px-4 py-2 rounded-xl bg-theme-10 text-white font-semibold text-xs transition hover:brightness-110 cursor-pointer shadow-md shadow-theme-10/20"
                 >
-                  Create First Smart Playlist
+                  {t('smartPlaylists.createFirst')}
                 </button>
               </div>
             ) : (
@@ -689,11 +686,15 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-bold text-white truncate">{playlist.name}</h3>
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-theme-10/15 text-theme-10 border border-theme-10/30">
-                          {tracks.length} tracks
+                          {t('smartPlaylists.tracksBadge', { count: tracks.length })}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
-                        <span>{playlist.matchAll ? 'Matches all:' : 'Matches any:'}</span>
+                        <span>
+                          {playlist.matchAll
+                            ? t('smartPlaylists.matchesAll')
+                            : t('smartPlaylists.matchesAny')}
+                        </span>
                         {(playlist.rules || []).map((r, idx) => (
                           <span
                             key={idx}
@@ -709,21 +710,21 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                       <button
                         onClick={() => handlePlayMatching(tracks)}
                         disabled={tracks.length === 0}
-                        title="Play Playlist"
+                        title={t('smartPlaylists.playNow')}
                         className="p-2 rounded-lg bg-theme-10 text-white hover:brightness-110 transition cursor-pointer disabled:opacity-40"
                       >
                         <Play size={14} className="fill-current" />
                       </button>
                       <button
                         onClick={() => handleEditPlaylist(playlist)}
-                        title="Edit Rules"
+                        title={t('smartPlaylists.editPlaylist')}
                         className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
                       >
                         <SlidersHorizontal size={14} />
                       </button>
                       <button
                         onClick={() => handleDeletePlaylist(playlist.id, playlist.name)}
-                        title="Delete"
+                        title={t('common.delete')}
                         className="p-2 rounded-lg bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-300 transition cursor-pointer"
                       >
                         <Trash2 size={14} />
@@ -740,7 +741,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
         {activeTab === 'create' && (
           <div className="p-4 border-t border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-950/40">
             <span className="text-xs text-zinc-500">
-              {matchingTracks.length} tracks will be included in this smart playlist
+              {t('smartPlaylists.footerCount', { count: matchingTracks.length })}
             </span>
             <div className="flex items-center gap-3">
               <button
@@ -756,7 +757,7 @@ export const SmartPlaylistModal: React.FC<SmartPlaylistModalProps> = ({
                 className="flex items-center gap-1.5 bg-theme-10 hover:brightness-110 text-white px-5 py-2 rounded-lg text-xs font-semibold shadow-lg shadow-theme-10/20 transition cursor-pointer"
               >
                 <Save size={13} />
-                <span>Save Smart Playlist</span>
+                <span>{t('smartPlaylists.savePlaylist')}</span>
               </button>
             </div>
           </div>

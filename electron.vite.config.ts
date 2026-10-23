@@ -14,7 +14,7 @@ export default defineConfig({
   },
   preload: {
     build: {
-      minify: true,
+      minify: true
     }
   },
   renderer: {
@@ -23,9 +23,6 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src')
       }
     },
-    plugins: [
-      react(),
-      tailwindcss()
-    ]
+    plugins: [react(), tailwindcss()]
   }
 })

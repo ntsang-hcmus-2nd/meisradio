@@ -45,6 +45,7 @@ import { useUIStore } from '../../stores/uiStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useLibraryStore } from '../../stores/libraryStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useAudioStore } from '../../stores/audioStore'
 import { useSoulseekStore } from '../../stores/soulseekStore'
 import { removeAccents } from '../../utils/textUtils'
 import { DynamicCoverArt } from '../DynamicCoverArt'
@@ -69,9 +70,16 @@ export interface TrackItem {
 }
 
 interface ElectronAPI {
-  setBitPerfect?: (enabled: boolean) => Promise<unknown>
+  setBitPerfect?: (
+    enabled: boolean,
+    currentVol?: number,
+    outputType?: 'wasapi' | 'asio'
+  ) => Promise<unknown>
   saveConfig?: (cfg: Record<string, unknown>) => Promise<unknown>
-  slskSearch?: (query: string) => Promise<unknown>
+  soulseekSearch?: (query: string, timeout?: number) => Promise<unknown>
+  searchOnline?: (query: string) => Promise<any>
+  searchScOnline?: (query: string) => Promise<any>
+  toggleMiniPlayer?: (isMini: boolean) => Promise<unknown>
 }
 
 const getElectronApi = (): ElectronAPI | undefined => {
@@ -96,6 +104,8 @@ export interface CommandPaletteModalProps {
   onReloadLibrary?: () => void
   onAddLibraryFolder?: () => void
   onNavigateToArtist?: (artistName: string) => void
+  onToggleBitPerfect?: () => void | Promise<void>
+  onToggleMiniPlayer?: () => void
 }
 
 type TabCategory = 'all' | 'tracks' | 'artists' | 'albums' | 'playlists' | 'commands'
@@ -169,7 +179,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   onSeekBackward,
   onReloadLibrary,
   onAddLibraryFolder,
-  onNavigateToArtist
+  onNavigateToArtist,
+  onToggleBitPerfect,
+  onToggleMiniPlayer
 }) => {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
@@ -199,6 +211,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const setIsPlaying = usePlayerStore((s) => s.setIsPlaying)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
+  const volume = usePlayerStore((s) => s.volume)
   const isShuffle = usePlayerStore((s) => s.isShuffle)
   const repeatMode = usePlayerStore((s) => s.repeatMode)
   const bitPerfectEnabled = usePlayerStore((s) => s.bitPerfectEnabled)
@@ -227,9 +240,17 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const setActiveAlbum = useLibraryStore((s) => s.setActiveAlbum)
   const setSearchQuery = useLibraryStore((s) => s.setSearchQuery)
   const setSearchInput = useLibraryStore((s) => s.setSearchInput)
+  const setDashboardData = useLibraryStore((s) => s.setDashboardData)
+  const setScDashboardData = useLibraryStore((s) => s.setScDashboardData)
+
+  // Audio Store (fallback cho Bit-Perfect khi không có onToggleBitPerfect)
+  const bitPerfectType = useAudioStore((s) => s.bitPerfectType)
 
   // Soulseek Store
   const setSlskSearchQuery = useSoulseekStore((s) => s.setSearchQuery)
+  const setSlskIsSearching = useSoulseekStore((s) => s.setIsSearching)
+  const setSlskSearchResults = useSoulseekStore((s) => s.setSearchResults)
+  const setSlskSearchError = useSoulseekStore((s) => s.setSearchError)
 
   // Focus input and reset state on open
   useEffect(() => {
@@ -558,17 +579,22 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         category: 'action',
         badge: t('spotlight.categoryCommands'),
         action: async () => {
+          setShow(false)
+          if (onToggleBitPerfect) {
+            await onToggleBitPerfect()
+            return
+          }
+          // Fallback: đồng bộ volume + output type như SettingsView
           const nextVal = !bitPerfectEnabled
           try {
             const api = getElectronApi()
             if (api?.setBitPerfect) {
-              await api.setBitPerfect(nextVal)
+              await api.setBitPerfect(nextVal, volume, bitPerfectType)
             }
           } catch {
             // Ignore hardware lock toggle error
           }
           setBitPerfectEnabled(nextVal)
-          setShow(false)
         }
       },
       {
@@ -716,7 +742,17 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         badge: t('spotlight.categoryCommands'),
         action: () => {
           setShow(false)
+          if (onToggleMiniPlayer) {
+            onToggleMiniPlayer()
+            return
+          }
+          // Fallback: thu nhỏ cửa sổ Electron như handleToggleMiniPlayer trong App
+          setIsLyricsMaximized(false)
           setIsMiniPlayer(true)
+          const api = getElectronApi() as unknown as {
+            toggleMiniPlayer?: (isMini: boolean) => Promise<unknown>
+          }
+          void api?.toggleMiniPlayer?.(true)
         }
       },
 
@@ -1042,6 +1078,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     onReloadLibrary,
     onAddLibraryFolder,
     handleSetAccentColor,
+    onToggleBitPerfect,
+    onToggleMiniPlayer,
+    volume,
+    bitPerfectType,
     setShow,
     setIsPlaying,
     setBitPerfectEnabled,
@@ -1336,6 +1376,17 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             setSearchInput(rawQuery)
             setActiveView('home-ytm')
             setShow(false)
+            const api = getElectronApi()
+            void api
+              ?.searchOnline?.(rawQuery)
+              .then((res: any) => {
+                if (res?.success) {
+                  setDashboardData(res.data)
+                } else {
+                  showToast(res?.error || t('common.error'), 'error')
+                }
+              })
+              .catch(() => {})
           }
         },
         {
@@ -1350,6 +1401,19 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             setSearchInput(rawQuery)
             setActiveView('home-soundcloud')
             setShow(false)
+            const api = getElectronApi()
+            void api
+              ?.searchScOnline?.(rawQuery)
+              .then((res: any) => {
+                if (res?.success) {
+                  setScDashboardData([
+                    { title: `${t('header.searchSc')}: "${rawQuery}"`, contents: res.tracks }
+                  ])
+                } else {
+                  showToast(res?.error || t('common.error'), 'error')
+                }
+              })
+              .catch(() => {})
           }
         },
         {
@@ -1362,11 +1426,31 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           action: () => {
             setSlskSearchQuery(rawQuery)
             setActiveView('downloads')
-            const api = getElectronApi()
-            if (api?.slskSearch) {
-              void api.slskSearch(rawQuery).catch(() => {})
-            }
             setShow(false)
+            const api = getElectronApi()
+            if (!api?.soulseekSearch) {
+              setSlskSearchError(t('common.error'))
+              return
+            }
+            setSlskIsSearching(true)
+            setSlskSearchError(null)
+            void (api.soulseekSearch(rawQuery, 5000) as Promise<any>)
+              .then((res: any) => {
+                if (res?.success && res?.results) {
+                  setSlskSearchResults(res.results)
+                  if (res.results.length === 0) {
+                    setSlskSearchError(t('downloads.noResults'))
+                  }
+                } else {
+                  setSlskSearchError(res?.error || t('downloads.noResults'))
+                }
+              })
+              .catch((err: any) => {
+                setSlskSearchError(err?.message || t('common.error'))
+              })
+              .finally(() => {
+                setSlskIsSearching(false)
+              })
           }
         }
       )
@@ -1406,7 +1490,13 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     setActiveUserPlaylist,
     setSearchQuery,
     setSearchInput,
+    setDashboardData,
+    setScDashboardData,
     setSlskSearchQuery,
+    setSlskIsSearching,
+    setSlskSearchResults,
+    setSlskSearchError,
+    showToast,
     setShow
   ])
 

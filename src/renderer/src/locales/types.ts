@@ -827,8 +827,17 @@ export interface TranslationDictionary {
     duplicateFinder: string
     duplicateFinderDesc: string
     noDuplicatesFound: string
+    noDuplicatesDesc: string
     keepHighestQuality: string
     deleteDuplicates: string
+    groups: string
+    totalDuplicates: string
+    copies: string
+    highestQuality: string
+    duplicateNum: string
+    showInFolder: string
+    playTrack: string
+    moveToTrash: string
   }
   smartPlaylists: {
     smartPlaylists: string
@@ -839,6 +848,98 @@ export interface TranslationDictionary {
     ruleOperator: string
     ruleValue: string
     addRule: string
+    needOneRule: string
+    needName: string
+    noMatch: string
+    editPlaylist: string
+    createNew: string
+    fieldFormat: string
+    fieldSampleRate: string
+    fieldBitDepth: string
+    fieldGenre: string
+    fieldArtist: string
+    fieldAlbum: string
+    fieldTitle: string
+    fieldYear: string
+    fieldFavorite: string
+    heartedSongs: string
+    unheartedSongs: string
+    playNow: string
+    noPlaylistsYet: string
+    matchesAll: string
+    matchesAny: string
+    savePlaylist: string
+    desc: string
+    savedTab: string
+    listPlaceholder: string
+    matchAllBtn: string
+    matchAnyBtn: string
+    rulesTitle: string
+    searchPlaceholder: string
+    matchedCount: string
+    moreMatches: string
+    noCriteriaMatch: string
+    emptyDesc: string
+    createFirst: string
+    tracksBadge: string
+    footerCount: string
+    savedToast: string
+    deletedToast: string
+    playingToast: string
+    deleteConfirm: string
+    opIs: string
+    opIsNot: string
+    opContains: string
+    opEquals: string
+    opNotContains: string
+    opInFavorites: string
+    opNotInFavorites: string
+  }
+  backup: {
+    title: string
+    subtitle: string
+    m3u8Title: string
+    m3u8Desc: string
+    noPlaylist: string
+    emptyExport: string
+    exportSuccess: string
+    invalidM3u8: string
+    importSuccess: string
+    createFailed: string
+    importError: string
+    exportM3u8: string
+    importLabel: string
+    importM3u8: string
+    jsonTitle: string
+    jsonDesc: string
+    backupConfig: string
+    restoreBackup: string
+    backupSuccess: string
+    restoreSuccess: string
+    restoreError: string
+  }
+  insights: {
+    personalBadge: string
+    subtitle: string
+    musicLibrary: string
+    tracksReady: string
+    totalDuration: string
+    nonstop: string
+    flacWavFiles: string
+    dsdFiles: string
+    libraryQuality: string
+    qualityBreakdown: string
+    otherFormat: string
+    topArtists: string
+    noArtistData: string
+    tracksSuffix: string
+    topGenres: string
+    noGenreData: string
+  }
+  dragDrop: {
+    title: string
+    subtitle: string
+    ready: string
   }
   analytics: {
     title: string
@@ -875,4 +976,3 @@ export interface TranslationDictionary {
 }
 
 export type TranslationSchema = TranslationDictionary
-

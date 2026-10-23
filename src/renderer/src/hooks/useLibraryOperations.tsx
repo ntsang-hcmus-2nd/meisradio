@@ -315,7 +315,7 @@ export function useLibraryOperations({
       if (res?.success) {
         setUserPlaylists(res.playlists)
         setShowCreateUserPlaylistModal(false)
-        showToast(t('toasts.playlistCreatedSuccess', { name }), 'success')
+        showToast(t('toasts.playlistCreated', { name }), 'success')
         setActiveUserPlaylist(res.playlist)
         setActiveView('user-playlists')
       } else if (res?.error) {
@@ -620,7 +620,7 @@ export function useLibraryOperations({
       setEditingTrack(null)
       loadLibrary()
     } else {
-      alert('Error: ' + res?.error)
+      showToast('Error: ' + res?.error, 'error')
     }
   }, [
     editingTrack,
@@ -995,6 +995,9 @@ export function useLibraryOperations({
                 const rawTrackPath = track.id || track.filePath
                 // @ts-ignore
                 await window.api?.deleteTrack?.(rawTrackPath, false)
+                await (
+                  await import('../utils/trackStateUtils')
+                ).removeTrackKeysFromStores([rawTrackPath])
                 showToast(t('toasts.removedFromPlaylist'), 'success')
                 loadLibrary()
               }
@@ -1019,6 +1022,9 @@ export function useLibraryOperations({
               // @ts-ignore
               const res = await window.api?.deleteTrack?.(rawTrackPath, true)
               if (res?.success) {
+                await (
+                  await import('../utils/trackStateUtils')
+                ).removeTrackKeysFromStores([rawTrackPath])
                 showToast(t('toasts.movedToTrash', { title: track.title }), 'success')
                 loadLibrary()
               } else {
@@ -1053,6 +1059,7 @@ export function useLibraryOperations({
       loadLibrary,
       setPlayQueue,
       setUserPlaylists,
+      setActiveUserPlaylist,
       setShowCreateUserPlaylistModal
     ]
   )

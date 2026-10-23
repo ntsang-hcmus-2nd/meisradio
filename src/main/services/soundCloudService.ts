@@ -58,7 +58,7 @@ export function registerSoundCloudIpc(): void {
               saveConfig({ scUserInfo: userProfile })
               resolve({ success: true, user: userProfile })
               return
-            } catch (err) {
+            } catch {
               resolve({ success: true })
               return
             }
@@ -196,7 +196,7 @@ export function registerSoundCloudIpc(): void {
                 contents: extra
               })
             }
-          } catch (e) {}
+          } catch {}
         }
       }
 

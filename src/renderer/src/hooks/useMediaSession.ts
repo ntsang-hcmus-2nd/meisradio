@@ -50,7 +50,7 @@ export function useMediaSession({
         album: currentTrack.album || 'Unknown Album',
         artwork: artworkList
       })
-    } catch (e) {}
+    } catch {}
 
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
 
@@ -109,7 +109,16 @@ export function useMediaSession({
     for (const [action, handler] of actionHandlers) {
       try {
         navigator.mediaSession.setActionHandler(action, handler)
-      } catch (e) {}
+      } catch {}
     }
-  }, [currentTrack, isPlaying, bitPerfectEnabled, streamPort, handlePlayPause, handlePrev, handleNext, audioRef])
+  }, [
+    currentTrack,
+    isPlaying,
+    bitPerfectEnabled,
+    streamPort,
+    handlePlayPause,
+    handlePrev,
+    handleNext,
+    audioRef
+  ])
 }

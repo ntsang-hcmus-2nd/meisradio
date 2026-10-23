@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSettingsStore, usePlayerStore, useUIStore } from '../stores'
 import { formatImageSource } from '../utils/urlUtils'
-import { extractThemeColors, initThemeColorCache, generateThemeFromColor } from '../utils/colorUtils'
+import {
+  extractThemeColors,
+  initThemeColorCache,
+  generateThemeFromColor
+} from '../utils/colorUtils'
 
 export function useTheming() {
   const {
@@ -57,6 +61,7 @@ export function useTheming() {
     }
     return cleanup
   }, [
+    currentTrack,
     currentTrack?.id,
     currentTrack?.filePath,
     currentTrack?.coverArt,
@@ -127,6 +132,9 @@ export function useTheming() {
     return () => {
       isCancelled = true
     }
+    // activeBgLayer cố ý loại trừ: thêm vào sẽ gây ping-pong A→B→A vô hạn
+    // vì effect vừa đọc vừa lật layer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedBgImage, isLite, isCore])
 
   // Theme Colors Cache
@@ -145,6 +153,7 @@ export function useTheming() {
 
   // Apply Background & Extract Theme Colors (60/30/10)
   useEffect(() => {
+    let isCancelled = false
     if (isCore) {
       document.documentElement.style.setProperty('--bg-image', 'none')
       document.documentElement.style.setProperty('--theme-60', '#18181b')
@@ -173,7 +182,7 @@ export function useTheming() {
       if (!useTrackCoverAsBg && customBgImage) {
         const safeBg = formatImageSource(customBgImage, streamPort) || customBgImage
         extractThemeColors(safeBg, customBgImage).then((colors) => {
-          if (colors && !isCore) {
+          if (colors && !isCore && !isCancelled) {
             document.documentElement.style.setProperty('--theme-60', colors.primary60)
             document.documentElement.style.setProperty('--theme-30', colors.secondary30)
             document.documentElement.style.setProperty('--theme-10', colors.accent10)
@@ -196,7 +205,7 @@ export function useTheming() {
     if (trackCover) {
       const safeTrackCover = formatImageSource(trackCover, streamPort) || trackCover
       extractThemeColors(safeTrackCover, trackKey || safeTrackCover).then((colors) => {
-        if (colors && !isCore) {
+        if (colors && !isCore && !isCancelled) {
           document.documentElement.style.setProperty('--theme-60', colors.primary60)
           document.documentElement.style.setProperty('--theme-30', colors.secondary30)
           document.documentElement.style.setProperty('--theme-10', colors.accent10)
@@ -206,6 +215,9 @@ export function useTheming() {
       document.documentElement.style.setProperty('--theme-60', '#18181b')
       document.documentElement.style.setProperty('--theme-30', '#27272a')
       document.documentElement.style.setProperty('--theme-10', '#10b981')
+    }
+    return () => {
+      isCancelled = true
     }
   }, [
     accentColorMode,

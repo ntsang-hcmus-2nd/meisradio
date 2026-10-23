@@ -52,9 +52,7 @@ export async function streamDownloadToFile(
         if (now - lastEmit > 200 || downloadedBytes === totalBytes) {
           lastEmit = now
           const percent =
-            totalBytes > 0
-              ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
-              : 0
+            totalBytes > 0 ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : 0
           const progressPayload = {
             url,
             fileName,
@@ -255,7 +253,11 @@ export async function downloadMultipleFiles(
 
   const existingTrackKeys = new Set<string>()
   const getTrackKey = (t?: string, a?: string) =>
-    `${String(t || '').trim().toLowerCase()}:::${String(a || '').trim().toLowerCase()}`
+    `${String(t || '')
+      .trim()
+      .toLowerCase()}:::${String(a || '')
+      .trim()
+      .toLowerCase()}`
 
   for (const track of existingTracks) {
     if (track && track.title && track.artist) {
@@ -306,7 +308,7 @@ export async function downloadMultipleFiles(
         }
         if (metadata.common.artist) artist = metadata.common.artist
         if (metadata.common.album) album = metadata.common.album
-      } catch (e) {}
+      } catch {}
 
       const isDuplicate = existingTrackKeys.has(getTrackKey(title, artist))
 
@@ -378,7 +380,7 @@ export async function downloadMultipleFiles(
         downloadedTracks.push(newTrackObj)
         existingTracks.push(newTrackObj)
         existingTrackKeys.add(getTrackKey(title, artist))
-      } catch (e) {
+      } catch {
         const fallbackTrackObj = {
           ...file,
           id: destPath,

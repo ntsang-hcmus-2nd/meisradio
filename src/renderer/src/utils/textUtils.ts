@@ -26,10 +26,7 @@ export function buildTrackSearchKey(track: any): string {
 /**
  * Kiểm tra xem chuỗi nguồn có chứa từ khóa tìm kiếm (hỗ trợ không dấu) hay không
  */
-export function matchesQuery(
-  source: string | null | undefined,
-  normalizedQuery: string
-): boolean {
+export function matchesQuery(source: string | null | undefined, normalizedQuery: string): boolean {
   if (!source || !normalizedQuery) return false
   const normalizedSource = removeAccents(source)
   return normalizedSource.includes(normalizedQuery)
@@ -38,10 +35,7 @@ export function matchesQuery(
 /**
  * So khớp bài hát với từ khóa tìm kiếm sử dụng chuỗi chỉ mục _searchKey được lưu sẵn
  */
-export function matchesTrackQuery(
-  track: any,
-  normalizedQuery: string
-): boolean {
+export function matchesTrackQuery(track: any, normalizedQuery: string): boolean {
   if (!track || !normalizedQuery) return false
   if (!track._searchKey) {
     track._searchKey = buildTrackSearchKey(track)

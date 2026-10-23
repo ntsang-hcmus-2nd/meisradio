@@ -13,7 +13,7 @@ export function useMemoryOptimization() {
       window.api?.clearMemoryCache?.()
     }, 1500)
     return () => clearTimeout(timer)
-  }, [currentTrack?.id])
+  }, [currentTrack, currentTrack?.id])
 
   // 2. Dọn dẹp sâu khi ứng dụng thu nhỏ hoặc nhận sự kiện onDeepClean từ Main Process
   useEffect(() => {

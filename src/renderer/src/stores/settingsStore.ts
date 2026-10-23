@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { setGlobalStreamPort } from '../utils/urlUtils'
 
 export interface SettingsState {
   appMode: 'default' | 'lite' | 'core'
@@ -43,11 +44,25 @@ export interface SettingsState {
   waveformSeekbarEnabled: boolean
 
   // Actions
-  setAppMode: (mode: 'default' | 'lite' | 'core' | ((prev: 'default' | 'lite' | 'core') => 'default' | 'lite' | 'core')) => void
-  setUiStyle: (style: 'classic' | 'sleek' | ((prev: 'classic' | 'sleek') => 'classic' | 'sleek')) => void
+  setAppMode: (
+    mode:
+      | 'default'
+      | 'lite'
+      | 'core'
+      | ((prev: 'default' | 'lite' | 'core') => 'default' | 'lite' | 'core')
+  ) => void
+  setUiStyle: (
+    style: 'classic' | 'sleek' | ((prev: 'classic' | 'sleek') => 'classic' | 'sleek')
+  ) => void
   setCustomBgImage: (img: string | null | ((prev: string | null) => string | null)) => void
   setUseTrackCoverAsBg: (use: boolean | ((prev: boolean) => boolean)) => void
-  setAccentColorMode: (mode: 'track' | 'background' | 'custom' | ((prev: 'track' | 'background' | 'custom') => 'track' | 'background' | 'custom')) => void
+  setAccentColorMode: (
+    mode:
+      | 'track'
+      | 'background'
+      | 'custom'
+      | ((prev: 'track' | 'background' | 'custom') => 'track' | 'background' | 'custom')
+  ) => void
   setCustomAccentColor: (color: string | ((prev: string) => string)) => void
   setBgImageInput: (input: string | ((prev: string) => string)) => void
   setCustomBgOpacity: (opacity: number | ((prev: number) => number)) => void
@@ -75,9 +90,14 @@ export interface SettingsState {
   setDriveFiles: (files: any[] | ((prev: any[]) => any[])) => void
   setCloudActionTrack: (track: any | null | ((prev: any) => any)) => void
   setIsDownloading: (downloading: boolean | ((prev: boolean) => boolean)) => void
-  setDownloadProgress: (progress: { current: number; total: number; fileName: string } | null | ((prev: any) => any)) => void
+  setDownloadProgress: (
+    progress: { current: number; total: number; fileName: string } | null | ((prev: any) => any)
+  ) => void
   setLoudnessNormalization: (enabled: boolean | ((prev: boolean) => boolean)) => void
-  setReplayGainMode: (mode: 'off' | 'track' | 'album' | ((prev: 'off' | 'track' | 'album') => 'off' | 'track' | 'album')) => void
+  setReplayGainMode: (
+    mode:
+      'off' | 'track' | 'album' | ((prev: 'off' | 'track' | 'album') => 'off' | 'track' | 'album')
+  ) => void
   setCrossfeedEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setGaplessEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setWaveformSeekbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
@@ -228,83 +248,148 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   gaplessEnabled: getInitialGaplessEnabled(),
   waveformSeekbarEnabled: getInitialWaveformSeekbarEnabled(),
 
-  setAppMode: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.appMode)
-    try { document.documentElement.setAttribute('data-mode', next) } catch { /* ignore */ }
-    return { appMode: next }
-  }),
-  setUiStyle: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.uiStyle)
-    try {
-      document.documentElement.setAttribute('data-ui-style', next)
-      localStorage.setItem('meis_ui_style', next)
-    } catch {
-      /* ignore */
-    }
-    return { uiStyle: next }
-  }),
-  setCustomBgImage: (valOrFn) => set((s) => ({ customBgImage: resolveVal(valOrFn, s.customBgImage) })),
-  setUseTrackCoverAsBg: (valOrFn) => set((s) => ({ useTrackCoverAsBg: resolveVal(valOrFn, s.useTrackCoverAsBg) })),
-  setAccentColorMode: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.accentColorMode)
-    try { localStorage.setItem('meis_accent_color_mode', next) } catch { /* ignore */ }
-    return { accentColorMode: next }
-  }),
-  setCustomAccentColor: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.customAccentColor)
-    try { localStorage.setItem('meis_custom_accent_color', next) } catch { /* ignore */ }
-    return { customAccentColor: next }
-  }),
+  setAppMode: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.appMode)
+      try {
+        document.documentElement.setAttribute('data-mode', next)
+      } catch {
+        /* ignore */
+      }
+      return { appMode: next }
+    }),
+  setUiStyle: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.uiStyle)
+      try {
+        document.documentElement.setAttribute('data-ui-style', next)
+        localStorage.setItem('meis_ui_style', next)
+      } catch {
+        /* ignore */
+      }
+      return { uiStyle: next }
+    }),
+  setCustomBgImage: (valOrFn) =>
+    set((s) => ({ customBgImage: resolveVal(valOrFn, s.customBgImage) })),
+  setUseTrackCoverAsBg: (valOrFn) =>
+    set((s) => ({ useTrackCoverAsBg: resolveVal(valOrFn, s.useTrackCoverAsBg) })),
+  setAccentColorMode: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.accentColorMode)
+      try {
+        localStorage.setItem('meis_accent_color_mode', next)
+      } catch {
+        /* ignore */
+      }
+      return { accentColorMode: next }
+    }),
+  setCustomAccentColor: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.customAccentColor)
+      try {
+        localStorage.setItem('meis_custom_accent_color', next)
+      } catch {
+        /* ignore */
+      }
+      return { customAccentColor: next }
+    }),
   setBgImageInput: (valOrFn) => set((s) => ({ bgImageInput: resolveVal(valOrFn, s.bgImageInput) })),
-  setCustomBgOpacity: (valOrFn) => set((s) => ({ customBgOpacity: resolveVal(valOrFn, s.customBgOpacity) })),
+  setCustomBgOpacity: (valOrFn) =>
+    set((s) => ({ customBgOpacity: resolveVal(valOrFn, s.customBgOpacity) })),
   setCustomBgBlur: (valOrFn) => set((s) => ({ customBgBlur: resolveVal(valOrFn, s.customBgBlur) })),
   setIsReloading: (valOrFn) => set((s) => ({ isReloading: resolveVal(valOrFn, s.isReloading) })),
-  setIsConfigLoaded: (valOrFn) => set((s) => ({ isConfigLoaded: resolveVal(valOrFn, s.isConfigLoaded) })),
-  setStreamPort: (valOrFn) => set((s) => ({ streamPort: resolveVal(valOrFn, s.streamPort) })),
+  setIsConfigLoaded: (valOrFn) =>
+    set((s) => ({ isConfigLoaded: resolveVal(valOrFn, s.isConfigLoaded) })),
+  setStreamPort: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.streamPort)
+      if (next > 0) setGlobalStreamPort(next)
+      return { streamPort: next }
+    }),
 
-  setMinimizeToTray: (valOrFn) => set((s) => ({ minimizeToTray: resolveVal(valOrFn, s.minimizeToTray) })),
+  setMinimizeToTray: (valOrFn) =>
+    set((s) => ({ minimizeToTray: resolveVal(valOrFn, s.minimizeToTray) })),
   setCloseToTray: (valOrFn) => set((s) => ({ closeToTray: resolveVal(valOrFn, s.closeToTray) })),
 
-  setDiscordRpcEnabled: (valOrFn) => set((s) => ({ discordRpcEnabled: resolveVal(valOrFn, s.discordRpcEnabled) })),
-  setDiscordClientId: (valOrFn) => set((s) => ({ discordClientId: resolveVal(valOrFn, s.discordClientId) })),
-  setDiscordShowDetails: (valOrFn) => set((s) => ({ discordShowDetails: resolveVal(valOrFn, s.discordShowDetails) })),
-  setDiscordShowTime: (valOrFn) => set((s) => ({ discordShowTime: resolveVal(valOrFn, s.discordShowTime) })),
-  setDiscordShowCover: (valOrFn) => set((s) => ({ discordShowCover: resolveVal(valOrFn, s.discordShowCover) })),
-  setDiscordShowQuality: (valOrFn) => set((s) => ({ discordShowQuality: resolveVal(valOrFn, s.discordShowQuality) })),
-  setDiscordShowButtons: (valOrFn) => set((s) => ({ discordShowButtons: resolveVal(valOrFn, s.discordShowButtons) })),
-  setDiscordShowIdle: (valOrFn) => set((s) => ({ discordShowIdle: resolveVal(valOrFn, s.discordShowIdle) })),
-  setDiscordConnected: (valOrFn) => set((s) => ({ discordConnected: resolveVal(valOrFn, s.discordConnected) })),
+  setDiscordRpcEnabled: (valOrFn) =>
+    set((s) => ({ discordRpcEnabled: resolveVal(valOrFn, s.discordRpcEnabled) })),
+  setDiscordClientId: (valOrFn) =>
+    set((s) => ({ discordClientId: resolveVal(valOrFn, s.discordClientId) })),
+  setDiscordShowDetails: (valOrFn) =>
+    set((s) => ({ discordShowDetails: resolveVal(valOrFn, s.discordShowDetails) })),
+  setDiscordShowTime: (valOrFn) =>
+    set((s) => ({ discordShowTime: resolveVal(valOrFn, s.discordShowTime) })),
+  setDiscordShowCover: (valOrFn) =>
+    set((s) => ({ discordShowCover: resolveVal(valOrFn, s.discordShowCover) })),
+  setDiscordShowQuality: (valOrFn) =>
+    set((s) => ({ discordShowQuality: resolveVal(valOrFn, s.discordShowQuality) })),
+  setDiscordShowButtons: (valOrFn) =>
+    set((s) => ({ discordShowButtons: resolveVal(valOrFn, s.discordShowButtons) })),
+  setDiscordShowIdle: (valOrFn) =>
+    set((s) => ({ discordShowIdle: resolveVal(valOrFn, s.discordShowIdle) })),
+  setDiscordConnected: (valOrFn) =>
+    set((s) => ({ discordConnected: resolveVal(valOrFn, s.discordConnected) })),
 
-  setGoogleDriveApiKey: (valOrFn) => set((s) => ({ googleDriveApiKey: resolveVal(valOrFn, s.googleDriveApiKey) })),
+  setGoogleDriveApiKey: (valOrFn) =>
+    set((s) => ({ googleDriveApiKey: resolveVal(valOrFn, s.googleDriveApiKey) })),
   setDriveLink: (valOrFn) => set((s) => ({ driveLink: resolveVal(valOrFn, s.driveLink) })),
-  setIsFetchingDrive: (valOrFn) => set((s) => ({ isFetchingDrive: resolveVal(valOrFn, s.isFetchingDrive) })),
+  setIsFetchingDrive: (valOrFn) =>
+    set((s) => ({ isFetchingDrive: resolveVal(valOrFn, s.isFetchingDrive) })),
   setDriveFiles: (valOrFn) => set((s) => ({ driveFiles: resolveVal(valOrFn, s.driveFiles) })),
-  setCloudActionTrack: (valOrFn) => set((s) => ({ cloudActionTrack: resolveVal(valOrFn, s.cloudActionTrack) })),
-  setIsDownloading: (valOrFn) => set((s) => ({ isDownloading: resolveVal(valOrFn, s.isDownloading) })),
-  setDownloadProgress: (valOrFn) => set((s) => ({ downloadProgress: resolveVal(valOrFn, s.downloadProgress) })),
-  setLoudnessNormalization: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.loudnessNormalization)
-    try { localStorage.setItem('meis_loudness_norm', String(next)) } catch { /* ignore */ }
-    return { loudnessNormalization: next }
-  }),
-  setReplayGainMode: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.replayGainMode)
-    try { localStorage.setItem('meis_replaygain_mode', next) } catch { /* ignore */ }
-    return { replayGainMode: next }
-  }),
-  setCrossfeedEnabled: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.crossfeedEnabled)
-    try { localStorage.setItem('meis_crossfeed_enabled', String(next)) } catch { /* ignore */ }
-    return { crossfeedEnabled: next }
-  }),
-  setGaplessEnabled: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.gaplessEnabled)
-    try { localStorage.setItem('meis_gapless_enabled', String(next)) } catch { /* ignore */ }
-    return { gaplessEnabled: next }
-  }),
-  setWaveformSeekbarEnabled: (valOrFn) => set((s) => {
-    const next = resolveVal(valOrFn, s.waveformSeekbarEnabled)
-    try { localStorage.setItem('meis_waveform_seekbar_enabled', String(next)) } catch { /* ignore */ }
-    return { waveformSeekbarEnabled: next }
-  })
+  setCloudActionTrack: (valOrFn) =>
+    set((s) => ({ cloudActionTrack: resolveVal(valOrFn, s.cloudActionTrack) })),
+  setIsDownloading: (valOrFn) =>
+    set((s) => ({ isDownloading: resolveVal(valOrFn, s.isDownloading) })),
+  setDownloadProgress: (valOrFn) =>
+    set((s) => ({ downloadProgress: resolveVal(valOrFn, s.downloadProgress) })),
+  setLoudnessNormalization: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.loudnessNormalization)
+      try {
+        localStorage.setItem('meis_loudness_norm', String(next))
+      } catch {
+        /* ignore */
+      }
+      return { loudnessNormalization: next }
+    }),
+  setReplayGainMode: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.replayGainMode)
+      try {
+        localStorage.setItem('meis_replaygain_mode', next)
+      } catch {
+        /* ignore */
+      }
+      return { replayGainMode: next }
+    }),
+  setCrossfeedEnabled: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.crossfeedEnabled)
+      try {
+        localStorage.setItem('meis_crossfeed_enabled', String(next))
+      } catch {
+        /* ignore */
+      }
+      return { crossfeedEnabled: next }
+    }),
+  setGaplessEnabled: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.gaplessEnabled)
+      try {
+        localStorage.setItem('meis_gapless_enabled', String(next))
+      } catch {
+        /* ignore */
+      }
+      return { gaplessEnabled: next }
+    }),
+  setWaveformSeekbarEnabled: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.waveformSeekbarEnabled)
+      try {
+        localStorage.setItem('meis_waveform_seekbar_enabled', String(next))
+      } catch {
+        /* ignore */
+      }
+      return { waveformSeekbarEnabled: next }
+    })
 }))

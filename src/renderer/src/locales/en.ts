@@ -241,7 +241,8 @@ export const en: TranslationDictionary = {
       customColorPicker: 'Pick a custom color',
       wallpaperTitle: 'Application Wallpaper',
       waveformSeekbar: 'Waveform Progress Bar',
-      waveformSeekbarDesc: 'Display dynamic audio amplitude waveform directly on the playback seekbar'
+      waveformSeekbarDesc:
+        'Display dynamic audio amplitude waveform directly on the playback seekbar'
     },
     library: {
       title: 'Music Folders (Library)',
@@ -843,10 +844,21 @@ export const en: TranslationDictionary = {
   },
   duplicateFinder: {
     duplicateFinder: 'Duplicate Track Finder',
-    duplicateFinderDesc: 'Scan your library for duplicate songs by title, artist, duration, or audio quality',
+    duplicateFinderDesc:
+      'Scan your library for duplicate songs by title, artist, duration, or audio quality',
     noDuplicatesFound: 'No duplicate tracks found in your library!',
+    noDuplicatesDesc:
+      'Your music library is clean and well-organized. No songs with identical titles or matching file hashes were found.',
     keepHighestQuality: 'Select Lower Quality Duplicates',
-    deleteDuplicates: 'Move Selected Duplicates to Trash'
+    deleteDuplicates: 'Move Selected Duplicates to Trash',
+    groups: 'groups',
+    totalDuplicates: 'total duplicates',
+    copies: 'copies',
+    highestQuality: 'Highest Quality',
+    duplicateNum: 'Duplicate #{idx}',
+    showInFolder: 'Show in Folder',
+    playTrack: 'Play Track',
+    moveToTrash: 'will be moved to Recycle Bin'
   },
   smartPlaylists: {
     smartPlaylists: 'Smart Playlists',
@@ -856,7 +868,101 @@ export const en: TranslationDictionary = {
     ruleField: 'Field',
     ruleOperator: 'Condition',
     ruleValue: 'Value',
-    addRule: 'Add Rule'
+    addRule: 'Add Rule',
+    needOneRule: 'A smart playlist must have at least one rule',
+    needName: 'Please enter a name for the smart playlist',
+    noMatch: 'No tracks matched this smart playlist',
+    editPlaylist: 'Edit Playlist',
+    createNew: 'Create New',
+    fieldFormat: 'Format (FLAC, DSD, MP3...)',
+    fieldSampleRate: 'Sample Rate (Hz)',
+    fieldBitDepth: 'Bit Depth',
+    fieldGenre: 'Genre',
+    fieldArtist: 'Artist',
+    fieldAlbum: 'Album',
+    fieldTitle: 'Song Title',
+    fieldYear: 'Release Year',
+    fieldFavorite: 'Favorites Status',
+    heartedSongs: 'Hearted songs',
+    unheartedSongs: 'Unhearted songs',
+    playNow: 'Play Now',
+    noPlaylistsYet: 'No smart playlists created yet',
+    matchesAll: 'Matches all:',
+    matchesAny: 'Matches any:',
+    savePlaylist: 'Save Smart Playlist',
+    desc: 'Rule-based dynamic playlists that update automatically as your library changes',
+    savedTab: 'Saved ({count})',
+    listPlaceholder: 'e.g. Hi-Res FLAC Collection, 80s Rock, Favorites...',
+    matchAllBtn: 'Match All (AND)',
+    matchAnyBtn: 'Match Any (OR)',
+    rulesTitle: 'Rules ({count})',
+    searchPlaceholder: 'Search value...',
+    matchedCount: '{count} tracks matched in library',
+    moreMatches: '+ {count} more matching tracks',
+    noCriteriaMatch: 'No tracks currently match all the specified criteria.',
+    emptyDesc:
+      'Smart playlists automatically gather songs from your library based on high resolution audio formats, genres, years, or favorite ratings.',
+    createFirst: 'Create First Smart Playlist',
+    tracksBadge: '{count} tracks',
+    footerCount: '{count} tracks will be included in this smart playlist',
+    savedToast: 'Smart Playlist "{name}" saved!',
+    deletedToast: 'Deleted smart playlist "{name}"',
+    playingToast: 'Playing {count} tracks',
+    deleteConfirm: 'Delete smart playlist "{name}"?',
+    opIs: 'is',
+    opIsNot: 'is not',
+    opContains: 'contains',
+    opEquals: 'equals',
+    opNotContains: 'does not contain',
+    opInFavorites: 'is in Favorites',
+    opNotInFavorites: 'is not in Favorites'
+  },
+  backup: {
+    title: 'Backup & Playlist Manager',
+    subtitle: 'Import/export standard .m3u8 playlists and safely back up all data',
+    m3u8Title: 'Standard Playlist Format (.m3u8)',
+    m3u8Desc: 'Fully compatible with other popular music software (Foobar2000, VLC, MusicBee).',
+    noPlaylist: 'No playlist selected for export',
+    emptyExport: 'Playlist "{name}" has no tracks to export (.m3u8)',
+    exportSuccess: 'Exported playlist "{name}" ({count} tracks) to .m3u8 successfully',
+    invalidM3u8: 'The .m3u8 file contains no valid track paths',
+    importSuccess: 'Imported playlist "{name}" ({count} tracks) successfully',
+    createFailed: 'Could not create a new playlist',
+    importError: 'Error importing m3u8 file: {msg}',
+    exportM3u8: 'Export .m3u8',
+    importLabel: 'Import an existing playlist from your computer:',
+    importM3u8: 'Import .m3u8 file',
+    jsonTitle: 'Full Configuration Backup (.json)',
+    jsonDesc:
+      'Keep all User Playlists, custom Equalizer settings, listening history, and personal setup.',
+    backupConfig: 'Back up full configuration',
+    restoreBackup: 'Restore from backup',
+    backupSuccess: 'Full configuration backup exported successfully',
+    restoreSuccess: 'Data restored from backup file successfully!',
+    restoreError: 'Error restoring backup: {msg}'
+  },
+  insights: {
+    personalBadge: 'Personal Stats',
+    subtitle: 'An overview of your listening habits and music library',
+    musicLibrary: 'Music Library',
+    tracksReady: 'tracks ready',
+    totalDuration: 'Total Duration',
+    nonstop: 'of non-stop music',
+    flacWavFiles: 'FLAC/WAV files',
+    dsdFiles: 'DSD files',
+    libraryQuality: 'Library Audio Quality',
+    qualityBreakdown: '{l}% Lossless • {m}% MP3 • {o}% Other formats',
+    otherFormat: 'Other formats',
+    topArtists: 'Top Artists',
+    noArtistData: 'Not enough artist data',
+    tracksSuffix: 'tracks',
+    topGenres: 'Favorite Genres',
+    noGenreData: 'No genre info yet'
+  },
+  dragDrop: {
+    title: 'Drop audio files or folders here',
+    subtitle: 'Supports FLAC, MP3, WAV, M4A, OPUS, OGG... Auto-scans metadata into the playlist',
+    ready: 'Ready to play instantly'
   },
   analytics: {
     title: 'Audiophile Listening Analytics',
@@ -887,8 +993,8 @@ export const en: TranslationDictionary = {
     topGenres: 'Top Genres',
     mostPlayedTracks: 'Most Played Tracks',
     noData: 'No listening data available',
-    noDataDesc: 'Play some of your favorite tracks to start generating advanced listening statistics!',
+    noDataDesc:
+      'Play some of your favorite tracks to start generating advanced listening statistics!',
     playsCount: 'plays'
   }
 }
-

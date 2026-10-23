@@ -9,7 +9,12 @@ interface CloudActionModalProps {
   onAction: (action: 'stream' | 'download') => void
 }
 
-export const CloudActionModal: React.FC<CloudActionModalProps> = ({ track, isDownloading, onClose, onAction }) => {
+export const CloudActionModal: React.FC<CloudActionModalProps> = ({
+  track,
+  isDownloading,
+  onClose,
+  onAction
+}) => {
   const { t } = useTranslation()
 
   if (!track) return null
@@ -20,20 +25,31 @@ export const CloudActionModal: React.FC<CloudActionModalProps> = ({ track, isDow
         <h3 className="text-lg font-bold text-white mb-2">{track.title}</h3>
         <p className="text-zinc-400 text-sm mb-6">{t('modals.cloudAction.desc')}</p>
         <div className="space-y-3">
-          <button 
+          <button
             onClick={() => onAction('stream')}
             className="w-full flex items-center justify-center gap-3 bg-theme-10/10 text-theme-10 hover:bg-theme-10/20 py-3 rounded-lg font-medium transition"
           >
             <Wifi size={18} /> {t('modals.cloudAction.streamDirect')}
           </button>
-          <button 
+          <button
             onClick={() => onAction('download')}
             disabled={isDownloading}
             className="w-full flex items-center justify-center gap-3 bg-zinc-800 text-white hover:bg-zinc-700 py-3 rounded-lg font-medium transition disabled:opacity-50"
           >
-            {isDownloading ? <span className="animate-pulse">{t('modals.cloudAction.downloading')}</span> : <><Download size={18} /> {t('modals.cloudAction.downloadDirect')}</>}
+            {isDownloading ? (
+              <span className="animate-pulse">{t('modals.cloudAction.downloading')}</span>
+            ) : (
+              <>
+                <Download size={18} /> {t('modals.cloudAction.downloadDirect')}
+              </>
+            )}
           </button>
-          <button onClick={onClose} className="w-full text-zinc-500 hover:text-white py-2 mt-2 text-sm transition">{t('common.cancel')}</button>
+          <button
+            onClick={onClose}
+            className="w-full text-zinc-500 hover:text-white py-2 mt-2 text-sm transition"
+          >
+            {t('common.cancel')}
+          </button>
         </div>
       </div>
     </div>

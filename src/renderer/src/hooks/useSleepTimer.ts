@@ -24,12 +24,14 @@ export function useSleepTimer({ audioRef }: UseSleepTimerProps) {
 
   const sleepTimerTargetTimeRef = useRef<number | null>(null)
   const sleepTimerOriginalVolRef = useRef<number | null>(null)
+  const sleepTimerModeForRef = useRef<string | null>(null)
 
   const handleSetSleepTimer = (mode: 'off' | '15' | '30' | '45' | '60' | 'end_of_track') => {
     setSleepTimerMode(mode)
     setShowSleepTimerMenu(false)
     if (mode === 'off') {
       sleepTimerTargetTimeRef.current = null
+      sleepTimerModeForRef.current = null
       setSleepTimerRemaining(null)
       if (sleepTimerOriginalVolRef.current !== null) {
         setVolume(sleepTimerOriginalVolRef.current)
@@ -44,6 +46,7 @@ export function useSleepTimer({ audioRef }: UseSleepTimerProps) {
 
     if (mode === 'end_of_track') {
       sleepTimerTargetTimeRef.current = null
+      sleepTimerModeForRef.current = null
       setSleepTimerRemaining(null)
       showToast(t('player.sleepTimerEndTrackToast'), 'success')
       return
@@ -53,11 +56,32 @@ export function useSleepTimer({ audioRef }: UseSleepTimerProps) {
     if (!isNaN(mins) && mins > 0) {
       const targetTime = Date.now() + mins * 60 * 1000
       sleepTimerTargetTimeRef.current = targetTime
+      sleepTimerModeForRef.current = mode
       setSleepTimerRemaining(mins * 60)
       sleepTimerOriginalVolRef.current = volume
       showToast(t('player.sleepTimerMinsToast', { mins }), 'success')
     }
   }
+
+  // Đồng bộ khi sleepTimerMode bị đổi trực tiếp từ store (vd. Command Palette),
+  // lúc đó sleepTimerTargetTimeRef chưa được gán nên bộ đếm ở dưới không chạy.
+  useEffect(() => {
+    if (sleepTimerMode === 'off' || sleepTimerMode === 'end_of_track') {
+      sleepTimerTargetTimeRef.current = null
+      sleepTimerModeForRef.current = null
+      return
+    }
+    const mins = parseInt(sleepTimerMode, 10)
+    if (isNaN(mins) || mins <= 0) return
+    if (sleepTimerTargetTimeRef.current && sleepTimerModeForRef.current === sleepTimerMode) return
+    sleepTimerTargetTimeRef.current = Date.now() + mins * 60 * 1000
+    sleepTimerModeForRef.current = sleepTimerMode
+    setSleepTimerRemaining(mins * 60)
+    if (sleepTimerOriginalVolRef.current === null) {
+      sleepTimerOriginalVolRef.current = usePlayerStore.getState().volume
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sleepTimerMode])
 
   useEffect(() => {
     if (
@@ -86,7 +110,8 @@ export function useSleepTimer({ audioRef }: UseSleepTimerProps) {
         setVolume(fadedVol)
         const effectiveGain = sliderToGain(fadedVol)
         if (audioRef.current) audioRef.current.volume = effectiveGain
-        if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api?.bassSetVolume?.(effectiveGain)
+        if (bitPerfectEnabled || isDsdTrack(currentTrack))
+          window.api?.bassSetVolume?.(effectiveGain)
       }
 
       if (diffSecs <= 0) {
@@ -107,7 +132,8 @@ export function useSleepTimer({ audioRef }: UseSleepTimerProps) {
           setVolume(orig)
           const restoredGain = sliderToGain(orig)
           if (audioRef.current) audioRef.current.volume = restoredGain
-          if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api?.bassSetVolume?.(restoredGain)
+          if (bitPerfectEnabled || isDsdTrack(currentTrack))
+            window.api?.bassSetVolume?.(restoredGain)
           sleepTimerOriginalVolRef.current = null
         }
         showToast(t('player.sleepTimerStoppedToast'), 'info')
@@ -115,7 +141,18 @@ export function useSleepTimer({ audioRef }: UseSleepTimerProps) {
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [sleepTimerMode, bitPerfectEnabled, currentTrack, t, showToast, setIsPlaying, setSleepTimerMode, setSleepTimerRemaining, setVolume, audioRef])
+  }, [
+    sleepTimerMode,
+    bitPerfectEnabled,
+    currentTrack,
+    t,
+    showToast,
+    setIsPlaying,
+    setSleepTimerMode,
+    setSleepTimerRemaining,
+    setVolume,
+    audioRef
+  ])
 
   return {
     handleSetSleepTimer

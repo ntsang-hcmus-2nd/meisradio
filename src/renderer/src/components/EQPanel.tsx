@@ -1,11 +1,27 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react'
-import { Sliders, Plus, RotateCcw, Trash2, X, Download, Upload, Headphones, Sparkles } from 'lucide-react'
+import {
+  Sliders,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+  Download,
+  Upload,
+  Headphones,
+  Sparkles
+} from 'lucide-react'
 import { CustomNumberInput } from './CustomNumberInput'
 import { CustomSelect } from './CustomSelect'
 import { EQBand } from '../App'
-import { BUILTIN_AUTOEQ_PROFILES, parsePeaceEqText, exportPeaceEqText, AutoEqProfile } from './autoeq/autoeqProfiles'
+import {
+  BUILTIN_AUTOEQ_PROFILES,
+  parsePeaceEqText,
+  exportPeaceEqText,
+  AutoEqProfile
+} from './autoeq/autoeqProfiles'
 import { useTranslation } from '../locales'
 import { useSettingsStore } from '../stores'
+import { useUIStore } from '../stores/uiStore'
 
 interface EQPanelProps {
   showEQ: boolean
@@ -19,11 +35,19 @@ interface EQPanelProps {
   setPreampGain: (v: number) => void
 }
 
-export const EQPanel: React.FC<EQPanelProps> = ({ 
-  showEQ, setShowEQ, isEqEnabled, setIsEqEnabled, eqBands, setEqBands, filterNodesRef,
-  preampGain, setPreampGain
+export const EQPanel: React.FC<EQPanelProps> = ({
+  showEQ,
+  setShowEQ,
+  isEqEnabled,
+  setIsEqEnabled,
+  eqBands,
+  setEqBands,
+  filterNodesRef,
+  preampGain,
+  setPreampGain
 }) => {
   const { t } = useTranslation()
+  const showToast = useUIStore((s) => s.showToast)
   const crossfeedEnabled = useSettingsStore((s) => s.crossfeedEnabled)
   const setCrossfeedEnabled = useSettingsStore((s) => s.setCrossfeedEnabled)
   const eqCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -33,15 +57,18 @@ export const EQPanel: React.FC<EQPanelProps> = ({
   const [showAutoEqModal, setShowAutoEqModal] = useState<boolean>(false)
 
   const handleAddBand = () => {
-    setEqBands(prev => [...prev, { id: `band-${Date.now()}`, frequency: 1000, gain: 0, type: 'peaking', q: 1.4 }])
+    setEqBands((prev) => [
+      ...prev,
+      { id: `band-${Date.now()}`, frequency: 1000, gain: 0, type: 'peaking', q: 1.4 }
+    ])
   }
 
   const handleDeleteBand = (id: string) => {
-    setEqBands(prev => prev.filter(b => b.id !== id))
+    setEqBands((prev) => prev.filter((b) => b.id !== id))
   }
 
   const handleUpdateBand = (id: string, key: keyof EQBand, value: any) => {
-    setEqBands(prev => prev.map(band => (band.id === id ? { ...band, [key]: value } : band)))
+    setEqBands((prev) => prev.map((band) => (band.id === id ? { ...band, [key]: value } : band)))
   }
 
   const handleResetEQ = () => {
@@ -53,11 +80,13 @@ export const EQPanel: React.FC<EQPanelProps> = ({
       { id: `reset-${timestamp}-2`, frequency: 230, gain: 0, type: 'peaking', q: 1.4 },
       { id: `reset-${timestamp}-3`, frequency: 910, gain: 0, type: 'peaking', q: 1.4 },
       { id: `reset-${timestamp}-4`, frequency: 3600, gain: 0, type: 'peaking', q: 1.4 },
-      { id: `reset-${timestamp}-5`, frequency: 14000, gain: 0, type: 'peaking', q: 1.4 },
+      { id: `reset-${timestamp}-5`, frequency: 14000, gain: 0, type: 'peaking', q: 1.4 }
     ])
     if (filterNodesRef.current) {
-      filterNodesRef.current.forEach(node => {
-        try { node.gain.value = 0 } catch(e){}
+      filterNodesRef.current.forEach((node) => {
+        try {
+          node.gain.value = 0
+        } catch {}
       })
     }
   }
@@ -93,7 +122,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         if (!text) return
         const parsed = parsePeaceEqText(text)
         if (parsed.bands.length === 0) {
-          alert(t('modals.eq.noBandsFound'))
+          showToast(t('modals.eq.noBandsFound'), 'error')
           return
         }
 
@@ -112,7 +141,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         setEqBands(newBands)
         setIsEqEnabled(true)
       } catch (err: any) {
-        alert(t('common.error') + ': ' + err.message)
+        showToast(t('common.error') + ': ' + err.message, 'error')
       }
     }
     reader.readAsText(file)
@@ -140,7 +169,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
 
     const width = canvas.width
     const height = canvas.height
-    
+
     // Vùng đệm (Padding) để không bị khuất chữ và đường biên
     const paddingLeft = 40
     const paddingRight = 20
@@ -156,10 +185,10 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     const dbMarks = [20, 10, 0, -10, -20]
     ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
-    
-    dbMarks.forEach(db => {
-      const y = paddingTop + (drawHeight / 2) - (db / 20) * (drawHeight / 2)
-      
+
+    dbMarks.forEach((db) => {
+      const y = paddingTop + drawHeight / 2 - (db / 20) * (drawHeight / 2)
+
       // Kẻ lưới ngang
       ctx.beginPath()
       ctx.strokeStyle = db === 0 ? '#52525b' : '#27272a'
@@ -167,7 +196,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
       ctx.moveTo(paddingLeft, y)
       ctx.lineTo(paddingLeft + drawWidth, y)
       ctx.stroke()
-      
+
       // Viết chữ
       ctx.fillStyle = db === 0 ? '#a1a1aa' : '#71717a'
       ctx.fillText(`${db > 0 ? '+' : ''}${db}`, paddingLeft - 6, y)
@@ -177,13 +206,13 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     const minFreq = 20
     const maxFreq = 20000
     const hzMarks = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]
-    
+
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
 
-    hzMarks.forEach(hz => {
+    hzMarks.forEach((hz) => {
       const x = paddingLeft + drawWidth * (Math.log(hz / minFreq) / Math.log(maxFreq / minFreq))
-      
+
       // Kẻ lưới dọc
       ctx.beginPath()
       ctx.strokeStyle = '#27272a'
@@ -191,7 +220,7 @@ export const EQPanel: React.FC<EQPanelProps> = ({
       ctx.moveTo(x, paddingTop)
       ctx.lineTo(x, paddingTop + drawHeight)
       ctx.stroke()
-      
+
       // Viết chữ
       ctx.fillStyle = '#71717a'
       const label = hz >= 1000 ? `${hz / 1000}k` : `${hz}`
@@ -206,28 +235,29 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     for (let i = 0; i < drawWidth; i++) {
       freqArray[i] = minFreq * Math.pow(maxFreq / minFreq, i / drawWidth)
     }
-    
+
     const totalMag = new Float32Array(drawWidth).fill(1.0)
-    
+
     if (isEqEnabled && filterNodesRef.current && filterNodesRef.current.length > 0) {
-      filterNodesRef.current.forEach(filter => {
+      filterNodesRef.current.forEach((filter) => {
         try {
           filter.getFrequencyResponse(freqArray, magResponse, phaseResponse)
           for (let i = 0; i < drawWidth; i++) totalMag[i] *= magResponse[i]
-        } catch (e) {}
+        } catch {}
       })
     }
 
-    const theme10Color = getComputedStyle(document.documentElement).getPropertyValue('--theme-10').trim() || '#10b981'
+    const theme10Color =
+      getComputedStyle(document.documentElement).getPropertyValue('--theme-10').trim() || '#10b981'
     ctx.beginPath()
     ctx.lineWidth = 3
     ctx.strokeStyle = isEqEnabled ? theme10Color : '#52525b'
-    
+
     for (let i = 0; i < drawWidth; i++) {
-      const db = (20 * Math.log10(totalMag[i])) + (isEqEnabled ? preampGain : 0)
+      const db = 20 * Math.log10(totalMag[i]) + (isEqEnabled ? preampGain : 0)
       const clampedDb = Math.max(-20, Math.min(20, db))
-      const y = paddingTop + (drawHeight / 2) - (clampedDb / 20) * (drawHeight / 2)
-      
+      const y = paddingTop + drawHeight / 2 - (clampedDb / 20) * (drawHeight / 2)
+
       if (i === 0) ctx.moveTo(paddingLeft + i, y)
       else ctx.lineTo(paddingLeft + i, y)
     }
@@ -236,14 +266,14 @@ export const EQPanel: React.FC<EQPanelProps> = ({
     // Fill màu Gradient phía dưới
     ctx.lineTo(paddingLeft + drawWidth, paddingTop + drawHeight)
     ctx.lineTo(paddingLeft, paddingTop + drawHeight)
-    
+
     if (isEqEnabled) {
       ctx.globalAlpha = 0.1
       ctx.fillStyle = theme10Color
     } else {
       ctx.fillStyle = 'rgba(82, 82, 91, 0.05)'
     }
-    
+
     ctx.fill()
     ctx.globalAlpha = 1.0
   }, [isEqEnabled, filterNodesRef, preampGain])
@@ -256,22 +286,22 @@ export const EQPanel: React.FC<EQPanelProps> = ({
 
   if (!showEQ) return null
 
-  const filteredAutoEqProfiles = BUILTIN_AUTOEQ_PROFILES.filter(p => 
-    p.name.toLowerCase().includes(searchHeadphone.toLowerCase()) ||
-    p.brand.toLowerCase().includes(searchHeadphone.toLowerCase())
+  const filteredAutoEqProfiles = BUILTIN_AUTOEQ_PROFILES.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchHeadphone.toLowerCase()) ||
+      p.brand.toLowerCase().includes(searchHeadphone.toLowerCase())
   )
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in relative">
-        
         {/* Hidden file input for Peace profile import */}
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          accept=".txt,.peace" 
-          className="hidden" 
-          onChange={handleImportFile} 
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept=".txt,.peace"
+          className="hidden"
+          onChange={handleImportFile}
         />
 
         {/* HEADER */}
@@ -279,116 +309,136 @@ export const EQPanel: React.FC<EQPanelProps> = ({
           <div className="flex items-center gap-3 min-w-0">
             <Sliders className="text-theme-10 shrink-0" size={22} />
             <div className="min-w-0">
-              <h2 className="text-lg font-bold text-white leading-tight truncate">{t('modals.eq.title')}</h2>
-              <p className="text-[11px] text-zinc-400 truncate">Peace Equalizer / EqualizerAPO Compatible</p>
+              <h2 className="text-lg font-bold text-white leading-tight truncate">
+                {t('modals.eq.title')}
+              </h2>
+              <p className="text-[11px] text-zinc-400 truncate">
+                Peace Equalizer / EqualizerAPO Compatible
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             <label className="flex items-center gap-2 cursor-pointer bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-theme-10">
               <span className="text-zinc-300 text-xs font-semibold">{t('modals.eq.enableEq')}</span>
-              <input 
-                type="checkbox" 
-                checked={isEqEnabled} 
-                onChange={e => setIsEqEnabled(e.target.checked)} 
-                className="w-4 h-4 accent-theme-10 cursor-pointer" 
+              <input
+                type="checkbox"
+                checked={isEqEnabled}
+                onChange={(e) => setIsEqEnabled(e.target.checked)}
+                className="w-4 h-4 accent-theme-10 cursor-pointer"
               />
             </label>
 
-            <label 
+            <label
               className="flex items-center gap-2 cursor-pointer bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 transition hover:border-theme-10"
               title="Crossfeed (Headphone Spatializer DSP)"
             >
               <span className="text-zinc-300 text-xs font-semibold">Crossfeed</span>
-              <input 
-                type="checkbox" 
-                checked={crossfeedEnabled} 
-                onChange={e => setCrossfeedEnabled(e.target.checked)} 
-                className="w-4 h-4 accent-theme-10 cursor-pointer" 
+              <input
+                type="checkbox"
+                checked={crossfeedEnabled}
+                onChange={(e) => setCrossfeedEnabled(e.target.checked)}
+                className="w-4 h-4 accent-theme-10 cursor-pointer"
               />
             </label>
 
-            <button 
-              onClick={() => setShowAutoEqModal(true)} 
+            <button
+              onClick={() => setShowAutoEqModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-10/20 hover:bg-theme-10/30 text-theme-10 border border-theme-10/30 rounded-lg text-xs font-semibold transition"
               title="AutoEQ Profiles"
             >
               <Headphones size={15} /> AutoEQ
             </button>
 
-            <button 
-              onClick={() => fileInputRef.current?.click()} 
+            <button
+              onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition"
               title={t('modals.eq.importFile')}
             >
               <Upload size={14} /> {t('modals.eq.importFile')}
             </button>
 
-            <button 
-              onClick={handleExportFile} 
+            <button
+              onClick={handleExportFile}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition"
               title={t('modals.eq.exportFile')}
             >
               <Download size={14} /> {t('modals.eq.exportFile')}
             </button>
 
-            <button 
-              onClick={handleAddBand} 
+            <button
+              onClick={handleAddBand}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-theme-10 hover:bg-theme-10/80 text-white rounded-lg text-xs font-medium transition"
             >
               <Plus size={15} /> + Band
             </button>
 
-            <button 
-              onClick={handleResetEQ} 
+            <button
+              onClick={handleResetEQ}
               className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition"
               title={t('modals.eq.reset')}
             >
               <RotateCcw size={14} /> {t('modals.eq.reset')}
             </button>
 
-            <button onClick={() => setShowEQ(false)} className="text-zinc-400 hover:text-white p-1 text-lg">
-              <X size={20}/>
+            <button
+              onClick={() => setShowEQ(false)}
+              className="text-zinc-400 hover:text-white p-1 text-lg"
+            >
+              <X size={20} />
             </button>
           </div>
         </div>
 
         {/* CANVAS GRAPH */}
-        <canvas ref={eqCanvasRef} width={800} height={160} className="w-full h-36 bg-zinc-950 rounded-xl border border-zinc-800 mb-4 shrink-0 shadow-inner" />
-        
+        <canvas
+          ref={eqCanvasRef}
+          width={800}
+          height={160}
+          className="w-full h-36 bg-zinc-950 rounded-xl border border-zinc-800 mb-4 shrink-0 shadow-inner"
+        />
+
         {/* PREAMP BAR */}
-        <div 
+        <div
           className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 mb-4 flex items-center justify-between gap-4 text-xs shrink-0"
           onWheel={(e) => {
             e.preventDefault()
             e.stopPropagation()
             const delta = e.deltaY < 0 ? 0.5 : -0.5
-            const nextPreamp = Math.max(-20, Math.min(10, Math.round((preampGain + delta) * 10) / 10))
+            const nextPreamp = Math.max(
+              -20,
+              Math.min(10, Math.round((preampGain + delta) * 10) / 10)
+            )
             setPreampGain(nextPreamp)
           }}
         >
           <div className="flex items-center gap-2">
             <span className="font-semibold text-zinc-300">{t('modals.eq.preamp')}:</span>
-            <span className="font-mono text-theme-10 font-bold">{preampGain > 0 ? `+${preampGain.toFixed(1)}` : preampGain.toFixed(1)} dB</span>
+            <span className="font-mono text-theme-10 font-bold">
+              {preampGain > 0 ? `+${preampGain.toFixed(1)}` : preampGain.toFixed(1)} dB
+            </span>
             <span className="text-[10px] text-zinc-500 italic">(AutoEQ Preamp)</span>
           </div>
-          <input 
-            type="range" 
-            min="-20" 
-            max="10" 
-            step="0.5" 
-            value={preampGain} 
+          <input
+            type="range"
+            min="-20"
+            max="10"
+            step="0.5"
+            value={preampGain}
             onChange={(e) => setPreampGain(Number(e.target.value))}
             onWheel={(e) => {
               e.preventDefault()
               e.stopPropagation()
               const delta = e.deltaY < 0 ? 0.5 : -0.5
-              const nextPreamp = Math.max(-20, Math.min(10, Math.round((preampGain + delta) * 10) / 10))
+              const nextPreamp = Math.max(
+                -20,
+                Math.min(10, Math.round((preampGain + delta) * 10) / 10)
+              )
               setPreampGain(nextPreamp)
             }}
-            className="w-48 sm:w-64 h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" 
-            style={{ 
-              background: `linear-gradient(to right, var(--theme-10) ${Math.max(0, Math.min(100, ((preampGain + 20) / 30) * 100))}%, #27272a ${Math.max(0, Math.min(100, ((preampGain + 20) / 30) * 100))}%)` 
+            className="w-48 sm:w-64 h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10"
+            style={{
+              background: `linear-gradient(to right, var(--theme-10) ${Math.max(0, Math.min(100, ((preampGain + 20) / 30) * 100))}%, #27272a ${Math.max(0, Math.min(100, ((preampGain + 20) / 30) * 100))}%)`
             }}
           />
         </div>
@@ -399,87 +449,94 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             <p className="text-center text-zinc-500 py-8">{t('modals.eq.noBandsFound')}</p>
           ) : (
             eqBands.map((band) => (
-              <div key={band.id} className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex flex-wrap items-center gap-4 text-xs">
-                
+              <div
+                key={band.id}
+                className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex flex-wrap items-center gap-4 text-xs"
+              >
                 {/* Tần số */}
                 <div className="flex flex-col gap-1 w-28">
-                  <label className="text-zinc-400 font-mono text-xs">{t('modals.eq.freq')} (Hz)</label>
-                  <CustomNumberInput 
-                    min={20} 
-                    max={20000} 
-                    step={10} 
-                    value={band.frequency} 
+                  <label className="text-zinc-400 font-mono text-xs">
+                    {t('modals.eq.freq')} (Hz)
+                  </label>
+                  <CustomNumberInput
+                    min={20}
+                    max={20000}
+                    step={10}
+                    value={band.frequency}
                     onChange={(val) => {
                       handleUpdateBand(band.id, 'frequency', val)
                       if (filterNodesRef.current) {
-                        const nodeIndex = eqBands.findIndex(b => b.id === band.id)
+                        const nodeIndex = eqBands.findIndex((b) => b.id === band.id)
                         if (filterNodesRef.current[nodeIndex]) {
                           filterNodesRef.current[nodeIndex].frequency.value = val
                         }
                       }
                       requestAnimationFrame(drawEQCanvas)
-                    }} 
+                    }}
                   />
                 </div>
 
                 {/* Loại Filter */}
                 <div className="flex flex-col gap-1 w-36">
                   <label className="text-zinc-400 text-xs">{t('modals.eq.type')}</label>
-                  <CustomSelect 
-                    value={band.type} 
+                  <CustomSelect
+                    value={band.type}
                     onChange={(val) => {
                       const filterType = val as BiquadFilterType
                       handleUpdateBand(band.id, 'type', filterType)
                       if (filterNodesRef.current) {
-                        const nodeIndex = eqBands.findIndex(b => b.id === band.id)
+                        const nodeIndex = eqBands.findIndex((b) => b.id === band.id)
                         if (filterNodesRef.current[nodeIndex]) {
                           filterNodesRef.current[nodeIndex].type = filterType
                         }
                       }
                       requestAnimationFrame(drawEQCanvas)
-                    }} 
+                    }}
                     options={[
                       { value: 'peaking', label: `${t('modals.eq.peaking')} (PK)` },
                       { value: 'lowshelf', label: `${t('modals.eq.lowshelf')} (LSC)` },
                       { value: 'highshelf', label: `${t('modals.eq.highshelf')} (HSC)` },
                       { value: 'lowpass', label: `${t('modals.eq.lowpass')} (LP)` },
                       { value: 'highpass', label: `${t('modals.eq.highpass')} (HP)` }
-                    ]} 
+                    ]}
                   />
                 </div>
 
                 {/* Hệ số Q */}
                 <div className="flex flex-col gap-1 w-24">
                   <label className="text-zinc-400 text-xs">{t('modals.eq.bandwidthQ')}</label>
-                  <CustomNumberInput 
-                    min={0.1} 
-                    max={10.0} 
-                    step={0.1} 
-                    value={band.q || 1.4} 
+                  <CustomNumberInput
+                    min={0.1}
+                    max={10.0}
+                    step={0.1}
+                    value={band.q || 1.4}
                     onChange={(val) => {
                       handleUpdateBand(band.id, 'q', val)
                       if (filterNodesRef.current) {
-                        const nodeIndex = eqBands.findIndex(b => b.id === band.id)
+                        const nodeIndex = eqBands.findIndex((b) => b.id === band.id)
                         if (filterNodesRef.current[nodeIndex]) {
                           filterNodesRef.current[nodeIndex].Q.value = val
                         }
                       }
                       requestAnimationFrame(drawEQCanvas)
-                    }} 
+                    }}
                   />
                 </div>
 
                 {/* Gain Slider */}
-                <div 
+                <div
                   className="flex flex-col gap-1 flex-1 min-w-[180px]"
                   onWheel={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
                     const delta = e.deltaY < 0 ? 0.5 : -0.5
-                    const nextGain = Math.max(-20, Math.min(20, Math.round((band.gain + delta) * 10) / 10))
+                    const nextGain = Math.max(
+                      -20,
+                      Math.min(20, Math.round((band.gain + delta) * 10) / 10)
+                    )
                     handleUpdateBand(band.id, 'gain', nextGain)
                     if (filterNodesRef && filterNodesRef.current) {
-                      const nodeIndex = eqBands.findIndex(b => b.id === band.id)
+                      const nodeIndex = eqBands.findIndex((b) => b.id === band.id)
                       if (filterNodesRef.current[nodeIndex]) {
                         filterNodesRef.current[nodeIndex].gain.value = nextGain
                       }
@@ -489,48 +546,55 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                 >
                   <div className="flex justify-between text-zinc-400">
                     <span>{t('modals.eq.gain')}</span>
-                    <span className="font-mono text-theme-10 font-bold">{band.gain > 0 ? `+${band.gain}` : band.gain} dB</span>
+                    <span className="font-mono text-theme-10 font-bold">
+                      {band.gain > 0 ? `+${band.gain}` : band.gain} dB
+                    </span>
                   </div>
                   <input
                     type="range"
-                    min="-20" 
-                    max="20" 
-                    step="0.5" 
-                    value={band.gain} 
+                    min="-20"
+                    max="20"
+                    step="0.5"
+                    value={band.gain}
                     onChange={(e) => {
                       const val = Number(e.target.value)
                       handleUpdateBand(band.id, 'gain', val)
                       if (filterNodesRef && filterNodesRef.current) {
-                        const nodeIndex = eqBands.findIndex(b => b.id === band.id)
+                        const nodeIndex = eqBands.findIndex((b) => b.id === band.id)
                         if (filterNodesRef.current[nodeIndex]) {
                           filterNodesRef.current[nodeIndex].gain.value = val
                         }
                       }
                       requestAnimationFrame(drawEQCanvas)
-                    }} 
+                    }}
                     onWheel={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
                       const delta = e.deltaY < 0 ? 0.5 : -0.5
-                      const nextGain = Math.max(-20, Math.min(20, Math.round((band.gain + delta) * 10) / 10))
+                      const nextGain = Math.max(
+                        -20,
+                        Math.min(20, Math.round((band.gain + delta) * 10) / 10)
+                      )
                       handleUpdateBand(band.id, 'gain', nextGain)
                       if (filterNodesRef && filterNodesRef.current) {
-                        const nodeIndex = eqBands.findIndex(b => b.id === band.id)
+                        const nodeIndex = eqBands.findIndex((b) => b.id === band.id)
                         if (filterNodesRef.current[nodeIndex]) {
                           filterNodesRef.current[nodeIndex].gain.value = nextGain
                         }
                       }
                       requestAnimationFrame(drawEQCanvas)
                     }}
-                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10" 
-                    style={{ background: `linear-gradient(to right, var(--theme-10) ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)` }} 
+                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-theme-10"
+                    style={{
+                      background: `linear-gradient(to right, var(--theme-10) ${((band.gain + 20) / 40) * 100}%, #27272a ${((band.gain + 20) / 40) * 100}%)`
+                    }}
                   />
                 </div>
 
                 {/* Delete Button */}
-                <button 
-                  onClick={() => handleDeleteBand(band.id)} 
-                  className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3" 
+                <button
+                  onClick={() => handleDeleteBand(band.id)}
+                  className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition mt-3"
                   title={t('common.delete')}
                 >
                   <Trash2 size={16} />
@@ -548,16 +612,19 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                 <Sparkles className="text-theme-10" size={20} />
                 <h3 className="font-bold text-white text-base">AutoEQ Database (Harman Target)</h3>
               </div>
-              <button onClick={() => setShowAutoEqModal(false)} className="text-zinc-400 hover:text-white p-1">
+              <button
+                onClick={() => setShowAutoEqModal(false)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
                 <X size={20} />
               </button>
             </div>
 
             <div className="mb-4">
-              <input 
+              <input
                 type="text"
                 value={searchHeadphone}
-                onChange={e => setSearchHeadphone(e.target.value)}
+                onChange={(e) => setSearchHeadphone(e.target.value)}
                 placeholder={t('modals.eq.searchHeadphonePlaceholder')}
                 className="w-full bg-zinc-900 border border-zinc-700/60 rounded-xl py-2.5 px-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-theme-10"
               />
@@ -569,24 +636,30 @@ export const EQPanel: React.FC<EQPanelProps> = ({
                   No headphone profiles matched &quot;{searchHeadphone}&quot;.
                 </div>
               ) : (
-                filteredAutoEqProfiles.map(p => {
+                filteredAutoEqProfiles.map((p) => {
                   const isCurrent = selectedProfileId === p.id
                   return (
-                    <div 
+                    <div
                       key={p.id}
                       onClick={() => applyAutoEqProfile(p)}
                       className={`p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between ${
-                        isCurrent 
-                          ? 'bg-theme-10/15 border-theme-10/50 shadow-lg shadow-theme-10/10' 
+                        isCurrent
+                          ? 'bg-theme-10/15 border-theme-10/50 shadow-lg shadow-theme-10/10'
                           : 'bg-zinc-900/80 border-zinc-800 hover:bg-zinc-800/80 hover:border-zinc-700'
                       }`}
                     >
                       <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-theme-10">{p.brand}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-theme-10">
+                          {p.brand}
+                        </span>
                         <h4 className="font-bold text-white text-sm mt-0.5">{p.name}</h4>
-                        <p className="text-[11px] text-zinc-400 mt-1">{p.category} • {p.bands.length} bands • Preamp {p.preamp}dB</p>
+                        <p className="text-[11px] text-zinc-400 mt-1">
+                          {p.category} • {p.bands.length} bands • Preamp {p.preamp}dB
+                        </p>
                       </div>
-                      <button className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isCurrent ? 'bg-theme-10 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}>
+                      <button
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isCurrent ? 'bg-theme-10 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}
+                      >
                         {isCurrent ? 'Active' : 'Apply'}
                       </button>
                     </div>
@@ -596,7 +669,6 @@ export const EQPanel: React.FC<EQPanelProps> = ({
             </div>
           </div>
         )}
-
       </div>
     </div>
   )

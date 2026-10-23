@@ -1,19 +1,37 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { 
-  X, Info, Music, Disc3, Clock, Calendar, FileText, HardDrive, 
-  FolderOpen, Edit3, Play, Copy, Check, Waves, Cpu, Sparkles, 
-  Mic2, Tag, Layers, ShieldCheck, Loader2
+import {
+  X,
+  Info,
+  Music,
+  Disc3,
+  Clock,
+  Calendar,
+  FileText,
+  HardDrive,
+  FolderOpen,
+  Edit3,
+  Play,
+  Copy,
+  Check,
+  Waves,
+  Cpu,
+  Sparkles,
+  Mic2,
+  Tag,
+  Layers,
+  ShieldCheck,
+  Loader2
 } from 'lucide-react'
 import { useTranslation } from '../../locales'
 import { DynamicCoverArt } from '../DynamicCoverArt'
-import { 
-  isDsdTrack, 
-  formatAudioSampleRate, 
-  formatDuration, 
-  formatFileSize, 
-  formatBitrate, 
+import {
+  isDsdTrack,
+  formatAudioSampleRate,
+  formatDuration,
+  formatFileSize,
+  formatBitrate,
   formatDate,
-  getTrackFormatDisplay 
+  getTrackFormatDisplay
 } from '../../utils/formatUtils'
 import { useUIStore } from '../../stores/uiStore'
 
@@ -52,7 +70,8 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
     let isMounted = true
     setLoading(true)
 
-    window.api.getTrackDetails(trackId)
+    window.api
+      .getTrackDetails(trackId)
       .then((res: any) => {
         if (isMounted && res?.success) {
           setFetchedDetails({ trackId, data: res })
@@ -105,7 +124,9 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
     const copyright = details?.copyright
     const comment = details?.comment
     const lyrics = details?.lyrics || track?.lyrics
-    const fileName = details?.fileName || (track?.filePath ? track?.filePath.split('/').pop()?.split('\\').pop() : '')
+    const fileName =
+      details?.fileName ||
+      (track?.filePath ? track?.filePath.split('/').pop()?.split('\\').pop() : '')
     const directory = details?.directory
     const fileSizeBytes = details?.fileSizeBytes
     const createdTime = details?.createdTime
@@ -114,7 +135,10 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
     const codec = details?.codec
     const codecProfile = details?.codecProfile
     const numberOfChannels = details?.numberOfChannels
-    const lossless = details?.lossless ?? track?.lossless ?? (isDsd || ['FLAC', 'WAV', 'ALAC', 'AIFF'].includes(format.toUpperCase()))
+    const lossless =
+      details?.lossless ??
+      track?.lossless ??
+      (isDsd || ['FLAC', 'WAV', 'ALAC', 'AIFF'].includes(format.toUpperCase()))
 
     return {
       isDsd,
@@ -192,25 +216,39 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
       `${t('modals.trackInfo.artist')}: ${merged.artist}`,
       `${t('modals.trackInfo.album')}: ${merged.album}`,
       merged.year ? `${t('modals.trackInfo.year')}: ${merged.year}` : null,
-      merged.genre && merged.genre !== 'Unknown' ? `${t('modals.trackInfo.genre')}: ${merged.genre}` : null,
-      merged.trackNo ? `${t('modals.trackInfo.trackNumber')}: ${merged.trackNo}${merged.trackOf ? `/${merged.trackOf}` : ''}` : null,
+      merged.genre && merged.genre !== 'Unknown'
+        ? `${t('modals.trackInfo.genre')}: ${merged.genre}`
+        : null,
+      merged.trackNo
+        ? `${t('modals.trackInfo.trackNumber')}: ${merged.trackNo}${merged.trackOf ? `/${merged.trackOf}` : ''}`
+        : null,
       `${t('modals.trackInfo.duration')}: ${formatDuration(merged.duration)}`,
       '',
       `--- ${t('modals.trackInfo.technicalDetails')} ---`,
       `${t('modals.trackInfo.format')}: ${merged.format}`,
       merged.codec ? `${t('modals.trackInfo.codec')}: ${merged.codec}` : null,
       merged.container ? `${t('modals.trackInfo.container')}: ${merged.container}` : null,
-      merged.sampleRate ? `${t('modals.trackInfo.sampleRate')}: ${formatAudioSampleRate(merged.sampleRate)}` : null,
-      merged.bitDepth ? `${t('modals.trackInfo.bitDepth')}: ${merged.isDsd ? '1-bit DSD' : `${merged.bitDepth}-bit`}` : null,
+      merged.sampleRate
+        ? `${t('modals.trackInfo.sampleRate')}: ${formatAudioSampleRate(merged.sampleRate)}`
+        : null,
+      merged.bitDepth
+        ? `${t('modals.trackInfo.bitDepth')}: ${merged.isDsd ? '1-bit DSD' : `${merged.bitDepth}-bit`}`
+        : null,
       merged.bitrate ? `${t('modals.trackInfo.bitrate')}: ${formatBitrate(merged.bitrate)}` : null,
       channelsText ? `${t('modals.trackInfo.channels')}: ${channelsText}` : null,
       `${t('modals.trackInfo.quality')}: ${merged.isDsd ? t('modals.trackInfo.dsdNative') : merged.lossless ? t('modals.trackInfo.losslessYes') : t('modals.trackInfo.lossy')}`,
       '',
       `--- ${t('modals.trackInfo.fileDetails')} ---`,
       details?.rawPath ? `${t('modals.trackInfo.filePath')}: ${details.rawPath}` : null,
-      merged.fileSizeBytes ? `${t('modals.trackInfo.fileSize')}: ${formatFileSize(merged.fileSizeBytes)}` : null,
-      merged.modifiedTime ? `${t('modals.trackInfo.modifiedDate')}: ${formatDate(merged.modifiedTime)}` : null
-    ].filter(Boolean).join('\n')
+      merged.fileSizeBytes
+        ? `${t('modals.trackInfo.fileSize')}: ${formatFileSize(merged.fileSizeBytes)}`
+        : null,
+      merged.modifiedTime
+        ? `${t('modals.trackInfo.modifiedDate')}: ${formatDate(merged.modifiedTime)}`
+        : null
+    ]
+      .filter(Boolean)
+      .join('\n')
 
     navigator.clipboard.writeText(lines)
     setCopiedInfo(true)
@@ -223,11 +261,11 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
   const isLocalTrack = !track?.isCloud && !track?.isOnline
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
       onClick={onClose}
     >
-      <div 
+      <div
         className="w-[740px] max-w-full max-h-[92vh] bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-scale-up"
         onClick={(e) => e.stopPropagation()}
       >
@@ -276,7 +314,7 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
               </p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition cursor-pointer"
             title={t('common.close')}
@@ -289,11 +327,7 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
         <div className="p-6 bg-gradient-to-b from-zinc-900 via-zinc-900/60 to-zinc-950/80 border-b border-zinc-800/80 flex flex-col sm:flex-row gap-5 items-center sm:items-start">
           {/* Cover Art */}
           <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 shadow-2xl relative group">
-            <DynamicCoverArt
-              track={track}
-              tier="lg"
-              className="w-full h-full object-cover"
-            />
+            <DynamicCoverArt track={track} tier="lg" className="w-full h-full object-cover" />
             {merged.isDsd && (
               <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/80 backdrop-blur-md text-amber-950 uppercase shadow">
                 {formatDisplay.dsdRateLabel}
@@ -304,10 +338,16 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
           {/* Quick Details */}
           <div className="flex-1 min-w-0 text-center sm:text-left flex flex-col justify-between h-full py-1">
             <div>
-              <h3 className="text-xl sm:text-2xl font-black text-white leading-tight truncate" title={merged.title}>
+              <h3
+                className="text-xl sm:text-2xl font-black text-white leading-tight truncate"
+                title={merged.title}
+              >
                 {merged.title}
               </h3>
-              <p className="text-sm font-semibold text-theme-10 mt-1 truncate" title={merged.artist}>
+              <p
+                className="text-sm font-semibold text-theme-10 mt-1 truncate"
+                title={merged.artist}
+              >
                 {merged.artist}
               </p>
               <p className="text-xs text-zinc-400 mt-0.5 truncate" title={merged.album}>
@@ -337,7 +377,10 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
               {merged.trackNo && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-300 font-mono">
                   <Tag size={13} className="text-zinc-500" />
-                  <span>#{merged.trackNo}{merged.trackOf ? `/${merged.trackOf}` : ''}</span>
+                  <span>
+                    #{merged.trackNo}
+                    {merged.trackOf ? `/${merged.trackOf}` : ''}
+                  </span>
                 </span>
               )}
 
@@ -387,9 +430,7 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
           >
             <Mic2 size={14} />
             <span>{t('modals.trackInfo.tabLyrics')}</span>
-            {Boolean(merged.lyrics) && (
-              <span className="w-1.5 h-1.5 rounded-full bg-theme-10" />
-            )}
+            {Boolean(merged.lyrics) && <span className="w-1.5 h-1.5 rounded-full bg-theme-10" />}
           </button>
         </div>
 
@@ -411,7 +452,10 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                       {t('modals.trackInfo.filePath')}:
                     </span>
                     <div className="flex items-center gap-2 max-w-full min-w-0">
-                      <span className="text-zinc-200 font-mono text-[11px] truncate select-all" title={details?.rawPath || track?.filePath}>
+                      <span
+                        className="text-zinc-200 font-mono text-[11px] truncate select-all"
+                        title={details?.rawPath || track?.filePath}
+                      >
                         {details?.rawPath || track?.filePath || 'N/A'}
                       </span>
                       <button
@@ -419,14 +463,20 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                         className="p-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition shrink-0 cursor-pointer"
                         title={t('modals.trackInfo.copyPath')}
                       >
-                        {copiedPath ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                        {copiedPath ? (
+                          <Check size={12} className="text-emerald-400" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
                       </button>
                     </div>
                   </div>
 
                   {/* File Name */}
                   <div className="py-2.5 flex items-center justify-between gap-2">
-                    <span className="text-zinc-500 font-medium">{t('modals.trackInfo.format')}:</span>
+                    <span className="text-zinc-500 font-medium">
+                      {t('modals.trackInfo.format')}:
+                    </span>
                     <span className="text-zinc-200 font-mono uppercase font-bold">
                       {merged.format} {merged.container ? `(${merged.container})` : ''}
                     </span>
@@ -435,9 +485,12 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                   {/* File Size */}
                   {merged.fileSizeBytes && (
                     <div className="py-2.5 flex items-center justify-between gap-2">
-                      <span className="text-zinc-500 font-medium">{t('modals.trackInfo.fileSize')}:</span>
+                      <span className="text-zinc-500 font-medium">
+                        {t('modals.trackInfo.fileSize')}:
+                      </span>
                       <span className="text-zinc-200 font-mono">
-                        {formatFileSize(merged.fileSizeBytes)} ({merged.fileSizeBytes.toLocaleString()} bytes)
+                        {formatFileSize(merged.fileSizeBytes)} (
+                        {merged.fileSizeBytes.toLocaleString()} bytes)
                       </span>
                     </div>
                   )}
@@ -445,21 +498,23 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                   {/* Modified Date */}
                   {merged.modifiedTime && (
                     <div className="py-2.5 flex items-center justify-between gap-2">
-                      <span className="text-zinc-500 font-medium">{t('modals.trackInfo.modifiedDate')}:</span>
-                      <span className="text-zinc-300">
-                        {formatDate(merged.modifiedTime)}
+                      <span className="text-zinc-500 font-medium">
+                        {t('modals.trackInfo.modifiedDate')}:
                       </span>
+                      <span className="text-zinc-300">{formatDate(merged.modifiedTime)}</span>
                     </div>
                   )}
 
                   {/* Source */}
                   <div className="pt-2.5 flex items-center justify-between gap-2">
-                    <span className="text-zinc-500 font-medium">{t('modals.trackInfo.source')}:</span>
+                    <span className="text-zinc-500 font-medium">
+                      {t('modals.trackInfo.source')}:
+                    </span>
                     <span className="text-zinc-300 font-medium">
-                      {isLocalTrack 
-                        ? t('modals.trackInfo.sourceLocal') 
-                        : track?.isCloud 
-                          ? t('modals.trackInfo.sourceCloud') 
+                      {isLocalTrack
+                        ? t('modals.trackInfo.sourceLocal')
+                        : track?.isCloud
+                          ? t('modals.trackInfo.sourceCloud')
                           : t('modals.trackInfo.sourceOnline')}
                     </span>
                   </div>
@@ -474,50 +529,80 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className="bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl">
-                    <span className="text-zinc-500 block text-[11px] mb-1">{t('modals.trackInfo.titleLabel')}</span>
-                    <p className="text-white font-semibold truncate" title={merged.title}>{merged.title}</p>
+                    <span className="text-zinc-500 block text-[11px] mb-1">
+                      {t('modals.trackInfo.titleLabel')}
+                    </span>
+                    <p className="text-white font-semibold truncate" title={merged.title}>
+                      {merged.title}
+                    </p>
                   </div>
 
                   <div className="bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl">
-                    <span className="text-zinc-500 block text-[11px] mb-1">{t('modals.trackInfo.artist')}</span>
-                    <p className="text-white font-semibold truncate" title={merged.artist}>{merged.artist}</p>
+                    <span className="text-zinc-500 block text-[11px] mb-1">
+                      {t('modals.trackInfo.artist')}
+                    </span>
+                    <p className="text-white font-semibold truncate" title={merged.artist}>
+                      {merged.artist}
+                    </p>
                   </div>
 
                   <div className="bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl">
-                    <span className="text-zinc-500 block text-[11px] mb-1">{t('modals.trackInfo.album')}</span>
-                    <p className="text-white font-semibold truncate" title={merged.album}>{merged.album}</p>
+                    <span className="text-zinc-500 block text-[11px] mb-1">
+                      {t('modals.trackInfo.album')}
+                    </span>
+                    <p className="text-white font-semibold truncate" title={merged.album}>
+                      {merged.album}
+                    </p>
                   </div>
 
                   {merged.albumArtist && (
                     <div className="bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl">
-                      <span className="text-zinc-500 block text-[11px] mb-1">{t('modals.trackInfo.albumArtist')}</span>
-                      <p className="text-white font-semibold truncate" title={merged.albumArtist}>{merged.albumArtist}</p>
+                      <span className="text-zinc-500 block text-[11px] mb-1">
+                        {t('modals.trackInfo.albumArtist')}
+                      </span>
+                      <p className="text-white font-semibold truncate" title={merged.albumArtist}>
+                        {merged.albumArtist}
+                      </p>
                     </div>
                   )}
 
                   <div className="bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl">
-                    <span className="text-zinc-500 block text-[11px] mb-1">{t('modals.trackInfo.genre')}</span>
+                    <span className="text-zinc-500 block text-[11px] mb-1">
+                      {t('modals.trackInfo.genre')}
+                    </span>
                     <p className="text-white font-semibold truncate">{merged.genre || 'Unknown'}</p>
                   </div>
 
                   {merged.composer && (
                     <div className="bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl">
-                      <span className="text-zinc-500 block text-[11px] mb-1">{t('modals.trackInfo.composer')}</span>
-                      <p className="text-white font-semibold truncate" title={merged.composer}>{merged.composer}</p>
+                      <span className="text-zinc-500 block text-[11px] mb-1">
+                        {t('modals.trackInfo.composer')}
+                      </span>
+                      <p className="text-white font-semibold truncate" title={merged.composer}>
+                        {merged.composer}
+                      </p>
                     </div>
                   )}
 
                   {merged.lyricist && (
                     <div className="bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl">
-                      <span className="text-zinc-500 block text-[11px] mb-1">{t('modals.trackInfo.lyricist')}</span>
-                      <p className="text-white font-semibold truncate" title={merged.lyricist}>{merged.lyricist}</p>
+                      <span className="text-zinc-500 block text-[11px] mb-1">
+                        {t('modals.trackInfo.lyricist')}
+                      </span>
+                      <p className="text-white font-semibold truncate" title={merged.lyricist}>
+                        {merged.lyricist}
+                      </p>
                     </div>
                   )}
 
                   {merged.copyright && (
                     <div className="bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl sm:col-span-2">
-                      <span className="text-zinc-500 block text-[11px] mb-1">{t('modals.trackInfo.copyright')}</span>
-                      <p className="text-zinc-300 font-medium truncate" title={merged.copyright}>{merged.copyright}</p>
+                      <span className="text-zinc-500 block text-[11px] mb-1">
+                        {t('modals.trackInfo.copyright')}
+                      </span>
+                      <p className="text-zinc-300 font-medium truncate" title={merged.copyright}>
+                        {merged.copyright}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -553,10 +638,10 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                     {formatAudioSampleRate(merged.sampleRate) || '44.1 kHz'}
                   </p>
                   <p className="text-[11px] text-zinc-400 mt-1">
-                    {merged.isDsd 
-                      ? 'Direct Stream Digital' 
-                      : merged.sampleRate && merged.sampleRate >= 88200 
-                        ? 'High-Resolution Audio' 
+                    {merged.isDsd
+                      ? 'Direct Stream Digital'
+                      : merged.sampleRate && merged.sampleRate >= 88200
+                        ? 'High-Resolution Audio'
                         : 'Standard Rate'}
                   </p>
                 </div>
@@ -571,10 +656,10 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                     {merged.isDsd ? '1-BIT' : merged.bitDepth ? `${merged.bitDepth}-BIT` : '16-BIT'}
                   </p>
                   <p className="text-[11px] text-zinc-400 mt-1">
-                    {merged.isDsd 
-                      ? '1-bit Delta-Sigma Stream' 
-                      : merged.bitDepth && merged.bitDepth >= 24 
-                        ? 'Studio Master Depth' 
+                    {merged.isDsd
+                      ? '1-bit Delta-Sigma Stream'
+                      : merged.bitDepth && merged.bitDepth >= 24
+                        ? 'Studio Master Depth'
                         : 'CD Quality Depth'}
                   </p>
                 </div>
@@ -617,7 +702,11 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                     {merged.isDsd ? 'DSD Native' : merged.lossless ? 'Lossless' : 'Lossy'}
                   </p>
                   <p className="text-[11px] text-zinc-400 mt-1 truncate">
-                    {merged.isDsd ? 'Bit-Perfect 1-bit' : merged.lossless ? 'Bit-Perfect PCM' : 'Lossy Codec'}
+                    {merged.isDsd
+                      ? 'Bit-Perfect 1-bit'
+                      : merged.lossless
+                        ? 'Bit-Perfect PCM'
+                        : 'Lossy Codec'}
                   </p>
                 </div>
               </div>
@@ -629,15 +718,15 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                 </div>
                 <div className="text-xs">
                   <h5 className="font-bold text-white mb-0.5">
-                    {merged.isDsd 
-                      ? 'Audiophile DSD Stream (BASS DSD Engine)' 
-                      : merged.lossless 
-                        ? 'Lossless Audio Stream (Bit-Perfect WASAPI / ASIO)' 
+                    {merged.isDsd
+                      ? 'Audiophile DSD Stream (BASS DSD Engine)'
+                      : merged.lossless
+                        ? 'Lossless Audio Stream (Bit-Perfect WASAPI / ASIO)'
                         : 'Standard Audio Stream'}
                   </h5>
                   <p className="text-zinc-400 leading-relaxed">
                     {merged.isDsd
-                      ? 'Bản nhạc này chứa luồng bit 1-bit Direct Stream Digital. Mei\'s Radio tự động định tuyến qua BASS Audio Library (ASIO DSD Native hoặc WASAPI DSD-to-PCM 176.4kHz) để bảo toàn chất âm analog chân thực nhất.'
+                      ? "Bản nhạc này chứa luồng bit 1-bit Direct Stream Digital. Mei's Radio tự động định tuyến qua BASS Audio Library (ASIO DSD Native hoặc WASAPI DSD-to-PCM 176.4kHz) để bảo toàn chất âm analog chân thực nhất."
                       : merged.lossless
                         ? 'Bản nhạc này là dạng không nén Lossless nguyên bản. Khuyến nghị bật chế độ Bit-Perfect (WASAPI Exclusive hoặc ASIO) để thưởng thức âm thanh trung thực không qua bộ trộn Windows.'
                         : 'Bản nhạc này ở định dạng nén có tổn hao. Hỗ trợ đầy đủ bộ cân bằng âm thanh Parametric EQ và visualizer thời gian thực.'}
@@ -660,8 +749,14 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                     onClick={handleCopyLyrics}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition cursor-pointer"
                   >
-                    {copiedLyrics ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                    <span>{copiedLyrics ? t('common.copied') : t('modals.trackInfo.copyLyrics')}</span>
+                    {copiedLyrics ? (
+                      <Check size={13} className="text-emerald-400" />
+                    ) : (
+                      <Copy size={13} />
+                    )}
+                    <span>
+                      {copiedLyrics ? t('common.copied') : t('modals.trackInfo.copyLyrics')}
+                    </span>
                   </button>
                 )}
               </div>
@@ -677,7 +772,8 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                     {t('modals.trackInfo.noLyrics')}
                   </p>
                   <p className="text-xs text-zinc-500 mt-1 max-w-sm">
-                    {isLocalTrack && 'Bạn có thể chỉnh sửa metadata hoặc thêm file .lrc cùng thư mục để nhúng lời bài hát.'}
+                    {isLocalTrack &&
+                      'Bạn có thể chỉnh sửa metadata hoặc thêm file .lrc cùng thư mục để nhúng lời bài hát.'}
                   </p>
                 </div>
               )}
@@ -771,7 +867,6 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
             </div>
           </div>
         </div>
-
       </div>
     </div>
   )

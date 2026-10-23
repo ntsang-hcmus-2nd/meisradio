@@ -81,7 +81,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
   return (
     <>
       {/* Lớp nền bắt click ngoài toàn màn hình */}
-      <div 
+      <div
         className="fixed inset-0 z-[99998] bg-transparent cursor-default select-none"
         onMouseDown={handleBackdropEvent}
         onClick={handleBackdropEvent}
@@ -108,8 +108,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
           const hasSub = item.subItems && item.subItems.length > 0
 
           return (
-            <div 
-              key={item.id} 
+            <div
+              key={item.id}
               className="relative"
               onMouseEnter={() => hasSub && setActiveSubMenu(item.id)}
               onMouseLeave={() => hasSub && setActiveSubMenu(null)}
@@ -125,8 +125,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
                   }
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-left ${
-                  item.disabled 
-                    ? 'opacity-40 cursor-not-allowed text-zinc-500' 
+                  item.disabled
+                    ? 'opacity-40 cursor-not-allowed text-zinc-500'
                     : item.danger
                       ? 'text-red-400 hover:bg-red-500/15 hover:text-red-300'
                       : 'text-zinc-200 hover:bg-white/10 hover:text-white'
@@ -141,7 +141,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
 
               {/* Submenu */}
               {hasSub && activeSubMenu === item.id && (
-                <div 
+                <div
                   className="absolute left-full top-0 ml-1 min-w-[190px] max-h-64 overflow-y-auto bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/70 rounded-xl shadow-2xl p-1.5 text-xs z-[100000]"
                   onMouseDown={(e) => e.stopPropagation()}
                 >

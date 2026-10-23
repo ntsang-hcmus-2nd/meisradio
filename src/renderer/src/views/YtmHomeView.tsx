@@ -1,14 +1,5 @@
 import React from 'react'
-import {
-  ArrowLeft,
-  Disc,
-  Play,
-  Shuffle,
-  Activity,
-  Cloud,
-  ListMusic,
-  Download
-} from 'lucide-react'
+import { ArrowLeft, Disc, Play, Shuffle, Activity, Cloud, ListMusic, Download } from 'lucide-react'
 import { DynamicCoverArt } from '../components/DynamicCoverArt'
 import { TrackTable } from '../components/TrackTable'
 import { fisherYatesShuffle } from '../utils/arrayUtils'
@@ -99,13 +90,10 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
                   {activeAlbum.tracks && activeAlbum.tracks.length > 0 && (
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() =>
-                          handleRowClick(activeAlbum.tracks[0], activeAlbum.tracks)
-                        }
+                        onClick={() => handleRowClick(activeAlbum.tracks[0], activeAlbum.tracks)}
                         className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-lg shadow-red-600/20 cursor-pointer"
                       >
-                        <Play size={16} className="fill-current" />{' '}
-                        {t('userPlaylistsView.playAll')}
+                        <Play size={16} className="fill-current" /> {t('userPlaylistsView.playAll')}
                       </button>
                       <button
                         onClick={() => {
@@ -126,9 +114,7 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
           {isAlbumLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center">
               <Activity size={40} className="text-red-500 mb-4 animate-bounce" />
-              <p className="text-red-400 animate-pulse font-medium">
-                {t('home.extractingYtm')}
-              </p>
+              <p className="text-red-400 animate-pulse font-medium">{t('home.extractingYtm')}</p>
             </div>
           ) : (
             <TrackTable
@@ -184,9 +170,7 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
                 <div className="flex items-center gap-3 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                    <span className="text-xs text-zinc-300 font-medium">
-                      {t('home.ytmSynced')}
-                    </span>
+                    <span className="text-xs text-zinc-300 font-medium">{t('home.ytmSynced')}</span>
                   </div>
                   <button
                     onClick={handleYtmLogout}
@@ -217,15 +201,11 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
               </div>
             ) : (
               dashboardData.map((section, index) => {
-                const isListSection = section.contents.some(
-                  (t: any) => t.style === 'LIST'
-                )
+                const isListSection = section.contents.some((t: any) => t.style === 'LIST')
 
                 return (
                   <div key={index}>
-                    <h3 className="text-xl font-bold text-white mb-4">
-                      {section.title}
-                    </h3>
+                    <h3 className="text-xl font-bold text-white mb-4">{section.title}</h3>
 
                     <div
                       className={`overflow-x-auto pb-4 scrollbar-hide snap-x ${isListSection ? 'grid grid-rows-4 grid-flow-col gap-x-6 gap-y-3' : 'flex gap-4'}`}
@@ -242,23 +222,14 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
                                 {item.thumbnails && item.thumbnails.length > 0 ? (
                                   <img
                                     loading="lazy"
-                                    src={
-                                      item.thumbnails[item.thumbnails.length - 1]
-                                        .url
-                                    }
+                                    src={item.thumbnails[item.thumbnails.length - 1].url}
                                     className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                                   />
                                 ) : (
-                                  <ListMusic
-                                    size={16}
-                                    className="m-auto mt-4 text-zinc-600"
-                                  />
+                                  <ListMusic size={16} className="m-auto mt-4 text-zinc-600" />
                                 )}
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <Play
-                                    size={18}
-                                    className="text-white fill-current ml-0.5"
-                                  />
+                                  <Play size={18} className="text-white fill-current ml-0.5" />
                                 </div>
                               </div>
                               <div className="flex-1 truncate">
@@ -295,16 +266,11 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
                               {item.thumbnails && item.thumbnails.length > 0 ? (
                                 <img
                                   loading="lazy"
-                                  src={
-                                    item.thumbnails[item.thumbnails.length - 1].url
-                                  }
+                                  src={item.thumbnails[item.thumbnails.length - 1].url}
                                   className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                                 />
                               ) : (
-                                <ListMusic
-                                  size={40}
-                                  className="m-auto mt-16 text-zinc-600"
-                                />
+                                <ListMusic size={40} className="m-auto mt-16 text-zinc-600" />
                               )}
                               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                 <button
@@ -333,9 +299,7 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
                             <p className="font-semibold text-sm text-white truncate">
                               {item.title}
                             </p>
-                            <p className="text-xs text-zinc-500 truncate mt-1">
-                              {item.subtitle}
-                            </p>
+                            <p className="text-xs text-zinc-500 truncate mt-1">{item.subtitle}</p>
                           </div>
                         )
                       })}
