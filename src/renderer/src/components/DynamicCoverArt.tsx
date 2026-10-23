@@ -1,16 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { ListMusic } from 'lucide-react'
 
-export type CoverTier = 'sm' | 'md' | 'lg' | 'xl' | 'original'
-
-const TIER_SIZES: Record<CoverTier, number> = {
-  sm: 96, // List item (40-48px @ 2x DPR)
-  md: 200, // Player bar (56px), Mini player (96px), small cards (120-140px)
-  lg: 360, // Medium/large grid cards (160-260px @ 2x DPR)
-  xl: 600, // Fullscreen vinyl disc (250-400px @ 2x DPR)
-  original: 0 // Original full resolution
-}
-
 export interface TrackCoverData {
   id?: string | number
   filePath?: string
@@ -32,7 +22,9 @@ export interface DynamicCoverArtProps {
   alt?: string
   className?: string
   imageClassName?: string
-  smartAspect?: boolean
+  // true: luôn nền ambient + contain (cho art 16:9 online).
+  // 'auto': mặc định fill full-bleed; chỉ chuyển ambient khi ảnh thật bị dẹt/dọc.
+  smartAspect?: boolean | 'auto'
   animateSpin?: boolean
   isPlaying?: boolean
   isLite?: boolean
@@ -45,105 +37,8 @@ export interface DynamicCoverArtProps {
   style?: React.CSSProperties
 }
 
-import { getGlobalStreamPort, onStreamPortChange, extractRawFilePath } from '../utils/urlUtils'
-
-/**
- * Trợ thủ tạo URL ảnh bìa đã scale linh hoạt từ backend streamServer hoặc high-res CDN
- */
-function resolveCoverUrl({
-  track,
-  src,
-  highResSrc,
-  trackPath,
-  streamPort,
-  tier = 'md',
-  size
-}: {
-  track?: TrackCoverData | null
-  src?: string | null
-  highResSrc?: string | null
-  trackPath?: string | null
-  streamPort?: number
-  tier?: CoverTier
-  size?: number
-}): string | null {
-  const targetSize = typeof size === 'number' && size >= 0 ? size : (TIER_SIZES[tier] ?? 256)
-  const effectivePath = trackPath || track?.filePath
-  const effectiveSrc = src !== undefined ? src : track?.coverArt
-  const effectiveHighRes = highResSrc !== undefined ? highResSrc : track?.coverArtHighRes
-  const port = streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
-
-  // 1. Dạng dữ liệu nhúng trực tiếp (Data URL / Blob URL)
-  if (effectiveSrc && (effectiveSrc.startsWith('data:') || effectiveSrc.startsWith('blob:'))) {
-    return effectiveSrc
-  }
-
-  // 2. Nhạc trực tuyến (YouTube Music, SoundCloud, v.v., không phải localhost/127.0.0.1)
-  const isExternalOnline =
-    track?.isOnline ||
-    (effectiveSrc &&
-      (effectiveSrc.startsWith('http://') || effectiveSrc.startsWith('https://')) &&
-      !effectiveSrc.includes('127.0.0.1') &&
-      !effectiveSrc.includes('localhost'))
-
-  if (isExternalOnline) {
-    if (targetSize >= 500 && effectiveHighRes) {
-      return effectiveHighRes
-    }
-    return effectiveSrc || effectiveHighRes || null
-  }
-
-  // 3. Ảnh / bài hát cục bộ qua stream server nội bộ (/cover)
-  const cleanPath = extractRawFilePath(effectivePath)
-  const cleanSrc = extractRawFilePath(effectiveSrc)
-
-  // Trích xuất query parameter từ effectiveSrc (ví dụ ?t=123...) để cache bust
-  let tParam = ''
-  if (effectiveSrc && effectiveSrc.includes('?')) {
-    const rawQuery = effectiveSrc.split('?')[1]
-    if (rawQuery) {
-      tParam = `&${rawQuery}`
-    }
-  }
-
-  // Ưu tiên cao: Nếu cleanSrc là một tệp hình ảnh trực tiếp (ảnh bìa tùy chỉnh của playlist hoặc ảnh trên đĩa)
-  const isDirectImage = cleanSrc && /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(cleanSrc)
-  if (isDirectImage && port > 0) {
-    const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
-    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}${tParam}`
-  }
-
-  // Ưu tiên 3a: Đối với ảnh nhỏ và thẻ lưới vừa (tier sm, md hoặc targetSize <= 256px), nếu đã có sẵn thumbnail (cleanSrc),
-  // tải trực tiếp qua cleanSrc để tránh backend phải mở và phân tích file audio gốc 50MB!
-  if (targetSize <= 256 && cleanSrc && port > 0) {
-    const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
-    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}${tParam}`
-  }
-
-  // Ưu tiên 3b: Sử dụng effectivePath (file audio hoặc folder playlist) cho kích thước lớn hơn (>256px)
-  // hoặc khi chưa có thumbnail có sẵn, để đảm bảo trích xuất ảnh gốc chất lượng cao cho Dynamic Scaling
-  if (cleanPath && port > 0) {
-    const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
-    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanPath)}${sizeQuery}`
-  }
-
-  // Ưu tiên 3c: Fallback sử dụng cleanSrc cho kích thước lớn nếu không có cleanPath
-  if (cleanSrc && port > 0) {
-    const sizeQuery = targetSize > 0 ? `&size=${targetSize}` : ''
-    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(cleanSrc)}${sizeQuery}${tParam}`
-  }
-
-  // 4. Fallback an toàn: Không bao giờ trả về file:// hoặc đường dẫn ổ đĩa Windows trực tiếp
-  // để tránh kích hoạt lỗi "Not allowed to load local resource" của Chromium
-  if (
-    effectiveSrc &&
-    (effectiveSrc.startsWith('file://') || /^[a-zA-Z]:[\\/]/.test(effectiveSrc))
-  ) {
-    return null
-  }
-
-  return effectiveSrc || null
-}
+import { getGlobalStreamPort, onStreamPortChange, resolveCoverUrl } from '../utils/urlUtils'
+import type { CoverTier } from '../utils/urlUtils'
 
 export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
   ({
@@ -171,6 +66,9 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
   }) => {
     const [hasError, setHasError] = useState(false)
     const [isLoaded, setIsLoaded] = useState(false)
+    // auto mode: art vuông (≈1:1) thì fill; chỉ art dẹt/dọc mới dùng ambient.
+    // Ngưỡng 0.85–1.18 bao phủ cover vuông kể cả sai số crop/resize.
+    const [isNonSquareArt, setIsNonSquareArt] = useState(false)
     const [currentPort, setCurrentPort] = useState<number>(() => {
       return streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
     })
@@ -207,6 +105,7 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
     useEffect(() => {
       setHasError(false)
       setIsLoaded(false)
+      setIsNonSquareArt(false)
     }, [resolvedUrl])
 
     // Khi ở chế độ Lite hoặc không có ảnh / bị lỗi tải ảnh
@@ -246,8 +145,20 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
       )
     }
 
-    // Trường hợp smartAspect: với ảnh YouTube 16:9, tạo lớp nền mờ + ảnh chính căn giữa giữ tỉ lệ
-    if (smartAspect) {
+    // Trường hợp smartAspect: với ảnh YouTube 16:9, tạo lớp nền mờ + ảnh chính căn giữa giữ tỉ lệ.
+    // smartAspect='auto': mặc định fill full-bleed (đa số cover local là vuông);
+    // chỉ chuyển sang ambient khi đo được ảnh thật bị dẹt/dọc.
+    const useAmbientLayout = smartAspect === true || (smartAspect === 'auto' && isNonSquareArt)
+    const detectArtAspect = (el: HTMLImageElement | null) => {
+      if (smartAspect !== 'auto' || !el) return
+      const w = el.naturalWidth
+      const h = el.naturalHeight
+      if (w > 0 && h > 0) {
+        const ratio = w / h
+        if (ratio < 0.85 || ratio > 1.18) setIsNonSquareArt(true)
+      }
+    }
+    if (useAmbientLayout) {
       return (
         <div
           onClick={onClick}
@@ -295,7 +206,10 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
           alt={alt}
           loading={loading}
           decoding={decoding}
-          onLoad={() => setIsLoaded(true)}
+          onLoad={(e) => {
+            setIsLoaded(true)
+            detectArtAspect(e.currentTarget)
+          }}
           onError={() => setHasError(true)}
           className={`w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${
             isLoaded ? 'opacity-100' : 'opacity-40'

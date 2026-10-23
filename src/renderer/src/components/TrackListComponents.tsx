@@ -24,7 +24,8 @@ import {
   isDsdTrack,
   getDsdRateLabel,
   formatAudioSampleRate,
-  formatDuration
+  formatDuration,
+  getDprAwareCoverSize
 } from '../utils/formatUtils'
 import { useLibraryStore, useSettingsStore } from '../stores'
 import { useTranslation } from '../locales'
@@ -318,8 +319,9 @@ export const TrackGridItem = React.memo(
           <DynamicCoverArt
             track={track}
             tier="md"
+            size={getDprAwareCoverSize()}
             isLite={isLite}
-            smartAspect={true}
+            smartAspect="auto"
             fallbackIcon={<Music size={32} />}
             className="w-full h-full group-hover:scale-105 transition duration-300"
           />
@@ -526,6 +528,7 @@ export const PlaylistItemCard = React.memo(
             src={pl.thumbnail}
             trackPath={pl.path}
             tier="md"
+            size={getDprAwareCoverSize()}
             isLite={isLite}
             fallbackIcon={<FolderPlus size={40} className="text-zinc-600" />}
             className="w-full h-full"

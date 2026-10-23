@@ -44,6 +44,28 @@ export function clampSeekRange(value: number, range: { start: number; end: numbe
 }
 
 /**
+ * Kích thước ảnh cover cho thẻ lưới theo mật độ điểm ảnh màn hình (DPR),
+ * làm tròn lên 1 trong 3 mức cache: 256 / 384 / 512.
+ * - DPR 1 (màn thường): 256 — ngang chi phí hiện tại.
+ * - DPR 1.5: 384 — đủ nét, bitmap ~0.6MB/card.
+ * - DPR 2 (retina): 512 — nét tuyệt đối, bitmap ~1MB/card.
+ * Mức 512 vẫn do backend trích xuất từ art gốc rồi downscale (không upscale
+ * từ thumb 128px), RAM cache LRU phía main chịu được.
+ */
+export function getDprAwareCoverSize(cssWidth: number = 230): 256 | 384 | 512 {
+  const dpr =
+    typeof window !== 'undefined' &&
+    typeof window.devicePixelRatio === 'number' &&
+    window.devicePixelRatio > 0
+      ? window.devicePixelRatio
+      : 1
+  const need = cssWidth * dpr
+  if (need <= 256) return 256
+  if (need <= 384) return 384
+  return 512
+}
+
+/**
  * Kiểm tra xem một bài hát có phải là định dạng DSD (Direct Stream Digital: .dsf, .dff, .dsd) hay không
  */
 export function isDsdTrack(track?: any): boolean {

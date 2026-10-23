@@ -30,7 +30,7 @@ export const streamUrlCache = new Map<string, { url: string; expires: number }>(
 
 // BỘ NHỚ ĐỆM RAM PHÂN TẦNG (Tối ưu giới hạn tránh tích tụ heap):
 // - smallCoverCache: Lưu trữ tới 400 ảnh nhỏ (<=128px) ~1MB RAM cho cuộn danh sách.
-// - largeCoverCache: Lưu trữ tới 200 ảnh lớn (>128px) chất lượng cao cho PlayerBar, Grid, Vinyl (~2.5MB RAM).
+// - largeCoverCache: Lưu trữ tới 300 ảnh lớn (>128px) chất lượng cao cho PlayerBar, Grid, Vinyl (~8MB RAM ở mức 512px).
 // - folderCoverCache: Lưu trữ tới 150 ảnh bìa thư mục album/playlist tránh fs.readdirSync lặp lại.
 export const smallCoverCache = new Map<string, Buffer>()
 export const largeCoverCache = new Map<string, Buffer>()
@@ -82,7 +82,7 @@ export function setCoverResizeCache(key: string, buf: Buffer, targetSize: number
     }
     smallCoverCache.set(key, buf)
   } else {
-    if (largeCoverCache.size >= 200) {
+    if (largeCoverCache.size >= 300) {
       const oldestKey = largeCoverCache.keys().next().value
       if (oldestKey) largeCoverCache.delete(oldestKey)
     }
