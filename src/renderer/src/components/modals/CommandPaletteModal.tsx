@@ -38,7 +38,9 @@ import {
   AlignJustify,
   Cpu,
   Feather,
-  Monitor
+  Monitor,
+  Sun,
+  Moon
 } from 'lucide-react'
 import { useTranslation } from '../../locales'
 import { useUIStore } from '../../stores/uiStore'
@@ -47,6 +49,8 @@ import { useLibraryStore } from '../../stores/libraryStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useAudioStore } from '../../stores/audioStore'
 import { useSoulseekStore } from '../../stores/soulseekStore'
+import { AnimatePresence, motion } from 'motion/react'
+import { dialogScale, overlayFade, useMotionReduced } from '../motion'
 import { removeAccents } from '../../utils/textUtils'
 import { DynamicCoverArt } from '../DynamicCoverArt'
 
@@ -226,6 +230,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const setAppMode = useSettingsStore((s) => s.setAppMode)
   const setAccentColorMode = useSettingsStore((s) => s.setAccentColorMode)
   const setCustomAccentColor = useSettingsStore((s) => s.setCustomAccentColor)
+  const setColorScheme = useSettingsStore((s) => s.setColorScheme)
   const streamPort = useSettingsStore((s) => s.streamPort)
 
   // Library Store
@@ -251,6 +256,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const setSlskIsSearching = useSoulseekStore((s) => s.setIsSearching)
   const setSlskSearchResults = useSoulseekStore((s) => s.setSearchResults)
   const setSlskSearchError = useSoulseekStore((s) => s.setSearchError)
+  const reduceMotion = useMotionReduced()
 
   // Focus input and reset state on open
   useEffect(() => {
@@ -903,6 +909,28 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         }
       },
       {
+        id: 'cmd-theme-dark',
+        title: 'Dark Mode',
+        icon: <Moon size={16} className="text-indigo-400" />,
+        category: 'action',
+        badge: t('spotlight.categoryCommands'),
+        action: () => {
+          setColorScheme('dark')
+          setShow(false)
+        }
+      },
+      {
+        id: 'cmd-theme-light',
+        title: 'Light Mode',
+        icon: <Sun size={16} className="text-amber-400" />,
+        category: 'action',
+        badge: t('spotlight.categoryCommands'),
+        action: () => {
+          setColorScheme('light')
+          setShow(false)
+        }
+      },
+      {
         id: 'cmd-mode-default',
         title: t('spotlight.cmdModeDefault'),
         icon: <Monitor size={16} className="text-indigo-400" />,
@@ -1097,6 +1125,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     setAppMode,
     setViewMode,
     setAccentColorMode,
+    setColorScheme,
     setPlayQueue,
     showToast,
     setShowLyricsPanel,
@@ -1565,276 +1594,288 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
   }
 
-  if (!show) return null
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-start justify-center pt-16 sm:pt-20 p-4 animate-fade-in"
-      onClick={() => setShow(false)}
-    >
-      <div
-        className="w-[680px] max-w-full bg-zinc-900/95 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-2xl animate-scale-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Input Bar */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-zinc-800/80 bg-zinc-950/40">
-          <Search size={18} className="text-zinc-400 shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setSelectedIndex(0)
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder={t('spotlight.placeholder')}
-            className="flex-1 bg-transparent text-white placeholder-zinc-500 text-sm focus:outline-none"
-          />
-          {query.length > 0 && (
-            <button
-              onClick={() => {
-                setQuery('')
-                setSelectedIndex(0)
-                inputRef.current?.focus()
-              }}
-              className="text-zinc-500 hover:text-white p-1 rounded-md transition cursor-pointer"
-            >
-              <X size={14} />
-            </button>
-          )}
-          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
-            ESC
-          </span>
-        </div>
-
-        {/* Category Filter Tabs */}
-        <div className="flex items-center gap-1.5 px-3 py-2 border-b border-zinc-800/60 bg-zinc-900/50 overflow-x-auto no-scrollbar select-none">
-          <button
-            type="button"
-            onClick={() => handleSelectTab('all')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              activeTab === 'all'
-                ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
-            }`}
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-start justify-center pt-16 sm:pt-20 p-4"
+          initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+          animate={overlayFade.animate}
+          exit={overlayFade.exit}
+          transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+          onClick={() => setShow(false)}
+        >
+          <motion.div
+            className="w-[680px] max-w-full bg-zinc-900/95 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-2xl"
+            initial={reduceMotion ? { opacity: 1, scale: 1 } : dialogScale.initial}
+            animate={dialogScale.animate}
+            exit={dialogScale.exit}
+            transition={reduceMotion ? { duration: 0 } : dialogScale.transition}
+            onClick={(e) => e.stopPropagation()}
           >
-            <Layers size={13} />
-            <span>{t('spotlight.tabAll')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSelectTab('tracks')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              activeTab === 'tracks'
-                ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
-            }`}
-          >
-            <Music size={13} />
-            <span>{t('spotlight.tabTracks')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSelectTab('artists')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              activeTab === 'artists'
-                ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
-            }`}
-          >
-            <Mic2 size={13} />
-            <span>{t('spotlight.tabArtists')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSelectTab('albums')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              activeTab === 'albums'
-                ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
-            }`}
-          >
-            <Disc size={13} />
-            <span>{t('spotlight.tabAlbums')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSelectTab('playlists')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              activeTab === 'playlists'
-                ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
-            }`}
-          >
-            <ListPlus size={13} />
-            <span>{t('spotlight.tabPlaylists')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSelectTab('commands')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-              activeTab === 'commands'
-                ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
-            }`}
-          >
-            <Sliders size={13} />
-            <span>{t('spotlight.tabCommands')}</span>
-          </button>
-        </div>
-
-        {/* Results List */}
-        <div ref={listRef} className="max-h-[420px] overflow-y-auto p-2 space-y-1 select-none">
-          {filteredItems.length === 0 ? (
-            <div className="py-12 text-center text-zinc-500 text-xs flex flex-col items-center gap-2">
-              <Search size={28} className="text-zinc-600 opacity-60" />
-              <span>{t('spotlight.noResults')}</span>
-            </div>
-          ) : (
-            filteredItems.map((item, idx) => {
-              const isSelected = idx === safeSelectedIndex
-
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => item.action()}
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                  className={`group flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition text-xs relative ${
-                    isSelected
-                      ? 'bg-theme-10/15 border border-theme-10/35 text-white shadow-sm'
-                      : 'hover:bg-zinc-800/60 border border-transparent text-zinc-300'
-                  }`}
+            {/* Input Bar */}
+            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-zinc-800/80 bg-zinc-950/40">
+              <Search size={18} className="text-zinc-400 shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value)
+                  setSelectedIndex(0)
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={t('spotlight.placeholder')}
+                className="flex-1 bg-transparent text-white placeholder-zinc-500 text-sm focus:outline-none"
+              />
+              {query.length > 0 && (
+                <button
+                  onClick={() => {
+                    setQuery('')
+                    setSelectedIndex(0)
+                    inputRef.current?.focus()
+                  }}
+                  className="text-zinc-500 hover:text-white p-1 rounded-md transition cursor-pointer"
                 >
-                  {/* Thumbnail / Icon container */}
-                  <div
-                    className={`w-9 h-9 rounded-lg shrink-0 flex items-center justify-center overflow-hidden transition ${
-                      isSelected ? 'bg-theme-10/20 ring-1 ring-theme-10/30' : 'bg-zinc-800'
-                    }`}
-                  >
-                    {item.category === 'track' && item.data ? (
-                      <DynamicCoverArt
-                        track={item.data}
-                        src={item.data.coverArt}
-                        streamPort={streamPort}
-                        tier="sm"
-                        className="w-full h-full"
-                        fallbackImageSrc=""
-                      />
-                    ) : item.category === 'artist' && item.icon ? (
-                      item.icon
-                    ) : (
-                      item.icon
-                    )}
-                  </div>
+                  <X size={14} />
+                </button>
+              )}
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                ESC
+              </span>
+            </div>
 
-                  {/* Title & Subtitle */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p
-                        className={`font-medium truncate ${
-                          isSelected ? 'text-theme-10 font-semibold' : 'text-zinc-100'
-                        }`}
-                      >
-                        {item.title}
-                      </p>
-                      {item.formatBadge && (
-                        <span className="text-[9px] font-sans font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-theme-10 border border-theme-10/30 shrink-0">
-                          {item.formatBadge}
-                        </span>
-                      )}
-                    </div>
-                    {item.subtitle && (
-                      <p className="text-[11px] text-zinc-500 truncate mt-0.5">{item.subtitle}</p>
-                    )}
-                  </div>
+            {/* Category Filter Tabs */}
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-zinc-800/60 bg-zinc-900/50 overflow-x-auto no-scrollbar select-none">
+              <button
+                type="button"
+                onClick={() => handleSelectTab('all')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  activeTab === 'all'
+                    ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <Layers size={13} />
+                <span>{t('spotlight.tabAll')}</span>
+              </button>
 
-                  {/* Badges and action shortcuts */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {item.badge && !isSelected && (
-                      <span className="text-[10px] text-zinc-500 bg-zinc-800/80 px-2 py-0.5 rounded-md border border-zinc-700/50">
-                        {item.badge}
-                      </span>
-                    )}
+              <button
+                type="button"
+                onClick={() => handleSelectTab('tracks')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  activeTab === 'tracks'
+                    ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <Music size={13} />
+                <span>{t('spotlight.tabTracks')}</span>
+              </button>
 
-                    {/* Quick Add to Queue button for tracks */}
-                    {item.secondaryAction && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          item.secondaryAction!()
-                        }}
-                        className={`p-1.5 rounded-lg transition opacity-0 group-hover:opacity-100 cursor-pointer ${
-                          isSelected
-                            ? 'text-theme-10 hover:bg-theme-10/20 opacity-100'
-                            : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
-                        }`}
-                        title={item.secondaryActionLabel || t('spotlight.actionAddToQueue')}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    )}
+              <button
+                type="button"
+                onClick={() => handleSelectTab('artists')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  activeTab === 'artists'
+                    ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <Mic2 size={13} />
+                <span>{t('spotlight.tabArtists')}</span>
+              </button>
 
-                    {isSelected && (
-                      <span className="text-[10px] text-theme-10 font-mono font-semibold shrink-0 flex items-center gap-1">
-                        Enter ↵
-                      </span>
-                    )}
-                  </div>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('albums')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  activeTab === 'albums'
+                    ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <Disc size={13} />
+                <span>{t('spotlight.tabAlbums')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectTab('playlists')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  activeTab === 'playlists'
+                    ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <ListPlus size={13} />
+                <span>{t('spotlight.tabPlaylists')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectTab('commands')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  activeTab === 'commands'
+                    ? 'bg-theme-10/20 text-theme-10 border border-theme-10/40 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <Sliders size={13} />
+                <span>{t('spotlight.tabCommands')}</span>
+              </button>
+            </div>
+
+            {/* Results List */}
+            <div ref={listRef} className="max-h-[420px] overflow-y-auto p-2 space-y-1 select-none">
+              {filteredItems.length === 0 ? (
+                <div className="py-12 text-center text-zinc-500 text-xs flex flex-col items-center gap-2">
+                  <Search size={28} className="text-zinc-600 opacity-60" />
+                  <span>{t('spotlight.noResults')}</span>
                 </div>
-              )
-            })
-          )}
-        </div>
+              ) : (
+                filteredItems.map((item, idx) => {
+                  const isSelected = idx === safeSelectedIndex
 
-        {/* Footer info bar */}
-        <div className="px-4 py-2.5 border-t border-zinc-800/80 bg-zinc-950/60 flex items-center justify-between text-[11px] text-zinc-500">
-          <div className="flex items-center gap-3">
-            <span>
-              <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
-                ↑
-              </kbd>{' '}
-              <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
-                ↓
-              </kbd>{' '}
-              {t('spotlight.footerNavigate')}
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
-                ↵
-              </kbd>{' '}
-              {t('spotlight.footerSelect')}
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
-                Shift+↵
-              </kbd>{' '}
-              {t('spotlight.footerQueue')}
-            </span>
-            <span>
-              <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
-                Tab
-              </kbd>{' '}
-              {t('spotlight.footerFilter')}
-            </span>
-          </div>
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => item.action()}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                      className={`group flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition text-xs relative ${
+                        isSelected
+                          ? 'bg-theme-10/15 border border-theme-10/35 text-white shadow-sm'
+                          : 'hover:bg-zinc-800/60 border border-transparent text-zinc-300'
+                      }`}
+                    >
+                      {/* Thumbnail / Icon container */}
+                      <div
+                        className={`w-9 h-9 rounded-lg shrink-0 flex items-center justify-center overflow-hidden transition ${
+                          isSelected ? 'bg-theme-10/20 ring-1 ring-theme-10/30' : 'bg-zinc-800'
+                        }`}
+                      >
+                        {item.category === 'track' && item.data ? (
+                          <DynamicCoverArt
+                            track={item.data}
+                            src={item.data.coverArt}
+                            streamPort={streamPort}
+                            tier="sm"
+                            className="w-full h-full"
+                            fallbackImageSrc=""
+                          />
+                        ) : item.category === 'artist' && item.icon ? (
+                          item.icon
+                        ) : (
+                          item.icon
+                        )}
+                      </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-zinc-400 font-mono text-[10px]">
-              {t('spotlight.resultsCount', { count: filteredItems.length })}
-            </span>
-            <span className="font-whisper text-theme-10 text-sm tracking-wider">
-              {t('spotlight.title')}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
+                      {/* Title & Subtitle */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p
+                            className={`font-medium truncate ${
+                              isSelected ? 'text-theme-10 font-semibold' : 'text-zinc-100'
+                            }`}
+                          >
+                            {item.title}
+                          </p>
+                          {item.formatBadge && (
+                            <span className="text-[9px] font-sans font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-theme-10 border border-theme-10/30 shrink-0">
+                              {item.formatBadge}
+                            </span>
+                          )}
+                        </div>
+                        {item.subtitle && (
+                          <p className="text-[11px] text-zinc-500 truncate mt-0.5">
+                            {item.subtitle}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Badges and action shortcuts */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {item.badge && !isSelected && (
+                          <span className="text-[10px] text-zinc-500 bg-zinc-800/80 px-2 py-0.5 rounded-md border border-zinc-700/50">
+                            {item.badge}
+                          </span>
+                        )}
+
+                        {/* Quick Add to Queue button for tracks */}
+                        {item.secondaryAction && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              item.secondaryAction!()
+                            }}
+                            className={`p-1.5 rounded-lg transition opacity-0 group-hover:opacity-100 cursor-pointer ${
+                              isSelected
+                                ? 'text-theme-10 hover:bg-theme-10/20 opacity-100'
+                                : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+                            }`}
+                            title={item.secondaryActionLabel || t('spotlight.actionAddToQueue')}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        )}
+
+                        {isSelected && (
+                          <span className="text-[10px] text-theme-10 font-mono font-semibold shrink-0 flex items-center gap-1">
+                            Enter ↵
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Footer info bar */}
+            <div className="px-4 py-2.5 border-t border-zinc-800/80 bg-zinc-950/60 flex items-center justify-between text-[11px] text-zinc-500">
+              <div className="flex items-center gap-3">
+                <span>
+                  <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
+                    ↑
+                  </kbd>{' '}
+                  <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
+                    ↓
+                  </kbd>{' '}
+                  {t('spotlight.footerNavigate')}
+                </span>
+                <span>
+                  <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
+                    ↵
+                  </kbd>{' '}
+                  {t('spotlight.footerSelect')}
+                </span>
+                <span>
+                  <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
+                    Shift+↵
+                  </kbd>{' '}
+                  {t('spotlight.footerQueue')}
+                </span>
+                <span>
+                  <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px]">
+                    Tab
+                  </kbd>{' '}
+                  {t('spotlight.footerFilter')}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-zinc-400 font-mono text-[10px]">
+                  {t('spotlight.resultsCount', { count: filteredItems.length })}
+                </span>
+                <span className="font-sans font-bold text-theme-10 text-sm tracking-wider">
+                  {t('spotlight.title')}
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

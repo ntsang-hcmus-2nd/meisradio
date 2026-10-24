@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { motion } from 'motion/react'
 import { List, Trash2, X } from 'lucide-react'
 import {
   DndContext,
@@ -15,6 +16,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { SortableQueueItem } from './TrackListComponents'
+import { drawerSlide, useMotionReduced } from './motion'
 import { usePlayerStore, useUIStore, useSettingsStore } from '../stores'
 import { useTranslation, useLanguage } from '../locales'
 import { isSameTrack } from '../utils/trackStateUtils'
@@ -40,6 +42,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
   const showToast = useUIStore((s) => s.showToast)
   const appMode = useSettingsStore((s) => s.appMode)
   const isLite = appMode === 'lite' || appMode === 'core'
+  const reduceMotion = useMotionReduced()
 
   const [queueRenderLimit, setQueueRenderLimit] = useState(60)
 
@@ -51,7 +54,14 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
   const visibleQueue = (playQueue || []).slice(0, queueRenderLimit)
 
   return (
-    <div className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
+    <motion.div
+      layout
+      className="w-[25vw] min-w-[300px] max-w-[400px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col"
+      initial={reduceMotion ? { opacity: 1, x: 0 } : drawerSlide.initial}
+      animate={drawerSlide.animate}
+      exit={drawerSlide.exit}
+      transition={reduceMotion ? { duration: 0 } : drawerSlide.transition}
+    >
       <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
         <div className="flex items-center gap-2">
           <h3 className="font-bold text-white flex items-center gap-2">
@@ -136,6 +146,6 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
           </DndContext>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }

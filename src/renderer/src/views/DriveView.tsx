@@ -134,7 +134,6 @@ export function DriveView({
         <h1 className="text-2xl font-bold flex items-center gap-3 text-white">
           <Cloud className="text-theme-10" /> {t('driveView.title')}
         </h1>
-        <p className="text-sm text-zinc-400 mt-1">{t('driveView.desc')}</p>
       </div>
 
       {/* Input box link drive */}

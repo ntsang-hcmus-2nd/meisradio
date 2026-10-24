@@ -57,6 +57,30 @@ const enforceAccentBrightness = (c: RGB): RGB => {
   return c
 }
 
+export const enforceLightness = (c: RGB, minVal: number): RGB => {
+  return {
+    r: Math.min(250, Math.max(minVal, Math.floor(255 - (255 - c.r) * 0.12))),
+    g: Math.min(250, Math.max(minVal, Math.floor(255 - (255 - c.g) * 0.12))),
+    b: Math.min(250, Math.max(minVal, Math.floor(255 - (255 - c.b) * 0.12)))
+  }
+}
+
+export const enforceAccentForLight = (c: RGB): RGB => {
+  const highest = Math.max(c.r, c.g, c.b)
+  if (highest === 0) return { r: 5, g: 150, b: 105 }
+  // Darken saturated accent so it stays readable on light backgrounds
+  const maxChannel = 175
+  if (highest > maxChannel) {
+    const ratio = maxChannel / highest
+    return {
+      r: Math.floor(c.r * ratio),
+      g: Math.floor(c.g * ratio),
+      b: Math.floor(c.b * ratio)
+    }
+  }
+  return c
+}
+
 const MAX_THEME_CACHE = 500
 const themeColorCache = new Map<string, ThemeColors>()
 
@@ -79,7 +103,8 @@ const saveThemeColorToCache = (key: string, val: ThemeColors) => {
 
 export const extractThemeColors = (
   imageSrc: string,
-  trackKey?: string
+  trackKey?: string,
+  colorScheme: 'dark' | 'light' = 'dark'
 ): Promise<ThemeColors | null> => {
   return new Promise((resolve) => {
     if (!imageSrc) {
@@ -88,16 +113,17 @@ export const extractThemeColors = (
     }
 
     const lookupKey = trackKey || imageSrc
-    if (themeColorCache.has(lookupKey)) {
-      const cached = themeColorCache.get(lookupKey)!
-      themeColorCache.delete(lookupKey)
-      themeColorCache.set(lookupKey, cached) // Đưa lên đầu danh sách LRU
+    const cacheKey = `${lookupKey}_${colorScheme}`
+    if (themeColorCache.has(cacheKey)) {
+      const cached = themeColorCache.get(cacheKey)!
+      themeColorCache.delete(cacheKey)
+      themeColorCache.set(cacheKey, cached) // Đưa lên đầu danh sách LRU
       resolve(cached)
       return
     }
 
-    if (trackKey && themeColorCache.has(imageSrc)) {
-      const cached = themeColorCache.get(imageSrc)!
+    if (trackKey && themeColorCache.has(`${imageSrc}_${colorScheme}`)) {
+      const cached = themeColorCache.get(`${imageSrc}_${colorScheme}`)!
       resolve(cached)
       return
     }
@@ -234,24 +260,34 @@ export const extractThemeColors = (
         const dominant = validClusters[0]?.centroid || pixels[0]
         const secondary = validClusters[1]?.centroid || dominant
 
-        const c60 = enforceDarkness(dominant, 35) // Nền chính rất tối
-        const c30 = enforceDarkness(secondary, 65) // Nền panel sáng hơn một chút
-
         // Nếu ảnh có màu rực rỡ (saturation > 0.15), dùng pixel rực rỡ nhất làm màu nhấn
         // Nếu ảnh đơn sắc / đen trắng, dùng centroid phụ hoặc fallback
         const c10_raw =
           maxSaturation > 0.15 ? mostVibrantPixel : validClusters[2]?.centroid || secondary
 
-        const c10 = enforceAccentBrightness(c10_raw)
-
-        const result: ThemeColors = {
-          primary60: `rgb(${c60.r}, ${c60.g}, ${c60.b})`,
-          secondary30: `rgb(${c30.r}, ${c30.g}, ${c30.b})`,
-          accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
+        let result: ThemeColors
+        if (colorScheme === 'light') {
+          const c60 = enforceLightness(dominant, 238)
+          const c30 = enforceLightness(secondary, 218)
+          const c10 = enforceAccentForLight(c10_raw)
+          result = {
+            primary60: `rgb(${c60.r}, ${c60.g}, ${c60.b})`,
+            secondary30: `rgb(${c30.r}, ${c30.g}, ${c30.b})`,
+            accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
+          }
+        } else {
+          const c60 = enforceDarkness(dominant, 35) // Nền chính rất tối
+          const c30 = enforceDarkness(secondary, 65) // Nền panel sáng hơn một chút
+          const c10 = enforceAccentBrightness(c10_raw)
+          result = {
+            primary60: `rgb(${c60.r}, ${c60.g}, ${c60.b})`,
+            secondary30: `rgb(${c30.r}, ${c30.g}, ${c30.b})`,
+            accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
+          }
         }
 
-        saveThemeColorToCache(lookupKey, result)
-        if (trackKey) saveThemeColorToCache(imageSrc, result)
+        saveThemeColorToCache(cacheKey, result)
+        if (trackKey) saveThemeColorToCache(`${imageSrc}_${colorScheme}`, result)
 
         if (typeof window !== 'undefined' && (window as any).api?.cacheThemeColors) {
           ;(window as any).api.cacheThemeColors(trackKey || imageSrc, result)
@@ -307,8 +343,21 @@ export const parseColorToRgb = (color: string): RGB | null => {
   return null
 }
 
-export const generateThemeFromColor = (color: string): ThemeColors => {
+export const generateThemeFromColor = (
+  color: string,
+  colorScheme: 'dark' | 'light' = 'dark'
+): ThemeColors => {
   const rgb = parseColorToRgb(color) || { r: 16, g: 185, b: 129 }
+  if (colorScheme === 'light') {
+    const c60 = enforceLightness(rgb, 238)
+    const c30 = enforceLightness(rgb, 218)
+    const c10 = enforceAccentForLight(rgb)
+    return {
+      primary60: `rgb(${c60.r}, ${c60.g}, ${c60.b})`,
+      secondary30: `rgb(${c30.r}, ${c30.g}, ${c30.b})`,
+      accent10: `rgb(${c10.r}, ${c10.g}, ${c10.b})`
+    }
+  }
   const c60 = enforceDarkness(rgb, 35)
   const c30 = enforceDarkness(rgb, 65)
   return {

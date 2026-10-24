@@ -1,15 +1,5 @@
 import React from 'react'
-import {
-  FileAudio,
-  Cpu,
-  Sliders,
-  Zap,
-  Speaker,
-  ArrowRight,
-  ShieldCheck,
-  Sparkles,
-  Layers
-} from 'lucide-react'
+import { FileAudio, Cpu, Sliders, Zap, Speaker, ArrowRight, Layers } from 'lucide-react'
 import { useAudioStore } from '../stores/audioStore'
 import { usePlayerStore } from '../stores/playerStore'
 import { useTranslation } from '../locales'
@@ -156,44 +146,6 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
             <h3 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
               {t('modals.spectrogram.signalPathTitle')}
             </h3>
-            <span className="text-[11px] text-zinc-500 hidden sm:inline">
-              — {t('modals.spectrogram.signalPathSub')}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {isBASS ? (
-              isDsd ? (
-                <div className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full text-[10px] font-medium text-amber-400">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-amber-400 ${isPlaying ? 'animate-ping' : ''}`}
-                  />
-                  <ShieldCheck size={11} className="text-amber-400" />
-                  <span>{t('modals.spectrogram.dsdNativeBadge')}</span>
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[10px] font-medium text-emerald-400">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${isPlaying ? 'animate-ping' : ''}`}
-                  />
-                  <ShieldCheck size={11} className="text-emerald-400" />
-                  <span>{t('modals.spectrogram.bitPerfectBadge')}</span>
-                </div>
-              )
-            ) : isEqEnabled ? (
-              <div className="inline-flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 rounded-full text-[10px] font-medium text-sky-400">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full bg-sky-400 ${isPlaying ? 'animate-pulse' : ''}`}
-                />
-                <Sparkles size={11} className="text-sky-400" />
-                <span>{t('modals.spectrogram.dspActiveBadge')}</span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full text-[10px] font-medium text-zinc-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
-                <span>{t('modals.spectrogram.directBadge')}</span>
-              </div>
-            )}
           </div>
         </div>
 

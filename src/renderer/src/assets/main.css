@@ -19,6 +19,16 @@
 @theme {
   --font-whisper: 'Whisper', cursive;
   --font-sans: 'Google Sans Flex', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Google Sans Flex', ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-mono,
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-sans) !important;
+  font-variant-numeric: tabular-nums;
 }
 :root {
   --theme-60: #18181b; /* Nền chính */
@@ -219,4 +229,152 @@ body {
   padding-left: 0.65rem !important;
   padding-right: 0.65rem !important;
   gap: 0 !important;
+}
+
+/* ==========================================================================
+   VIEW / DRAWER / FULLSCREEN ANIMATIONS — owned by motion (see
+   src/renderer/src/components/motion.tsx: drawerSlide, lyricsMax, viewModeSlide).
+   View-mode direction slide 0.26s ease-out, exit 0.18s ease-out.
+   ========================================================================== */
+
+/* ==========================================================================
+   TRACK CHANGE CROSSFADE (Vinyl & Lyrics) + PlayerBar slide
+   ========================================================================== */
+@keyframes trackCrossfade {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-track-crossfade {
+  animation: trackCrossfade 0.32s ease-out forwards;
+}
+@keyframes playerTrackIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-player-track-in {
+  animation: playerTrackIn 0.28s ease-out forwards;
+}
+@keyframes playerTrackOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+.animate-player-track-out {
+  animation: playerTrackOut 0.15s ease-out forwards;
+}
+[data-mode='lite'] .animate-track-crossfade,
+[data-mode='lite'] .animate-player-track-in,
+[data-mode='lite'] .animate-player-track-out,
+[data-mode='core'] .animate-track-crossfade,
+[data-mode='core'] .animate-player-track-in,
+[data-mode='core'] .animate-player-track-out {
+  animation: none !important;
+}
+
+/* ==========================================================================
+   POPOVERS / MENUS / MODALS / TOASTS — owned by motion (see
+   src/renderer/src/components/motion.tsx: overlayFade, dialogScale,
+   toastSlide). lite/core instant via useMotionReduced, not CSS.
+   ========================================================================== */
+
+/* ==========================================================================
+   LIGHT MODE (html[data-theme='light'])
+   ========================================================================== */
+html[data-theme='light'] body {
+  background-color: var(--theme-60);
+  color: #0f172a;
+}
+html[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+}
+html[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-10);
+}
+html[data-theme='light'] .bg-theme-60\/40,
+html[data-theme='light'] .bg-theme-60,
+html[data-theme='light'] .bg-zinc-900,
+html[data-theme='light'] .bg-zinc-900\/80,
+html[data-theme='light'] .bg-zinc-950,
+html[data-theme='light'] .bg-zinc-950\/95,
+html[data-theme='light'] .bg-black\/40,
+html[data-theme='light'] .bg-black\/60 {
+  background-color: rgb(255 255 255 / 0.75);
+}
+html[data-theme='light'] .bg-theme-30,
+html[data-theme='light'] .bg-theme-30\/50,
+html[data-theme='light'] .bg-theme-30\/60,
+html[data-theme='light'] .bg-zinc-800,
+html[data-theme='light'] .bg-zinc-800\/80,
+html[data-theme='light'] .bg-white\/10,
+html[data-theme='light'] .bg-white\/5 {
+  background-color: rgb(226 232 240 / 0.7);
+}
+html[data-theme='light'] .text-white,
+html[data-theme='light'] .text-zinc-100,
+html[data-theme='light'] .text-zinc-200 {
+  color: #0f172a;
+}
+html[data-theme='light'] .text-zinc-300,
+html[data-theme='light'] .text-zinc-400,
+html[data-theme='light'] .text-zinc-500 {
+  color: #475569;
+}
+html[data-theme='light'] .text-white\/60,
+html[data-theme='light'] .text-white\/70,
+html[data-theme='light'] .text-white\/80,
+html[data-theme='light'] .text-white\/90 {
+  color: rgb(15 23 42 / 0.75);
+}
+html[data-theme='light'] .border-theme-30\/40,
+html[data-theme='light'] .border-zinc-700\/50,
+html[data-theme='light'] .border-zinc-700\/80,
+html[data-theme='light'] .border-zinc-800,
+html[data-theme='light'] .border-white\/10 {
+  border-color: rgb(203 213 225 / 0.9);
+}
+html[data-theme='light'] input,
+html[data-theme='light'] textarea,
+html[data-theme='light'] select {
+  background-color: rgb(255 255 255 / 0.85);
+  color: #0f172a;
+  border-color: rgb(203 213 225 / 0.9);
+}
+html[data-theme='light'] input::placeholder,
+html[data-theme='light'] textarea::placeholder {
+  color: #94a3b8;
+}
+/* Keep text white inside solid accent buttons */
+html[data-theme='light'] .bg-theme-10,
+html[data-theme='light'] .bg-red-600,
+html[data-theme='light'] .bg-emerald-600,
+html[data-theme='light'] .bg-amber-500,
+html[data-theme='light'] .bg-cyan-600 {
+  color: #fff;
+}
+html[data-theme='light'] .bg-theme-10 .text-white,
+html[data-theme='light'] .bg-red-600 .text-white,
+html[data-theme='light'] .bg-emerald-600 .text-white,
+html[data-theme='light'] .bg-amber-500 .text-white,
+html[data-theme='light'] .bg-cyan-600 .text-white {
+  color: #fff;
+}
+html[data-theme='light'] .hover\:bg-white\/10:hover {
+  background-color: rgb(15 23 42 / 0.06);
 }

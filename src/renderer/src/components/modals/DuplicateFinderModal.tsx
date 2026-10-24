@@ -14,6 +14,8 @@ import { useTranslation } from '../../locales'
 import { useLibraryStore } from '../../stores/libraryStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useUIStore } from '../../stores/uiStore'
+import { AnimatePresence, motion } from 'motion/react'
+import { overlayFade, useMotionReduced } from '../motion'
 import {
   isDsdTrack,
   formatAudioSampleRate,
@@ -83,6 +85,7 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
 
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
+  const reduceMotion = useMotionReduced()
 
   // Close on Escape key
   useEffect(() => {
@@ -221,252 +224,268 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-[860px] max-w-full max-h-[90vh] flex flex-col shadow-2xl animate-fade-in text-zinc-200">
-        {/* Header */}
-        <div className="p-5 border-b border-zinc-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-              <Copy size={20} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <span>{t('duplicateFinder.duplicateFinder')}</span>
-                <span className="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/60">
-                  {duplicateGroups.length} {t('duplicateFinder.groups')}
-                </span>
-              </h2>
-              <p className="text-xs text-zinc-400">{t('duplicateFinder.duplicateFinderDesc')}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+    <AnimatePresence>
+      {Boolean(isOpen) && (
+        <motion.div
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
+          initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+          animate={overlayFade.animate}
+          exit={overlayFade.exit}
+          transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+        >
+          <motion.div
+            className="bg-zinc-900 border border-zinc-800 rounded-2xl w-[860px] max-w-full max-h-[90vh] flex flex-col shadow-2xl text-zinc-200"
+            initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+            animate={overlayFade.animate}
+            exit={overlayFade.exit}
+            transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
           >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Toolbar */}
-        <div className="px-5 py-3 bg-zinc-950/60 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSelectLowerQuality}
-              disabled={duplicateGroups.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition cursor-pointer disabled:opacity-40"
-            >
-              <Sparkles size={14} />
-              <span>
-                {t('duplicateFinder.keepHighestQuality') || 'Select Lower Quality Duplicates'}
-              </span>
-            </button>
-
-            {selectedPaths.size > 0 && (
-              <button
-                onClick={handleClearSelection}
-                className="px-2.5 py-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
-              >
-                {t('batchActions.clearSelection') || 'Clear'}
-              </button>
-            )}
-          </div>
-
-          <div className="text-zinc-400 font-medium">
-            {selectedPaths.size > 0 ? (
-              <span className="text-amber-400 font-bold">
-                {selectedPaths.size} {t('batchActions.selectedCount')}
-              </span>
-            ) : (
-              <span>
-                {duplicateGroups.reduce((acc, g) => acc + g.tracks.length, 0)}{' '}
-                {t('duplicateFinder.totalDuplicates')}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Body / Groups List */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {duplicateGroups.length === 0 ? (
-            <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-3">
-              <CheckCircle2 size={44} className="text-emerald-400 opacity-80" />
-              <p className="text-sm font-semibold text-white">
-                {t('duplicateFinder.noDuplicatesFound')}
-              </p>
-              <p className="text-xs text-zinc-500 max-w-sm">
-                {t('duplicateFinder.noDuplicatesDesc')}
-              </p>
-            </div>
-          ) : (
-            duplicateGroups.map((group) => (
-              <div
-                key={group.id}
-                className="bg-zinc-950/70 border border-zinc-800 rounded-xl overflow-hidden shadow-sm"
-              >
-                {/* Group Title */}
-                <div className="px-4 py-2.5 bg-zinc-900/60 border-b border-zinc-800/60 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xs font-bold text-white">{group.title}</h3>
-                    <p className="text-[11px] text-zinc-400">{group.artist}</p>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/50">
-                    {group.tracks.length} {t('duplicateFinder.copies')}
-                  </span>
+            {/* Header */}
+            <div className="p-5 border-b border-zinc-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Copy size={20} />
                 </div>
-
-                {/* Group Tracks */}
-                <div className="divide-y divide-zinc-800/40 text-xs">
-                  {group.tracks.map((track, idx) => {
-                    // Ưu tiên id (giữ hậu tố #track-N của CUE Sheet) khớp với handleToggleTrack/handleSelectLowerQuality
-                    const path = track.id || track.filePath || ''
-                    const isSelected = selectedPaths.has(path)
-                    const isHighest = idx === 0
-                    const fmtDisplay = getTrackFormatDisplay(track)
-
-                    return (
-                      <div
-                        key={path || idx}
-                        className={`px-4 py-2.5 flex items-center justify-between gap-3 transition ${
-                          isSelected
-                            ? 'bg-amber-500/10'
-                            : isHighest
-                              ? 'bg-zinc-900/30'
-                              : 'hover:bg-zinc-900/40'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          {/* Checkbox */}
-                          <button
-                            onClick={() => handleToggleTrack(path)}
-                            className="text-zinc-400 hover:text-white cursor-pointer shrink-0"
-                          >
-                            {isSelected ? (
-                              <CheckSquare size={16} className="text-amber-400 fill-amber-400/20" />
-                            ) : (
-                              <Square size={16} className="text-zinc-600 hover:text-zinc-400" />
-                            )}
-                          </button>
-
-                          {/* Highest Quality Badge */}
-                          {isHighest ? (
-                            <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
-                              {t('duplicateFinder.highestQuality')}
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700/50 text-[10px] shrink-0 font-mono">
-                              {t('duplicateFinder.duplicateNum', { idx })}
-                            </span>
-                          )}
-
-                          {/* Format Badge */}
-                          <span
-                            className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] uppercase shrink-0 border ${
-                              fmtDisplay.isDsd
-                                ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                                : fmtDisplay.isHiRes
-                                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                                  : fmtDisplay.isLossless
-                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                                    : 'bg-zinc-800 text-zinc-400 border-zinc-700/50'
-                            }`}
-                          >
-                            {fmtDisplay.badgeLabel}
-                          </span>
-
-                          {/* Track Details */}
-                          <div className="min-w-0 flex-1 text-zinc-400 text-[11px] truncate flex items-center gap-2">
-                            {track.sampleRate && (
-                              <span className="font-mono">
-                                {formatAudioSampleRate(track.sampleRate)}
-                              </span>
-                            )}
-                            {track.bitDepth && !fmtDisplay.isDsd && (
-                              <span className="font-mono">{track.bitDepth}-bit</span>
-                            )}
-                            {track.bitrate && !fmtDisplay.isLossless && (
-                              <span className="font-mono">{formatBitrate(track.bitrate)}</span>
-                            )}
-                            {track.duration && (
-                              <span className="tabular-nums">
-                                ({formatDuration(track.duration)})
-                              </span>
-                            )}
-                            {track.fileSize && (
-                              <span className="text-zinc-500">
-                                [{formatFileSize(track.fileSize)}]
-                              </span>
-                            )}
-                            <span
-                              className="text-zinc-500 truncate text-[10px] font-mono"
-                              title={track.filePath}
-                            >
-                              {track.filePath}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Play preview button */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {window.api?.showInFolder && track.filePath && (
-                            <button
-                              onClick={() => window.api.showInFolder(track.filePath)}
-                              title={t('duplicateFinder.showInFolder')}
-                              className="p-1 rounded text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-                            >
-                              <FolderOpen size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handlePlay(track)}
-                            title={t('duplicateFinder.playTrack')}
-                            className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
-                          >
-                            <Play size={12} className="fill-current" />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>{t('duplicateFinder.duplicateFinder')}</span>
+                    <span className="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/60">
+                      {duplicateGroups.length} {t('duplicateFinder.groups')}
+                    </span>
+                  </h2>
                 </div>
               </div>
-            ))
-          )}
-        </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-950/40">
-          <div className="text-xs text-zinc-500">
-            {selectedPaths.size > 0 && (
-              <span>
-                {selectedPaths.size} {t('common.files')} {t('duplicateFinder.moveToTrash')}
-              </span>
-            )}
-          </div>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
-            >
-              {t('common.close')}
-            </button>
-            <button
-              onClick={handleDeleteSelected}
-              disabled={selectedPaths.size === 0 || isDeleting}
-              className="flex items-center gap-1.5 px-5 py-2 text-xs font-semibold rounded-lg bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Trash2 size={13} />
-              <span>
-                {t('duplicateFinder.deleteDuplicates') || 'Move Selected Duplicates to Trash'}
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+            {/* Toolbar */}
+            <div className="px-5 py-3 bg-zinc-950/60 border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSelectLowerQuality}
+                  disabled={duplicateGroups.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition cursor-pointer disabled:opacity-40"
+                >
+                  <Sparkles size={14} />
+                  <span>
+                    {t('duplicateFinder.keepHighestQuality') || 'Select Lower Quality Duplicates'}
+                  </span>
+                </button>
+
+                {selectedPaths.size > 0 && (
+                  <button
+                    onClick={handleClearSelection}
+                    className="px-2.5 py-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+                  >
+                    {t('batchActions.clearSelection') || 'Clear'}
+                  </button>
+                )}
+              </div>
+
+              <div className="text-zinc-400 font-medium">
+                {selectedPaths.size > 0 ? (
+                  <span className="text-amber-400 font-bold">
+                    {selectedPaths.size} {t('batchActions.selectedCount')}
+                  </span>
+                ) : (
+                  <span>
+                    {duplicateGroups.reduce((acc, g) => acc + g.tracks.length, 0)}{' '}
+                    {t('duplicateFinder.totalDuplicates')}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Body / Groups List */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {duplicateGroups.length === 0 ? (
+                <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-3">
+                  <CheckCircle2 size={44} className="text-emerald-400 opacity-80" />
+                  <p className="text-sm font-semibold text-white">
+                    {t('duplicateFinder.noDuplicatesFound')}
+                  </p>
+                  <p className="text-xs text-zinc-500 max-w-sm">
+                    {t('duplicateFinder.noDuplicatesDesc')}
+                  </p>
+                </div>
+              ) : (
+                duplicateGroups.map((group) => (
+                  <div
+                    key={group.id}
+                    className="bg-zinc-950/70 border border-zinc-800 rounded-xl overflow-hidden shadow-sm"
+                  >
+                    {/* Group Title */}
+                    <div className="px-4 py-2.5 bg-zinc-900/60 border-b border-zinc-800/60 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xs font-bold text-white">{group.title}</h3>
+                        <p className="text-[11px] text-zinc-400">{group.artist}</p>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/50">
+                        {group.tracks.length} {t('duplicateFinder.copies')}
+                      </span>
+                    </div>
+
+                    {/* Group Tracks */}
+                    <div className="divide-y divide-zinc-800/40 text-xs">
+                      {group.tracks.map((track, idx) => {
+                        // Ưu tiên id (giữ hậu tố #track-N của CUE Sheet) khớp với handleToggleTrack/handleSelectLowerQuality
+                        const path = track.id || track.filePath || ''
+                        const isSelected = selectedPaths.has(path)
+                        const isHighest = idx === 0
+                        const fmtDisplay = getTrackFormatDisplay(track)
+
+                        return (
+                          <div
+                            key={path || idx}
+                            className={`px-4 py-2.5 flex items-center justify-between gap-3 transition ${
+                              isSelected
+                                ? 'bg-amber-500/10'
+                                : isHighest
+                                  ? 'bg-zinc-900/30'
+                                  : 'hover:bg-zinc-900/40'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              {/* Checkbox */}
+                              <button
+                                onClick={() => handleToggleTrack(path)}
+                                className="text-zinc-400 hover:text-white cursor-pointer shrink-0"
+                              >
+                                {isSelected ? (
+                                  <CheckSquare
+                                    size={16}
+                                    className="text-amber-400 fill-amber-400/20"
+                                  />
+                                ) : (
+                                  <Square size={16} className="text-zinc-600 hover:text-zinc-400" />
+                                )}
+                              </button>
+
+                              {/* Highest Quality Badge */}
+                              {isHighest ? (
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
+                                  {t('duplicateFinder.highestQuality')}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-700/50 text-[10px] shrink-0 font-mono">
+                                  {t('duplicateFinder.duplicateNum', { idx })}
+                                </span>
+                              )}
+
+                              {/* Format Badge */}
+                              <span
+                                className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] uppercase shrink-0 border ${
+                                  fmtDisplay.isDsd
+                                    ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                                    : fmtDisplay.isHiRes
+                                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                      : fmtDisplay.isLossless
+                                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                        : 'bg-zinc-800 text-zinc-400 border-zinc-700/50'
+                                }`}
+                              >
+                                {fmtDisplay.badgeLabel}
+                              </span>
+
+                              {/* Track Details */}
+                              <div className="min-w-0 flex-1 text-zinc-400 text-[11px] truncate flex items-center gap-2">
+                                {track.sampleRate && (
+                                  <span className="font-mono">
+                                    {formatAudioSampleRate(track.sampleRate)}
+                                  </span>
+                                )}
+                                {track.bitDepth && !fmtDisplay.isDsd && (
+                                  <span className="font-mono">{track.bitDepth}-bit</span>
+                                )}
+                                {track.bitrate && !fmtDisplay.isLossless && (
+                                  <span className="font-mono">{formatBitrate(track.bitrate)}</span>
+                                )}
+                                {track.duration && (
+                                  <span className="tabular-nums">
+                                    ({formatDuration(track.duration)})
+                                  </span>
+                                )}
+                                {track.fileSize && (
+                                  <span className="text-zinc-500">
+                                    [{formatFileSize(track.fileSize)}]
+                                  </span>
+                                )}
+                                <span
+                                  className="text-zinc-500 truncate text-[10px] font-mono"
+                                  title={track.filePath}
+                                >
+                                  {track.filePath}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Play preview button */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {window.api?.showInFolder && track.filePath && (
+                                <button
+                                  onClick={() => window.api.showInFolder(track.filePath)}
+                                  title={t('duplicateFinder.showInFolder')}
+                                  className="p-1 rounded text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
+                                >
+                                  <FolderOpen size={14} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handlePlay(track)}
+                                title={t('duplicateFinder.playTrack')}
+                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
+                              >
+                                <Play size={12} className="fill-current" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-950/40">
+              <div className="text-xs text-zinc-500">
+                {selectedPaths.size > 0 && (
+                  <span>
+                    {selectedPaths.size} {t('common.files')} {t('duplicateFinder.moveToTrash')}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                >
+                  {t('common.close')}
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  disabled={selectedPaths.size === 0 || isDeleting}
+                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-semibold rounded-lg bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Trash2 size={13} />
+                  <span>
+                    {t('duplicateFinder.deleteDuplicates') || 'Move Selected Duplicates to Trash'}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

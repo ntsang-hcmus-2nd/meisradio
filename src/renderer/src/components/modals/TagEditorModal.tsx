@@ -1,18 +1,10 @@
-import React, { useMemo, useEffect } from 'react'
-import {
-  Image as ImageIcon,
-  Music,
-  Disc,
-  Layers,
-  Calendar,
-  Hash,
-  FileText,
-  Info
-} from 'lucide-react'
+import React, { useMemo, useEffect, useCallback } from 'react'
+import { motion } from 'motion/react'
+import { Image as ImageIcon, Music, Disc, Layers, Calendar, Hash, FileText } from 'lucide-react'
 import { useTranslation } from '../../locales'
 import { splitArtistString } from '../../utils/textUtils'
 import { formatImageSource } from '../../utils/urlUtils'
-import { isDsdTrack } from '../../utils/formatUtils'
+import { overlayFade, useMotionReduced } from '../motion'
 
 export interface TagEditorModalProps {
   track: any
@@ -45,17 +37,23 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
   onClose
 }) => {
   const { t } = useTranslation()
+  const reduceMotion = useMotionReduced()
+
+  // AnimatePresence phát exit khi parent gỡ mount, gọi onClose ngay không chờ timer
+  const handleClose = useCallback(() => {
+    onClose()
+  }, [onClose])
 
   // Close on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose()
+        handleClose()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [handleClose])
 
   // Call all hooks unconditionally before any early returns (Rules of Hooks)
   const detectedArtists = useMemo(() => {
@@ -64,57 +62,32 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
 
   if (!track) return null
 
-  const isDsd = isDsdTrack(track)
-  const pathLower = (track.filePath || track.id || '').toLowerCase()
-  const fmt = (track.format || '').toUpperCase()
-
-  const isFlac = pathLower.endsWith('.flac') || fmt === 'FLAC'
-  const isMp3 = pathLower.endsWith('.mp3') || fmt === 'MP3'
-  const isM4a =
-    pathLower.endsWith('.m4a') || pathLower.endsWith('.aac') || fmt === 'M4A' || fmt === 'AAC'
-  const isWav = pathLower.endsWith('.wav') || fmt === 'WAV'
-  const isOgg = pathLower.endsWith('.ogg') || fmt === 'OGG'
-  const isOpus = pathLower.endsWith('.opus') || fmt === 'OPUS'
-
-  // Determine display badge label for audio container/format
-  const getFormatBadge = () => {
-    if (isDsd) return t('modals.tagEditor.dsdTag') || 'DSD (ID3v2)'
-    if (isFlac) return t('modals.tagEditor.flacTag') || 'FLAC Vorbis Tag'
-    if (isMp3) return t('modals.tagEditor.mp3Tag') || 'MP3 ID3v2 Tag'
-    if (isM4a) return 'M4A / AAC (MP4)'
-    if (isWav) return 'WAV (INFO/ID3)'
-    if (isOgg) return 'OGG Vorbis Tag'
-    if (isOpus) return 'OPUS Vorbis Tag'
-    return t('modals.tagEditor.audioTag') || 'Audio Tag'
-  }
-
   return (
-    <div
+    <motion.div
       className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+      animate={overlayFade.animate}
+      exit={overlayFade.exit}
+      transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          onClose()
+          handleClose()
         }
       }}
     >
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-[700px] max-w-full max-h-[92vh] flex flex-col shadow-2xl animate-fade-in">
+      <motion.div
+        className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-[700px] max-w-full max-h-[92vh] flex flex-col shadow-2xl"
+        initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+        animate={overlayFade.animate}
+        exit={overlayFade.exit}
+        transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-2.5">
             <Music className="text-theme-10" size={20} />
             <h2 className="text-lg font-bold text-white">{t('modals.tagEditor.title')}</h2>
           </div>
-          <span
-            className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full border ${
-              isDsd
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                : isFlac
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                  : 'bg-theme-10/10 text-theme-10 border-theme-10/20'
-            }`}
-          >
-            {getFormatBadge()}
-          </span>
         </div>
 
         {/* Scrollable Form Body */}
@@ -326,16 +299,11 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
         </div>
 
         {/* Footer & Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-zinc-800 shrink-0">
-          <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-            <Info size={13} className="text-theme-10 shrink-0" />
-            <span>{t('modals.tagEditor.dsdTagSupportNotice')}</span>
-          </div>
-
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-3 mt-4 pt-4 border-t border-zinc-800 shrink-0">
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
             >
               {t('common.cancel')}
@@ -349,7 +317,7 @@ export const TagEditorModal: React.FC<TagEditorModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

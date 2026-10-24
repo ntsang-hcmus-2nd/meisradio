@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Radio, X, Loader2 } from 'lucide-react'
 import { useTranslation } from '../locales'
 import { usePlayerStore } from '../stores'
+import { AnimatePresence, motion } from 'motion/react'
+import { overlayFade, useMotionReduced } from './motion'
 import { AudioSignalPath } from './AudioSignalPath'
 import { formatAudioSource } from '../utils/urlUtils'
 import { isDsdTrack, formatAudioSampleRate, getDsdRateLabel } from '../utils/formatUtils'
@@ -109,6 +111,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
     const [detectedBitDepth, setDetectedBitDepth] = useState<number | undefined>(
       currentTrack?.bitDepth
     )
+    const reduceMotion = useMotionReduced()
 
     const activeSampleRate = detectedSampleRate || currentTrack?.sampleRate || 44100
     // Dải tần số cực đại theo định lý Nyquist là Sample Rate / 2 (ví dụ 96kHz -> 48kHz, 48kHz -> 24kHz)
@@ -418,8 +421,6 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
       language
     ])
 
-    if (!isOpen) return null
-
     const formatTime = (secs: number) => {
       if (!secs || isNaN(secs)) return '0:00'
       const m = Math.floor(secs / 60)
@@ -483,158 +484,178 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
     })
 
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-fade-in">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl h-[88vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
-          {/* MODAL HEADER */}
-          <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-theme-10/10 text-theme-10 rounded-xl">
-                <Radio size={22} />
-              </div>
-              <div>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-6"
+            initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+            animate={overlayFade.animate}
+            exit={overlayFade.exit}
+            transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+          >
+            <motion.div
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl h-[88vh] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden"
+              initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+              animate={overlayFade.animate}
+              exit={overlayFade.exit}
+              transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+            >
+              {/* MODAL HEADER */}
+              <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70 shrink-0">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-lg font-bold text-white">{t('modals.spectrogram.title')}</h2>
-                  {currentTrack &&
-                    (() => {
-                      const isDsd = isDsdTrack(currentTrack)
-                      return (
-                        <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
-                          <span
-                            className={`font-bold uppercase ${isDsd ? 'text-amber-400' : 'text-theme-10'}`}
-                          >
-                            {isDsd
-                              ? getDsdRateLabel(currentTrack.sampleRate || activeSampleRate)
-                              : currentTrack.lossless
-                                ? 'Lossless'
-                                : currentTrack.format || 'MP3'}
-                          </span>
-                          {(isDsd || detectedBitDepth || currentTrack.bitDepth) && (
-                            <span className="text-blue-400 font-bold">
-                              {isDsd ? '1-BIT' : `${detectedBitDepth || currentTrack.bitDepth}-BIT`}
-                            </span>
-                          )}
-                          <span className="text-zinc-400">
-                            {formatAudioSampleRate(activeSampleRate)}
-                          </span>
-                        </div>
-                      )
-                    })()}
+                  <div className="p-2.5 bg-theme-10/10 text-theme-10 rounded-xl">
+                    <Radio size={22} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg font-bold text-white">
+                        {t('modals.spectrogram.title')}
+                      </h2>
+                      {currentTrack &&
+                        (() => {
+                          const isDsd = isDsdTrack(currentTrack)
+                          return (
+                            <div className="inline-flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-md text-xs font-mono">
+                              <span
+                                className={`font-bold uppercase ${isDsd ? 'text-amber-400' : 'text-theme-10'}`}
+                              >
+                                {isDsd
+                                  ? getDsdRateLabel(currentTrack.sampleRate || activeSampleRate)
+                                  : currentTrack.lossless
+                                    ? 'Lossless'
+                                    : currentTrack.format || 'MP3'}
+                              </span>
+                              {(isDsd || detectedBitDepth || currentTrack.bitDepth) && (
+                                <span className="text-blue-400 font-bold">
+                                  {isDsd
+                                    ? '1-BIT'
+                                    : `${detectedBitDepth || currentTrack.bitDepth}-BIT`}
+                                </span>
+                              )}
+                              <span className="text-zinc-400">
+                                {formatAudioSampleRate(activeSampleRate)}
+                              </span>
+                            </div>
+                          )
+                        })()}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
+                      {currentTrack
+                        ? `${currentTrack.title} — ${currentTrack.artist}`
+                        : t('modals.spectrogram.noTrack')}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
-                  {currentTrack
-                    ? `${currentTrack.title} — ${currentTrack.artist}`
-                    : t('modals.spectrogram.noTrack')}
-                </p>
-              </div>
-            </div>
 
-            <button
-              onClick={handleModalClose}
-              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
-              title={t('modals.spectrogram.closeWindow')}
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* SPECTROGRAM DISPLAY AREA */}
-          <div className="flex-1 min-h-[220px] relative flex bg-black overflow-hidden select-none">
-            {/* Y-AXIS FREQUENCY LABELS (0Hz to Sample Rate) */}
-            <div className="w-18 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[11px] text-zinc-400 font-mono text-center z-10 shrink-0">
-              {yTicks.map((label, idx) => (
-                <span key={idx} className={idx === 0 ? 'text-theme-10 font-bold' : ''}>
-                  {label}
-                </span>
-              ))}
-            </div>
-
-            {/* MAIN INTERACTIVE SPECTROGRAM CANVAS CONTAINER */}
-            <div
-              className="flex-1 relative h-full cursor-crosshair overflow-hidden group"
-              onClick={handleCanvasClick}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={() => setHoverInfo(null)}
-            >
-              <canvas ref={canvasRef} className="w-full h-full block bg-[#0a0a18]" />
-
-              {/* LOADING SPINNER */}
-              {loading && (
-                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
-                  <Loader2 size={36} className="text-theme-10 animate-spin" />
-                  <span className="text-zinc-300 text-sm font-medium">
-                    {t('modals.spectrogram.generating')}
-                  </span>
-                </div>
-              )}
-
-              {/* ERROR MESSAGE */}
-              {errorMsg && (
-                <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 z-30 p-6 text-center">
-                  <span className="text-rose-400 text-sm font-semibold">
-                    {t('modals.spectrogram.errorPrefix')}
-                    {errorMsg}
-                  </span>
-                  <span className="text-zinc-500 text-xs">
-                    {t('modals.spectrogram.ensureLocalFile')}
-                  </span>
-                </div>
-              )}
-
-              {/* REAL-TIME PLAYHEAD LINE */}
-              {!loading && !errorMsg && duration > 0 && (
-                <div
-                  className="absolute top-0 bottom-0 w-[2px] bg-white shadow-[0_0_10px_#ffffff] pointer-events-none z-20 transition-all duration-75"
-                  style={{ left: `${progressPercent}%` }}
+                <button
+                  onClick={handleModalClose}
+                  className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
+                  title={t('modals.spectrogram.closeWindow')}
                 >
-                  <div className="absolute -top-1 -translate-x-1/2 bg-white text-zinc-950 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
-                    {formatTime(currentTime)}
-                  </div>
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* SPECTROGRAM DISPLAY AREA */}
+              <div className="flex-1 min-h-[220px] relative flex bg-black overflow-hidden select-none">
+                {/* Y-AXIS FREQUENCY LABELS (0Hz to Sample Rate) */}
+                <div className="w-18 bg-zinc-950/90 border-r border-zinc-800 flex flex-col justify-between py-2 text-[11px] text-zinc-400 font-mono text-center z-10 shrink-0">
+                  {yTicks.map((label, idx) => (
+                    <span key={idx} className={idx === 0 ? 'text-theme-10 font-bold' : ''}>
+                      {label}
+                    </span>
+                  ))}
                 </div>
-              )}
 
-              {/* HOVER TOOLTIP & CROSSHAIR */}
-              {hoverInfo && !loading && (
-                <>
-                  <div
-                    className="absolute top-0 bottom-0 w-[1px] bg-white/30 pointer-events-none z-10"
-                    style={{ left: `${hoverInfo.x}px` }}
-                  />
-                  <div
-                    className="absolute left-0 right-0 h-[1px] bg-white/30 pointer-events-none z-10"
-                    style={{ top: `${hoverInfo.y}px` }}
-                  />
-                  <div
-                    className="absolute bg-zinc-900/90 text-white border border-zinc-700 text-[11px] font-mono px-2 py-1 rounded pointer-events-none z-30 shadow-lg"
-                    style={{
-                      left: Math.min(hoverInfo.x + 12, 750),
-                      top: Math.max(hoverInfo.y - 30, 10)
-                    }}
-                  >
-                    ⏱ {hoverInfo.time} | ⚡ {hoverInfo.freq}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+                {/* MAIN INTERACTIVE SPECTROGRAM CANVAS CONTAINER */}
+                <div
+                  className="flex-1 relative h-full cursor-crosshair overflow-hidden group"
+                  onClick={handleCanvasClick}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={() => setHoverInfo(null)}
+                >
+                  <canvas ref={canvasRef} className="w-full h-full block bg-[#0a0a18]" />
 
-          {/* X-AXIS TIME SCALE */}
-          <div className="h-6 bg-zinc-950 border-t border-zinc-800/80 flex items-center justify-between px-16 text-[10px] text-zinc-500 font-mono shrink-0">
-            <span>0:00</span>
-            <span>{formatTime(duration * 0.25)}</span>
-            <span>{formatTime(duration * 0.5)}</span>
-            <span>{formatTime(duration * 0.75)}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
+                  {/* LOADING SPINNER */}
+                  {loading && (
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
+                      <Loader2 size={36} className="text-theme-10 animate-spin" />
+                      <span className="text-zinc-300 text-sm font-medium">
+                        {t('modals.spectrogram.generating')}
+                      </span>
+                    </div>
+                  )}
 
-          {/* AUDIO SIGNAL FLOW (PIPELINE) */}
-          <AudioSignalPath
-            currentTrack={currentTrack}
-            activeSampleRate={activeSampleRate}
-            detectedBitDepth={detectedBitDepth}
-            isPlaying={isPlaying}
-          />
-        </div>
-      </div>
+                  {/* ERROR MESSAGE */}
+                  {errorMsg && (
+                    <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 z-30 p-6 text-center">
+                      <span className="text-rose-400 text-sm font-semibold">
+                        {t('modals.spectrogram.errorPrefix')}
+                        {errorMsg}
+                      </span>
+                      <span className="text-zinc-500 text-xs">
+                        {t('modals.spectrogram.ensureLocalFile')}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* REAL-TIME PLAYHEAD LINE */}
+                  {!loading && !errorMsg && duration > 0 && (
+                    <div
+                      className="absolute top-0 bottom-0 w-[2px] bg-white shadow-[0_0_10px_#ffffff] pointer-events-none z-20 transition-all duration-75"
+                      style={{ left: `${progressPercent}%` }}
+                    >
+                      <div className="absolute -top-1 -translate-x-1/2 bg-white text-zinc-950 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+                        {formatTime(currentTime)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* HOVER TOOLTIP & CROSSHAIR */}
+                  {hoverInfo && !loading && (
+                    <>
+                      <div
+                        className="absolute top-0 bottom-0 w-[1px] bg-white/30 pointer-events-none z-10"
+                        style={{ left: `${hoverInfo.x}px` }}
+                      />
+                      <div
+                        className="absolute left-0 right-0 h-[1px] bg-white/30 pointer-events-none z-10"
+                        style={{ top: `${hoverInfo.y}px` }}
+                      />
+                      <div
+                        className="absolute bg-zinc-900/90 text-white border border-zinc-700 text-[11px] font-mono px-2 py-1 rounded pointer-events-none z-30 shadow-lg"
+                        style={{
+                          left: Math.min(hoverInfo.x + 12, 750),
+                          top: Math.max(hoverInfo.y - 30, 10)
+                        }}
+                      >
+                        ⏱ {hoverInfo.time} | ⚡ {hoverInfo.freq}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* X-AXIS TIME SCALE */}
+              <div className="h-6 bg-zinc-950 border-t border-zinc-800/80 flex items-center justify-between px-16 text-[10px] text-zinc-500 font-mono shrink-0">
+                <span>0:00</span>
+                <span>{formatTime(duration * 0.25)}</span>
+                <span>{formatTime(duration * 0.5)}</span>
+                <span>{formatTime(duration * 0.75)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+
+              {/* AUDIO SIGNAL FLOW (PIPELINE) */}
+              <AudioSignalPath
+                currentTrack={currentTrack}
+                activeSampleRate={activeSampleRate}
+                detectedBitDepth={detectedBitDepth}
+                isPlaying={isPlaying}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     )
   }
 )

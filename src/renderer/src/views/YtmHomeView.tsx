@@ -78,9 +78,6 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
                   </div>
                 )}
                 <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-2">
-                    {t('home.ytmPlaylist')}
-                  </p>
                   <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-3 truncate">
                     {activeAlbum.title}
                   </h2>
@@ -160,7 +157,6 @@ export const YtmHomeView: React.FC<YtmHomeViewProps> = ({
                 <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                   {t('home.ytmTitle')}
                 </h2>
-                <p className="text-xs text-zinc-400">{t('home.ytmSubtitle')}</p>
               </div>
             </div>
 

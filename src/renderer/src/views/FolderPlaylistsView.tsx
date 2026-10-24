@@ -1,4 +1,5 @@
 import React from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import { Plus, Sparkles, ArrowLeft, Play, Shuffle, Upload, FolderPlus } from 'lucide-react'
 import { DynamicCoverArt } from '../components/DynamicCoverArt'
 import { TrackTable } from '../components/TrackTable'
@@ -11,6 +12,11 @@ import {
 import { fisherYatesShuffle } from '../utils/arrayUtils'
 import { useTranslation } from '../locales'
 import { useUIStore, useSettingsStore } from '../stores'
+import {
+  useMotionReduced,
+  viewModeSlideTransition,
+  viewModeSlideVariants
+} from '../components/motion'
 
 export interface FolderPlaylistsViewProps {
   searchQuery: string
@@ -73,7 +79,10 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
 }) => {
   const { t, language } = useTranslation()
   const viewMode = useUIStore((state) => state.viewMode)
+  const viewModeDirection = useUIStore((state) => state.viewModeDirection)
   const isLite = useSettingsStore((state) => state.appMode === 'lite' || state.appMode === 'core')
+  const reduceMotion = useMotionReduced()
+  const noAnim = reduceMotion || isLite
 
   if (activePlaylist) {
     return (
@@ -102,9 +111,6 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
                 />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">
-                  Playlist
-                </p>
                 <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">
                   {activePlaylist.name}
                 </h2>
@@ -225,63 +231,75 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
                 </h3>
               )}
 
-              {viewMode === 'table' ? (
-                <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
-                  <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                    <div className="col-span-1 text-center">#</div>
-                    <div className="col-span-7">{t('playlistsView.title')}</div>
-                    <div className="col-span-2 text-center">{t('common.songs')}</div>
-                    <div className="col-span-2 text-right">{t('trackTable.actions')}</div>
-                  </div>
-                  <div className="divide-y divide-theme-30/20">
-                    {visiblePlaylists.map((pl, idx) => (
-                      <PlaylistItemRow
-                        key={pl.name}
-                        pl={pl}
-                        idx={idx}
-                        isLite={isLite}
-                        onOpen={handleOpenPlaylist}
-                        onPlay={handlePlayPlaylistTracks}
-                        onContextMenu={handlePlaylistContextMenu}
-                        onChangeImage={handleChangePlaylistImage}
-                        onRename={handleOpenPlaylistRename}
-                        t={t}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : viewMode === 'compact' ? (
-                <div className="w-full space-y-1.5">
-                  {visiblePlaylists.map((pl, idx) => (
-                    <PlaylistItemCompact
-                      key={pl.name}
-                      pl={pl}
-                      idx={idx}
-                      isLite={isLite}
-                      onOpen={handleOpenPlaylist}
-                      onPlay={handlePlayPlaylistTracks}
-                      onContextMenu={handlePlaylistContextMenu}
-                      t={t}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
-                  {visiblePlaylists.map((pl) => (
-                    <PlaylistItemCard
-                      key={pl.name}
-                      pl={pl}
-                      isLite={isLite}
-                      onOpen={handleOpenPlaylist}
-                      onContextMenu={handlePlaylistContextMenu}
-                      onChangeImage={handleChangePlaylistImage}
-                      onExtractImage={handleExtractPlaylistImage}
-                      onRename={handleOpenPlaylistRename}
-                      t={t}
-                    />
-                  ))}
-                </div>
-              )}
+              <AnimatePresence mode="wait" initial={false} custom={viewModeDirection}>
+                <motion.div
+                  key={viewMode}
+                  custom={viewModeDirection}
+                  variants={viewModeSlideVariants}
+                  initial={noAnim ? { opacity: 1, x: 0 } : 'initial'}
+                  animate={noAnim ? { opacity: 1, x: 0 } : 'animate'}
+                  exit={noAnim ? { opacity: 1, x: 0 } : 'exit'}
+                  transition={noAnim ? { duration: 0 } : viewModeSlideTransition}
+                >
+                  {viewMode === 'table' ? (
+                    <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
+                      <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                        <div className="col-span-1 text-center">#</div>
+                        <div className="col-span-7">{t('playlistsView.title')}</div>
+                        <div className="col-span-2 text-center">{t('common.songs')}</div>
+                        <div className="col-span-2 text-right">{t('trackTable.actions')}</div>
+                      </div>
+                      <div className="divide-y divide-theme-30/20">
+                        {visiblePlaylists.map((pl, idx) => (
+                          <PlaylistItemRow
+                            key={pl.name}
+                            pl={pl}
+                            idx={idx}
+                            isLite={isLite}
+                            onOpen={handleOpenPlaylist}
+                            onPlay={handlePlayPlaylistTracks}
+                            onContextMenu={handlePlaylistContextMenu}
+                            onChangeImage={handleChangePlaylistImage}
+                            onRename={handleOpenPlaylistRename}
+                            t={t}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : viewMode === 'compact' ? (
+                    <div className="w-full space-y-1.5">
+                      {visiblePlaylists.map((pl, idx) => (
+                        <PlaylistItemCompact
+                          key={pl.name}
+                          pl={pl}
+                          idx={idx}
+                          isLite={isLite}
+                          onOpen={handleOpenPlaylist}
+                          onPlay={handlePlayPlaylistTracks}
+                          onContextMenu={handlePlaylistContextMenu}
+                          t={t}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+                      {visiblePlaylists.map((pl) => (
+                        <PlaylistItemCard
+                          key={pl.name}
+                          pl={pl}
+                          isLite={isLite}
+                          onOpen={handleOpenPlaylist}
+                          onContextMenu={handlePlaylistContextMenu}
+                          onChangeImage={handleChangePlaylistImage}
+                          onExtractImage={handleExtractPlaylistImage}
+                          onRename={handleOpenPlaylistRename}
+                          t={t}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
 
               {/* Sentinel tải lũy tiến (Progressive batching) */}
               {visiblePlaylists.length < matchedPlaylists.length && (

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue } from 'react'
-import { ArrowLeft, Search, X, LayoutGrid, Rows3, List, Sparkles, Cloud } from 'lucide-react'
+import { ArrowLeft, Search, X, Sparkles, Cloud } from 'lucide-react'
 
 // Modals & Panels (Lazy loaded for optimized bundle size & fast startup)
 const PlaylistRenameModal = React.lazy(() =>
@@ -82,6 +82,10 @@ import { QueuePanel } from './components/QueuePanel'
 import { SideLyricsPanel } from './components/SideLyricsPanel'
 import { FullscreenLyrics } from './components/FullscreenLyrics'
 import { PlayerBar } from './components/PlayerBar'
+import { GlobalTooltip } from './components/GlobalTooltip'
+import { ViewModeSlider } from './components/ViewModeSlider'
+import { AnimatePresence, motion } from 'motion/react'
+import { toastSlide, useMotionReduced, viewFade } from './components/motion'
 
 // Custom Hooks
 import {
@@ -280,6 +284,12 @@ export default function App() {
     setGaplessEnabled,
     waveformSeekbarEnabled,
     setWaveformSeekbarEnabled,
+    colorScheme,
+    setColorScheme,
+    sidebarBgEnabled,
+    setSidebarBgEnabled,
+    sidebarBgOpacity,
+    setSidebarBgOpacity,
     setDiscordRpcEnabled,
     setDiscordClientId,
     setDiscordShowDetails,
@@ -310,6 +320,8 @@ export default function App() {
   const [showSmartPlaylists, setShowSmartPlaylists] = useState(false)
   const [isConfigLoaded, setIsConfigLoaded] = useState(false)
   const [updaterStatus, setUpdaterStatus] = useState<any>(null)
+
+  const reduceMotion = useMotionReduced()
 
   // 2. HEADLESS HOOKS
   const audioEngine = useAudioEngine()
@@ -805,6 +817,7 @@ export default function App() {
 
       const alphabetGroups = (preAggregatedData.alphabetGroups || []).map((grp: any) => ({
         ...grp,
+        count: typeof grp.count === 'number' ? grp.count : (grp.artists || []).length,
         artists: (grp.artists || []).map((a: any) => {
           const found = artistsList.find(
             (x: any) =>
@@ -1258,6 +1271,9 @@ export default function App() {
       if (cfg.gaplessEnabled !== undefined) setGaplessEnabled(cfg.gaplessEnabled)
       if (cfg.waveformSeekbarEnabled !== undefined)
         setWaveformSeekbarEnabled(cfg.waveformSeekbarEnabled)
+      if (cfg.colorScheme !== undefined) setColorScheme(cfg.colorScheme)
+      if (cfg.sidebarBgEnabled !== undefined) setSidebarBgEnabled(cfg.sidebarBgEnabled)
+      if (cfg.sidebarBgOpacity !== undefined) setSidebarBgOpacity(cfg.sidebarBgOpacity)
       if (cfg.appMode !== undefined) setAppMode(cfg.appMode)
       else if (cfg.liteMode !== undefined) setAppMode(cfg.liteMode ? 'lite' : 'default')
       if (cfg.uiStyle !== undefined) setUiStyle(cfg.uiStyle)
@@ -1367,7 +1383,10 @@ export default function App() {
       customBgBlur,
       useTrackCoverAsBg,
       accentColorMode,
-      customAccentColor
+      customAccentColor,
+      colorScheme,
+      sidebarBgEnabled,
+      sidebarBgOpacity
     })
     // @ts-ignore
     window.api?.updateTrayConfig?.({ minimizeToTray, closeToTray })
@@ -1398,6 +1417,9 @@ export default function App() {
     useTrackCoverAsBg,
     accentColorMode,
     customAccentColor,
+    colorScheme,
+    sidebarBgEnabled,
+    sidebarBgOpacity,
     isConfigLoaded
   ])
 
@@ -1447,6 +1469,7 @@ export default function App() {
   // ==========================================
   return (
     <>
+      <GlobalTooltip />
       {!theming.isCore && (
         <div className="custom-bg-container">
           <div
@@ -1531,35 +1554,45 @@ export default function App() {
           }}
         >
           {!theming.isLite && !theming.effectiveBgImage && (
-            <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 to-zinc-950 pointer-events-none -z-10" />
+            <div
+              className={`absolute inset-0 bg-gradient-to-b pointer-events-none -z-10 ${colorScheme === 'light' ? 'from-white/60 to-slate-100/80' : 'from-zinc-950/80 to-zinc-950'}`}
+            />
           )}
 
           {/* TOAST NOTIFICATION */}
-          {toast.visible && (
-            <div
-              onClick={hideToast}
-              className="fixed top-10 right-10 z-[100] animate-fade-in flex items-center gap-3 bg-theme-60/95 backdrop-blur-md border border-zinc-700 shadow-2xl py-3 px-5 rounded-xl cursor-pointer select-none hover:bg-zinc-800/80 transition-all duration-200"
-              title={language === 'vi' ? 'Nhấn để đóng thông báo' : 'Click to dismiss'}
-            >
-              {toast.type === 'success' && (
-                <Sparkles size={18} className="text-theme-10 flex-shrink-0" />
-              )}
-              {toast.type === 'error' && <X size={18} className="text-red-400 flex-shrink-0" />}
-              {toast.type === 'info' && <Cloud size={18} className="text-blue-400 flex-shrink-0" />}
-              <span className="text-sm font-medium text-white">{toast.message}</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  hideToast()
-                }}
-                className="ml-2 text-zinc-400 hover:text-white transition p-0.5 rounded-full hover:bg-white/10"
-                title={language === 'vi' ? 'Đóng' : 'Close'}
+          <AnimatePresence>
+            {toast.visible && (
+              <motion.div
+                onClick={hideToast}
+                className="fixed top-10 right-10 z-[100] flex items-center gap-3 bg-theme-60/95 backdrop-blur-md border border-zinc-700 shadow-2xl py-3 px-5 rounded-xl cursor-pointer select-none hover:bg-zinc-800/80 transition-all duration-200"
+                title={language === 'vi' ? 'Nhấn để đóng thông báo' : 'Click to dismiss'}
+                initial={reduceMotion ? { opacity: 1, y: 0 } : toastSlide.initial}
+                animate={toastSlide.animate}
+                exit={toastSlide.exit}
+                transition={reduceMotion ? { duration: 0 } : toastSlide.transition}
               >
-                <X size={14} />
-              </button>
-            </div>
-          )}
+                {toast.type === 'success' && (
+                  <Sparkles size={18} className="text-theme-10 flex-shrink-0" />
+                )}
+                {toast.type === 'error' && <X size={18} className="text-red-400 flex-shrink-0" />}
+                {toast.type === 'info' && (
+                  <Cloud size={18} className="text-blue-400 flex-shrink-0" />
+                )}
+                <span className="text-sm font-medium text-white">{toast.message}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    hideToast()
+                  }}
+                  className="ml-2 text-zinc-400 hover:text-white transition p-0.5 rounded-full hover:bg-white/10"
+                  title={language === 'vi' ? 'Đóng' : 'Close'}
+                >
+                  <X size={14} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <DownloadProgressToast t={t} />
 
@@ -1670,26 +1703,32 @@ export default function App() {
                 onAction={handleCloudAction}
               />
 
-              {libraryOps.infoTrack && (
-                <TrackInfoModal
-                  track={libraryOps.infoTrack}
-                  onClose={() => libraryOps.setInfoTrack(null)}
-                  onEditTags={libraryOps.openTagEditor}
-                  onPlayTrack={audioEngine.handlePlayTrack}
-                />
-              )}
+              <AnimatePresence>
+                {libraryOps.infoTrack && (
+                  <TrackInfoModal
+                    key="track-info"
+                    track={libraryOps.infoTrack}
+                    onClose={() => libraryOps.setInfoTrack(null)}
+                    onEditTags={libraryOps.openTagEditor}
+                    onPlayTrack={audioEngine.handlePlayTrack}
+                  />
+                )}
+              </AnimatePresence>
 
-              {libraryOps.editingTrack && (
-                <TagEditorModal
-                  track={libraryOps.editingTrack}
-                  tags={libraryOps.editTags}
-                  imagePath={libraryOps.editImagePath}
-                  setTags={libraryOps.setEditTags}
-                  onSelectImage={libraryOps.handleSelectTagImage}
-                  onSave={libraryOps.saveTags}
-                  onClose={() => libraryOps.setEditingTrack(null)}
-                />
-              )}
+              <AnimatePresence>
+                {libraryOps.editingTrack && (
+                  <TagEditorModal
+                    key="tag-editor"
+                    track={libraryOps.editingTrack}
+                    tags={libraryOps.editTags}
+                    imagePath={libraryOps.editImagePath}
+                    setTags={libraryOps.setEditTags}
+                    onSelectImage={libraryOps.handleSelectTagImage}
+                    onSave={libraryOps.saveTags}
+                    onClose={() => libraryOps.setEditingTrack(null)}
+                  />
+                )}
+              </AnimatePresence>
 
               <PlaylistRenameModal
                 isOpen={playlistRename.isOpen}
@@ -1787,14 +1826,16 @@ export default function App() {
 
           <DragDropOverlay isDragging={isDraggingFile} />
 
-          {libraryOps.contextMenu && (
-            <ContextMenu
-              x={libraryOps.contextMenu.x}
-              y={libraryOps.contextMenu.y}
-              items={libraryOps.contextMenu.items}
-              onClose={() => libraryOps.setContextMenu(null)}
-            />
-          )}
+          <AnimatePresence>
+            {libraryOps.contextMenu && (
+              <ContextMenu
+                x={libraryOps.contextMenu.x}
+                y={libraryOps.contextMenu.y}
+                items={libraryOps.contextMenu.items}
+                onClose={() => libraryOps.setContextMenu(null)}
+              />
+            )}
+          </AnimatePresence>
 
           {/* TOP DRAGGABLE TITLE BAR */}
           <div
@@ -1824,8 +1865,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* MAIN SHELL */}
-          <div className="flex flex-1 overflow-hidden">
+          {/* MAIN SHELL (relative: offset parent for the exiting fullscreen-lyrics ghost) */}
+          <div className="flex flex-1 overflow-hidden relative">
             <Sidebar
               activeView={activeView}
               setActiveView={setActiveView}
@@ -1949,49 +1990,33 @@ export default function App() {
                   activeView === 'artists' ||
                   activeView === 'genres' ||
                   activeView === 'user-playlists') && (
-                  <div className="flex items-center bg-theme-60/50 p-1 rounded-full border border-zinc-700/50">
-                    <button
-                      onClick={() => setViewMode('table')}
-                      className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'table' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
-                      title={t('viewOptions.table')}
-                    >
-                      <Rows3 size={15} />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'grid' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
-                      title={t('viewOptions.grid')}
-                    >
-                      <LayoutGrid size={15} />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('compact')}
-                      className={`p-1.5 rounded-full transition cursor-pointer ${viewMode === 'compact' ? 'bg-theme-10 text-white' : 'text-zinc-400 hover:text-white'}`}
-                      title={t('viewOptions.compact')}
-                    >
-                      <List size={15} />
-                    </button>
-                  </div>
+                  <ViewModeSlider value={viewMode} onChange={setViewMode} />
                 )}
               </div>
 
               {/* CONTENT VIEW ROUTING */}
               <div className="flex flex-1 overflow-hidden relative">
-                <div
+                <motion.div
+                  layout
                   key={`${activeView}-${activeAlbum ? (activeAlbum as any).browseId || activeAlbum.title || 'album' : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.id || activePlaylist?.name || ''}-${activeUserPlaylist?.id || activeUserPlaylist?.name || ''}`}
-                  className={`${theming.isLite ? '' : 'animate-fade-in'} flex-1 flex flex-col p-4 sm:p-6 lg:p-8 relative ${
+                  className={`flex-1 flex flex-col p-4 sm:p-6 lg:p-8 relative ${
                     activeView === 'analytics'
                       ? 'overflow-y-auto no-scrollbar'
                       : activeView === 'settings' ||
                           activeView === 'drive' ||
                           activeView === 'home' ||
                           (activeView === 'playlists' && !activePlaylist) ||
-                          activeView === 'artists' ||
+                          (activeView === 'artists' && Boolean(activeArtist)) ||
                           (activeView === 'genres' && !activeGenre) ||
                           (activeView === 'user-playlists' && !activeUserPlaylist)
                         ? 'overflow-y-auto'
                         : 'overflow-hidden'
                   }`}
+                  initial={reduceMotion || theming.isLite ? { opacity: 1, y: 0 } : viewFade.initial}
+                  animate={viewFade.animate}
+                  transition={
+                    reduceMotion || theming.isLite ? { duration: 0 } : viewFade.transition
+                  }
                 >
                   {activeView === 'home' && (
                     <HomeView
@@ -2219,42 +2244,51 @@ export default function App() {
                       setUpdaterStatus={setUpdaterStatus}
                     />
                   )}
-                </div>
+                </motion.div>
 
                 {/* SIDE LYRICS DRAWER */}
-                {showLyricsPanel && !isLyricsMaximized && (
-                  <SideLyricsPanel
-                    lyrics={lyricsData.lyrics}
-                    audioRef={audioEngine.audioRef}
-                    analyserNodeRef={audioEngine.analyserNodeRef}
-                    changeLyricOffset={lyricsData.changeLyricOffset}
-                    resetLyricOffset={lyricsData.resetLyricOffset}
-                  />
-                )}
+                <AnimatePresence>
+                  {showLyricsPanel && !isLyricsMaximized && (
+                    <SideLyricsPanel
+                      key="side-lyrics"
+                      lyrics={lyricsData.lyrics}
+                      audioRef={audioEngine.audioRef}
+                      analyserNodeRef={audioEngine.analyserNodeRef}
+                      changeLyricOffset={lyricsData.changeLyricOffset}
+                      resetLyricOffset={lyricsData.resetLyricOffset}
+                    />
+                  )}
+                </AnimatePresence>
 
                 {/* PLAY QUEUE DRAWER */}
-                {showQueuePanel && (
-                  <QueuePanel
-                    onPlayTrack={audioEngine.handlePlayTrack}
-                    onTrackContextMenu={libraryOps.handleTrackContextMenu}
-                    onArtistClick={navigateToArtist}
-                  />
-                )}
+                <AnimatePresence>
+                  {showQueuePanel && (
+                    <QueuePanel
+                      key="play-queue"
+                      onPlayTrack={audioEngine.handlePlayTrack}
+                      onTrackContextMenu={libraryOps.handleTrackContextMenu}
+                      onArtistClick={navigateToArtist}
+                    />
+                  )}
+                </AnimatePresence>
               </div>
             </main>
 
             {/* FULLSCREEN VINYL LYRICS */}
-            {isLyricsMaximized && showLyricsPanel && (
-              <FullscreenLyrics
-                lyrics={lyricsData.lyrics}
-                originalCover={lyricsData.originalCover}
-                audioRef={audioEngine.audioRef}
-                analyserNodeRef={audioEngine.analyserNodeRef}
-                navigateToArtist={navigateToArtist}
-                changeLyricOffset={lyricsData.changeLyricOffset}
-                resetLyricOffset={lyricsData.resetLyricOffset}
-              />
-            )}
+            <AnimatePresence>
+              {isLyricsMaximized && showLyricsPanel && (
+                <FullscreenLyrics
+                  key="fullscreen-lyrics"
+                  lyrics={lyricsData.lyrics}
+                  originalCover={lyricsData.originalCover}
+                  audioRef={audioEngine.audioRef}
+                  analyserNodeRef={audioEngine.analyserNodeRef}
+                  navigateToArtist={navigateToArtist}
+                  changeLyricOffset={lyricsData.changeLyricOffset}
+                  resetLyricOffset={lyricsData.resetLyricOffset}
+                />
+              )}
+            </AnimatePresence>
           </div>
 
           {/* BOTTOM PLAYER BAR */}

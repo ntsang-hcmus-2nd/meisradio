@@ -122,7 +122,6 @@ export function HomeView({
             <h2 className="text-2xl lg:text-3xl font-extrabold text-white truncate">
               {t('home.dashboardTitle')}
             </h2>
-            <p className="text-xs text-zinc-400 truncate">{t('home.dashboardSubtitle')}</p>
           </div>
         </div>
 
@@ -235,7 +234,6 @@ export function HomeView({
               <Sparkles size={18} className="text-theme-10 shrink-0" />
               <span className="truncate">{t('home.forYouTitle')}</span>
             </h3>
-            <p className="text-xs text-zinc-400 mt-0.5 truncate">{t('home.forYouSubtitle')}</p>
           </div>
           {dashboardRecommendations.length > 0 && (
             <button
@@ -318,9 +316,6 @@ export function HomeView({
               <History size={18} className="text-amber-400 shrink-0" />
               <span className="truncate">{t('home.recentlyPlayedTitle')}</span>
             </h3>
-            <p className="text-xs text-zinc-400 mt-0.5 truncate">
-              {t('home.recentlyPlayedSubtitle')}
-            </p>
           </div>
           {(recentlyPlayed?.length || 0) > 0 && (
             <button
@@ -396,9 +391,6 @@ export function HomeView({
                 <Compass size={18} className="text-blue-400 shrink-0" />
                 <span className="truncate">{t('home.discoverFolderTitle')}</span>
               </h3>
-              <p className="text-xs text-zinc-400 mt-0.5 truncate">
-                {t('home.discoverFolderSubtitle')}
-              </p>
             </div>
           </div>
 

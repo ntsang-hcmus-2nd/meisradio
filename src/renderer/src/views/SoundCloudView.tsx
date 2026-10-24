@@ -127,9 +127,6 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                   </div>
                 )}
                 <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-2">
-                    {t('home.scPlaylist')}
-                  </p>
                   <h2 className="text-3xl lg:text-4xl font-extrabold text-white mb-3 truncate">
                     {activeAlbum.title}
                   </h2>
@@ -201,7 +198,6 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                 <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                   {t('home.scTitle')}
                 </h2>
-                <p className="text-xs text-zinc-400">{t('home.scSubtitle')}</p>
               </div>
             </div>
 

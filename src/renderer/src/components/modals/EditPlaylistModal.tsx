@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Image as ImageIcon, X, Trash2, FolderOpen } from 'lucide-react'
 import { useTranslation } from '../../locales'
 import { formatImageSource } from '../../utils/urlUtils'
+import { AnimatePresence, motion } from 'motion/react'
+import { overlayFade, useMotionReduced } from '../motion'
 
 interface EditPlaylistModalProps {
   isOpen: boolean
@@ -31,6 +33,12 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   const [customImagePath, setCustomImagePath] = useState<string | undefined>(undefined)
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
+  const reduceMotion = useMotionReduced()
+  const [retainedPlaylist, setRetainedPlaylist] = useState<any>(playlist)
+  useEffect(() => {
+    if (playlist) setRetainedPlaylist(playlist)
+  }, [playlist])
+  const activePlaylist = playlist || retainedPlaylist
 
   useEffect(() => {
     if (playlist && isOpen) {
@@ -43,7 +51,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
     }
   }, [playlist, isOpen])
 
-  if (!isOpen || !playlist) return null
+  if (!activePlaylist) return null
 
   const handlePickImage = async () => {
     try {
@@ -73,7 +81,7 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
 
     setIsSaving(true)
     try {
-      await onSave(playlist.id, {
+      await onSave(activePlaylist.id, {
         name: name.trim(),
         description: description.trim(),
         thumbnail: customImagePath ? undefined : thumbnail,
@@ -88,125 +96,141 @@ export const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative animate-fade-in text-white">
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80 mb-6">
-          <h2 className="text-xl font-bold">{t('modals.editPlaylist.title')}</h2>
-          <button
-            onClick={onClose}
-            className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
+    <AnimatePresence>
+      {isOpen && Boolean(playlist) && (
+        <motion.div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+          animate={overlayFade.animate}
+          exit={overlayFade.exit}
+          transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+        >
+          <motion.div
+            className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative text-white"
+            initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+            animate={overlayFade.animate}
+            exit={overlayFade.exit}
+            transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
           >
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Ảnh bìa & Chọn tệp */}
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-              {t('modals.editPlaylist.coverLabel')}
-            </label>
-            <div className="flex items-center gap-5">
-              <div
-                onClick={handlePickImage}
-                className="w-28 h-28 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-theme-10 overflow-hidden relative group cursor-pointer flex items-center justify-center shrink-0 shadow-md transition"
-                title={t('modals.editPlaylist.chooseImage')}
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80 mb-6">
+              <h2 className="text-xl font-bold">{t('modals.editPlaylist.title')}</h2>
+              <button
+                onClick={onClose}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
               >
-                {previewUrl ? (
-                  <img
-                    src={formatImageSource(previewUrl)}
-                    alt="Cover preview"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-zinc-600 gap-1">
-                    <ImageIcon size={32} />
-                    <span className="text-[10px] text-zinc-500 font-medium">
-                      {t('modals.editPlaylist.chooseImageShort')}
-                    </span>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Ảnh bìa & Chọn tệp */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  {t('modals.editPlaylist.coverLabel')}
+                </label>
+                <div className="flex items-center gap-5">
+                  <div
+                    onClick={handlePickImage}
+                    className="w-28 h-28 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-theme-10 overflow-hidden relative group cursor-pointer flex items-center justify-center shrink-0 shadow-md transition"
+                    title={t('modals.editPlaylist.chooseImage')}
+                  >
+                    {previewUrl ? (
+                      <img
+                        src={formatImageSource(previewUrl)}
+                        alt="Cover preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-zinc-600 gap-1">
+                        <ImageIcon size={32} />
+                        <span className="text-[10px] text-zinc-500 font-medium">
+                          {t('modals.editPlaylist.chooseImageShort')}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1.5 p-2 text-center">
+                      <FolderOpen size={20} className="shrink-0" />
+                      <span className="text-center font-medium leading-tight select-none">
+                        {t('modals.editPlaylist.changeImageShort')}
+                      </span>
+                    </div>
                   </div>
-                )}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs gap-1.5 p-2 text-center">
-                  <FolderOpen size={20} className="shrink-0" />
-                  <span className="text-center font-medium leading-tight select-none">
-                    {t('modals.editPlaylist.changeImageShort')}
-                  </span>
+
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePickImage}
+                      className="flex items-center gap-2 px-3.5 py-2 bg-theme-30 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-medium rounded-lg transition"
+                    >
+                      <FolderOpen size={15} />
+                      {t('modals.editPlaylist.chooseImage')}
+                    </button>
+                    {previewUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="flex items-center gap-2 px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium rounded-lg transition"
+                      >
+                        <Trash2 size={15} />
+                        {t('modals.editPlaylist.removeImage')}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
+              {/* Tên Playlist */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  {t('modals.editPlaylist.nameLabel')} <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t('modals.editPlaylist.namePlaceholder')}
+                  required
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-theme-10 transition placeholder:text-zinc-600"
+                  autoFocus
+                />
+              </div>
+
+              {/* Mô tả Playlist */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  {t('modals.editPlaylist.descLabel')}
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder={t('modals.editPlaylist.descPlaceholder')}
+                  rows={3}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-theme-10 transition placeholder:text-zinc-600 resize-none"
+                />
+              </div>
+
+              {/* Nút hành động */}
+              <div className="flex justify-end items-center gap-3 pt-3 border-t border-zinc-800/80">
                 <button
                   type="button"
-                  onClick={handlePickImage}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-theme-30 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-medium rounded-lg transition"
+                  onClick={onClose}
+                  disabled={isSaving}
+                  className="px-4 py-2 text-zinc-400 hover:text-white text-sm font-medium transition"
                 >
-                  <FolderOpen size={15} />
-                  {t('modals.editPlaylist.chooseImage')}
+                  {t('modals.editPlaylist.cancel')}
                 </button>
-                {previewUrl && (
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="flex items-center gap-2 px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium rounded-lg transition"
-                  >
-                    <Trash2 size={15} />
-                    {t('modals.editPlaylist.removeImage')}
-                  </button>
-                )}
+                <button
+                  type="submit"
+                  disabled={isSaving || !name.trim()}
+                  className="bg-theme-10 hover:bg-theme-10/90 disabled:opacity-50 text-white px-6 py-2 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 flex items-center gap-2"
+                >
+                  {isSaving ? t('common.loading') : t('modals.editPlaylist.save')}
+                </button>
               </div>
-            </div>
-          </div>
-
-          {/* Tên Playlist */}
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-              {t('modals.editPlaylist.nameLabel')} <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('modals.editPlaylist.namePlaceholder')}
-              required
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-theme-10 transition placeholder:text-zinc-600"
-              autoFocus
-            />
-          </div>
-
-          {/* Mô tả Playlist */}
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-              {t('modals.editPlaylist.descLabel')}
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t('modals.editPlaylist.descPlaceholder')}
-              rows={3}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-theme-10 transition placeholder:text-zinc-600 resize-none"
-            />
-          </div>
-
-          {/* Nút hành động */}
-          <div className="flex justify-end items-center gap-3 pt-3 border-t border-zinc-800/80">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSaving}
-              className="px-4 py-2 text-zinc-400 hover:text-white text-sm font-medium transition"
-            >
-              {t('modals.editPlaylist.cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving || !name.trim()}
-              className="bg-theme-10 hover:bg-theme-10/90 disabled:opacity-50 text-white px-6 py-2 rounded-xl text-sm font-medium transition shadow-lg shadow-theme-10/20 flex items-center gap-2"
-            >
-              {isSaving ? t('common.loading') : t('modals.editPlaylist.save')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

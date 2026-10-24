@@ -5,6 +5,8 @@ import { useUIStore } from '../../stores/uiStore'
 import { useLibraryStore } from '../../stores/libraryStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useAudioStore } from '../../stores/audioStore'
+import { AnimatePresence, motion } from 'motion/react'
+import { dialogScale, overlayFade, useMotionReduced } from '../motion'
 
 // Chuẩn hóa danh sách bài hát của playlist: hỗ trợ cả `trackIds` lẫn `tracks`.
 // Item có thể là string (id/filePath) hoặc object track đầy đủ; key tra cứu
@@ -75,8 +77,7 @@ export const BackupModal: React.FC = () => {
   const preampGain = useAudioStore((s) => s.preampGain)
 
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>('')
-
-  if (!show) return null
+  const reduceMotion = useMotionReduced()
 
   // 1. Xuất Playlist sang .m3u8
   const handleExportM3U8 = () => {
@@ -256,122 +257,132 @@ export const BackupModal: React.FC = () => {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
-      onClick={() => setShow(false)}
-    >
-      <div
-        className="w-[580px] max-w-full bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6 animate-scale-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400">
-              <Database size={22} />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white">{t('backup.title')}</h2>
-              <p className="text-xs text-zinc-400">{t('backup.subtitle')}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShow(false)}
-            className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setShow(false)}
+          initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+          animate={overlayFade.animate}
+          exit={overlayFade.exit}
+          transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+        >
+          <motion.div
+            className="w-[580px] max-w-full bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6"
+            onClick={(e) => e.stopPropagation()}
+            initial={reduceMotion ? { opacity: 1, scale: 1 } : dialogScale.initial}
+            animate={dialogScale.animate}
+            exit={dialogScale.exit}
+            transition={reduceMotion ? { duration: 0 } : dialogScale.transition}
           >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="py-5 space-y-6">
-          {/* Section 1: M3U8 Playlist Export / Import */}
-          <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl space-y-3">
-            <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-2">
-              <FileText size={15} className="text-emerald-400" />
-              {t('backup.m3u8Title')}
-            </h3>
-            <p className="text-[11px] text-zinc-400 leading-relaxed">{t('backup.m3u8Desc')}</p>
-
-            <div className="flex gap-2 items-center pt-1">
-              <select
-                value={selectedPlaylistId}
-                onChange={(e) => setSelectedPlaylistId(e.target.value)}
-                className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
-              >
-                {userPlaylists.length === 0 ? (
-                  <option value="">{t('backup.noPlaylist')}</option>
-                ) : (
-                  userPlaylists.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.trackIds?.length || p.tracks?.length || 0} {t('common.tracks')})
-                    </option>
-                  ))
-                )}
-              </select>
-
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400">
+                  <Database size={22} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">{t('backup.title')}</h2>
+                </div>
+              </div>
               <button
-                onClick={handleExportM3U8}
-                disabled={userPlaylists.length === 0}
-                className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
+                onClick={() => setShow(false)}
+                className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
               >
-                <Download size={14} /> {t('backup.exportM3u8')}
+                <X size={18} />
               </button>
             </div>
 
-            <div className="pt-2 border-t border-zinc-900 flex justify-between items-center">
-              <span className="text-[11px] text-zinc-500">{t('backup.importLabel')}</span>
-              <label className="cursor-pointer px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition">
-                <Upload size={13} /> {t('backup.importM3u8')}
-                <input
-                  type="file"
-                  accept=".m3u,.m3u8"
-                  onChange={handleImportM3U8}
-                  className="hidden"
-                />
-              </label>
+            {/* Content */}
+            <div className="py-5 space-y-6">
+              {/* Section 1: M3U8 Playlist Export / Import */}
+              <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl space-y-3">
+                <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-2">
+                  <FileText size={15} className="text-emerald-400" />
+                  {t('backup.m3u8Title')}
+                </h3>
+
+                <div className="flex gap-2 items-center pt-1">
+                  <select
+                    value={selectedPlaylistId}
+                    onChange={(e) => setSelectedPlaylistId(e.target.value)}
+                    className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    {userPlaylists.length === 0 ? (
+                      <option value="">{t('backup.noPlaylist')}</option>
+                    ) : (
+                      userPlaylists.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.trackIds?.length || p.tracks?.length || 0}{' '}
+                          {t('common.tracks')})
+                        </option>
+                      ))
+                    )}
+                  </select>
+
+                  <button
+                    onClick={handleExportM3U8}
+                    disabled={userPlaylists.length === 0}
+                    className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
+                  >
+                    <Download size={14} /> {t('backup.exportM3u8')}
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-zinc-900 flex justify-between items-center">
+                  <span className="text-[11px] text-zinc-500">{t('backup.importLabel')}</span>
+                  <label className="cursor-pointer px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition">
+                    <Upload size={13} /> {t('backup.importM3u8')}
+                    <input
+                      type="file"
+                      accept=".m3u,.m3u8"
+                      onChange={handleImportM3U8}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Section 2: Full System Config Backup */}
+              <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl space-y-3">
+                <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-2">
+                  <ShieldCheck size={15} className="text-purple-400" />
+                  {t('backup.jsonTitle')}
+                </h3>
+
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={handleExportFullBackup}
+                    className="flex-1 py-2.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs font-semibold flex items-center justify-center gap-2 transition"
+                  >
+                    <Download size={15} /> {t('backup.backupConfig')}
+                  </button>
+
+                  <label className="flex-1 cursor-pointer py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition">
+                    <Upload size={15} /> {t('backup.restoreBackup')}
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleRestoreBackup}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Section 2: Full System Config Backup */}
-          <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl space-y-3">
-            <h3 className="text-xs font-bold text-zinc-200 flex items-center gap-2">
-              <ShieldCheck size={15} className="text-purple-400" />
-              {t('backup.jsonTitle')}
-            </h3>
-            <p className="text-[11px] text-zinc-400 leading-relaxed">{t('backup.jsonDesc')}</p>
-
-            <div className="flex gap-3 pt-1">
+            {/* Footer */}
+            <div className="pt-4 border-t border-zinc-800 flex justify-end">
               <button
-                onClick={handleExportFullBackup}
-                className="flex-1 py-2.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs font-semibold flex items-center justify-center gap-2 transition"
+                onClick={() => setShow(false)}
+                className="px-5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition"
               >
-                <Download size={15} /> {t('backup.backupConfig')}
+                {t('common.close')}
               </button>
-
-              <label className="flex-1 cursor-pointer py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition">
-                <Upload size={15} /> {t('backup.restoreBackup')}
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleRestoreBackup}
-                  className="hidden"
-                />
-              </label>
             </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="pt-4 border-t border-zinc-800 flex justify-end">
-          <button
-            onClick={() => setShow(false)}
-            className="px-5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition"
-          >
-            {t('common.close')}
-          </button>
-        </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

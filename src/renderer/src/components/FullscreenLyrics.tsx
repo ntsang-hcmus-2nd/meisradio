@@ -1,4 +1,5 @@
 import React from 'react'
+import { motion } from 'motion/react'
 import { Minimize2 } from 'lucide-react'
 import { DynamicCoverArt } from './DynamicCoverArt'
 import { ArtistLinks } from './TrackListComponents'
@@ -7,6 +8,7 @@ import { WebGLVisualizer } from './visualizers/WebGLVisualizer'
 import { usePlayerStore, useUIStore, useSettingsStore } from '../stores'
 import { useTranslation } from '../locales'
 import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate } from '../utils/formatUtils'
+import { lyricsMax, useMotionReduced } from './motion'
 import meiSingingPlaceholder from '../../../../resources/Mei singing.webp'
 
 interface FullscreenLyricsProps {
@@ -38,6 +40,7 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
   const appMode = useSettingsStore((s) => s.appMode)
   const streamPort = useSettingsStore((s) => s.streamPort)
   const isLite = appMode === 'lite' || appMode === 'core'
+  const reduceMotion = useMotionReduced()
 
   // Escape key listener to exit fullscreen lyrics
   React.useEffect(() => {
@@ -51,9 +54,13 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
   }, [setIsLyricsMaximized])
 
   return (
-    <div
-      className="flex-1 flex flex-col bg-transparent z-10 relative animate-fade-in overflow-hidden"
-      style={{ willChange: 'opacity, transform' }}
+    <motion.div
+      className="flex-1 flex flex-col bg-transparent z-10 relative overflow-hidden"
+      style={{ willChange: 'opacity, transform', transformOrigin: '100% 50%' }}
+      initial={reduceMotion || isLite ? { opacity: 1, x: 0, scale: 1 } : lyricsMax.initial}
+      animate={lyricsMax.animate}
+      exit={lyricsMax.exit}
+      transition={reduceMotion || isLite ? { duration: 0 } : lyricsMax.transition}
     >
       <div className="absolute top-6 sm:top-8 right-6 sm:right-8 flex items-center gap-3 z-50">
         <div className="flex items-center gap-1.5 text-xs bg-theme-60/80 backdrop-blur-md border border-theme-30/60 p-1.5 px-3 rounded-full shadow-lg">
@@ -94,7 +101,10 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
       </div>
 
       <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-12 overflow-hidden">
-        <div className="w-1/2 flex flex-col items-center justify-center gap-6">
+        <div
+          key={currentTrack?.id || (currentTrack as any)?.filePath || 'vinyl'}
+          className={`w-1/2 flex flex-col items-center justify-center gap-6 ${!isLite ? 'animate-track-crossfade' : ''}`}
+        >
           <div className="w-[min(28vw,38vh)] max-w-[420px] min-w-[240px] aspect-square rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
             <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-10 rounded-full mix-blend-overlay"></div>
             <div className="w-12 h-12 bg-zinc-950 rounded-full absolute z-20 border-2 border-zinc-700 shadow-inner"></div>
@@ -164,7 +174,10 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
           </div>
         </div>
 
-        <div className="w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide">
+        <div
+          key={`lyrics-${currentTrack?.id || (currentTrack as any)?.filePath || 'none'}`}
+          className={`w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide ${!isLite ? 'animate-track-crossfade' : ''}`}
+        >
           <SyncedLyricsList
             lyrics={lyrics}
             audioRef={audioRef}
@@ -173,6 +186,6 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
           />
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }

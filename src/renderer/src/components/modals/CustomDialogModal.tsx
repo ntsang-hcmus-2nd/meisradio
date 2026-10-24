@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, HelpCircle, Info, Trash2, X } from 'lucide-react'
 import { useTranslation } from '../../locales'
+import { dialogScale, overlayFade, useMotionReduced } from '../motion'
 
 export interface DialogOptions {
   isOpen: boolean
@@ -20,36 +22,44 @@ interface CustomDialogModalProps {
 
 export const CustomDialogModal: React.FC<CustomDialogModalProps> = ({ dialog, onClose }) => {
   const { t } = useTranslation()
+  const reduceMotion = useMotionReduced()
+  const isOpen = Boolean(dialog?.isOpen)
+  const [retainedDialog, setRetainedDialog] = useState<DialogOptions | null>(dialog)
+  useEffect(() => {
+    if (dialog) setRetainedDialog(dialog)
+  }, [dialog])
+  const activeDialog = dialog || retainedDialog
 
   useEffect(() => {
-    if (!dialog?.isOpen) return
+    if (!activeDialog?.isOpen) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        dialog.onCancel ? dialog.onCancel() : onClose()
+        activeDialog.onCancel ? activeDialog.onCancel() : onClose()
       } else if (e.key === 'Enter') {
         e.preventDefault()
-        dialog.onConfirm ? dialog.onConfirm() : onClose()
+        activeDialog.onConfirm ? activeDialog.onConfirm() : onClose()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [dialog, onClose])
+  }, [activeDialog, onClose])
 
-  if (!dialog || !dialog.isOpen) return null
+  if (!activeDialog) return null
 
-  const isAlert = dialog.type === 'alert'
-  const isDanger = dialog.type === 'danger'
-  const isInfo = dialog.type === 'info'
+  const isAlert = activeDialog.type === 'alert'
+  const isDanger = activeDialog.type === 'danger'
+  const isInfo = activeDialog.type === 'info'
 
   const title =
-    dialog.title ||
+    activeDialog.title ||
     (isDanger ? t('common.warning') : isAlert ? t('common.notice') : t('common.confirm'))
   const confirmText =
-    dialog.confirmText || (isDanger ? t('common.delete') : isAlert ? 'OK' : t('common.confirm'))
-  const cancelText = dialog.cancelText || t('common.cancel')
+    activeDialog.confirmText ||
+    (isDanger ? t('common.delete') : isAlert ? 'OK' : t('common.confirm'))
+  const cancelText = activeDialog.cancelText || t('common.cancel')
 
   const renderIcon = () => {
     if (isDanger) {
@@ -81,78 +91,94 @@ export const CustomDialogModal: React.FC<CustomDialogModalProps> = ({ dialog, on
   }
 
   const handleConfirm = () => {
-    if (dialog.onConfirm) {
-      dialog.onConfirm()
+    if (activeDialog.onConfirm) {
+      activeDialog.onConfirm()
     } else {
       onClose()
     }
   }
 
   const handleCancel = () => {
-    if (dialog.onCancel) {
-      dialog.onCancel()
+    if (activeDialog.onCancel) {
+      activeDialog.onCancel()
     } else {
       onClose()
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-fade-in select-none">
-      <div
-        className="bg-zinc-900/95 border border-zinc-800/90 rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/80 flex flex-col transition-all transform scale-100"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header with icon & close button */}
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3.5">
-            {renderIcon()}
-            <div>
-              <h3 className="text-lg font-bold text-white tracking-wide">{title}</h3>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 select-none"
+          initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+          animate={overlayFade.animate}
+          exit={overlayFade.exit}
+          transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+        >
+          <motion.div
+            className="bg-zinc-900/95 border border-zinc-800/90 rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/80 flex flex-col"
+            initial={reduceMotion ? { opacity: 1, scale: 1 } : dialogScale.initial}
+            animate={dialogScale.animate}
+            exit={dialogScale.exit}
+            transition={reduceMotion ? { duration: 0 } : dialogScale.transition}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header with icon & close button */}
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div className="flex items-center gap-3.5">
+                {renderIcon()}
+                <div>
+                  <h3 className="text-lg font-bold text-white tracking-wide">{title}</h3>
+                </div>
+              </div>
+              <button
+                onClick={handleCancel}
+                className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-white/5 transition"
+              >
+                <X size={18} />
+              </button>
             </div>
-          </div>
-          <button
-            onClick={handleCancel}
-            className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-white/5 transition"
-          >
-            <X size={18} />
-          </button>
-        </div>
 
-        {/* Message body */}
-        <div className="py-2 mb-6">
-          {typeof dialog.message === 'string' ? (
-            <p className="text-sm text-zinc-300 leading-relaxed break-words">{dialog.message}</p>
-          ) : (
-            dialog.message
-          )}
-        </div>
+            {/* Message body */}
+            <div className="py-2 mb-6">
+              {typeof activeDialog.message === 'string' ? (
+                <p className="text-sm text-zinc-300 leading-relaxed break-words">
+                  {activeDialog.message}
+                </p>
+              ) : (
+                activeDialog.message
+              )}
+            </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800/70">
-          {!isAlert && (
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 rounded-xl transition cursor-pointer"
-            >
-              {cancelText}
-            </button>
-          )}
+            {/* Action buttons */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800/70">
+              {!isAlert && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/60 rounded-xl transition cursor-pointer"
+                >
+                  {cancelText}
+                </button>
+              )}
 
-          <button
-            type="button"
-            onClick={handleConfirm}
-            autoFocus
-            className={`px-6 py-2 text-sm font-semibold text-white rounded-xl transition shadow-lg cursor-pointer flex items-center justify-center ${
-              isDanger
-                ? 'bg-red-600 hover:bg-red-500 shadow-red-600/20 active:scale-95'
-                : 'bg-theme-10 hover:brightness-110 shadow-theme-10/20 active:scale-95'
-            }`}
-          >
-            {confirmText}
-          </button>
-        </div>
-      </div>
-    </div>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                autoFocus
+                className={`px-6 py-2 text-sm font-semibold text-white rounded-xl transition shadow-lg cursor-pointer flex items-center justify-center ${
+                  isDanger
+                    ? 'bg-red-600 hover:bg-red-500 shadow-red-600/20 active:scale-95'
+                    : 'bg-theme-10 hover:brightness-110 shadow-theme-10/20 active:scale-95'
+                }`}
+              >
+                {confirmText}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

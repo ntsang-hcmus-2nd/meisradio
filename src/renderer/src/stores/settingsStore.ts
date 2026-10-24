@@ -42,6 +42,9 @@ export interface SettingsState {
   crossfeedEnabled: boolean
   gaplessEnabled: boolean
   waveformSeekbarEnabled: boolean
+  colorScheme: 'dark' | 'light'
+  sidebarBgEnabled: boolean
+  sidebarBgOpacity: number
 
   // Actions
   setAppMode: (
@@ -101,6 +104,11 @@ export interface SettingsState {
   setCrossfeedEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setGaplessEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setWaveformSeekbarEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
+  setColorScheme: (
+    scheme: 'dark' | 'light' | ((prev: 'dark' | 'light') => 'dark' | 'light')
+  ) => void
+  setSidebarBgEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
+  setSidebarBgOpacity: (opacity: number | ((prev: number) => number)) => void
 }
 
 const resolveVal = <T>(valOrFn: T | ((prev: T) => T), prev: T): T => {
@@ -194,10 +202,41 @@ const getInitialCustomAccentColor = (): string => {
   return '#10b981'
 }
 
+const getInitialColorScheme = (): 'dark' | 'light' => {
+  try {
+    if (localStorage.getItem('meis_color_scheme') === 'light') return 'light'
+  } catch {
+    /* ignore */
+  }
+  return 'dark'
+}
+
+const getInitialSidebarBgEnabled = (): boolean => {
+  try {
+    return localStorage.getItem('meis_sidebar_bg_enabled') !== 'false'
+  } catch {
+    return true
+  }
+}
+
+const getInitialSidebarBgOpacity = (): number => {
+  try {
+    const saved = localStorage.getItem('meis_sidebar_bg_opacity')
+    if (saved !== null) {
+      const v = parseFloat(saved)
+      if (!isNaN(v)) return Math.min(1, Math.max(0, v))
+    }
+  } catch {
+    /* ignore */
+  }
+  return 0.8
+}
+
 // Thiết lập ngay thuộc tính data-ui-style và màu accent lên thẻ html để tránh nhấp nháy giao diện
 try {
   if (typeof document !== 'undefined') {
     document.documentElement.setAttribute('data-ui-style', getInitialUiStyle())
+    document.documentElement.setAttribute('data-theme', getInitialColorScheme())
     const savedMode = localStorage.getItem('meis_accent_color_mode')
     const savedColor = localStorage.getItem('meis_custom_accent_color')
     if (savedMode === 'custom' && savedColor) {
@@ -247,6 +286,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   crossfeedEnabled: getInitialCrossfeedEnabled(),
   gaplessEnabled: getInitialGaplessEnabled(),
   waveformSeekbarEnabled: getInitialWaveformSeekbarEnabled(),
+  colorScheme: getInitialColorScheme(),
+  sidebarBgEnabled: getInitialSidebarBgEnabled(),
+  sidebarBgOpacity: getInitialSidebarBgOpacity(),
 
   setAppMode: (valOrFn) =>
     set((s) => {
@@ -391,5 +433,42 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         /* ignore */
       }
       return { waveformSeekbarEnabled: next }
+    }),
+  setColorScheme: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.colorScheme)
+      try {
+        if (typeof document !== 'undefined') {
+          document.documentElement.setAttribute('data-theme', next)
+        }
+      } catch {
+        /* ignore */
+      }
+      try {
+        localStorage.setItem('meis_color_scheme', next)
+      } catch {
+        /* ignore */
+      }
+      return { colorScheme: next }
+    }),
+  setSidebarBgEnabled: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.sidebarBgEnabled)
+      try {
+        localStorage.setItem('meis_sidebar_bg_enabled', String(next))
+      } catch {
+        /* ignore */
+      }
+      return { sidebarBgEnabled: next }
+    }),
+  setSidebarBgOpacity: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.sidebarBgOpacity)
+      try {
+        localStorage.setItem('meis_sidebar_bg_opacity', String(next))
+      } catch {
+        /* ignore */
+      }
+      return { sidebarBgOpacity: next }
     })
 }))

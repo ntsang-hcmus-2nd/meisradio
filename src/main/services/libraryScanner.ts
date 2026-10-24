@@ -576,7 +576,7 @@ export function buildPreAggregatedData(tracks: any[]) {
     grp.push(art)
   }
 
-  const alphabetGroups: { letter: string; artists: typeof artistsList }[] = []
+  const alphabetGroups: { letter: string; count: number; artists: typeof artistsList }[] = []
   const sortedKeys = Array.from(groupsMap.keys()).sort((a, b) => {
     if (a === '#') return 1
     if (b === '#') return -1
@@ -584,7 +584,8 @@ export function buildPreAggregatedData(tracks: any[]) {
   })
 
   for (const k of sortedKeys) {
-    alphabetGroups.push({ letter: k, artists: groupsMap.get(k)! })
+    const grp = groupsMap.get(k)!
+    alphabetGroups.push({ letter: k, count: grp.length, artists: grp })
   }
 
   const genresList = Array.from(genreMap.values()).map((gm) => ({

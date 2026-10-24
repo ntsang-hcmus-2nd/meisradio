@@ -14,7 +14,6 @@ import {
   Play,
   X,
   ExternalLink,
-  Sparkles,
   ArrowUpDown,
   ListFilter,
   Check,
@@ -525,9 +524,6 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white flex items-center gap-2 min-w-0">
               <span className="truncate">{t('downloads.title')}</span>
             </h1>
-            <p className="text-xs text-zinc-400 mt-1 max-w-2xl truncate">
-              {t('downloads.subtitle')}
-            </p>
           </div>
         </div>
 
@@ -611,14 +607,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
       {!connected && (
         <div className="bg-gradient-to-br from-theme-10/10 via-zinc-900/80 to-zinc-950 border border-theme-10/30 rounded-3xl p-6 lg:p-8 backdrop-blur-xl relative overflow-hidden shrink-0">
           <div className="max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-theme-10/20 text-theme-10 text-xs font-semibold border border-theme-10/30">
-              <Sparkles size={14} />
-              <span>Soulseek Lossless Music Network</span>
-            </div>
             <h2 className="text-2xl font-bold text-white">{t('downloads.loginOrRegister')}</h2>
-            <p className="text-xs lg:text-sm text-zinc-300 leading-relaxed">
-              {t('downloads.loginSubtitle')}
-            </p>
 
             <form onSubmit={handleLogin} className="space-y-4 pt-2 max-w-md">
               <div>

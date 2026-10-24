@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { motion } from 'motion/react'
 import {
   X,
   Info,
@@ -34,6 +35,7 @@ import {
   getTrackFormatDisplay
 } from '../../utils/formatUtils'
 import { useUIStore } from '../../stores/uiStore'
+import { dialogScale, overlayFade, useMotionReduced } from '../motion'
 
 interface TrackInfoModalProps {
   track: any | null
@@ -50,6 +52,7 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
 }) => {
   const { t } = useTranslation()
   const showToast = useUIStore((s) => s.showToast)
+  const reduceMotion = useMotionReduced()
 
   const [activeTab, setActiveTab] = useState<'overview' | 'audio' | 'lyrics'>('overview')
   const [fetchedDetails, setFetchedDetails] = useState<{ trackId: string; data: any } | null>(null)
@@ -57,6 +60,11 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
   const [copiedPath, setCopiedPath] = useState(false)
   const [copiedLyrics, setCopiedLyrics] = useState(false)
   const [copiedInfo, setCopiedInfo] = useState(false)
+
+  // AnimatePresence phát exit khi parent gỡ mount, gọi onClose ngay không chờ timer
+  const handleClose = useCallback(() => {
+    onClose()
+  }, [onClose])
 
   const trackId = (track?.id || track?.filePath || '') as string
   const details = fetchedDetails?.trackId === trackId ? fetchedDetails.data : null
@@ -93,12 +101,12 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
-        onClose()
+        handleClose()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [handleClose])
 
   // Merged info from track prop + fetched detailed data
   const merged = useMemo(() => {
@@ -261,12 +269,20 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
   const isLocalTrack = !track?.isCloud && !track?.isOnline
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
-      onClick={onClose}
+    <motion.div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+      animate={overlayFade.animate}
+      exit={overlayFade.exit}
+      transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+      onClick={handleClose}
     >
-      <div
-        className="w-[740px] max-w-full max-h-[92vh] bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-scale-up"
+      <motion.div
+        className="w-[740px] max-w-full max-h-[92vh] bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+        initial={reduceMotion ? { opacity: 1, scale: 1 } : dialogScale.initial}
+        animate={dialogScale.animate}
+        exit={dialogScale.exit}
+        transition={reduceMotion ? { duration: 0 } : dialogScale.transition}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -281,33 +297,6 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                   {t('modals.trackInfo.title')}
                   {loading && <Loader2 size={13} className="animate-spin text-theme-10" />}
                 </h2>
-                {/* Badges */}
-                {merged.isDsd ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono tracking-wider">
-                    {formatDisplay.dsdRateLabel} 1-BIT
-                  </span>
-                ) : formatDisplay.isHiRes ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 tracking-wider">
-                    HI-RES AUDIO
-                  </span>
-                ) : merged.lossless ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 tracking-wider">
-                    LOSSLESS
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 tracking-wider uppercase">
-                    {merged.format}
-                  </span>
-                )}
-                {isLocalTrack ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/60 hidden sm:inline">
-                    {t('modals.trackInfo.sourceLocal')}
-                  </span>
-                ) : (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                    {t('modals.trackInfo.sourceOnline')}
-                  </span>
-                )}
               </div>
               <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-[420px]">
                 {merged.title} • {merged.artist}
@@ -315,7 +304,7 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition cursor-pointer"
             title={t('common.close')}
           >
@@ -710,29 +699,6 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                   </p>
                 </div>
               </div>
-
-              {/* Engine Recommendation Card */}
-              <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 flex items-start gap-3">
-                <div className="p-2 rounded-xl bg-theme-10/10 text-theme-10 mt-0.5 shrink-0">
-                  <Info size={16} />
-                </div>
-                <div className="text-xs">
-                  <h5 className="font-bold text-white mb-0.5">
-                    {merged.isDsd
-                      ? 'Audiophile DSD Stream (BASS DSD Engine)'
-                      : merged.lossless
-                        ? 'Lossless Audio Stream (Bit-Perfect WASAPI / ASIO)'
-                        : 'Standard Audio Stream'}
-                  </h5>
-                  <p className="text-zinc-400 leading-relaxed">
-                    {merged.isDsd
-                      ? "Bản nhạc này chứa luồng bit 1-bit Direct Stream Digital. Mei's Radio tự động định tuyến qua BASS Audio Library (ASIO DSD Native hoặc WASAPI DSD-to-PCM 176.4kHz) để bảo toàn chất âm analog chân thực nhất."
-                      : merged.lossless
-                        ? 'Bản nhạc này là dạng không nén Lossless nguyên bản. Khuyến nghị bật chế độ Bit-Perfect (WASAPI Exclusive hoặc ASIO) để thưởng thức âm thanh trung thực không qua bộ trộn Windows.'
-                        : 'Bản nhạc này ở định dạng nén có tổn hao. Hỗ trợ đầy đủ bộ cân bằng âm thanh Parametric EQ và visualizer thời gian thực.'}
-                  </p>
-                </div>
-              </div>
             </div>
           )}
 
@@ -792,9 +758,6 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
             >
               {copiedInfo ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
             </button>
-            <div className="absolute bottom-full mb-2 left-0 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
-              {copiedInfo ? t('common.copied') : t('modals.trackInfo.copyInfo')}
-            </div>
           </div>
 
           {/* Right: Functional actions */}
@@ -811,9 +774,6 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                 >
                   <FolderOpen size={16} />
                 </button>
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
-                  {t('modals.trackInfo.showInFolder')}
-                </div>
               </div>
             )}
 
@@ -829,9 +789,6 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                 >
                   <Edit3 size={16} />
                 </button>
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
-                  {t('modals.trackInfo.editTags')}
-                </div>
               </div>
             )}
 
@@ -847,27 +804,21 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
                 >
                   <Play size={16} className="ml-0.5" />
                 </button>
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
-                  {t('modals.trackInfo.playTrack')}
-                </div>
               </div>
             )}
 
             <div className="relative group/btn">
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="w-9 h-9 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition flex items-center justify-center cursor-pointer"
                 title={t('modals.trackInfo.close')}
               >
                 <X size={16} />
               </button>
-              <div className="absolute bottom-full mb-2 right-0 px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap opacity-0 group-hover/btn:opacity-100 transition-all pointer-events-none shadow-xl z-50">
-                {t('modals.trackInfo.close')}
-              </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

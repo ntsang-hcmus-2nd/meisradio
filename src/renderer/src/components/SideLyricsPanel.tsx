@@ -1,10 +1,12 @@
 import React from 'react'
+import { motion } from 'motion/react'
 import { Mic2, Maximize2 } from 'lucide-react'
 import { SyncedLyricsList, LyricLine } from './SyncedLyricsList'
 import { WebGLVisualizer } from './visualizers/WebGLVisualizer'
 import { usePlayerStore, useUIStore, useSettingsStore } from '../stores'
 import { useTranslation } from '../locales'
 import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate } from '../utils/formatUtils'
+import { drawerSlide, useMotionReduced } from './motion'
 
 interface SideLyricsPanelProps {
   lyrics: LyricLine[]
@@ -30,9 +32,17 @@ export const SideLyricsPanel: React.FC<SideLyricsPanelProps> = ({
   const setIsLyricsMaximized = useUIStore((s) => s.setIsLyricsMaximized)
   const appMode = useSettingsStore((s) => s.appMode)
   const isLite = appMode === 'lite' || appMode === 'core'
+  const reduceMotion = useMotionReduced()
 
   return (
-    <div className="w-[30vw] min-w-[320px] max-w-[480px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col">
+    <motion.div
+      layout
+      className="w-[30vw] min-w-[320px] max-w-[480px] border-l border-theme-30/50 bg-theme-60/40 backdrop-blur-sm flex flex-col"
+      initial={reduceMotion ? { opacity: 1, x: 0 } : drawerSlide.initial}
+      animate={drawerSlide.animate}
+      exit={drawerSlide.exit}
+      transition={reduceMotion ? { duration: 0 } : drawerSlide.transition}
+    >
       <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
         <div className="flex items-center gap-2">
           <h3 className="font-bold text-white flex items-center gap-2">
@@ -75,7 +85,16 @@ export const SideLyricsPanel: React.FC<SideLyricsPanelProps> = ({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
-        <SyncedLyricsList lyrics={lyrics} audioRef={audioRef} noLyricsText={t('lyrics.noLyrics')} />
+        <div
+          key={currentTrack?.id || (currentTrack as any)?.filePath || 'no-track'}
+          className={`${!isLite ? 'animate-track-crossfade' : ''}`}
+        >
+          <SyncedLyricsList
+            lyrics={lyrics}
+            audioRef={audioRef}
+            noLyricsText={t('lyrics.noLyrics')}
+          />
+        </div>
       </div>
       <div className="p-3 border-t border-theme-30/50 bg-zinc-950/40 h-16 shrink-0 w-full overflow-hidden flex items-center justify-center">
         {bitPerfectEnabled || isDsdTrack(currentTrack) ? (
@@ -115,6 +134,6 @@ export const SideLyricsPanel: React.FC<SideLyricsPanelProps> = ({
           />
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }

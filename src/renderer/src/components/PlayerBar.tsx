@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   Heart,
   Shuffle,
@@ -90,112 +90,151 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   const isLite = appMode === 'lite' || appMode === 'core'
   const isCore = appMode === 'core'
 
+  const trackKey = currentTrack?.id || (currentTrack as any)?.filePath || 'none'
+  const [displayedTrack, setDisplayedTrack] = useState(currentTrack)
+  const [trackAnimClass, setTrackAnimClass] = useState('')
+  const trackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFirstTrackRender = useRef(true)
+
+  useEffect(() => {
+    if (isFirstTrackRender.current) {
+      isFirstTrackRender.current = false
+      setDisplayedTrack(currentTrack)
+      return
+    }
+    if (isLite) {
+      setDisplayedTrack(currentTrack)
+      setTrackAnimClass('')
+      return
+    }
+    setTrackAnimClass('animate-player-track-out')
+    if (trackTimerRef.current) clearTimeout(trackTimerRef.current)
+    trackTimerRef.current = setTimeout(() => {
+      setDisplayedTrack(currentTrack)
+      setTrackAnimClass('animate-player-track-in')
+    }, 140)
+    return () => {
+      if (trackTimerRef.current) clearTimeout(trackTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackKey])
+
+  useEffect(() => {
+    return () => {
+      if (trackTimerRef.current) clearTimeout(trackTimerRef.current)
+    }
+  }, [])
+
   return (
     <footer className="h-24 bg-theme-60 border-t border-theme-30 flex items-center justify-between px-3.5 sm:px-6 z-30 relative shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
       <div className="flex items-center gap-3 sm:gap-4 w-[28%] max-w-[260px] lg:max-w-[320px] min-w-0 z-10">
-        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
-          <DynamicCoverArt
-            track={currentTrack}
-            streamPort={streamPort}
-            tier="md"
-            isLite={isLite}
-            smartAspect={true}
-            fallbackIconSize={24}
-            className="w-full h-full"
-          />
-        </div>
-        <div className="truncate min-w-0 flex-1">
-          <h4 className="text-sm font-bold text-white leading-tight truncate">
-            {currentTrack ? currentTrack.title : t('player.noTrack')}
-          </h4>
-          <div className="text-xs text-zinc-400 mt-1 truncate">
-            {currentTrack ? (
-              <ArtistLinks
-                artists={currentTrack.artists}
-                fallbackArtist={currentTrack.artist || t('player.unknownArtist')}
-                onArtistClick={navigateToArtist}
-                className="text-xs text-zinc-400"
-              />
-            ) : (
-              t('player.unknownArtist')
+        <div className={`flex items-center gap-3 sm:gap-4 min-w-0 flex-1 ${trackAnimClass}`}>
+          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-theme-30 rounded-md shadow-lg overflow-hidden flex-shrink-0">
+            <DynamicCoverArt
+              track={displayedTrack}
+              streamPort={streamPort}
+              tier="md"
+              isLite={isLite}
+              smartAspect={true}
+              fallbackIconSize={24}
+              className="w-full h-full"
+            />
+          </div>
+          <div className="truncate min-w-0 flex-1">
+            <h4 className="text-sm font-bold text-white leading-tight truncate">
+              {displayedTrack ? displayedTrack.title : t('player.noTrack')}
+            </h4>
+            <div className="text-xs text-zinc-400 mt-1 truncate">
+              {displayedTrack ? (
+                <ArtistLinks
+                  artists={displayedTrack.artists}
+                  fallbackArtist={displayedTrack.artist || t('player.unknownArtist')}
+                  onArtistClick={navigateToArtist}
+                  className="text-xs text-zinc-400"
+                />
+              ) : (
+                t('player.unknownArtist')
+              )}
+            </div>
+            {displayedTrack && (
+              <div className="flex items-center gap-2 mt-1 truncate">
+                <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md shrink-0">
+                  {isDsdTrack(displayedTrack) ? (
+                    <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                      {getDsdRateLabel(displayedTrack.sampleRate) || displayedTrack.format || 'DSD'}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase font-bold text-theme-10 bg-theme-10/10 px-1.5 py-0.5 rounded">
+                      {displayedTrack.lossless ? 'Lossless' : displayedTrack.format || 'MP3'}
+                    </span>
+                  )}
+                  {displayedTrack.bitDepth && (
+                    <span
+                      className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                        isDsdTrack(displayedTrack)
+                          ? 'text-amber-400 bg-amber-500/10'
+                          : 'text-blue-500 bg-blue-500/10'
+                      }`}
+                    >
+                      {displayedTrack.bitDepth}-BIT
+                    </span>
+                  )}
+                  {(bitPerfectEnabled || isDsdTrack(displayedTrack)) &&
+                    (() => {
+                      const activeAudioParams = bassOutParams
+                      return (
+                        <span
+                          className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                            activeAudioParams?.isDsd
+                              ? 'text-amber-400 bg-amber-500/10'
+                              : isDsdTrack(displayedTrack)
+                                ? 'text-amber-400/90 bg-amber-500/10'
+                                : bitPerfectType === 'asio'
+                                  ? 'text-purple-400 bg-purple-500/10'
+                                  : 'text-emerald-400 bg-emerald-500/10'
+                          }`}
+                          title={
+                            activeAudioParams?.samplerate
+                              ? `${bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Exclusive'}: ${activeAudioParams.samplerate}Hz • ${activeAudioParams.format || 'Direct'} (Bit-perfect)`
+                              : isDsdTrack(displayedTrack)
+                                ? 'BASS DSD Engine'
+                                : 'Direct bit-perfect stream to hardware DAC'
+                          }
+                        >
+                          {activeAudioParams?.isDsd
+                            ? bitPerfectType === 'asio'
+                              ? 'DSD Native'
+                              : 'DSD (DoP)'
+                            : isDsdTrack(displayedTrack)
+                              ? activeAudioParams?.format || 'DSD Engine'
+                              : bitPerfectType === 'asio'
+                                ? 'ASIO Direct'
+                                : 'WASAPI Direct'}
+                        </span>
+                      )
+                    })()}
+                </div>
+                <span className="text-[10px] text-zinc-500 hidden md:inline truncate">
+                  {bitPerfectEnabled && bassOutParams?.samplerate
+                    ? isDsdTrack(displayedTrack)
+                      ? formatAudioSampleRate(bassOutParams.samplerate)
+                      : bassOutParams.samplerate >= 1000
+                        ? `${bassOutParams.samplerate / 1000}kHz`
+                        : `${bassOutParams.samplerate}Hz`
+                    : displayedTrack.sampleRate
+                      ? isDsdTrack(displayedTrack)
+                        ? formatAudioSampleRate(displayedTrack.sampleRate)
+                        : displayedTrack.sampleRate >= 1000
+                          ? `${displayedTrack.sampleRate / 1000}kHz`
+                          : `${displayedTrack.sampleRate}Hz`
+                      : ''}
+                  {displayedTrack.bitrate
+                    ? ` | ${Math.round(displayedTrack.bitrate / 1000)} kbps`
+                    : ''}
+                </span>
+              </div>
             )}
           </div>
-          {currentTrack && (
-            <div className="flex items-center gap-2 mt-1 truncate">
-              <div className="inline-flex items-center gap-1 bg-white/5 p-0.5 rounded-md shrink-0">
-                {isDsdTrack(currentTrack) ? (
-                  <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
-                    {getDsdRateLabel(currentTrack.sampleRate) || currentTrack.format || 'DSD'}
-                  </span>
-                ) : (
-                  <span className="text-[10px] uppercase font-bold text-theme-10 bg-theme-10/10 px-1.5 py-0.5 rounded">
-                    {currentTrack.lossless ? 'Lossless' : currentTrack.format || 'MP3'}
-                  </span>
-                )}
-                {currentTrack.bitDepth && (
-                  <span
-                    className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                      isDsdTrack(currentTrack)
-                        ? 'text-amber-400 bg-amber-500/10'
-                        : 'text-blue-500 bg-blue-500/10'
-                    }`}
-                  >
-                    {currentTrack.bitDepth}-BIT
-                  </span>
-                )}
-                {(bitPerfectEnabled || isDsdTrack(currentTrack)) &&
-                  (() => {
-                    const activeAudioParams = bassOutParams
-                    return (
-                      <span
-                        className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                          activeAudioParams?.isDsd
-                            ? 'text-amber-400 bg-amber-500/10'
-                            : isDsdTrack(currentTrack)
-                              ? 'text-amber-400/90 bg-amber-500/10'
-                              : bitPerfectType === 'asio'
-                                ? 'text-purple-400 bg-purple-500/10'
-                                : 'text-emerald-400 bg-emerald-500/10'
-                        }`}
-                        title={
-                          activeAudioParams?.samplerate
-                            ? `${bitPerfectType === 'asio' ? 'ASIO Direct' : 'WASAPI Exclusive'}: ${activeAudioParams.samplerate}Hz • ${activeAudioParams.format || 'Direct'} (Bit-perfect)`
-                            : isDsdTrack(currentTrack)
-                              ? 'BASS DSD Engine'
-                              : 'Direct bit-perfect stream to hardware DAC'
-                        }
-                      >
-                        {activeAudioParams?.isDsd
-                          ? bitPerfectType === 'asio'
-                            ? 'DSD Native'
-                            : 'DSD (DoP)'
-                          : isDsdTrack(currentTrack)
-                            ? activeAudioParams?.format || 'DSD Engine'
-                            : bitPerfectType === 'asio'
-                              ? 'ASIO Direct'
-                              : 'WASAPI Direct'}
-                      </span>
-                    )
-                  })()}
-              </div>
-              <span className="text-[10px] text-zinc-500 hidden md:inline truncate">
-                {bitPerfectEnabled && bassOutParams?.samplerate
-                  ? isDsdTrack(currentTrack)
-                    ? formatAudioSampleRate(bassOutParams.samplerate)
-                    : bassOutParams.samplerate >= 1000
-                      ? `${bassOutParams.samplerate / 1000}kHz`
-                      : `${bassOutParams.samplerate}Hz`
-                  : currentTrack.sampleRate
-                    ? isDsdTrack(currentTrack)
-                      ? formatAudioSampleRate(currentTrack.sampleRate)
-                      : currentTrack.sampleRate >= 1000
-                        ? `${currentTrack.sampleRate / 1000}kHz`
-                        : `${currentTrack.sampleRate}Hz`
-                    : ''}
-                {currentTrack.bitrate ? ` | ${Math.round(currentTrack.bitrate / 1000)} kbps` : ''}
-              </span>
-            </div>
-          )}
         </div>
 
         {currentTrack && (

@@ -16,7 +16,8 @@ export function useTheming() {
     customAccentColor,
     customBgOpacity,
     customBgBlur,
-    streamPort
+    streamPort,
+    colorScheme
   } = useSettingsStore()
 
   const currentTrack = usePlayerStore((s) => s.currentTrack)
@@ -154,11 +155,16 @@ export function useTheming() {
   // Apply Background & Extract Theme Colors (60/30/10)
   useEffect(() => {
     let isCancelled = false
+    document.documentElement.setAttribute('data-theme', colorScheme)
+    const lightFallback = colorScheme === 'light'
+    const fallback60 = lightFallback ? '#f8fafc' : '#18181b'
+    const fallback30 = lightFallback ? '#e2e8f0' : '#27272a'
+    const fallback10 = lightFallback ? '#059669' : '#10b981'
     if (isCore) {
       document.documentElement.style.setProperty('--bg-image', 'none')
-      document.documentElement.style.setProperty('--theme-60', '#18181b')
-      document.documentElement.style.setProperty('--theme-30', '#27272a')
-      document.documentElement.style.setProperty('--theme-10', '#10b981')
+      document.documentElement.style.setProperty('--theme-60', fallback60)
+      document.documentElement.style.setProperty('--theme-30', fallback30)
+      document.documentElement.style.setProperty('--theme-10', fallback10)
       return
     }
 
@@ -171,7 +177,7 @@ export function useTheming() {
     }
 
     if (accentColorMode === 'custom') {
-      const theme = generateThemeFromColor(customAccentColor)
+      const theme = generateThemeFromColor(customAccentColor, colorScheme)
       document.documentElement.style.setProperty('--theme-60', theme.primary60)
       document.documentElement.style.setProperty('--theme-30', theme.secondary30)
       document.documentElement.style.setProperty('--theme-10', theme.accent10)
@@ -181,7 +187,7 @@ export function useTheming() {
     if (accentColorMode === 'background') {
       if (!useTrackCoverAsBg && customBgImage) {
         const safeBg = formatImageSource(customBgImage, streamPort) || customBgImage
-        extractThemeColors(safeBg, customBgImage).then((colors) => {
+        extractThemeColors(safeBg, customBgImage, colorScheme).then((colors) => {
           if (colors && !isCore && !isCancelled) {
             document.documentElement.style.setProperty('--theme-60', colors.primary60)
             document.documentElement.style.setProperty('--theme-30', colors.secondary30)
@@ -194,7 +200,7 @@ export function useTheming() {
 
     const trackKey = currentTrack?.id || currentTrack?.filePath
 
-    if (currentTrack?.themeColors && !isCore) {
+    if (currentTrack?.themeColors && !isCore && colorScheme === 'dark') {
       document.documentElement.style.setProperty('--theme-60', currentTrack.themeColors.primary60)
       document.documentElement.style.setProperty('--theme-30', currentTrack.themeColors.secondary30)
       document.documentElement.style.setProperty('--theme-10', currentTrack.themeColors.accent10)
@@ -204,7 +210,7 @@ export function useTheming() {
 
     if (trackCover) {
       const safeTrackCover = formatImageSource(trackCover, streamPort) || trackCover
-      extractThemeColors(safeTrackCover, trackKey || safeTrackCover).then((colors) => {
+      extractThemeColors(safeTrackCover, trackKey || safeTrackCover, colorScheme).then((colors) => {
         if (colors && !isCore && !isCancelled) {
           document.documentElement.style.setProperty('--theme-60', colors.primary60)
           document.documentElement.style.setProperty('--theme-30', colors.secondary30)
@@ -212,9 +218,9 @@ export function useTheming() {
         }
       })
     } else if (!currentTrack?.themeColors) {
-      document.documentElement.style.setProperty('--theme-60', '#18181b')
-      document.documentElement.style.setProperty('--theme-30', '#27272a')
-      document.documentElement.style.setProperty('--theme-10', '#10b981')
+      document.documentElement.style.setProperty('--theme-60', fallback60)
+      document.documentElement.style.setProperty('--theme-30', fallback30)
+      document.documentElement.style.setProperty('--theme-10', fallback10)
     }
     return () => {
       isCancelled = true
@@ -233,6 +239,7 @@ export function useTheming() {
     currentTrack?.coverArt,
     currentTrack?.coverArtHighRes,
     streamPort,
+    colorScheme,
     isCore
   ])
 

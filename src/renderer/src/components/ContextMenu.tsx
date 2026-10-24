@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { motion } from 'motion/react'
 import { ChevronRight } from 'lucide-react'
+import { overlayFade, useMotionReduced } from './motion'
 
 export interface ContextMenuSubItem {
   id: string
@@ -32,6 +34,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
   const mountTimeRef = useRef<number>(Date.now())
   const [activeSubMenu, setActiveSubMenu] = useState<string | null>(null)
   const [position, setPosition] = useState<{ x: number; y: number }>({ x, y })
+  const reduceMotion = useMotionReduced()
+
+  // AnimatePresence phát exit khi parent gỡ mount, gọi onClose ngay không chờ timer
+  const requestClose = () => {
+    onClose()
+  }
 
   // Căn chỉnh vị trí menu để không bao giờ tràn mép màn hình
   useEffect(() => {
@@ -62,10 +70,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
   // Lắng nghe phím Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') requestClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose])
 
   const handleBackdropEvent = (e: React.SyntheticEvent) => {
@@ -75,7 +84,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
     }
     e.preventDefault()
     e.stopPropagation()
-    onClose()
+    requestClose()
   }
 
   return (
@@ -89,10 +98,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
       />
 
       {/* Menu nổi bật chính */}
-      <div
+      <motion.div
         ref={menuRef}
-        className="fixed z-[99999] min-w-[220px] bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/70 rounded-xl shadow-2xl p-1.5 text-xs select-none animate-fade-in"
+        className="fixed z-[99999] min-w-[220px] bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/70 rounded-xl shadow-2xl p-1.5 text-xs select-none"
         style={{ left: position.x, top: position.y }}
+        initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+        animate={overlayFade.animate}
+        exit={overlayFade.exit}
+        transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         onContextMenu={(e) => {
@@ -121,7 +134,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
                   e.stopPropagation()
                   if (!hasSub && item.onClick) {
                     item.onClick()
-                    onClose()
+                    requestClose()
                   }
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-left ${
@@ -156,7 +169,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
                         onClick={(e) => {
                           e.stopPropagation()
                           sub.onClick?.()
-                          onClose()
+                          requestClose()
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-left text-zinc-200 hover:bg-white/10 hover:text-white truncate"
                       >
@@ -170,7 +183,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
             </div>
           )
         })}
-      </div>
+      </motion.div>
     </>
   )
 }

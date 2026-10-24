@@ -18,6 +18,7 @@ export type ActiveViewType =
 export interface UIState {
   activeView: ActiveViewType
   viewMode: 'table' | 'grid' | 'compact'
+  viewModeDirection: 'left' | 'right'
   themeColor: string
   toast: { message: string; type: 'success' | 'error' | 'info'; visible: boolean }
   customDialog: DialogOptions | null
@@ -110,6 +111,7 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 export const useUIStore = create<UIState>((set) => ({
   activeView: 'home',
   viewMode: getInitialViewMode(),
+  viewModeDirection: 'right',
   themeColor: 'rgba(39, 39, 42, 0)',
   toast: { message: '', type: 'info', visible: false },
   customDialog: null,
@@ -147,7 +149,9 @@ export const useUIStore = create<UIState>((set) => ({
       try {
         localStorage.setItem('meis_view_mode', next)
       } catch {}
-      return { viewMode: next }
+      const order = { table: 0, grid: 1, compact: 2 } as const
+      const viewModeDirection = order[next] < order[s.viewMode] ? 'left' : 'right'
+      return { viewMode: next, viewModeDirection }
     }),
   setThemeColor: (valOrFn) => set((s) => ({ themeColor: resolveVal(valOrFn, s.themeColor) })),
   setToast: (valOrFn) =>

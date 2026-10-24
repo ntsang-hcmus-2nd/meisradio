@@ -9,7 +9,6 @@ import {
   Cloud,
   Settings,
   ChevronDown,
-  ChevronRight,
   FolderDown,
   BarChart3
 } from 'lucide-react'
@@ -59,6 +58,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const storeSetActiveGenre = useLibraryStore((s) => s.setActiveGenre)
   const storeSetActiveUserPlaylist = useLibraryStore((s) => s.setActiveUserPlaylist)
   const storeAppMode = useSettingsStore((s) => s.appMode)
+  const sidebarBgEnabled = useSettingsStore((s) => s.sidebarBgEnabled)
+  const sidebarBgOpacity = useSettingsStore((s) => s.sidebarBgOpacity)
   const isLyricsMaximized = useUIStore((s) => s.isLyricsMaximized)
   const setIsLyricsMaximized = useUIStore((s) => s.setIsLyricsMaximized)
 
@@ -113,7 +114,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <aside className="w-[15vw] min-w-[190px] max-w-[260px] h-full bg-theme-60/80 backdrop-blur-md border-r border-theme-30/50 flex flex-col shrink-0 transition-all z-20 select-none overflow-hidden">
+    <aside
+      className={`w-[15vw] min-w-[190px] max-w-[260px] h-full flex flex-col shrink-0 transition-all z-20 select-none overflow-hidden ${sidebarBgEnabled && sidebarBgOpacity > 0 && !isCore ? 'backdrop-blur-md border-r border-theme-30/50' : 'border-r border-transparent'}`}
+      style={{
+        backgroundColor:
+          !sidebarBgEnabled || sidebarBgOpacity <= 0
+            ? 'transparent'
+            : `color-mix(in srgb, var(--theme-60) ${Math.round(sidebarBgOpacity * 100)}%, transparent)`
+      }}
+    >
       {/* CỐ ĐỊNH: Logo & Tiêu đề ứng dụng */}
       <div className="p-4 pb-3 shrink-0 border-b border-theme-30/20">
         <h1
@@ -160,54 +169,76 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       }}
                       className="p-1 hover:text-white transition cursor-pointer"
                     >
-                      {isHomeExpanded ? (
-                        <ChevronDown size={14} className="text-zinc-500 hover:text-zinc-300" />
-                      ) : (
-                        <ChevronRight size={14} className="text-zinc-500 hover:text-zinc-300" />
-                      )}
+                      <ChevronDown
+                        size={14}
+                        className={`text-zinc-500 hover:text-zinc-300 transition-transform duration-300 ${isHomeExpanded ? 'rotate-0' : '-rotate-90'}`}
+                      />
                     </button>
                   </div>
 
                   {/* Mục con mở rộng: Dashboard, YouTube Music & SoundCloud */}
-                  {isHomeExpanded && (
-                    <div className="pl-5 space-y-0.5 pt-0.5 animate-fade-in">
-                      <div
-                        onClick={() => handleNavClick('home')}
-                        className={`flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
-                          activeView === 'home'
-                            ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30'
-                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-theme-10 shrink-0"></span>
-                        <span className="truncate">{t('sidebar.dashboard')}</span>
-                      </div>
+                  <div
+                    className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+                      isHomeExpanded
+                        ? 'grid-rows-[1fr] opacity-100'
+                        : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+                    }`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="pl-5 space-y-0.5 pt-0.5">
+                        <div
+                          onClick={() => handleNavClick('home')}
+                          style={{ transitionDelay: isHomeExpanded ? '0ms' : '60ms' }}
+                          className={`flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-md text-xs font-medium transition-all duration-250 ${
+                            isHomeExpanded
+                              ? 'translate-y-0 opacity-100'
+                              : '-translate-y-2 opacity-0'
+                          } ${
+                            activeView === 'home'
+                              ? 'bg-theme-10/20 text-theme-10 border border-theme-10/30'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-theme-10 shrink-0"></span>
+                          <span className="truncate">{t('sidebar.dashboard')}</span>
+                        </div>
 
-                      <div
-                        onClick={() => handleNavClick('home-ytm')}
-                        className={`flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
-                          activeView === 'home-ytm'
-                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></span>
-                        <span className="truncate">{t('sidebar.youtubeMusic')}</span>
-                      </div>
+                        <div
+                          onClick={() => handleNavClick('home-ytm')}
+                          style={{ transitionDelay: isHomeExpanded ? '35ms' : '30ms' }}
+                          className={`flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-md text-xs font-medium transition-all duration-250 ${
+                            isHomeExpanded
+                              ? 'translate-y-0 opacity-100'
+                              : '-translate-y-2 opacity-0'
+                          } ${
+                            activeView === 'home-ytm'
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></span>
+                          <span className="truncate">{t('sidebar.youtubeMusic')}</span>
+                        </div>
 
-                      <div
-                        onClick={() => handleNavClick('home-soundcloud')}
-                        className={`flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-md text-xs font-medium transition-all ${
-                          activeView === 'home-soundcloud'
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
-                        <span className="truncate">{t('sidebar.soundCloud')}</span>
+                        <div
+                          onClick={() => handleNavClick('home-soundcloud')}
+                          style={{ transitionDelay: isHomeExpanded ? '70ms' : '0ms' }}
+                          className={`flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-md text-xs font-medium transition-all duration-250 ${
+                            isHomeExpanded
+                              ? 'translate-y-0 opacity-100'
+                              : '-translate-y-2 opacity-0'
+                          } ${
+                            activeView === 'home-soundcloud'
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                          <span className="truncate">{t('sidebar.soundCloud')}</span>
+                        </div>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </li>
               ) : (
                 <li
@@ -281,7 +312,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* CỐ ĐỊNH: Nút Cài đặt luôn ghim ở đáy */}
-      <div className="p-3 shrink-0 border-t border-theme-30/30 bg-theme-60/40">
+      <div
+        className={`p-3 shrink-0 border-t ${sidebarBgEnabled && sidebarBgOpacity > 0 ? 'border-theme-30/30 bg-theme-60/40' : 'border-transparent bg-transparent'}`}
+      >
         <div
           onClick={() => handleNavClick('settings')}
           className={`flex items-center gap-2.5 cursor-pointer py-2 px-2.5 rounded-md text-sm transition-colors ${activeView === 'settings' ? 'bg-theme-10/20 text-theme-10 font-medium' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}

@@ -1,4 +1,5 @@
 import React from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   Plus,
   ListPlus,
@@ -16,6 +17,11 @@ import { fisherYatesShuffle } from '../utils/arrayUtils'
 import { removeAccents, matchesQuery } from '../utils/textUtils'
 import { useTranslation } from '../locales'
 import { useUIStore, useSettingsStore } from '../stores'
+import {
+  useMotionReduced,
+  viewModeSlideTransition,
+  viewModeSlideVariants
+} from '../components/motion'
 
 export interface UserPlaylistsViewProps {
   searchQuery: string
@@ -62,7 +68,10 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
 }) => {
   const { t } = useTranslation()
   const viewMode = useUIStore((state) => state.viewMode)
+  const viewModeDirection = useUIStore((state) => state.viewModeDirection)
   const isLite = useSettingsStore((state) => state.appMode === 'lite' || state.appMode === 'core')
+  const reduceMotion = useMotionReduced()
+  const noAnim = reduceMotion || isLite
 
   if (activeUserPlaylist) {
     return (
@@ -110,9 +119,6 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
               </div>
 
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">
-                  {t('userPlaylistsView.title')}
-                </p>
                 <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-2 truncate">
                   {activeUserPlaylist.name}
                 </h2>
@@ -227,39 +233,134 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-2">
-        {(() => {
-          const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
-          const normQuery = removeAccents(rawQuery)
-          const matchedUserPlaylists = rawQuery
-            ? userPlaylists.filter((pl) => matchesQuery(pl.name, normQuery))
-            : userPlaylists
+      <AnimatePresence mode="wait" initial={false} custom={viewModeDirection}>
+        <motion.div
+          key={viewMode}
+          className="flex-1 overflow-y-auto pr-2"
+          custom={viewModeDirection}
+          variants={viewModeSlideVariants}
+          initial={noAnim ? { opacity: 1, x: 0 } : 'initial'}
+          animate={noAnim ? { opacity: 1, x: 0 } : 'animate'}
+          exit={noAnim ? { opacity: 1, x: 0 } : 'exit'}
+          transition={noAnim ? { duration: 0 } : viewModeSlideTransition}
+        >
+          {(() => {
+            const rawQuery = (deferredSearchQuery || searchQuery || '').trim()
+            const normQuery = removeAccents(rawQuery)
+            const matchedUserPlaylists = rawQuery
+              ? userPlaylists.filter((pl) => matchesQuery(pl.name, normQuery))
+              : userPlaylists
 
-          if (matchedUserPlaylists.length === 0) {
-            return (
-              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
-                <ListPlus size={56} className="mb-4 opacity-20" />
-                <p className="text-lg">{t('userPlaylistsView.noPlaylists')}</p>
-                <button
-                  onClick={() => setShowCreateUserPlaylistModal(true)}
-                  className="mt-4 px-4 py-2 bg-theme-10 text-white rounded-lg text-sm font-medium transition"
-                >
-                  {t('userPlaylistsView.createPlaylist')}
-                </button>
-              </div>
-            )
-          }
-
-          if (viewMode === 'table') {
-            return (
-              <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
-                <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                  <div className="col-span-1 text-center">#</div>
-                  <div className="col-span-6">{t('userPlaylistsView.title')}</div>
-                  <div className="col-span-3 text-center">{t('common.songs')}</div>
-                  <div className="col-span-2 text-right">{t('trackTable.actions')}</div>
+            if (matchedUserPlaylists.length === 0) {
+              return (
+                <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 mt-20">
+                  <ListPlus size={56} className="mb-4 opacity-20" />
+                  <p className="text-lg">{t('userPlaylistsView.noPlaylists')}</p>
+                  <button
+                    onClick={() => setShowCreateUserPlaylistModal(true)}
+                    className="mt-4 px-4 py-2 bg-theme-10 text-white rounded-lg text-sm font-medium transition"
+                  >
+                    {t('userPlaylistsView.createPlaylist')}
+                  </button>
                 </div>
-                <div className="divide-y divide-theme-30/20">
+              )
+            }
+
+            if (viewMode === 'table') {
+              return (
+                <div className="w-full bg-theme-60/20 rounded-2xl border border-theme-30/40 overflow-hidden shadow-xl">
+                  <div className="grid grid-cols-12 gap-4 px-6 py-3.5 bg-theme-30/40 border-b border-theme-30/50 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                    <div className="col-span-1 text-center">#</div>
+                    <div className="col-span-6">{t('userPlaylistsView.title')}</div>
+                    <div className="col-span-3 text-center">{t('common.songs')}</div>
+                    <div className="col-span-2 text-right">{t('trackTable.actions')}</div>
+                  </div>
+                  <div className="divide-y divide-theme-30/20">
+                    {matchedUserPlaylists.map((pl, idx) => {
+                      const resolved = getResolvedUserPlaylistTracks(pl)
+                      const coverImg =
+                        pl.thumbnail || pl.coverArt || resolved.find((t) => t.coverArt)?.coverArt
+
+                      return (
+                        <div
+                          key={pl.id}
+                          onClick={() => setActiveUserPlaylist(pl)}
+                          onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
+                          className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+                        >
+                          <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
+                            {idx + 1}
+                          </div>
+                          <div className="col-span-6 flex items-center gap-3.5 min-w-0">
+                            <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
+                              <DynamicCoverArt
+                                src={coverImg}
+                                trackPath={
+                                  pl.thumbnail || pl.coverArt ? undefined : resolved[0]?.filePath
+                                }
+                                tier="sm"
+                                isLite={isLite}
+                                fallbackIcon={<ListPlus size={20} className="text-zinc-600" />}
+                                className="w-full h-full"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (resolved.length > 0) handleRowClick(resolved[0], resolved)
+                                  }}
+                                  className="text-white hover:scale-110 transition"
+                                >
+                                  <Play size={16} className="fill-current" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">
+                                {pl.name}
+                              </h4>
+                              <p className="text-xs text-zinc-500 truncate mt-0.5">
+                                {t('userPlaylistsView.title')}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="col-span-3 text-center">
+                            <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
+                              {pl.trackIds?.length || 0} {t('common.songs')}
+                            </span>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-end gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleChangeUserPlaylistCover(pl.id)
+                              }}
+                              className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100"
+                              title={t('userPlaylistsView.chooseCover')}
+                            >
+                              <ImageIcon size={15} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleUserPlaylistContextMenu(pl, e)
+                              }}
+                              className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition"
+                            >
+                              <MoreVertical size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            }
+
+            if (viewMode === 'compact') {
+              return (
+                <div className="w-full space-y-1.5">
                   {matchedUserPlaylists.map((pl, idx) => {
                     const resolved = getResolvedUserPlaylistTracks(pl)
                     const coverImg =
@@ -270,13 +371,13 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                         key={pl.id}
                         onClick={() => setActiveUserPlaylist(pl)}
                         onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                        className="grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-theme-30/40 transition group cursor-pointer track-row-optimized"
+                        className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
                       >
-                        <div className="col-span-1 text-center text-xs text-zinc-500 font-mono group-hover:text-theme-10 font-bold">
-                          {idx + 1}
-                        </div>
-                        <div className="col-span-6 flex items-center gap-3.5 min-w-0">
-                          <div className="w-12 h-12 rounded-xl bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow-md">
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                          <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">
+                            {idx + 1}
+                          </span>
+                          <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
                             <DynamicCoverArt
                               src={coverImg}
                               trackPath={
@@ -284,68 +385,50 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                               }
                               tier="sm"
                               isLite={isLite}
-                              fallbackIcon={<ListPlus size={20} className="text-zinc-600" />}
+                              fallbackIcon={<ListPlus size={16} className="text-zinc-600" />}
                               className="w-full h-full"
                             />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  if (resolved.length > 0) handleRowClick(resolved[0], resolved)
-                                }}
-                                className="text-white hover:scale-110 transition"
-                              >
-                                <Play size={16} className="fill-current" />
-                              </button>
-                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-white text-sm group-hover:text-theme-10 transition truncate">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">
                               {pl.name}
                             </h4>
-                            <p className="text-xs text-zinc-500 truncate mt-0.5">
-                              {t('userPlaylistsView.title')}
-                            </p>
                           </div>
                         </div>
-                        <div className="col-span-3 text-center">
-                          <span className="px-2.5 py-1 rounded-full bg-theme-30/60 text-xs font-semibold text-zinc-300">
+                        <div className="flex items-center gap-4 shrink-0">
+                          <span className="text-xs text-zinc-400 font-mono">
                             {pl.trackIds?.length || 0} {t('common.songs')}
                           </span>
-                        </div>
-                        <div className="col-span-2 flex items-center justify-end gap-2">
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              handleChangeUserPlaylistCover(pl.id)
+                              if (resolved.length > 0) handleRowClick(resolved[0], resolved)
                             }}
-                            className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition opacity-0 group-hover:opacity-100"
-                            title={t('userPlaylistsView.chooseCover')}
+                            className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
+                            title={t('artistsView.playAll')}
                           >
-                            <ImageIcon size={15} />
+                            <Play size={13} className="ml-0.5 fill-current" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               handleUserPlaylistContextMenu(pl, e)
                             }}
-                            className="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-theme-30 transition"
+                            className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
                           >
-                            <MoreVertical size={15} />
+                            <MoreVertical size={14} />
                           </button>
                         </div>
                       </div>
                     )
                   })}
                 </div>
-              </div>
-            )
-          }
+              )
+            }
 
-          if (viewMode === 'compact') {
             return (
-              <div className="w-full space-y-1.5">
-                {matchedUserPlaylists.map((pl, idx) => {
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+                {matchedUserPlaylists.map((pl) => {
                   const resolved = getResolvedUserPlaylistTracks(pl)
                   const coverImg =
                     pl.thumbnail || pl.coverArt || resolved.find((t) => t.coverArt)?.coverArt
@@ -355,44 +438,51 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                       key={pl.id}
                       onClick={() => setActiveUserPlaylist(pl)}
                       onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                      className="flex items-center justify-between px-4 py-2 bg-theme-60/30 hover:bg-theme-30/50 rounded-xl border border-theme-30/20 hover:border-theme-30/60 transition group cursor-pointer shadow-sm track-row-optimized"
+                      className="bg-theme-60/40 hover:bg-theme-30/50 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between shadow-lg track-card-optimized"
                     >
-                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                        <span className="text-xs text-zinc-500 font-mono w-6 text-center shrink-0 group-hover:text-theme-10 font-bold">
-                          {idx + 1}
-                        </span>
-                        <div className="w-9 h-9 rounded-lg bg-theme-30 overflow-hidden shrink-0 relative flex items-center justify-center shadow">
-                          <DynamicCoverArt
-                            src={coverImg}
-                            trackPath={
-                              pl.thumbnail || pl.coverArt ? undefined : resolved[0]?.filePath
-                            }
-                            tier="sm"
-                            isLite={isLite}
-                            fallbackIcon={<ListPlus size={16} className="text-zinc-600" />}
-                            className="w-full h-full"
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="font-semibold text-white text-sm group-hover:text-theme-10 transition truncate">
-                            {pl.name}
-                          </h4>
+                      <div className="aspect-square bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-md">
+                        <DynamicCoverArt
+                          src={coverImg}
+                          trackPath={
+                            pl.thumbnail || pl.coverArt ? undefined : resolved[0]?.filePath
+                          }
+                          tier="md"
+                          isLite={isLite}
+                          fallbackIcon={<ListPlus size={36} className="text-zinc-600" />}
+                          className="w-full h-full"
+                          imageClassName="group-hover:scale-105 transition duration-300"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (resolved.length > 0) handleRowClick(resolved[0], resolved)
+                            }}
+                            className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg"
+                          >
+                            <Play size={18} className="ml-0.5 fill-current" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleChangeUserPlaylistCover(pl.id)
+                            }}
+                            className="w-8 h-8 rounded-full bg-black/70 text-white hover:bg-theme-10 flex items-center justify-center transition"
+                            title={t('userPlaylistsView.chooseCover')}
+                          >
+                            <ImageIcon size={14} />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 shrink-0">
-                        <span className="text-xs text-zinc-400 font-mono">
-                          {pl.trackIds?.length || 0} {t('common.songs')}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (resolved.length > 0) handleRowClick(resolved[0], resolved)
-                          }}
-                          className="p-1.5 bg-theme-10/20 hover:bg-theme-10 text-theme-10 hover:text-white rounded-lg transition opacity-0 group-hover:opacity-100"
-                          title={t('artistsView.playAll')}
-                        >
-                          <Play size={13} className="ml-0.5 fill-current" />
-                        </button>
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0 flex-1 pr-2">
+                          <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">
+                            {pl.name}
+                          </h3>
+                          <p className="text-xs text-zinc-400 mt-0.5">
+                            {pl.trackIds?.length || 0} {t('common.songs')}
+                          </p>
+                        </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -408,80 +498,9 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
                 })}
               </div>
             )
-          }
-
-          return (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
-              {matchedUserPlaylists.map((pl) => {
-                const resolved = getResolvedUserPlaylistTracks(pl)
-                const coverImg =
-                  pl.thumbnail || pl.coverArt || resolved.find((t) => t.coverArt)?.coverArt
-
-                return (
-                  <div
-                    key={pl.id}
-                    onClick={() => setActiveUserPlaylist(pl)}
-                    onContextMenu={(e) => handleUserPlaylistContextMenu(pl, e)}
-                    className="bg-theme-60/40 hover:bg-theme-30/50 p-4 rounded-2xl border border-theme-30/50 hover:border-theme-10/40 transition group cursor-pointer flex flex-col justify-between shadow-lg track-card-optimized"
-                  >
-                    <div className="aspect-square bg-theme-30 rounded-xl mb-3 overflow-hidden relative shadow-md">
-                      <DynamicCoverArt
-                        src={coverImg}
-                        trackPath={pl.thumbnail || pl.coverArt ? undefined : resolved[0]?.filePath}
-                        tier="md"
-                        isLite={isLite}
-                        fallbackIcon={<ListPlus size={36} className="text-zinc-600" />}
-                        className="w-full h-full"
-                        imageClassName="group-hover:scale-105 transition duration-300"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (resolved.length > 0) handleRowClick(resolved[0], resolved)
-                          }}
-                          className="w-10 h-10 rounded-full bg-theme-10 text-white flex items-center justify-center shadow-lg"
-                        >
-                          <Play size={18} className="ml-0.5 fill-current" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleChangeUserPlaylistCover(pl.id)
-                          }}
-                          className="w-8 h-8 rounded-full bg-black/70 text-white hover:bg-theme-10 flex items-center justify-center transition"
-                          title={t('userPlaylistsView.chooseCover')}
-                        >
-                          <ImageIcon size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <h3 className="font-bold text-white truncate text-sm group-hover:text-theme-10 transition">
-                          {pl.name}
-                        </h3>
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          {pl.trackIds?.length || 0} {t('common.songs')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleUserPlaylistContextMenu(pl, e)
-                        }}
-                        className="text-zinc-500 hover:text-white p-1 rounded transition opacity-0 group-hover:opacity-100"
-                      >
-                        <MoreVertical size={14} />
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })()}
-      </div>
+          })()}
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }

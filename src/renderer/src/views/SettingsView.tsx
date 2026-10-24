@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Settings,
   Palette,
   LayoutTemplate,
   Sparkles,
@@ -8,19 +7,13 @@ import {
   Image as ImageIcon,
   Check,
   Trash2,
-  Languages,
   Folder,
   Edit2,
   FolderOpen,
   Plus,
   RefreshCw,
-  Volume2,
   Cpu,
   Leaf,
-  AppWindow,
-  Flame,
-  Cloud,
-  Database,
   Download,
   BarChart2,
   Shuffle
@@ -97,6 +90,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Settings Store
   const uiStyle = useSettingsStore((state) => state.uiStyle)
   const setUiStyle = useSettingsStore((state) => state.setUiStyle)
+  const colorScheme = useSettingsStore((state) => state.colorScheme)
+  const setColorScheme = useSettingsStore((state) => state.setColorScheme)
+  const sidebarBgEnabled = useSettingsStore((state) => state.sidebarBgEnabled)
+  const setSidebarBgEnabled = useSettingsStore((state) => state.setSidebarBgEnabled)
+  const sidebarBgOpacity = useSettingsStore((state) => state.sidebarBgOpacity)
+  const setSidebarBgOpacity = useSettingsStore((state) => state.setSidebarBgOpacity)
   const appMode = useSettingsStore((state) => state.appMode)
   const setAppMode = useSettingsStore((state) => state.setAppMode)
   const isCore = appMode === 'core'
@@ -204,7 +203,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
         <div className="min-w-0 flex-1">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white truncate flex items-center gap-3">
-            <Settings className="text-theme-10 w-7 h-7 sm:w-8 sm:h-8 shrink-0" />
             <span>{t('settings.title')}</span>
           </h2>
         </div>
@@ -214,9 +212,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-              <Palette size={20} />
-            </div>
             <h3 className="text-base sm:text-lg font-bold text-white truncate">
               {t('settings.customBg.title')}
             </h3>
@@ -318,6 +313,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <span className="text-[11px] text-emerald-400 font-medium ml-1">
                   {language === 'vi' ? '✓ Giữ nguyên tên bài hát' : '✓ Preserves song text'}
                 </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CHỌN GIAO DIỆN SÁNG / TỐI (COLOR SCHEME) */}
+        <div className="pt-4 border-t border-theme-30/40">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-theme-10 mb-2.5">
+            {language === 'vi' ? 'Giao diện Sáng / Tối' : 'Color Scheme'}
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div
+              onClick={() => setColorScheme('dark')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                colorScheme === 'dark'
+                  ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
+                  : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
+              }`}
+            >
+              <span className="font-bold text-white text-sm">
+                {language === 'vi' ? 'Chế độ Tối (Dark Mode)' : 'Dark Mode'}
+              </span>
+              <div
+                className={`w-4 h-4 rounded-full border flex items-center justify-center ${colorScheme === 'dark' ? 'border-theme-10 bg-theme-10/20' : 'border-zinc-700'}`}
+              >
+                {colorScheme === 'dark' && <div className="w-2 h-2 rounded-full bg-theme-10" />}
+              </div>
+            </div>
+            <div
+              onClick={() => setColorScheme('light')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                colorScheme === 'light'
+                  ? 'bg-theme-10/15 border-theme-10 shadow-lg shadow-theme-10/10 ring-1 ring-theme-10/40'
+                  : 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-900/60 hover:border-zinc-700'
+              }`}
+            >
+              <span className="font-bold text-white text-sm">
+                {language === 'vi' ? 'Chế độ Sáng (Light Mode)' : 'Light Mode'}
+              </span>
+              <div
+                className={`w-4 h-4 rounded-full border flex items-center justify-center ${colorScheme === 'light' ? 'border-theme-10 bg-theme-10/20' : 'border-zinc-700'}`}
+              >
+                {colorScheme === 'light' && <div className="w-2 h-2 rounded-full bg-theme-10" />}
               </div>
             </div>
           </div>
@@ -630,6 +668,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       {customBgBlur}px
                     </span>
                   </div>
+                  <label className="flex items-center gap-3 cursor-pointer select-none pt-1">
+                    <input
+                      type="checkbox"
+                      checked={sidebarBgEnabled}
+                      onChange={(e) => setSidebarBgEnabled(e.target.checked)}
+                      className="w-4 h-4 accent-theme-10 rounded cursor-pointer"
+                    />
+                    <span className="text-sm text-zinc-300">
+                      {language === 'vi'
+                        ? 'Bật nền cho thanh bên (Sidebar)'
+                        : 'Enable Sidebar Background'}
+                    </span>
+                  </label>
+                  {sidebarBgEnabled && (
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-zinc-300 w-32">
+                        {language === 'vi' ? 'Độ trong suốt thanh bên' : 'Sidebar Opacity'}:
+                      </span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={sidebarBgOpacity}
+                        onChange={(e) => setSidebarBgOpacity(parseFloat(e.target.value))}
+                        onWheel={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const delta = e.deltaY < 0 ? 0.05 : -0.05
+                          setSidebarBgOpacity((prev) =>
+                            Math.max(0, Math.min(1, Math.round((prev + delta) * 100) / 100))
+                          )
+                        }}
+                        className="flex-1 accent-theme-10"
+                      />
+                      <span className="text-sm font-mono text-zinc-400 w-12 text-right">
+                        {Math.round(sidebarBgOpacity * 100)}%
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -640,9 +718,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col pr-4">
               <span className="text-zinc-300 text-sm font-medium">
                 {t('settings.customBg.waveformSeekbar')}
-              </span>
-              <span className="text-xs text-zinc-400 mt-0.5">
-                {t('settings.customBg.waveformSeekbarDesc')}
               </span>
             </div>
             <input
@@ -658,9 +733,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ISLAND 2: NGÔN NGỮ (LANGUAGE) */}
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-            <Languages size={20} />
-          </div>
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {t('settings.language.title')}
           </h3>
@@ -681,9 +753,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-              <Folder size={20} />
-            </div>
             <h3 className="text-base sm:text-lg font-bold text-white truncate">
               {t('settings.library.title')}
             </h3>
@@ -766,9 +835,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-              <Volume2 size={20} />
-            </div>
             <h3 className="text-base sm:text-lg font-bold text-white truncate">
               {t('settings.bitPerfect.title')}
             </h3>
@@ -1005,9 +1071,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="text-zinc-300 text-sm font-medium">
                 {t('settings.gaplessPlayback')}
               </span>
-              <span className="text-xs text-zinc-400 mt-0.5">
-                {t('settings.gaplessPlaybackDesc')}
-              </span>
             </div>
             <input
               type="checkbox"
@@ -1033,11 +1096,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </span>
               )}
             </span>
-            <span className="text-xs text-zinc-400 mt-0.5">
-              {language === 'vi'
-                ? 'Cân bằng âm lượng chuẩn hóa dựa trên thẻ ReplayGain của tệp âm thanh'
-                : 'Normalize loudness using ReplayGain tags in audio files'}
-            </span>
           </div>
           <select
             disabled={bitPerfectEnabled}
@@ -1059,9 +1117,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ISLAND 5: HIỆU NĂNG & CHẾ ĐỘ HOẠT ĐỘNG (APP MODE) */}
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-            <Cpu size={20} />
-          </div>
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {t('settings.appMode.title')}
           </h3>
@@ -1151,9 +1206,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ISLAND 6: HÀNH VI CỬA SỔ (WINDOW BEHAVIOR) */}
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-            <AppWindow size={20} />
-          </div>
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {t('settings.windowBehavior.title')}
           </h3>
@@ -1204,9 +1256,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-              <Flame size={20} />
-            </div>
             <div className="flex items-center gap-2.5">
               <h3 className="text-base sm:text-lg font-bold text-white truncate">
                 {t('settings.discordRpc.title')}
@@ -1324,9 +1373,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ISLAND 8: GOOGLE DRIVE */}
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-            <Cloud size={20} />
-          </div>
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {t('settings.googleDrive.title')}
           </h3>
@@ -1345,9 +1391,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ISLAND 9: DỮ LIỆU, THỐNG KÊ & SAO LƯU */}
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-            <Database size={20} />
-          </div>
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {language === 'vi' ? 'Dữ liệu, Thống kê & Sao lưu' : 'Data, Insights & Backup'}
           </h3>
@@ -1389,16 +1432,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center shrink-0">
-              <RefreshCw
-                size={20}
-                className={
-                  updaterStatus?.status === 'checking' || updaterStatus?.status === 'downloading'
-                    ? 'animate-spin'
-                    : ''
-                }
-              />
-            </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-bold text-white truncate">
@@ -1410,35 +1443,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   v{updaterStatus?.currentVersion || '1.0.0'}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {updaterStatus?.status === 'checking'
-                  ? language === 'vi'
-                    ? 'Đang kiểm tra bản cập nhật mới...'
-                    : 'Checking for updates...'
-                  : updaterStatus?.status === 'available'
+              {updaterStatus?.status && updaterStatus.status !== 'idle' && (
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  {updaterStatus?.status === 'checking'
                     ? language === 'vi'
-                      ? `Có bản cập nhật mới: v${updaterStatus?.latestVersion || ''}`
-                      : `New update available: v${updaterStatus?.latestVersion || ''}`
-                    : updaterStatus?.status === 'downloading'
+                      ? 'Đang kiểm tra bản cập nhật mới...'
+                      : 'Checking for updates...'
+                    : updaterStatus?.status === 'available'
                       ? language === 'vi'
-                        ? `Đang tải: ${updaterStatus?.progressPercent || 0}%`
-                        : `Downloading: ${updaterStatus?.progressPercent || 0}%`
-                      : updaterStatus?.status === 'downloaded'
+                        ? `Có bản cập nhật mới: v${updaterStatus?.latestVersion || ''}`
+                        : `New update available: v${updaterStatus?.latestVersion || ''}`
+                      : updaterStatus?.status === 'downloading'
                         ? language === 'vi'
-                          ? 'Sẵn sàng cài đặt'
-                          : 'Ready to install'
-                        : updaterStatus?.status === 'not-available'
+                          ? `Đang tải: ${updaterStatus?.progressPercent || 0}%`
+                          : `Downloading: ${updaterStatus?.progressPercent || 0}%`
+                        : updaterStatus?.status === 'downloaded'
                           ? language === 'vi'
-                            ? 'Đã là phiên bản mới nhất'
-                            : 'You are on the latest version'
-                          : updaterStatus?.status === 'error'
+                            ? 'Sẵn sàng cài đặt'
+                            : 'Ready to install'
+                          : updaterStatus?.status === 'not-available'
                             ? language === 'vi'
-                              ? `Lỗi: ${updaterStatus?.error || 'Không thể kiểm tra'}`
-                              : `Error: ${updaterStatus?.error || 'Failed to check'}`
-                            : language === 'vi'
-                              ? 'Tự động kiểm tra và cập nhật phiên bản mới'
-                              : 'Check for and install new updates'}
-              </p>
+                              ? 'Đã là phiên bản mới nhất'
+                              : 'You are on the latest version'
+                            : updaterStatus?.status === 'error'
+                              ? language === 'vi'
+                                ? `Lỗi: ${updaterStatus?.error || 'Không thể kiểm tra'}`
+                                : `Error: ${updaterStatus?.error || 'Failed to check'}`
+                              : null}
+                </p>
+              )}
             </div>
           </div>
 

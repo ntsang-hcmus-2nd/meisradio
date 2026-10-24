@@ -3,6 +3,8 @@ import { X, BarChart3, Clock, Disc3, Mic2, Music2, Sparkles, Headphones } from '
 import { useTranslation } from '../../locales'
 import { useUIStore } from '../../stores/uiStore'
 import { useLibraryStore } from '../../stores/libraryStore'
+import { AnimatePresence, motion } from 'motion/react'
+import { dialogScale, overlayFade, useMotionReduced } from '../motion'
 import { splitArtistString } from '../../utils/textUtils'
 import { isDsdTrack } from '../../utils/formatUtils'
 
@@ -13,6 +15,7 @@ export const MusicInsightsModal: React.FC = () => {
 
   const libraryTracks = useLibraryStore((s) => s.libraryTracks)
   const recentlyPlayed = useLibraryStore((s) => s.recentlyPlayed)
+  const reduceMotion = useMotionReduced()
 
   // Compute insights
   const stats = useMemo(() => {
@@ -110,194 +113,202 @@ export const MusicInsightsModal: React.FC = () => {
     }
   }, [libraryTracks, recentlyPlayed])
 
-  if (!show) return null
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
-      onClick={() => setShow(false)}
-    >
-      <div
-        className="w-[680px] max-w-full bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6 animate-scale-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-violet-500/20 text-violet-400">
-              <BarChart3 size={22} />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                Mei&apos;s Music Insights
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                  {t('insights.personalBadge')}
-                </span>
-              </h2>
-              <p className="text-xs text-zinc-400">{t('insights.subtitle')}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShow(false)}
-            className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setShow(false)}
+          initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
+          animate={overlayFade.animate}
+          exit={overlayFade.exit}
+          transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+        >
+          <motion.div
+            className="w-[680px] max-w-full bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6"
+            onClick={(e) => e.stopPropagation()}
+            initial={reduceMotion ? { opacity: 1, scale: 1 } : dialogScale.initial}
+            animate={dialogScale.animate}
+            exit={dialogScale.exit}
+            transition={reduceMotion ? { duration: 0 } : dialogScale.transition}
           >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="py-5 space-y-6 overflow-y-auto max-h-[70vh]">
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl">
-              <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
-                <Music2 size={15} className="text-emerald-400" />
-                <span>{t('insights.musicLibrary')}</span>
-              </div>
-              <p className="text-2xl font-black text-white">{stats.totalTracks.toLocaleString()}</p>
-              <p className="text-[11px] text-zinc-500 mt-1">{t('insights.tracksReady')}</p>
-            </div>
-
-            <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl">
-              <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
-                <Clock size={15} className="text-amber-400" />
-                <span>{t('insights.totalDuration')}</span>
-              </div>
-              <p className="text-2xl font-black text-white">
-                {stats.totalHours}h {stats.totalMinutes}m
-              </p>
-              <p className="text-[11px] text-zinc-500 mt-1">{t('insights.nonstop')}</p>
-            </div>
-
-            <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl">
-              <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
-                <Headphones size={15} className="text-purple-400" />
-                <span>Lossless Hi-Res</span>
-              </div>
-              <p className="text-2xl font-black text-white">{stats.losslessPercent}%</p>
-              <p className="text-[11px] text-zinc-500 mt-1">
-                {stats.flacCount} {t('insights.flacWavFiles')}
-                {stats.dsdCount > 0 ? ` • ${stats.dsdCount} ${t('insights.dsdFiles')}` : ''}
-              </p>
-            </div>
-          </div>
-
-          {/* Lossless Quality Progress Bar */}
-          <div className="bg-zinc-950/40 border border-zinc-800/60 p-4 rounded-2xl space-y-2">
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
-                <Sparkles size={14} className="text-yellow-400" />
-                {t('insights.libraryQuality')}
-              </span>
-              <span className="text-zinc-500 text-[11px] font-mono">
-                {t('insights.qualityBreakdown', {
-                  l: stats.losslessPercent,
-                  m: stats.mp3Percent,
-                  o: stats.otherPercent
-                })}
-              </span>
-            </div>
-            <div className="h-2.5 rounded-full overflow-hidden flex bg-zinc-800">
-              <div
-                style={{ width: `${stats.losslessPercent}%` }}
-                className="bg-emerald-500 h-full transition-all"
-                title={`${stats.flacCount} FLAC/WAV${stats.dsdCount > 0 ? `, ${stats.dsdCount} DSD` : ''}`}
-              />
-              <div
-                style={{ width: `${stats.mp3Percent}%` }}
-                className="bg-sky-500 h-full transition-all"
-                title="MP3 / Compressed"
-              />
-              <div
-                style={{ width: `${stats.otherPercent}%` }}
-                className="bg-zinc-600 h-full transition-all"
-                title={t('insights.otherFormat')}
-              />
-            </div>
-          </div>
-
-          {/* Top Artists & Top Genres */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Top Artists */}
-            <div className="bg-zinc-950/40 border border-zinc-800/60 p-4 rounded-2xl">
-              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Mic2 size={14} className="text-rose-400" />
-                {t('insights.topArtists')}
-              </h3>
-              {stats.sortedArtists.length === 0 ? (
-                <p className="text-zinc-600 text-xs py-4 text-center">
-                  {t('insights.noArtistData')}
-                </p>
-              ) : (
-                <div className="space-y-2.5">
-                  {stats.sortedArtists.map(([artist, count], i) => (
-                    <div key={artist} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span
-                          className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
-                            i === 0
-                              ? 'bg-amber-500/20 text-amber-400'
-                              : i === 1
-                                ? 'bg-zinc-700 text-zinc-300'
-                                : i === 2
-                                  ? 'bg-orange-800/30 text-orange-400'
-                                  : 'bg-zinc-800 text-zinc-500'
-                          }`}
-                        >
-                          {i + 1}
-                        </span>
-                        <span className="text-zinc-300 font-medium truncate">{artist}</span>
-                      </div>
-                      <span className="text-zinc-500 text-[11px] font-mono shrink-0">
-                        {count} {t('insights.tracksSuffix')}
-                      </span>
-                    </div>
-                  ))}
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-violet-500/20 text-violet-400">
+                  <BarChart3 size={22} />
                 </div>
-              )}
-            </div>
-
-            {/* Top Genres */}
-            <div className="bg-zinc-950/40 border border-zinc-800/60 p-4 rounded-2xl">
-              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Disc3 size={14} className="text-cyan-400" />
-                {t('insights.topGenres')}
-              </h3>
-              {stats.sortedGenres.length === 0 ? (
-                <p className="text-zinc-600 text-xs py-4 text-center">
-                  {t('insights.noGenreData')}
-                </p>
-              ) : (
-                <div className="space-y-2.5">
-                  {stats.sortedGenres.map(([genre, count], i) => (
-                    <div key={genre} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-5 h-5 rounded-full bg-zinc-800 text-zinc-400 flex items-center justify-center font-bold text-[10px] shrink-0">
-                          {i + 1}
-                        </span>
-                        <span className="text-zinc-300 font-medium truncate">{genre}</span>
-                      </div>
-                      <span className="text-zinc-500 text-[11px] font-mono shrink-0">
-                        {count} {t('insights.tracksSuffix')}
-                      </span>
-                    </div>
-                  ))}
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    Mei&apos;s Music Insights
+                  </h2>
                 </div>
-              )}
+              </div>
+              <button
+                onClick={() => setShow(false)}
+                className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
+              >
+                <X size={18} />
+              </button>
             </div>
-          </div>
-        </div>
 
-        {/* Footer */}
-        <div className="pt-4 border-t border-zinc-800 flex justify-end">
-          <button
-            onClick={() => setShow(false)}
-            className="px-5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition"
-          >
-            {t('common.close')}
-          </button>
-        </div>
-      </div>
-    </div>
+            {/* Content */}
+            <div className="py-5 space-y-6 overflow-y-auto max-h-[70vh]">
+              {/* Quick Metrics */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl">
+                  <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                    <Music2 size={15} className="text-emerald-400" />
+                    <span>{t('insights.musicLibrary')}</span>
+                  </div>
+                  <p className="text-2xl font-black text-white">
+                    {stats.totalTracks.toLocaleString()}
+                  </p>
+                  <p className="text-[11px] text-zinc-500 mt-1">{t('insights.tracksReady')}</p>
+                </div>
+
+                <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl">
+                  <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                    <Clock size={15} className="text-amber-400" />
+                    <span>{t('insights.totalDuration')}</span>
+                  </div>
+                  <p className="text-2xl font-black text-white">
+                    {stats.totalHours}h {stats.totalMinutes}m
+                  </p>
+                  <p className="text-[11px] text-zinc-500 mt-1">{t('insights.nonstop')}</p>
+                </div>
+
+                <div className="bg-zinc-950/60 border border-zinc-800/80 p-4 rounded-2xl">
+                  <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                    <Headphones size={15} className="text-purple-400" />
+                    <span>Lossless Hi-Res</span>
+                  </div>
+                  <p className="text-2xl font-black text-white">{stats.losslessPercent}%</p>
+                  <p className="text-[11px] text-zinc-500 mt-1">
+                    {stats.flacCount} {t('insights.flacWavFiles')}
+                    {stats.dsdCount > 0 ? ` • ${stats.dsdCount} ${t('insights.dsdFiles')}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              {/* Lossless Quality Progress Bar */}
+              <div className="bg-zinc-950/40 border border-zinc-800/60 p-4 rounded-2xl space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-yellow-400" />
+                    {t('insights.libraryQuality')}
+                  </span>
+                  <span className="text-zinc-500 text-[11px] font-mono">
+                    {t('insights.qualityBreakdown', {
+                      l: stats.losslessPercent,
+                      m: stats.mp3Percent,
+                      o: stats.otherPercent
+                    })}
+                  </span>
+                </div>
+                <div className="h-2.5 rounded-full overflow-hidden flex bg-zinc-800">
+                  <div
+                    style={{ width: `${stats.losslessPercent}%` }}
+                    className="bg-emerald-500 h-full transition-all"
+                    title={`${stats.flacCount} FLAC/WAV${stats.dsdCount > 0 ? `, ${stats.dsdCount} DSD` : ''}`}
+                  />
+                  <div
+                    style={{ width: `${stats.mp3Percent}%` }}
+                    className="bg-sky-500 h-full transition-all"
+                    title="MP3 / Compressed"
+                  />
+                  <div
+                    style={{ width: `${stats.otherPercent}%` }}
+                    className="bg-zinc-600 h-full transition-all"
+                    title={t('insights.otherFormat')}
+                  />
+                </div>
+              </div>
+
+              {/* Top Artists & Top Genres */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Top Artists */}
+                <div className="bg-zinc-950/40 border border-zinc-800/60 p-4 rounded-2xl">
+                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Mic2 size={14} className="text-rose-400" />
+                    {t('insights.topArtists')}
+                  </h3>
+                  {stats.sortedArtists.length === 0 ? (
+                    <p className="text-zinc-600 text-xs py-4 text-center">
+                      {t('insights.noArtistData')}
+                    </p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {stats.sortedArtists.map(([artist, count], i) => (
+                        <div key={artist} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span
+                              className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
+                                i === 0
+                                  ? 'bg-amber-500/20 text-amber-400'
+                                  : i === 1
+                                    ? 'bg-zinc-700 text-zinc-300'
+                                    : i === 2
+                                      ? 'bg-orange-800/30 text-orange-400'
+                                      : 'bg-zinc-800 text-zinc-500'
+                              }`}
+                            >
+                              {i + 1}
+                            </span>
+                            <span className="text-zinc-300 font-medium truncate">{artist}</span>
+                          </div>
+                          <span className="text-zinc-500 text-[11px] font-mono shrink-0">
+                            {count} {t('insights.tracksSuffix')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Top Genres */}
+                <div className="bg-zinc-950/40 border border-zinc-800/60 p-4 rounded-2xl">
+                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Disc3 size={14} className="text-cyan-400" />
+                    {t('insights.topGenres')}
+                  </h3>
+                  {stats.sortedGenres.length === 0 ? (
+                    <p className="text-zinc-600 text-xs py-4 text-center">
+                      {t('insights.noGenreData')}
+                    </p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {stats.sortedGenres.map(([genre, count], i) => (
+                        <div key={genre} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-5 h-5 rounded-full bg-zinc-800 text-zinc-400 flex items-center justify-center font-bold text-[10px] shrink-0">
+                              {i + 1}
+                            </span>
+                            <span className="text-zinc-300 font-medium truncate">{genre}</span>
+                          </div>
+                          <span className="text-zinc-500 text-[11px] font-mono shrink-0">
+                            {count} {t('insights.tracksSuffix')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="pt-4 border-t border-zinc-800 flex justify-end">
+              <button
+                onClick={() => setShow(false)}
+                className="px-5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition"
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

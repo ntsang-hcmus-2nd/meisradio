@@ -53,6 +53,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
   const libraryTracks = useLibraryStore((state) => state.libraryTracks)
 
   const [collapsedArtistLetters, setCollapsedArtistLetters] = useState<Record<string, boolean>>({})
+  const [highlightedLetter, setHighlightedLetter] = useState<string | null>(null)
   const artistVirtuosoRef = useRef<GroupedVirtuosoHandle>(null)
 
   const chunkedAlphabetGroups = useMemo(() => {
@@ -61,7 +62,9 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
     for (let grpIdx = 0; grpIdx < artistsData.alphabetGroups.length; grpIdx++) {
       const grp = artistsData.alphabetGroups[grpIdx]
       const isCollapsed = Boolean(collapsedArtistLetters[grp.letter])
-      const artists = isCollapsed ? [] : grp.artists || []
+      const rawArtists = grp.artists || []
+      const count = typeof grp.count === 'number' ? grp.count : rawArtists.length
+      const artists = isCollapsed ? [] : rawArtists
       const rows: any[][] = []
       for (let i = 0; i < artists.length; i += 3) {
         rows.push(artists.slice(i, i + 3))
@@ -70,6 +73,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
       globalRowIndex += rows.length
       result.push({
         ...grp,
+        count,
         rows,
         startRowIndex,
         groupIndex: grpIdx,
@@ -106,9 +110,6 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
               />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold uppercase tracking-widest text-theme-10 mb-2">
-                {t('artistsView.title')}
-              </p>
               <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-3 truncate">
                 {activeArtist.name}
               </h2>
@@ -240,27 +241,43 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
               const grpIdx = artistsData.alphabetGroups.findIndex((g) => g.letter === grp.letter)
               if (grpIdx !== -1) {
                 const target = chunkedAlphabetGroups[grpIdx]
-                if (target?.isCollapsed) {
+                const wasCollapsed = target?.isCollapsed
+                if (wasCollapsed) {
                   setCollapsedArtistLetters((prev) => ({
                     ...prev,
                     [grp.letter]: false
                   }))
                 }
-                setTimeout(
-                  () => {
-                    artistVirtuosoRef.current?.scrollToIndex({
-                      index: target?.startRowIndex || 0,
-                      align: 'start',
-                      behavior: 'smooth'
-                    })
-                  },
-                  target?.isCollapsed ? 50 : 0
-                )
+                const doScroll = () => {
+                  const targetGroupIndex = grpIdx
+                  ;(
+                    artistVirtuosoRef.current?.scrollToIndex as unknown as (
+                      loc: Record<string, unknown>
+                    ) => void
+                  )?.({ groupIndex: targetGroupIndex, align: 'start', behavior: 'auto' })
+                  requestAnimationFrame(() => {
+                    ;(
+                      artistVirtuosoRef.current?.scrollToIndex as unknown as (
+                        loc: Record<string, unknown>
+                      ) => void
+                    )?.({ groupIndex: targetGroupIndex, align: 'start', behavior: 'auto' })
+                  })
+                }
+                if (wasCollapsed) {
+                  requestAnimationFrame(() => setTimeout(doScroll, 30))
+                } else {
+                  doScroll()
+                }
+                setHighlightedLetter(grp.letter)
+                setTimeout(() => setHighlightedLetter(null), 700)
               }
             }}
             className="px-2.5 py-1 text-xs font-bold rounded-lg bg-theme-60/40 hover:bg-theme-10 hover:text-white text-zinc-400 transition shrink-0"
           >
-            {grp.letter} <span className="text-[10px] opacity-60">({grp.count})</span>
+            {grp.letter}{' '}
+            <span className="text-[10px] opacity-60">
+              ({grp.count ?? grp.artists?.length ?? 0})
+            </span>
           </button>
         ))}
       </div>
@@ -353,6 +370,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
               groupContent={(index) => {
                 const grp = chunkedAlphabetGroups[index]
                 if (!grp) return null
+                const isHighlighted = highlightedLetter === grp.letter
                 return (
                   <div
                     onClick={() =>
@@ -361,7 +379,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = ({
                         [grp.letter]: !prev[grp.letter]
                       }))
                     }
-                    className="inline-flex items-center gap-2.5 cursor-pointer py-1.5 px-3 select-none group rounded-xl transition hover:bg-white/10 active:scale-95 my-1"
+                    className={`inline-flex items-center gap-2.5 cursor-pointer py-1.5 px-3 select-none group rounded-xl transition hover:bg-white/10 active:scale-95 my-1 ${isHighlighted ? 'bg-theme-10/25 ring-1 ring-theme-10/60' : ''}`}
                   >
                     <span className="text-2xl font-bold font-sans text-white group-hover:text-theme-10 tracking-tight leading-none transition-colors">
                       {grp.letter}
