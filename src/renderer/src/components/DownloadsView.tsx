@@ -26,7 +26,7 @@ import { useTranslation } from '../locales'
 import { useSoulseekStore, SoulseekSearchResult, SoulseekDownload } from '../stores/soulseekStore'
 import { useUIStore } from '../stores/uiStore'
 
-interface DownloadsViewProps {
+export interface DownloadsViewProps {
   onPlayTrack?: (track: any) => void
 }
 

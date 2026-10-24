@@ -187,12 +187,10 @@ export const DuplicateFinderModal: React.FC<DuplicateFinderModalProps> = ({
       if (onDeleteTracks) {
         await onDeleteTracks(pathsToDelete)
       } else if (window.api?.deleteTrack) {
-        for (const p of pathsToDelete) {
-          try {
-            await window.api.deleteTrack(p, false)
-          } catch {
-            /* ignore */
-          }
+        try {
+          await window.api.deleteTrack(pathsToDelete, false)
+        } catch {
+          /* ignore */
         }
       }
 

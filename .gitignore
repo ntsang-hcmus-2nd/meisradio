@@ -152,11 +152,12 @@ AGENTS.md
 bass*.zip
 bass*/
 
+#misc
 .refactor-backup/
-tests/
-
 serverplan.md
 todo.md
 .vscode/
 touched.txt
 .eslint-warnings.json
+tests/
+.github/

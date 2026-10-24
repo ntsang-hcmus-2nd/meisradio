@@ -14,7 +14,8 @@ import {
   markMetadataDirty,
   saveMetadataCache,
   saveThemeColorsCache,
-  getFfmpegPath
+  getFfmpegPath,
+  isAllowedLocalPath
 } from './sharedContext'
 import { splitArtistString, buildPreAggregatedData, extractEmbeddedLyrics } from './libraryScanner'
 import { updateFlacTags, FlacTagUpdate } from '../flacMetadata'
@@ -37,6 +38,7 @@ export async function updateTags(
       rawPath = rawPath.replace(/\//g, '\\')
     }
 
+    if (!isAllowedLocalPath(rawPath)) throw new Error('Access denied')
     if (!fs.existsSync(rawPath)) {
       return { success: false, error: 'Tệp không tồn tại trên hệ thống' }
     }
@@ -50,6 +52,15 @@ export async function updateTags(
       try {
         rawImagePath = fileURLToPath(rawImagePath)
       } catch {}
+    }
+    if (
+      rawImagePath &&
+      !rawImagePath.startsWith('data:') &&
+      !rawImagePath.startsWith('http://') &&
+      !rawImagePath.startsWith('https://') &&
+      !isAllowedLocalPath(rawImagePath, true)
+    ) {
+      throw new Error('Access denied')
     }
 
     let picBuffer: Buffer | null = null
@@ -354,7 +365,8 @@ export async function updateTags(
     }
 
     const stat = fs.statSync(rawPath)
-    const existingCached = metadataCache[rawPath]?.data || {}
+    const existingMeta = metadataCache[rawPath] || sqliteStorage.getMetadata(rawPath)
+    const existingCached = existingMeta?.data || {}
     const finalArtist = targetArtist || existingCached.artist || 'Unknown'
     const finalArtists =
       targetArtists.length > 0 ? targetArtists : existingCached.artists || [finalArtist]
@@ -467,6 +479,7 @@ export async function getTrackDetails(trackPath: string): Promise<any> {
       rawPath = rawPath.replace(/\//g, '\\')
     }
 
+    if (!isAllowedLocalPath(rawPath)) throw new Error('Access denied')
     if (!fs.existsSync(rawPath)) {
       return { success: false, error: `Không tìm thấy tệp: ${rawPath}` }
     }

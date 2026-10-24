@@ -1613,11 +1613,9 @@ export default function App() {
               )
               if (!confirmed) return
               if (window.api?.deleteTrack) {
-                for (const p of paths) {
-                  try {
-                    await window.api.deleteTrack(p, false)
-                  } catch {}
-                }
+                try {
+                  await window.api.deleteTrack(paths, false)
+                } catch {}
                 showToast(
                   t('toasts.movedToTrash', { title: `${paths.length} ${t('common.tracks')}` }),
                   'info'
@@ -1638,11 +1636,9 @@ export default function App() {
                 onClose={() => setShowDuplicateFinder(false)}
                 onDeleteTracks={async (trackPaths) => {
                   if (window.api?.deleteTrack) {
-                    for (const p of trackPaths) {
-                      try {
-                        await window.api.deleteTrack(p, false)
-                      } catch {}
-                    }
+                    try {
+                      await window.api.deleteTrack(trackPaths, false)
+                    } catch {}
                     showToast(
                       t('toasts.movedToTrash', {
                         title: `${trackPaths.length} ${t('common.tracks')}`

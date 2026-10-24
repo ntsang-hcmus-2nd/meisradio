@@ -120,12 +120,10 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     if (!confirmed) return
 
     if (window.api?.deleteTrack) {
-      for (const p of paths) {
-        try {
-          await window.api.deleteTrack(p, false)
-        } catch {
-          /* ignore */
-        }
+      try {
+        await window.api.deleteTrack(paths, false)
+      } catch {
+        /* ignore */
       }
       // Đồng bộ state renderer: xóa khỏi libraryTracks + hàng đợi + playlists + recentlyPlayed
       const keySet = new Set(paths)

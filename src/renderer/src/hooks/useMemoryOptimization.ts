@@ -1,20 +1,6 @@
 import { useEffect } from 'react'
-import { usePlayerStore, useUIStore } from '../stores'
 
 export function useMemoryOptimization() {
-  const currentTrack = usePlayerStore((s) => s.currentTrack)
-  const activeView = useUIStore((s) => s.activeView)
-
-  // 1. Dọn dẹp khi đổi bài hát (trì hoãn 1.5s để UI ổn định trước)
-  useEffect(() => {
-    if (!currentTrack) return
-    const timer = setTimeout(() => {
-      window.api?.clearWebFrameCache?.()
-      window.api?.clearMemoryCache?.()
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [currentTrack, currentTrack?.id])
-
   // 2. Dọn dẹp sâu khi ứng dụng thu nhỏ hoặc nhận sự kiện onDeepClean từ Main Process
   useEffect(() => {
     const triggerGC = () => {
@@ -60,16 +46,4 @@ export function useMemoryOptimization() {
       }
     }
   }, [])
-
-  // 4. Giải phóng bộ nhớ đệm ảnh không dùng khi chuyển đổi tab / view
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        window.api?.clearWebFrameCache?.()
-        window.api?.forceRendererGC?.()
-        window.api?.forceGC?.()
-      } catch (_) {}
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [activeView])
 }

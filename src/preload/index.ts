@@ -11,7 +11,6 @@ const api = {
   getTrackDetails: (filePath: string) => ipcRenderer.invoke('music:getTrackDetails', filePath),
   selectImageFile: () => ipcRenderer.invoke('music:selectImageFile'),
 
-  openMusicFolder: () => ipcRenderer.invoke('music:openFolder'),
   downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) =>
     ipcRenderer.invoke('music:downloadCloudFile', url, filename, existingTracks),
   downloadMultipleFiles: (files: any[], existingTracks?: any[]) =>
@@ -91,8 +90,10 @@ const api = {
     ipcRenderer.invoke('music:createPlaylist', playlistName),
   deletePlaylist: (playlistName: string) =>
     ipcRenderer.invoke('music:deletePlaylist', playlistName),
-  deleteTrack: (trackPath: string, deletePermanently?: boolean) =>
+  deleteTrack: (trackPath: string | string[], deletePermanently?: boolean) =>
     ipcRenderer.invoke('music:deleteTrack', trackPath, deletePermanently),
+  deleteTracks: (trackPaths: string[], deletePermanently?: boolean) =>
+    ipcRenderer.invoke('music:deleteTrack', trackPaths, deletePermanently),
   showInFolder: (filePath: string) => ipcRenderer.invoke('music:showInFolder', filePath),
   addTrackToPlaylist: (playlistName: string, trackPath: string) =>
     ipcRenderer.invoke('music:addTrackToPlaylist', playlistName, trackPath),

@@ -260,6 +260,10 @@ export const PRESERVED_ARTIST_NAMES = [
 
 /**
  * Splits an artist string into an array of distinct artist names.
+ * Unified logic shared with cueParser, libraryScanner and renderer textUtils:
+ * preserved-name placeholders (longest match first), Jr./Sr. protection,
+ * "(feat. X)" normalization, broad delimiter set, bracket stripping and
+ * case-insensitive deduplication.
  */
 export function splitArtistNames(raw: string): string[] {
   if (!raw || typeof raw !== 'string') return []
@@ -272,45 +276,67 @@ export function splitArtistNames(raw: string): string[] {
     return []
   }
 
-  let working = trimmed
-  const placeholders: { token: string; original: string }[] = []
-  let tokenCounter = 0
-
-  const sortedPreserved = [...PRESERVED_ARTIST_NAMES].sort((a, b) => b.length - a.length)
-  for (const name of sortedPreserved) {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(escaped, 'gi')
-    working = working.replace(regex, (matched) => {
-      const token = `__PRESERVED_ARTIST_${tokenCounter++}__`
-      placeholders.push({ token, original: matched })
-      return token
-    })
+  for (const preserved of PRESERVED_ARTIST_NAMES) {
+    if (trimmed.toLowerCase() === preserved.toLowerCase()) {
+      return [preserved]
+    }
   }
 
-  // Split on common delimiters: semicolon, slash, backslash, feat., ft., &, comma
-  const DELIMITERS = [';', '/', '\\', '&', ',']
-  const delimPattern = DELIMITERS.map(
-    (sep) => '\\s*' + sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'
-  ).join('|')
-  const splitRegex = new RegExp(`(?:${delimPattern}|\\s+(?:feat\\.?|ft\\.?)\\s+)`, 'i')
+  let working = trimmed
+  const placeholders: { token: string; original: string }[] = []
+  const sortedPreserved = [...PRESERVED_ARTIST_NAMES].sort((a, b) => b.length - a.length)
+  sortedPreserved.forEach((preserved, idx) => {
+    const regex = new RegExp(preserved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+    if (regex.test(working)) {
+      const token = `__PRESERVED_ARTIST_${idx}__`
+      working = working.replace(regex, token)
+      placeholders.push({ token, original: preserved })
+    }
+  })
 
-  const rawParts = working
-    .split(splitRegex)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
+  // Protect comma-attached name suffixes (e.g. "Grover Washington, Jr.")
+  working = working.replace(
+    /,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;/|)\]])/gi,
+    (_, g1) => `___JRSR___${g1}`
+  )
 
-  const parts = rawParts
-    .map((part) => {
-      let restored = part
-      for (const p of placeholders) {
-        restored = restored.replaceAll(p.token, p.original)
+  // Normalize parenthesized feat/ft: "(feat. X)" -> " feat. X"
+  working = working.replace(
+    /[([{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]}]+)[)\]}]/gi,
+    ' feat. $1'
+  )
+
+  // Split on common delimiters: semicolon, NUL, slashes, pipe, feat/ft/featuring/with/vs,
+  // &/x/+, CJK separators, comma
+  const splitRegex =
+    /(?:\s*;\s*|\0+|\s*[/\\/]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
+  const parts = working.split(splitRegex)
+  const result: string[] = []
+
+  for (let part of parts) {
+    for (const p of placeholders) {
+      part = part.replace(new RegExp(p.token, 'g'), p.original)
+    }
+    part = part.replace(/___JRSR___/g, ', ')
+
+    const clean = part
+      .trim()
+      .replace(/^[([{]/, '')
+      .replace(/[)\]}]$/, '')
+      .trim()
+    if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
+      if (/^(jr\.?|sr\.?|iii|ii|iv)$/i.test(clean)) continue
+
+      if (!result.some((existing) => existing.toLowerCase() === clean.toLowerCase())) {
+        result.push(clean)
       }
-      return restored.trim()
-    })
-    .filter((s) => s.length > 0)
+    }
+  }
 
-  return parts.length > 0 ? parts : [trimmed]
+  return result.length > 0 ? result : [trimmed]
 }
+
+export const splitArtistString = splitArtistNames
 
 /**
  * Parses raw Vorbis comment block buffer into key-value map.

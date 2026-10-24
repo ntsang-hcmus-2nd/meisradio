@@ -1,6 +1,8 @@
 import fs from 'fs'
 import path from 'path'
-import { PRESERVED_ARTIST_NAMES } from './fastAudioParser'
+import { splitArtistNames } from './fastAudioParser'
+
+export { splitArtistNames }
 
 export interface CueTrackInfo {
   id: string // e.g. `${cueFilePath}#track-${trackNo}`
@@ -50,60 +52,6 @@ export const AUDIO_PROBE_EXTS = [
   '.wma',
   '.bin'
 ]
-
-/**
- * Splits an artist string into an array of distinct artist names.
- */
-export function splitArtistNames(raw: string): string[] {
-  if (!raw || typeof raw !== 'string') return []
-  const trimmed = raw.trim()
-  if (
-    !trimmed ||
-    trimmed.toLowerCase() === 'unknown' ||
-    trimmed.toLowerCase() === 'unknown artist'
-  ) {
-    return []
-  }
-
-  let working = trimmed
-  const placeholders: { token: string; original: string }[] = []
-  let tokenCounter = 0
-
-  const sortedPreserved = [...PRESERVED_ARTIST_NAMES].sort((a, b) => b.length - a.length)
-  for (const name of sortedPreserved) {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(escaped, 'gi')
-    working = working.replace(regex, (matched) => {
-      const token = `__PRESERVED_ARTIST_${tokenCounter++}__`
-      placeholders.push({ token, original: matched })
-      return token
-    })
-  }
-
-  // Split on common delimiters: semicolon, slash, backslash, feat., ft., &, comma
-  const DELIMITERS = [';', '/', '\\', '&', ',']
-  const delimPattern = DELIMITERS.map(
-    (sep) => '\\s*' + sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'
-  ).join('|')
-  const splitRegex = new RegExp(`(?:${delimPattern}|\\s+(?:feat\\.?|ft\\.?)\\s+)`, 'i')
-
-  const rawParts = working
-    .split(splitRegex)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-
-  const parts = rawParts
-    .map((part) => {
-      let restored = part
-      for (const p of placeholders) {
-        restored = restored.replaceAll(p.token, p.original)
-      }
-      return restored.trim()
-    })
-    .filter((s) => s.length > 0)
-
-  return parts.length > 0 ? parts : [trimmed]
-}
 
 /**
  * Decodes a CUE file buffer with robust multi-encoding detection:

@@ -2016,13 +2016,6 @@ export class BassManager extends EventEmitter {
       this.preloadedInfo = null
     }
 
-    if (this.preloadedStream) {
-      this.parkStreamForDeferredFree(this.preloadedStream)
-      this.preloadedStream = 0
-      this.preloadedFilePath = null
-      this.preloadedInfo = null
-    }
-
     this.currentStartTime = 0
     this.currentEndTime = 0
     this.currentEndByte = 0

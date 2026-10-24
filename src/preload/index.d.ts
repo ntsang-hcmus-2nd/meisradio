@@ -7,7 +7,6 @@ export interface MeisRadioApi {
   updateTags: (filePath: string, tags: any, imagePath: string | null) => Promise<any>
   getTrackDetails: (filePath: string) => Promise<any>
   selectImageFile: () => Promise<string | null>
-  openMusicFolder: () => Promise<any>
   downloadCloudFile: (url: string, filename: string, existingTracks?: any[]) => Promise<any>
   downloadMultipleFiles: (files: any[], existingTracks?: any[]) => Promise<any>
   fetchDriveFiles: (folderId: string) => Promise<any>
@@ -78,7 +77,8 @@ export interface MeisRadioApi {
   toggleMiniPlayer: (isMini: boolean) => Promise<any>
   createPlaylist: (playlistName: string) => Promise<any>
   deletePlaylist: (playlistName: string) => Promise<any>
-  deleteTrack: (trackPath: string, deletePermanently?: boolean) => Promise<any>
+  deleteTrack: (trackPath: string | string[], deletePermanently?: boolean) => Promise<any>
+  deleteTracks: (trackPaths: string[], deletePermanently?: boolean) => Promise<any>
   showInFolder: (filePath: string) => Promise<any>
   addTrackToPlaylist: (playlistName: string, trackPath: string) => Promise<any>
   forceGC: () => Promise<any>

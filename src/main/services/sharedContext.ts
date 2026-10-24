@@ -427,6 +427,15 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
       IMAGE_CACHE_DIR,
       ...(config.libraryPaths || []),
       config.libraryPath,
+      config.soulseekDownloadFolder,
+      (() => {
+        try {
+          const d = safeGetPath('downloads')
+          return d ? path.join(d, "Mei's Radio", 'Soulseek') : null
+        } catch {
+          return null
+        }
+      })(),
       safeGetPath('userData'),
       safeGetPath('music'),
       safeGetPath('downloads'),
@@ -455,8 +464,7 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
 // ==========================================
 // METADATA & THEME COLORS IN-MEMORY CACHE
 // ==========================================
-export const metadataCache: Record<string, { mtime: number; data: any }> =
-  sqliteStorage.getAllMetadata()
+export const metadataCache: Record<string, { mtime: number; data: any }> = {}
 export const dirtyMetadataKeys = new Set<string>()
 
 export function markMetadataDirty(key: string): void {

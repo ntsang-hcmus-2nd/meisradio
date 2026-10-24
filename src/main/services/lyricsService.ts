@@ -715,132 +715,70 @@ export async function fetchOnlineLyrics(
 // IPC HANDLERS CHO LYRICS SERVICE
 // ==========================================
 export function registerLyricsIpc(): void {
-  ipcMain.handle(
-    'music:fetchMusixmatchLyrics',
-    async (
-      _,
-      title: string,
-      artist: string,
-      album?: string,
-      duration?: number
-    ): Promise<MxmResult> => {
-      if (
-        typeof title !== 'string' ||
-        typeof artist !== 'string' ||
-        !title.trim() ||
-        !artist.trim()
-      ) {
-        return { success: false, code: 'NOT_FOUND', error: 'Thiếu tên bài hát hoặc nghệ sĩ' }
+  const handleFetchOnlineLyrics = async (
+    _: any,
+    title: string,
+    artist: string,
+    album?: string,
+    duration?: number
+  ): Promise<MxmResult> => {
+    if (
+      typeof title !== 'string' ||
+      typeof artist !== 'string' ||
+      !title.trim() ||
+      !artist.trim()
+    ) {
+      return { success: false, code: 'NOT_FOUND', error: 'Thiếu tên bài hát hoặc nghệ sĩ' }
+    }
+
+    const cacheKey = `${mxmNormalize(title)}|${mxmNormalize(artist)}`
+
+    // 1. Kiểm tra cache RAM
+    const cached = mxmResultCache.get(cacheKey)
+    if (cached) {
+      if (cached.result.success || Date.now() - cached.at < MXM_NEGATIVE_CACHE_MS)
+        return cached.result
+      mxmResultCache.delete(cacheKey)
+    }
+
+    // 2. Kiểm tra cache SQLite nhúng
+    const dbCached = sqliteStorage.getOnlineLyric(cacheKey)
+    if (dbCached && dbCached.lyrics) {
+      const res: MxmResult = {
+        success: true,
+        lyrics: dbCached.lyrics,
+        isSynced: dbCached.isSynced,
+        source: dbCached.source as any
       }
+      mxmCacheSet(cacheKey, res)
+      return res
+    }
 
-      const cacheKey = `${mxmNormalize(title)}|${mxmNormalize(artist)}`
+    // 3. Tra cứu đa nguồn online
+    const result = await fetchOnlineLyrics(
+      title,
+      artist,
+      typeof album === 'string' ? album : undefined,
+      typeof duration === 'number' ? duration : undefined
+    )
 
-      // 1. Kiểm tra cache RAM
-      const cached = mxmResultCache.get(cacheKey)
-      if (cached) {
-        if (cached.result.success || Date.now() - cached.at < MXM_NEGATIVE_CACHE_MS)
-          return cached.result
-        mxmResultCache.delete(cacheKey)
-      }
-
-      // 2. Kiểm tra cache SQLite nhúng
-      const dbCached = sqliteStorage.getOnlineLyric(cacheKey)
-      if (dbCached && dbCached.lyrics) {
-        const res: MxmResult = {
-          success: true,
-          lyrics: dbCached.lyrics,
-          isSynced: dbCached.isSynced,
-          source: dbCached.source as any
-        }
-        mxmCacheSet(cacheKey, res)
-        return res
-      }
-
-      // 3. Tra cứu đa nguồn online
-      const result = await fetchOnlineLyrics(
+    if (result.success && result.lyrics) {
+      sqliteStorage.setOnlineLyric(
+        cacheKey,
         title,
         artist,
-        typeof album === 'string' ? album : undefined,
-        typeof duration === 'number' ? duration : undefined
+        result.lyrics,
+        Boolean(result.isSynced),
+        result.source || 'lrclib'
       )
-
-      if (result.success && result.lyrics) {
-        sqliteStorage.setOnlineLyric(
-          cacheKey,
-          title,
-          artist,
-          result.lyrics,
-          Boolean(result.isSynced),
-          result.source || 'lrclib'
-        )
-        mxmCacheSet(cacheKey, result)
-      } else if (result.code === 'NOT_FOUND' || result.code === 'NO_LYRICS') {
-        mxmCacheSet(cacheKey, result)
-      }
-      return result
+      mxmCacheSet(cacheKey, result)
+    } else if (result.code === 'NOT_FOUND' || result.code === 'NO_LYRICS') {
+      mxmCacheSet(cacheKey, result)
     }
-  )
+    return result
+  }
 
-  ipcMain.handle(
-    'music:fetchLrclibLyrics',
-    async (
-      _,
-      title: string,
-      artist: string,
-      album?: string,
-      duration?: number
-    ): Promise<MxmResult> => {
-      if (
-        typeof title !== 'string' ||
-        typeof artist !== 'string' ||
-        !title.trim() ||
-        !artist.trim()
-      ) {
-        return { success: false, code: 'NOT_FOUND', error: 'Thiếu tên bài hát hoặc nghệ sĩ' }
-      }
+  ipcMain.handle('music:fetchMusixmatchLyrics', handleFetchOnlineLyrics)
 
-      const cacheKey = `${mxmNormalize(title)}|${mxmNormalize(artist)}`
-
-      const cached = mxmResultCache.get(cacheKey)
-      if (cached) {
-        if (cached.result.success || Date.now() - cached.at < MXM_NEGATIVE_CACHE_MS)
-          return cached.result
-        mxmResultCache.delete(cacheKey)
-      }
-
-      const dbCached = sqliteStorage.getOnlineLyric(cacheKey)
-      if (dbCached && dbCached.lyrics) {
-        const res: MxmResult = {
-          success: true,
-          lyrics: dbCached.lyrics,
-          isSynced: dbCached.isSynced,
-          source: dbCached.source as any
-        }
-        mxmCacheSet(cacheKey, res)
-        return res
-      }
-
-      const result = await fetchOnlineLyrics(
-        title,
-        artist,
-        typeof album === 'string' ? album : undefined,
-        typeof duration === 'number' ? duration : undefined
-      )
-
-      if (result.success && result.lyrics) {
-        sqliteStorage.setOnlineLyric(
-          cacheKey,
-          title,
-          artist,
-          result.lyrics,
-          Boolean(result.isSynced),
-          result.source || 'lrclib'
-        )
-        mxmCacheSet(cacheKey, result)
-      } else if (result.code === 'NOT_FOUND' || result.code === 'NO_LYRICS') {
-        mxmCacheSet(cacheKey, result)
-      }
-      return result
-    }
-  )
+  ipcMain.handle('music:fetchLrclibLyrics', handleFetchOnlineLyrics)
 }

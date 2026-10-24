@@ -16,7 +16,8 @@ import {
   saveMetadataCache,
   saveThemeColorsCache,
   sanitizeDirectoryName,
-  registerAllowedDroppedFile
+  registerAllowedDroppedFile,
+  isAllowedLocalPath
 } from './sharedContext'
 import { getAudioFilesInDirectoryRecursiveAsync } from './libraryScanner'
 import { fastExtractCover, fastReadMetadata } from '../fastAudioParser'
@@ -777,175 +778,191 @@ function cueReferencesAudio(cueFile: string, audioFile: string): boolean {
   }
 }
 
+function resolveDeleteTarget(trackPath: string): {
+  trackPath: string
+  baseNoFrag: string
+  cueSuffix: string
+  rawPath: string
+  isCueTrack: boolean
+} {
+  const cueIdx = trackPath.indexOf('#track-')
+  const isCueTrack = cueIdx !== -1
+  const baseNoFrag = isCueTrack ? trackPath.slice(0, cueIdx) : trackPath
+  const cueSuffix = isCueTrack ? trackPath.slice(cueIdx) : ''
+  let rawPath = baseNoFrag.replace(/^file:\/\/\/?/, '')
+  if (isCueTrack || /^file:\/\//i.test(baseNoFrag)) {
+    try {
+      rawPath = decodeURIComponent(rawPath)
+    } catch {
+      /* giữ nguyên nếu decode thất bại */
+    }
+  }
+  if (process.platform === 'win32') {
+    if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+    rawPath = rawPath.replace(/\//g, '\\')
+  }
+  return { trackPath, baseNoFrag, cueSuffix, rawPath, isCueTrack }
+}
+
 export async function deleteTrack(
-  trackPath: string,
+  trackPathOrPaths: string | string[],
   _deletePermanently: boolean = false
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!trackPath) return { success: false, error: 'Không có đường dẫn bài hát' }
+    const list = Array.isArray(trackPathOrPaths) ? trackPathOrPaths : [trackPathOrPaths]
+    if (list.length === 0 || (list.length === 1 && !list[0]))
+      return { success: false, error: 'Không có đường dẫn bài hát' }
 
-    // ----- Xác định track ảo CUE Sheet (id hay là 1 file URL + "#track-N" như libraryScanner tạo) -----
-    const cueIdx = trackPath.indexOf('#track-')
-    const isCueTrack = cueIdx !== -1
-    const baseNoFrag = isCueTrack ? trackPath.slice(0, cueIdx) : trackPath
-    const cueSuffix = isCueTrack ? trackPath.slice(cueIdx) : '' // vd: "#track-3"
-
-    let rawPath = baseNoFrag.replace(/^file:\/\/\/?/, '')
-    if (isCueTrack || /^file:\/\//i.test(baseNoFrag)) {
-      try {
-        rawPath = decodeURIComponent(rawPath)
-      } catch {
-        /* giữ nguyên nếu decode thất bại */
-      }
-    }
-    if (process.platform === 'win32') {
-      if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
-      rawPath = rawPath.replace(/\//g, '\\')
+    // Validate toàn bộ trước khi chạm vào đĩa: bất kỳ path nào bị cấm -> abort
+    const targets = list.filter(Boolean).map((tp) => resolveDeleteTarget(tp))
+    if (targets.length === 0) return { success: false, error: 'Không có đường dẫn bài hát' }
+    for (const t of targets) {
+      if (!isAllowedLocalPath(t.rawPath)) throw new Error('Access denied')
     }
 
-    // ======================================================
-    // TRACK ẢO CUE SHEET: TUYỆT ĐỐI KHÔNG ĐỤNG VÀO FILE VẬT LÝ (trừ khi là track cuối cùng)
-    // ======================================================
-    if (isCueTrack) {
-      // 1) Xóa chính xác entry ảo này khỏi SQLite (không khai triển path bỏ fragment,
-      //    không lọc library_cache theo file_path dùng chung -> không lệch các track anh em)
-      sqliteStorage.removeCueTrackFromLibrary(trackPath)
+    // Gom mọi key SQLite cần dọn để chỉ gọi removeLibraryTracks + save cache MỘT lần
+    const allPhysicalPathsToRemove: string[] = []
+    const keysToClear = new Set<string>()
 
-      let filesDeleted = false
-      const audioExists = fs.existsSync(rawPath)
-      if (audioExists) {
-        // 2) Chỉ chạm vào file khi track này là track CUỐI CÙNG của album
-        const remainingSiblings = sqliteStorage.countOtherCueSiblingsForAudio(rawPath)
-        if (remainingSiblings === 0) {
-          try {
-            await shell.trashItem(rawPath)
-          } catch (_err) {
-            try {
-              fs.unlinkSync(rawPath)
-            } catch {}
-          }
+    for (const { trackPath, baseNoFrag, cueSuffix, rawPath, isCueTrack } of targets) {
+      // ======================================================
+      // TRACK ẢO CUE SHEET: TUYỆT ĐỐI KHÔNG ĐỤNG VÀO FILE VẬT LÝ (trừ khi là track cuối cùng)
+      // ======================================================
+      if (isCueTrack) {
+        // 1) Xóa chính xác entry ảo này khỏi SQLite (không khai triển path bỏ fragment,
+        //    không lọc library_cache theo file_path dùng chung -> không lệch các track anh em)
+        sqliteStorage.removeCueTrackFromLibrary(trackPath)
 
-          const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
-          if (fs.existsSync(lrcPath)) {
+        let filesDeleted = false
+        const audioExists = fs.existsSync(rawPath)
+        if (audioExists) {
+          // 2) Chỉ chạm vào file khi track này là track CUỐI CÙNG của album
+          const remainingSiblings = sqliteStorage.countOtherCueSiblingsForAudio(rawPath)
+          if (remainingSiblings === 0) {
             try {
-              await shell.trashItem(lrcPath)
-            } catch {
+              await shell.trashItem(rawPath)
+            } catch (_err) {
               try {
-                fs.unlinkSync(lrcPath)
+                fs.unlinkSync(rawPath)
               } catch {}
             }
-          }
 
-          // .cue chỉ bị bẫy khi: thật sự tham chiếu file audio này VÀ không còn
-          // track CUE nào khác (đến từ file audio khác trong cue đa file) dùng nó
-          const cuePath = rawPath.replace(/\.[^/.]+$/, '.cue')
-          if (fs.existsSync(cuePath) && cueReferencesAudio(cuePath, rawPath)) {
-            const otherCueUsers = sqliteStorage.countCueTracksUsingCueFile(cuePath, rawPath)
-            if (otherCueUsers === 0) {
+            const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
+            if (fs.existsSync(lrcPath)) {
               try {
-                await shell.trashItem(cuePath)
+                await shell.trashItem(lrcPath)
               } catch {
                 try {
-                  fs.unlinkSync(cuePath)
+                  fs.unlinkSync(lrcPath)
                 } catch {}
               }
             }
+
+            // .cue chỉ bị bẫy khi: thật sự tham chiếu file audio này VÀ không còn
+            // track CUE nào khác (đến từ file audio khác trong cue đa file) dùng nó
+            const cuePath = rawPath.replace(/\.[^/.]+$/, '.cue')
+            if (fs.existsSync(cuePath) && cueReferencesAudio(cuePath, rawPath)) {
+              const otherCueUsers = sqliteStorage.countCueTracksUsingCueFile(cuePath, rawPath)
+              if (otherCueUsers === 0) {
+                try {
+                  await shell.trashItem(cuePath)
+                } catch {
+                  try {
+                    fs.unlinkSync(cuePath)
+                  } catch {}
+                }
+              }
+            }
+            filesDeleted = true
           }
-          filesDeleted = true
+          // remainingSiblings > 0 hoặc -1: còn track anh em -> giữ nguyên mọi file vật lý
         }
-        // remainingSiblings > 0 hoặc -1: còn track anh em -> giữ nguyên mọi file vật lý
-      }
 
-      if (filesDeleted) {
-        // 3) Dọn sạch mọi record SQLite trỏ về file audio này (chống ghost entries)
-        sqliteStorage.removeLibraryTracks([trackPath, baseNoFrag, rawPath])
-      }
+        if (filesDeleted) {
+          // 3) Dọn sạch mọi record SQLite trỏ về file audio này (chống ghost entries)
+          allPhysicalPathsToRemove.push(trackPath, baseNoFrag, rawPath)
+        }
 
-      // 4) Cache trong bộ nhớ: chỉ gỡ các key của track ảo này;
-      //    KHÔNG gỡ key của file gốc (vẫn hợp lệ cho các track anh em)
-      const keysToClear = new Set<string>(
-        [trackPath, `${rawPath}${cueSuffix}`, `${rawPath.replace(/\\/g, '/')}${cueSuffix}`].filter(
-          Boolean
-        ) as string[]
-      )
-      try {
-        keysToClear.add(`${pathToFileURL(rawPath).href}${cueSuffix}`)
-      } catch {
-        /* ignore */
-      }
-      if (filesDeleted) {
-        keysToClear.add(rawPath)
-        keysToClear.add(baseNoFrag)
-      }
-      for (const k of keysToClear) {
-        if (!k) continue
-        delete metadataCache[k]
-        delete themeColorsCache[k]
-        dirtyMetadataKeys.delete(k)
-        dirtyThemeColorKeys.delete(k)
-      }
-      saveMetadataCache()
-      saveThemeColorsCache()
-
-      return { success: true }
-    }
-
-    // ======================================================
-    // FILE VẬT LÝ (track thường): giữ nguyên hành vi cũ
-    // ======================================================
-    const cuePath = rawPath.replace(/\.[^/.]+$/, '.cue')
-
-    if (fs.existsSync(rawPath)) {
-      try {
-        await shell.trashItem(rawPath)
-      } catch (_err) {
+        // 4) Cache trong bộ nhớ: chỉ gỡ các key của track ảo này;
+        //    KHÔNG gỡ key của file gốc (vẫn hợp lệ cho các track anh em)
+        for (const k of [
+          trackPath,
+          `${rawPath}${cueSuffix}`,
+          `${rawPath.replace(/\\/g, '/')}${cueSuffix}`
+        ].filter(Boolean) as string[]) {
+          keysToClear.add(k)
+        }
         try {
-          fs.unlinkSync(rawPath)
-        } catch {}
-      }
-
-      const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
-      if (fs.existsSync(lrcPath)) {
-        try {
-          await shell.trashItem(lrcPath)
+          keysToClear.add(`${pathToFileURL(rawPath).href}${cueSuffix}`)
         } catch {
+          /* ignore */
+        }
+        if (filesDeleted) {
+          keysToClear.add(rawPath)
+          keysToClear.add(baseNoFrag)
+        }
+        continue
+      }
+
+      // ======================================================
+      // FILE VẬT LÝ (track thường): giữ nguyên hành vi cũ
+      // ======================================================
+      const cuePath = rawPath.replace(/\.[^/.]+$/, '.cue')
+
+      if (fs.existsSync(rawPath)) {
+        try {
+          await shell.trashItem(rawPath)
+        } catch (_err) {
           try {
-            fs.unlinkSync(lrcPath)
+            fs.unlinkSync(rawPath)
           } catch {}
         }
-      }
-    }
 
-    // .cue chỉ bị bẫy khi nó thực sự tham chiếu file audio này và không còn
-    // track CUE nào khác dùng chung (cue đa file có nhiều FILE cùng 1 .cue)
-    if (fs.existsSync(cuePath) && cueReferencesAudio(cuePath, rawPath)) {
-      const otherCueUsers = sqliteStorage.countCueTracksUsingCueFile(cuePath, rawPath)
-      if (otherCueUsers === 0) {
-        try {
-          await shell.trashItem(cuePath)
-        } catch {
+        const lrcPath = rawPath.replace(/\.[^/.]+$/, '.lrc')
+        if (fs.existsSync(lrcPath)) {
           try {
-            fs.unlinkSync(cuePath)
-          } catch {}
+            await shell.trashItem(lrcPath)
+          } catch {
+            try {
+              fs.unlinkSync(lrcPath)
+            } catch {}
+          }
         }
       }
+
+      // .cue chỉ bị bẫy khi nó thực sự tham chiếu file audio này và không còn
+      // track CUE nào khác dùng chung (cue đa file có nhiều FILE cùng 1 .cue)
+      if (fs.existsSync(cuePath) && cueReferencesAudio(cuePath, rawPath)) {
+        const otherCueUsers = sqliteStorage.countCueTracksUsingCueFile(cuePath, rawPath)
+        if (otherCueUsers === 0) {
+          try {
+            await shell.trashItem(cuePath)
+          } catch {
+            try {
+              fs.unlinkSync(cuePath)
+            } catch {}
+          }
+        }
+      }
+
+      // Dọn mọi record SQLite trỏ về file audio (gồm track CUE ảo chưa dọn -> chống ghost)
+      allPhysicalPathsToRemove.push(trackPath, baseNoFrag, rawPath)
+      keysToClear.add(rawPath)
+      keysToClear.add(baseNoFrag)
+      keysToClear.add(trackPath)
     }
 
-    // Dọn mọi record SQLite trỏ về file audio (gồm track CUE ảo chưa dọn -> chống ghost)
-    sqliteStorage.removeLibraryTracks([trackPath, baseNoFrag, rawPath])
-
-    delete metadataCache[rawPath]
-    delete metadataCache[baseNoFrag]
-    delete metadataCache[trackPath]
-    delete themeColorsCache[rawPath]
-    delete themeColorsCache[baseNoFrag]
-    delete themeColorsCache[trackPath]
-    dirtyMetadataKeys.delete(rawPath)
-    dirtyMetadataKeys.delete(baseNoFrag)
-    dirtyMetadataKeys.delete(trackPath)
-    dirtyThemeColorKeys.delete(rawPath)
-    dirtyThemeColorKeys.delete(baseNoFrag)
-    dirtyThemeColorKeys.delete(trackPath)
+    // Ghi lại snapshot SQLite + cache MỘT lần duy nhất cho cả batch
+    if (allPhysicalPathsToRemove.length > 0) {
+      sqliteStorage.removeLibraryTracks(allPhysicalPathsToRemove)
+    }
+    for (const k of keysToClear) {
+      if (!k) continue
+      delete metadataCache[k]
+      delete themeColorsCache[k]
+      dirtyMetadataKeys.delete(k)
+      dirtyThemeColorKeys.delete(k)
+    }
     saveMetadataCache()
     saveThemeColorsCache()
 
@@ -953,6 +970,13 @@ export async function deleteTrack(
   } catch (e: any) {
     return { success: false, error: e.message }
   }
+}
+
+export function deleteTracks(
+  filePaths: string[],
+  deletePermanently: boolean = false
+): Promise<{ success: boolean; error?: string }> {
+  return deleteTrack(filePaths, deletePermanently)
 }
 
 // ==========================================
@@ -1135,8 +1159,15 @@ export function registerPlaylistManagerIpc(): void {
 
   ipcMain.handle(
     'music:deleteTrack',
-    async (_, trackPath: string, deletePermanently: boolean = false) => {
+    async (_, trackPath: string | string[], deletePermanently: boolean = false) => {
       return await deleteTrack(trackPath, deletePermanently)
+    }
+  )
+
+  ipcMain.handle(
+    'music:deleteTracks',
+    async (_, trackPaths: string[], deletePermanently: boolean = false) => {
+      return await deleteTrack(trackPaths, deletePermanently)
     }
   )
 

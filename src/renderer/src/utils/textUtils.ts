@@ -107,7 +107,8 @@ export const splitArtistString = (raw: string): string[] => {
 
   let working = trimmed
   const placeholders: { token: string; original: string }[] = []
-  PRESERVED_ARTIST_NAMES.forEach((preserved, idx) => {
+  const sortedPreserved = [...PRESERVED_ARTIST_NAMES].sort((a, b) => b.length - a.length)
+  sortedPreserved.forEach((preserved, idx) => {
     const regex = new RegExp(preserved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
     if (regex.test(working)) {
       const token = `__PRESERVED_ARTIST_${idx}__`
@@ -156,3 +157,5 @@ export const splitArtistString = (raw: string): string[] => {
 
   return result.length > 0 ? result : [trimmed]
 }
+
+export const splitArtistNames = splitArtistString

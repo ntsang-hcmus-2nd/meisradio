@@ -12,9 +12,14 @@ export function useDiscordRpc({ audioRef, isConfigLoaded }: UseDiscordRpcProps) 
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const bitPerfectEnabled = usePlayerStore((s) => s.bitPerfectEnabled)
   const setDiscordConnected = useSettingsStore((s) => s.setDiscordConnected)
+  const discordRpcEnabled = useSettingsStore((s) => s.discordRpcEnabled)
 
   // Periodic Discord RPC connection status check
   useEffect(() => {
+    if (!discordRpcEnabled) {
+      setDiscordConnected(false)
+      return
+    }
     const checkStatus = () => {
       // @ts-ignore
       if (window.api && window.api.discordGetStatus) {
@@ -30,11 +35,12 @@ export function useDiscordRpc({ audioRef, isConfigLoaded }: UseDiscordRpcProps) 
     checkStatus()
     const interval = setInterval(checkStatus, 5000)
     return () => clearInterval(interval)
-  }, [setDiscordConnected])
+  }, [discordRpcEnabled, setDiscordConnected])
 
   // Send Discord Rich Presence updates
   const sendDiscordPresence = useCallback(
     (override?: { isPlaying?: boolean; position?: number }) => {
+      if (!discordRpcEnabled) return
       // @ts-ignore
       if (!window.api || !window.api.discordUpdatePresence) return
 
@@ -87,7 +93,7 @@ export function useDiscordRpc({ audioRef, isConfigLoaded }: UseDiscordRpcProps) 
         bitDepth: currentTrack.bitDepth
       })
     },
-    [currentTrack, isPlaying, bitPerfectEnabled, audioRef]
+    [currentTrack, isPlaying, bitPerfectEnabled, audioRef, discordRpcEnabled]
   )
 
   useEffect(() => {

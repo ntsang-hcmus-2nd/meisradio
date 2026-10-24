@@ -9,7 +9,7 @@ import {
 import { app, dialog, BrowserWindow, shell, safeStorage } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { sanitizeFileName } from './services/sharedContext'
+import { sanitizeFileName, registerAllowedDroppedFile } from './services/sharedContext'
 
 export interface SoulseekFormattedResult {
   id: string
@@ -462,6 +462,19 @@ export class SoulseekManager {
 
     let activeDownloadId = ''
     try {
+      const downloadId = item.id || `${item.user}::${item.file}`
+      const existing = this.activeDownloads.get(downloadId)
+      if (
+        existing &&
+        ['requested', 'queued', 'queued_peer', 'connected', 'downloading'].includes(existing.status)
+      ) {
+        return {
+          success: false,
+          id: downloadId,
+          error: 'Tệp này đang trong hàng đợi hoặc đang tải xuống'
+        }
+      }
+
       const folder = this.downloadFolder
       if (!fs.existsSync(folder)) {
         fs.mkdirSync(folder, { recursive: true })
@@ -481,7 +494,6 @@ export class SoulseekManager {
         counter++
       }
 
-      const downloadId = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
       activeDownloadId = downloadId
 
       const download = this.client!.download({
@@ -548,6 +560,7 @@ export class SoulseekManager {
       })
 
       download.on('complete', (res: DownloadResult) => {
+        registerAllowedDroppedFile(res.path || destPath)
         downloadRecord.status = 'complete'
         downloadRecord.progress = 1
         downloadRecord.receivedBytes = res.receivedBytes

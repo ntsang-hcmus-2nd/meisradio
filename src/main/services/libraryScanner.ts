@@ -24,7 +24,8 @@ import {
   getMainWindow,
   getFfmpegPath,
   trimNativeMemory,
-  registerAllowedDroppedFile
+  registerAllowedDroppedFile,
+  isAllowedLocalPath
 } from './sharedContext'
 import { parseCueFile, resolveCueSheetDurations } from '../cueParser'
 import { fastReadMetadata, findFolderCoverImage, ID3V1_GENRES } from '../fastAudioParser'
@@ -142,109 +143,11 @@ export function extractEmbeddedLyrics(metadata: any): string | null {
   return plain
 }
 
-export const PRESERVED_ARTIST_NAMES = [
-  'AC/DC',
-  'Tyler, The Creator',
-  'Earth, Wind & Fire',
-  'Earth Wind & Fire',
-  'Simon & Garfunkel',
-  'Hall & Oates',
-  'Daryl Hall & John Oates',
-  'Crosby, Stills, Nash & Young',
-  'Crosby, Stills & Nash',
-  'Emerson, Lake & Palmer',
-  'Blood, Sweat & Tears',
-  'Brooks & Dunn',
-  'Bell, Book & Candle',
-  'K/DA',
-  'Panic! At The Disco',
-  'Florence + The Machine',
-  'Florence and the Machine',
-  'Tom Petty and the Heartbreakers',
-  'KC & The Sunshine Band',
-  'K-Ci & JoJo',
-  'Meg & Dia',
-  'Katrina and the Waves',
-  'Huey Lewis & The News',
-  'Joan Jett & the Blackhearts',
-  'Bob Marley & The Wailers',
-  'Marina & The Diamonds',
-  'Of Monsters and Men',
-  'Above & Beyond',
-  'Arms and Sleepers',
-  'Me & My',
-  'Jack & Jack',
-  'Dan + Shay',
-  'King & Prince',
-  'Sunstroke Project & Olia Tira'
-]
+// Single source of truth for artist splitting lives in ../fastAudioParser.
+// Re-exported here so existing imports from './libraryScanner' keep working.
+import { PRESERVED_ARTIST_NAMES, splitArtistNames as splitArtistString } from '../fastAudioParser'
 
-export function splitArtistString(raw: string): string[] {
-  if (!raw || typeof raw !== 'string') return []
-  const trimmed = raw.trim()
-  if (
-    !trimmed ||
-    trimmed.toLowerCase() === 'unknown' ||
-    trimmed.toLowerCase() === 'unknown artist'
-  ) {
-    return []
-  }
-
-  for (const preserved of PRESERVED_ARTIST_NAMES) {
-    if (trimmed.toLowerCase() === preserved.toLowerCase()) {
-      return [preserved]
-    }
-  }
-
-  let working = trimmed
-  const placeholders: { token: string; original: string }[] = []
-  PRESERVED_ARTIST_NAMES.forEach((preserved, idx) => {
-    const regex = new RegExp(preserved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
-    if (regex.test(working)) {
-      const token = `__PRESERVED_ARTIST_${idx}__`
-      working = working.replace(regex, token)
-      placeholders.push({ token, original: preserved })
-    }
-  })
-
-  working = working.replace(
-    /,\s*(Jr\.?|Sr\.?|III|II|IV)(?=$|[\s,;/|)\]])/gi,
-    (_, g1) => `___JRSR___${g1}`
-  )
-
-  working = working.replace(
-    /[([{]\s*(?:feat\.?|ft\.?|featuring)\s+([^()\]}]+)[)\]}]/gi,
-    ' feat. $1'
-  )
-
-  const splitRegex =
-    /(?:\s*;\s*|\0+|\s*[/\\/]+\s*|\s*\|\s*|\s+(?:feat\.?|ft\.?|featuring|with|vs\.?)\s+|\s+[&xX+]\s+|[，、；]|\s*,\s*)/i
-
-  const parts = working.split(splitRegex)
-  const result: string[] = []
-
-  for (let part of parts) {
-    for (const p of placeholders) {
-      part = part.replace(new RegExp(p.token, 'g'), p.original)
-    }
-    part = part.replace(/___JRSR___/g, ', ')
-
-    const clean = part
-      .trim()
-      .replace(/^[([{]/, '')
-      .replace(/[)\]}]$/, '')
-      .trim()
-    if (clean && clean.toLowerCase() !== 'unknown' && clean.toLowerCase() !== 'unknown artist') {
-      if (/^(jr\.?|sr\.?|iii|ii|iv)$/i.test(clean)) continue
-
-      if (!result.some((existing) => existing.toLowerCase() === clean.toLowerCase())) {
-        result.push(clean)
-      }
-    }
-  }
-
-  return result.length > 0 ? result : [trimmed]
-}
+export { PRESERVED_ARTIST_NAMES, splitArtistString }
 
 function normalizeForComparison(name: string): string {
   return name.toLowerCase().replace(/[,.\s_-]/g, '')
@@ -859,6 +762,11 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
     } catch {}
   }
 
+  // Lazy-load metadata vào RAM chỉ khi thực sự quét đĩa (tránh đọc toàn bảng lúc boot)
+  try {
+    Object.assign(metadataCache, sqliteStorage.getAllMetadata())
+  } catch {}
+
   // 2. LÀM MỚI GIA TĂNG (INCREMENTAL REFRESH)
   const previousTrackMap = new Map<string, any>()
   try {
@@ -1471,9 +1379,11 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
   }
 
   if (cacheModified) {
-    saveMetadataCache()
-    saveThemeColorsCache()
+    saveMetadataCache(true)
+    saveThemeColorsCache(true)
   }
+  // Giải phóng metadata khỏi RAM sau khi quét xong (chỉ giữ trong lúc quét)
+  for (const k of Object.keys(metadataCache)) delete metadataCache[k]
 
   const userPlaylists = getUserPlaylists()
   const preAggregated = buildPreAggregatedData(tracks)
@@ -1600,16 +1510,16 @@ export function registerLibraryScannerIpc(): void {
 
       try {
         if (sourcePath !== destPath) {
-          fs.copyFileSync(sourcePath, destPath)
+          await fs.promises.copyFile(sourcePath, destPath)
 
           const lrcSource = sourcePath.replace(/\.[^/.]+$/, '.lrc')
           const lrcDest = destPath.replace(/\.[^/.]+$/, '.lrc')
           if (fs.existsSync(lrcSource) && lrcSource !== lrcDest) {
-            fs.copyFileSync(lrcSource, lrcDest)
+            await fs.promises.copyFile(lrcSource, lrcDest)
           }
         }
 
-        const metadata = await mm.parseFile(destPath)
+        const metadata = await fastReadMetadata(destPath, { skipCovers: true })
         const { artist, artists } = extractArtists(metadata, fileName)
 
         importedTracks.push({
@@ -1643,6 +1553,14 @@ export function registerLibraryScannerIpc(): void {
   })
 
   ipcMain.handle('music:read-lyrics', async (_event, audioFilePath: string) => {
+    return readLyricsForAudio(audioFilePath)
+  })
+
+  ipcMain.handle('music:readLrcFile', async (_event, audioFilePath: string) => {
+    return readLyricsForAudio(audioFilePath)
+  })
+
+  async function readLyricsForAudio(audioFilePath: string): Promise<string | null> {
     try {
       if (!audioFilePath) return null
       let rawPath = audioFilePath
@@ -1654,6 +1572,7 @@ export function registerLibraryScannerIpc(): void {
         } catch (_) {}
       }
       if (rawPath.startsWith('http')) return null
+      if (rawPath.includes('#track-')) rawPath = rawPath.split('#track-')[0]
       if (rawPath.startsWith('file://')) {
         const { fileURLToPath } = require('url')
         rawPath = fileURLToPath(rawPath)
@@ -1662,6 +1581,7 @@ export function registerLibraryScannerIpc(): void {
           rawPath = decodeURIComponent(rawPath)
         } catch {}
       }
+      if (!isAllowedLocalPath(rawPath)) throw new Error('Access denied')
       const dir = path.dirname(rawPath)
       const fileNameWithoutExt = path.basename(rawPath, path.extname(rawPath))
       for (const lrcExt of ['.lrc', '.LRC']) {
@@ -1674,7 +1594,7 @@ export function registerLibraryScannerIpc(): void {
         } catch {}
       }
 
-      const cached = metadataCache[rawPath]
+      const cached = metadataCache[rawPath] || sqliteStorage.getMetadata(rawPath)
       if (
         cached?.data?.lyrics &&
         typeof cached.data.lyrics === 'string' &&
@@ -1687,7 +1607,7 @@ export function registerLibraryScannerIpc(): void {
         const metadata = await mm.parseFile(rawPath, { skipCovers: true, duration: false })
         const embedded = extractEmbeddedLyrics(metadata)
         if (embedded && embedded.trim()) {
-          if (cached?.data) cached.data.lyrics = embedded
+          if (metadataCache[rawPath]?.data) metadataCache[rawPath].data.lyrics = embedded
           return embedded
         }
       } catch {}
@@ -1696,7 +1616,7 @@ export function registerLibraryScannerIpc(): void {
     } catch {
       return null
     }
-  })
+  }
 
   ipcMain.handle(
     'music:readAudioBuffer',
@@ -1721,6 +1641,7 @@ export function registerLibraryScannerIpc(): void {
           if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
           rawPath = rawPath.replace(/\//g, '\\')
         }
+        if (!isAllowedLocalPath(rawPath)) throw new Error('Access denied')
         if (fs.existsSync(rawPath)) {
           const stat = fs.statSync(rawPath)
           let sampleRate: number | undefined = undefined
@@ -1941,6 +1862,7 @@ export function registerLibraryScannerIpc(): void {
             if (p) rawPath = p
           } catch (_) {}
         }
+        rawPath = rawPath.replace(/#track-\d+$/, '')
         rawPath = rawPath.replace(/^file:\/\/\/?/, '')
         if (process.platform === 'win32') {
           try {
@@ -1950,6 +1872,9 @@ export function registerLibraryScannerIpc(): void {
           rawPath = rawPath.replace(/\//g, '\\')
         }
 
+        if (!isAllowedLocalPath(rawPath)) {
+          return { success: false, error: 'Access denied' }
+        }
         if (!fs.existsSync(rawPath)) {
           return { success: false, error: `Source audio file not found: ${rawPath}` }
         }
@@ -1987,7 +1912,7 @@ export function registerLibraryScannerIpc(): void {
           args.push('-ss', track.startTime.toString())
         }
         if (typeof track.endTime === 'number' && track.endTime > (track.startTime || 0)) {
-          args.push('-to', track.endTime.toString())
+          args.push('-t', String(track.endTime - (track.startTime || 0)))
         }
         // File .bin là ảnh đĩa RAW PCM (s16le, 44.1kHz, stereo) - FFmpeg không
         // tự nhận diện được định dạng nên phải chỉ định trước -i.
@@ -2061,14 +1986,11 @@ export function registerLibraryScannerIpc(): void {
       sqliteStorage.setThemeColor(trackPath, colors)
       saveThemeColorsCache()
 
-      if (metadataCache[rawPath] && metadataCache[rawPath].data) {
-        metadataCache[rawPath].data.themeColors = colors
-        markMetadataDirty(rawPath)
-        sqliteStorage.setMetadata(
-          rawPath,
-          metadataCache[rawPath].mtime,
-          metadataCache[rawPath].data
-        )
+      const existingMeta = metadataCache[rawPath] || sqliteStorage.getMetadata(rawPath)
+      if (existingMeta && existingMeta.data) {
+        existingMeta.data.themeColors = colors
+        if (metadataCache[rawPath]) markMetadataDirty(rawPath)
+        sqliteStorage.setMetadata(rawPath, existingMeta.mtime, existingMeta.data)
         saveMetadataCache()
       }
       return { success: true }
@@ -2129,47 +2051,5 @@ export function registerLibraryScannerIpc(): void {
     } catch (e: any) {
       return { success: false, error: e.message }
     }
-  })
-
-  ipcMain.handle('music:openFolder', async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openDirectory'] })
-    if (canceled || filePaths.length === 0) return []
-    const folderPath = filePaths[0]
-    const supportedExtensions = SUPPORTED_AUDIO_EXTS
-    const audioFiles = await getAudioFilesInDirectoryRecursiveAsync(folderPath, supportedExtensions)
-    const tracks: any[] = []
-
-    for (const filePath of audioFiles) {
-      const file = path.basename(filePath)
-      try {
-        const metadata = await mm.parseFile(filePath)
-        const { artist, artists } = extractArtists(metadata, file)
-        tracks.push({
-          id: filePath,
-          filePath: pathToFileURL(filePath).href,
-          title: metadata.common.title || file.replace(/\.[^/.]+$/, ''),
-          artist: artist,
-          artists: artists,
-          multiArtistVersion: 2,
-          album: metadata.common.album || 'Unknown Album',
-          duration: metadata.format.duration,
-          format: metadata.format.container || file.split('.').pop()?.toUpperCase(),
-          bitrate: metadata.format.bitrate,
-          sampleRate: metadata.format.sampleRate,
-          bitDepth: metadata.format.bitsPerSample,
-          lossless: metadata.format.lossless,
-          coverArt: null,
-          isCloud: false
-        })
-      } catch {
-        tracks.push({
-          id: filePath,
-          filePath: pathToFileURL(filePath).href,
-          title: file,
-          isCloud: false
-        })
-      }
-    }
-    return tracks
   })
 }

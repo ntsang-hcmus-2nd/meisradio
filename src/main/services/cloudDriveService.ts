@@ -3,7 +3,7 @@ import path, { join } from 'path'
 import { pathToFileURL } from 'url'
 import { ipcMain } from 'electron'
 import * as mm from 'music-metadata'
-import NodeID3 from 'node-id3'
+import { isBlockedSsrfHost } from './streamServer'
 import {
   getConfig,
   sqliteStorage,
@@ -14,7 +14,33 @@ import {
   getMainWindow,
   sanitizeFileName
 } from './sharedContext'
-import { extractEmbeddedLyrics } from './libraryScanner'
+
+// Chỉ cho phép tải từ URL https công khai (chặn SSRF tới host nội bộ).
+function validateCloudDownloadUrl(url: string): URL {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new Error('Access denied: Invalid or blocked cloud URL')
+  }
+  if (parsed.protocol !== 'https:' || isBlockedSsrfHost(parsed.hostname)) {
+    throw new Error('Access denied: Invalid or blocked cloud URL')
+  }
+  return parsed
+}
+
+function assertSafeRedirectUrl(responseUrl: string | undefined): void {
+  if (!responseUrl) return
+  try {
+    const finalUrl = new URL(responseUrl)
+    if (finalUrl.protocol !== 'https:' || isBlockedSsrfHost(finalUrl.hostname)) {
+      throw new Error('Access denied: Invalid or blocked cloud URL')
+    }
+  } catch (err: any) {
+    if (err?.message?.startsWith('Access denied:')) throw err
+    throw new Error('Access denied: Invalid or blocked cloud URL')
+  }
+}
 
 // ==========================================
 // TẢI FILE TỪ STREAM
@@ -102,7 +128,9 @@ export async function downloadCloudFile(
   const savePath = join(rootPath, safeFilename)
   const tempDestPath = join(rootPath, `temp_cloud_${Date.now()}_${safeFilename}`)
   try {
+    validateCloudDownloadUrl(url)
     const response = await fetch(url)
+    assertSafeRedirectUrl(response.url)
 
     if (!response.ok) {
       throw new Error(`Google Drive từ chối tải file. Mã lỗi: ${response.status}`)
@@ -121,28 +149,8 @@ export async function downloadCloudFile(
       const metadata = await mm.parseFile(savePath)
       const ext = savePath.toLowerCase().split('.').pop()
 
-      if (ext === 'mp3') {
-        const tags: NodeID3.Tags = {
-          title: metadata.common.title || filename.replace(/\.[^/.]+$/, ''),
-          artist: metadata.common.artist || 'Unknown Artist',
-          album: metadata.common.album || 'Unknown Album'
-        }
-        if (metadata.common.picture && metadata.common.picture.length > 0) {
-          tags.image = {
-            mime: metadata.common.picture[0].format,
-            type: { id: 3, name: 'front cover' },
-            description: 'Cover',
-            imageBuffer: Buffer.from(metadata.common.picture[0].data)
-          }
-        }
-        if (metadata?.common.lyrics && metadata.common.lyrics.length > 0) {
-          tags.unsynchronisedLyrics = {
-            language: 'eng',
-            text: extractEmbeddedLyrics(metadata) || ''
-          }
-        }
-        NodeID3.update(tags, savePath)
-      } else {
+      // Không ghi đè ID3 tag gốc của file mp3: chỉ trích lyric nhúng ra .lrc cho file không phải mp3.
+      if (ext !== 'mp3') {
         if (metadata.common.lyrics && metadata.common.lyrics.length > 0) {
           const fileNameWithoutExt = path.basename(savePath, path.extname(savePath))
           const lrcPath = join(rootPath, `${fileNameWithoutExt}.lrc`)
@@ -287,7 +295,19 @@ export async function downloadMultipleFiles(
       const tempPath = join(rootPath, `temp_${Date.now()}_${filename}`)
       const destPath = join(rootPath, filename)
 
+      try {
+        validateCloudDownloadUrl(file.url)
+      } catch {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
+        continue
+      }
       const response = await fetch(file.url)
+      try {
+        assertSafeRedirectUrl(response.url)
+      } catch {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
+        continue
+      }
 
       if (!response.ok) {
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
@@ -321,19 +341,7 @@ export async function downloadMultipleFiles(
       fs.renameSync(tempPath, destPath)
 
       try {
-        if (ext === 'mp3') {
-          const tags: NodeID3.Tags = { title, artist, album }
-
-          if (metadata?.common.picture && metadata.common.picture.length > 0) {
-            tags.image = {
-              mime: metadata.common.picture[0].format,
-              type: { id: 3, name: 'front cover' },
-              description: 'Cover',
-              imageBuffer: Buffer.from(metadata.common.picture[0].data)
-            }
-          }
-          NodeID3.update(tags, destPath)
-        } else {
+        if (ext !== 'mp3') {
           if (metadata?.common.lyrics && metadata.common.lyrics.length > 0) {
             const lyricText =
               typeof metadata.common.lyrics[0] === 'string'
