@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useSettingsStore } from '../stores'
 
 export function useMemoryOptimization() {
   // 2. Dọn dẹp sâu khi ứng dụng thu nhỏ hoặc nhận sự kiện onDeepClean từ Main Process
@@ -16,9 +17,24 @@ export function useMemoryOptimization() {
       window.api?.clearMemoryCache?.()
     }
 
+    // shortcut: auto-degrade chỉ khi appMode==='default' — Lite/Core đã tự xử lý.
+    // Manual override = chuyển sang Lite/Core, auto không can thiệp.
+    const setDegraded = (on: boolean) => {
+      try {
+        if (on && useSettingsStore.getState().appMode === 'default') {
+          document.documentElement.setAttribute('data-degraded', 'true')
+        } else {
+          document.documentElement.removeAttribute('data-degraded')
+        }
+      } catch {}
+    }
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         triggerGC()
+        setDegraded(true)
+      } else {
+        setDegraded(false)
       }
     }
 
@@ -28,6 +44,7 @@ export function useMemoryOptimization() {
     if (window.api?.onDeepClean) {
       unlistenDeepClean = window.api.onDeepClean(() => {
         triggerGC()
+        setDegraded(true)
       })
     }
 
@@ -35,11 +52,15 @@ export function useMemoryOptimization() {
     const idleInterval = setInterval(() => {
       if (document.hidden) {
         triggerGC()
+        setDegraded(true)
       }
     }, 180000)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      try {
+        document.documentElement.removeAttribute('data-degraded')
+      } catch {}
       clearInterval(idleInterval)
       if (typeof unlistenDeepClean === 'function') {
         unlistenDeepClean()

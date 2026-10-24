@@ -114,7 +114,7 @@ export const PlayerToolsMenu: React.FC<PlayerToolsMenuProps> = React.memo(
         <AnimatePresence>
           {isOpen && (
             <motion.div
-              className="absolute bottom-full right-0 mb-3 w-64 max-h-[calc(100vh-7.5rem)] overflow-y-auto no-scrollbar bg-zinc-900/95 border border-theme-30/70 backdrop-blur-xl rounded-2xl p-2 shadow-2xl z-50 text-xs space-y-1 select-none"
+              className="absolute bottom-full right-0 mb-3 w-64 max-h-[calc(100vh-7.5rem)] overflow-y-auto no-scrollbar bg-zinc-900 border border-theme-30/70 rounded-2xl p-2 shadow-2xl z-50 text-xs space-y-1 select-none"
               initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
               animate={overlayFade.animate}
               exit={overlayFade.exit}

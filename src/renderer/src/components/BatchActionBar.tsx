@@ -151,7 +151,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     <AnimatePresence>
       {count > 0 && (
         <motion.div
-          className={`fixed bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-40 bg-zinc-900/90 backdrop-blur-xl border border-zinc-700/80 shadow-2xl rounded-2xl px-4 py-2.5 flex items-center gap-2 sm:gap-3 max-w-[95vw] text-xs select-none ${className}`}
+          className={`fixed bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-40 bg-zinc-900 border border-zinc-700/80 shadow-2xl rounded-2xl px-4 py-2.5 flex items-center gap-2 sm:gap-3 max-w-[95vw] text-xs select-none ${className}`}
           initial={reduceMotion ? { opacity: 1, y: 0 } : toastSlide.initial}
           animate={toastSlide.animate}
           exit={toastSlide.exit}

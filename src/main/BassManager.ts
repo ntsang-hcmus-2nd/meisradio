@@ -186,6 +186,7 @@ export class BassManager extends EventEmitter {
   public isPlaying = false
   public isPaused = false
   private progressTimer: NodeJS.Timeout | null = null
+  private lastTimeEmit: number = 0
   private activeWasapiStream = 0
   private activeAsioStream = 0
   private currentAsioDevice = -1
@@ -1929,13 +1930,22 @@ export class BassManager extends EventEmitter {
       this.emit('duration', totalDuration)
     }
 
+    this.lastTimeEmit = 0
     this.progressTimer = setInterval(() => {
       if (!this.isPlaying || !this.currentStream) return
 
       try {
         const rawPos = this.getRawPosition()
         const curSec = this.getPosition()
-        this.emit('time', curSec)
+        // shortcut: end-check giữ 200ms cho gapless/CUE chính xác, IPC time throttle 500ms.
+        const rawDur = this.getRawDuration()
+        const endCondition = this.currentEndTime > 0 ? this.currentEndTime : rawDur
+        const nearEnd = endCondition > 0 && endCondition - rawPos < 2
+        const now = Date.now()
+        if (nearEnd || now - this.lastTimeEmit >= 500) {
+          this.lastTimeEmit = now
+          this.emit('time', curSec)
+        }
 
         // Kiểm tra giới hạn CUE sheet ảo (currentEndTime)
         if (this.currentEndTime > 0 && rawPos >= this.currentEndTime) {
@@ -1952,8 +1962,6 @@ export class BassManager extends EventEmitter {
         const isActive = this.BASS_ChannelIsActive
           ? this.BASS_ChannelIsActive(this.currentStream)
           : 1
-        const rawDur = this.getRawDuration()
-        const endCondition = this.currentEndTime > 0 ? this.currentEndTime : rawDur
         if (
           isActive === BASS_ACTIVE_STOPPED ||
           (endCondition > 0 && rawPos >= endCondition - 0.1)

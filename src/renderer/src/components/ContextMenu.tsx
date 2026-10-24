@@ -100,7 +100,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
       {/* Menu nổi bật chính */}
       <motion.div
         ref={menuRef}
-        className="fixed z-[99999] min-w-[220px] bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/70 rounded-xl shadow-2xl p-1.5 text-xs select-none"
+        className="fixed z-[99999] min-w-[220px] bg-zinc-900 border border-zinc-700/70 rounded-xl shadow-2xl p-1.5 text-xs select-none"
         style={{ left: position.x, top: position.y }}
         initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
         animate={overlayFade.animate}
@@ -155,7 +155,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
               {/* Submenu */}
               {hasSub && activeSubMenu === item.id && (
                 <div
-                  className="absolute left-full top-0 ml-1 min-w-[190px] max-h-64 overflow-y-auto bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/70 rounded-xl shadow-2xl p-1.5 text-xs z-[100000]"
+                  className="absolute left-full top-0 ml-1 min-w-[190px] max-h-64 overflow-y-auto bg-zinc-900 border border-zinc-700/70 rounded-xl shadow-2xl p-1.5 text-xs z-[100000]"
                   onMouseDown={(e) => e.stopPropagation()}
                 >
                   {item.subItems!.map((sub) => {

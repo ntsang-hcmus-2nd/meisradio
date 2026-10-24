@@ -33,7 +33,11 @@ export function useDiscordRpc({ audioRef, isConfigLoaded }: UseDiscordRpcProps) 
       }
     }
     checkStatus()
-    const interval = setInterval(checkStatus, 5000)
+    // shortcut: status ít đổi — 15s đủ, bỏ qua khi tab hidden để giảm IPC.
+    const interval = setInterval(() => {
+      if (document.hidden) return
+      checkStatus()
+    }, 15000)
     return () => clearInterval(interval)
   }, [discordRpcEnabled, setDiscordConnected])
 

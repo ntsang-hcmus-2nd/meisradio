@@ -468,55 +468,55 @@ export function useAudioEngine() {
         })
       }
 
-      // Binaural Crossfeed DSP
-      // Toàn bộ node phụ trợ của chuỗi crossfeed được lưu vào crossfeedNodesRef
-      // để teardownCrossfeed() có thể ngắt sạch khi setupAudio chạy lại (đổi bài,
-      // đổi EQ...), tránh chồng chéo luồng âm thanh.
-      const crossfeedMerger = ctx.createGain()
-      crossfeedMerger.gain.value = 1.0
-      crossfeedMergerNodeRef.current = crossfeedMerger
-      crossfeedNodesRef.current = [crossfeedMerger]
-      prevNode.connect(crossfeedMerger)
+      // Binaural Crossfeed DSP — chỉ dựng 7 node phụ (splitter/lowpass/delay/merger)
+      // khi user bật crossfeed; mặc định gain=0 nên bypass để tiết kiệm CPU.
+      if (crossfeedSetting) {
+        const crossfeedMerger = ctx.createGain()
+        crossfeedMerger.gain.value = 1.0
+        crossfeedMergerNodeRef.current = crossfeedMerger
+        crossfeedNodesRef.current = [crossfeedMerger]
+        prevNode.connect(crossfeedMerger)
 
-      const splitter = ctx.createChannelSplitter(2)
-      crossfeedNodesRef.current.push(splitter)
-      prevNode.connect(splitter)
+        const splitter = ctx.createChannelSplitter(2)
+        crossfeedNodesRef.current.push(splitter)
+        prevNode.connect(splitter)
 
-      const filterL = ctx.createBiquadFilter()
-      filterL.type = 'lowpass'
-      filterL.frequency.value = 700
+        const filterL = ctx.createBiquadFilter()
+        filterL.type = 'lowpass'
+        filterL.frequency.value = 700
 
-      const filterR = ctx.createBiquadFilter()
-      filterR.type = 'lowpass'
-      filterR.frequency.value = 700
+        const filterR = ctx.createBiquadFilter()
+        filterR.type = 'lowpass'
+        filterR.frequency.value = 700
 
-      const delayL = ctx.createDelay()
-      delayL.delayTime.value = 0.0003
+        const delayL = ctx.createDelay()
+        delayL.delayTime.value = 0.0003
 
-      const delayR = ctx.createDelay()
-      delayR.delayTime.value = 0.0003
-      crossfeedNodesRef.current.push(filterL, filterR, delayL, delayR)
+        const delayR = ctx.createDelay()
+        delayR.delayTime.value = 0.0003
+        crossfeedNodesRef.current.push(filterL, filterR, delayL, delayR)
 
-      splitter.connect(filterL, 0)
-      filterL.connect(delayL)
+        splitter.connect(filterL, 0)
+        filterL.connect(delayL)
 
-      splitter.connect(filterR, 1)
-      filterR.connect(delayR)
+        splitter.connect(filterR, 1)
+        filterR.connect(delayR)
 
-      const crossMerger = ctx.createChannelMerger(2)
-      crossfeedNodesRef.current.push(crossMerger)
-      delayR.connect(crossMerger, 0, 0)
-      delayL.connect(crossMerger, 0, 1)
+        const crossMerger = ctx.createChannelMerger(2)
+        crossfeedNodesRef.current.push(crossMerger)
+        delayR.connect(crossMerger, 0, 0)
+        delayL.connect(crossMerger, 0, 1)
 
-      const crossfeedGain = ctx.createGain()
-      crossfeedGain.gain.value = crossfeedSetting ? 0.28 : 0
-      crossfeedGainNodeRef.current = crossfeedGain
-      crossfeedNodesRef.current.push(crossfeedGain)
+        const crossfeedGain = ctx.createGain()
+        crossfeedGain.gain.value = 0.28
+        crossfeedGainNodeRef.current = crossfeedGain
+        crossfeedNodesRef.current.push(crossfeedGain)
 
-      crossMerger.connect(crossfeedGain)
-      crossfeedGain.connect(crossfeedMerger)
+        crossMerger.connect(crossfeedGain)
+        crossfeedGain.connect(crossfeedMerger)
 
-      prevNode = crossfeedMerger
+        prevNode = crossfeedMerger
+      }
 
       prevNode.connect(analyserNodeRef.current)
       analyserNodeRef.current.connect(compressorNodeRef.current)
@@ -544,6 +544,7 @@ export function useAudioEngine() {
     loudnessNormalization,
     replayGainMode,
     bitPerfectEnabled,
+    crossfeedSetting,
     audioRemountCount
   ])
 
@@ -599,6 +600,25 @@ export function useAudioEngine() {
     replayGainMode,
     bitPerfectEnabled
   ])
+
+  // Suspend Web Audio khi pause/hidden để tiết kiệm CPU; resume do handlePlayTrack đảm nhiệm.
+  // shortcut: chỉ suspend khi không phát — đang phát mà hidden vẫn giữ audio.
+  useEffect(() => {
+    const ctx = audioCtxRef.current
+    if (!ctx) return
+    if (!isPlaying && ctx.state === 'running') {
+      ctx.suspend().catch(() => {})
+    }
+    const onVis = () => {
+      const c = audioCtxRef.current
+      if (!c) return
+      if (document.hidden && !usePlayerStore.getState().isPlaying && c.state === 'running') {
+        c.suspend().catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [isPlaying])
 
   // BASS Audio Listeners (WASAPI / ASIO / DSD)
   useEffect(() => {
