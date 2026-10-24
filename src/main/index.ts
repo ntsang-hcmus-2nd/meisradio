@@ -198,7 +198,7 @@ app.whenReady().then(async () => {
 
   // 4. Khởi tạo BASS Audio Backend
   bassManager = new BassManager()
-  const bitPerfectType = (currentConfig.bitPerfectType as 'wasapi' | 'asio') || 'asio'
+  const bitPerfectType = (currentConfig.bitPerfectType as 'wasapi' | 'asio') || 'wasapi'
   const rawVol = currentConfig.volume ?? 1.0
   const initialGain =
     typeof rawVol === 'number' ? Math.pow(Math.max(0, Math.min(1, rawVol)), 2) : 1.0

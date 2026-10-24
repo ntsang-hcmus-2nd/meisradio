@@ -180,7 +180,7 @@ export class BassManager extends EventEmitter {
 
   // Runtime State
   private currentStream = 0
-  private currentMode: 'wasapi' | 'asio' = 'asio'
+  private currentMode: 'wasapi' | 'asio' = 'wasapi'
   private currentDeviceId = 'auto'
   private currentVolume = 1.0
   public isPlaying = false
@@ -1032,7 +1032,7 @@ export class BassManager extends EventEmitter {
   /**
    * Lấy danh sách thiết bị âm thanh khả dụng theo kiểu (ASIO hoặc WASAPI)
    */
-  public getAudioDevices(preferredType: 'wasapi' | 'asio' = 'asio'): BassAudioDevice[] {
+  public getAudioDevices(preferredType: 'wasapi' | 'asio' = 'wasapi'): BassAudioDevice[] {
     if (!this.ensureLoaded()) return []
     const devices: BassAudioDevice[] = []
 

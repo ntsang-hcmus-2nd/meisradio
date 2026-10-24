@@ -545,6 +545,33 @@ export class SqliteStorage {
     return this.db.checkpoint(mode)
   }
 
+  // WAL tích tụ vì autocheckpoint PASSIVE không truncate được và bó tay khi có
+  // read transaction đang mở. Hàm này ép TRUNCATE khi file -wal vượt ngưỡng,
+  // gọi ở các điểm đồng bộ rẻ (sau batch ghi), tránh phình WAL vô hạn giữa
+  // các lần khởi động/tắt app.
+  public checkpointIfNeeded(maxWalBytes: number = 8 * 1024 * 1024): boolean {
+    if (!this.db || !this.dataFolder) return false
+    try {
+      const walPath = path.join(this.dataFolder, 'library.db-wal')
+      let size = 0
+      try {
+        size = fs.statSync(walPath).size
+      } catch {
+        return true
+      }
+      if (size < maxWalBytes) return true
+      this.checkpoint('TRUNCATE')
+      try {
+        if (fs.statSync(walPath).size >= maxWalBytes) {
+          this.checkpoint('RESTART')
+        }
+      } catch {}
+      return true
+    } catch {
+      return false
+    }
+  }
+
   private resolveSqliteDll(): string {
     const candidates = [
       path.join(process.resourcesPath || '', 'bin', 'sqlite3.dll'),
@@ -1227,6 +1254,7 @@ export class SqliteStorage {
         this.stmtSetMetadata?.run(item.filePath, item.mtime, JSON.stringify(item.data || {}), now)
       }
     })
+    this.checkpointIfNeeded()
   }
 
   public getAllMetadata(): Record<string, TrackMetadata> {
@@ -1513,6 +1541,7 @@ export class SqliteStorage {
         }
       })
       this.checkpoint('PASSIVE')
+      this.checkpointIfNeeded()
     } catch (e) {
       console.warn('[SqliteStorage.setLibraryCache] Error saving cache:', e)
     }
@@ -2621,6 +2650,8 @@ export class SqliteStorage {
           this.stmtUpdatePlayStatDuration?.run(delta, Date.now(), fPath)
         }
       }
+      // Ghi định kỳ mỗi 5s khi đang phát: chỉ stat file WAL, checkpoint khi vượt ngưỡng
+      this.checkpointIfNeeded()
     } catch (err) {
       console.error('[SqliteStorage] Error updating play event duration:', err)
     }

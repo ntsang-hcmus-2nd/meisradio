@@ -52,7 +52,7 @@ export const useAudioStore = create<AudioState>((set) => ({
   isEqEnabled: false,
   availableAudioDevices: [],
   selectedDeviceId: 'auto',
-  bitPerfectType: 'asio',
+  bitPerfectType: 'wasapi',
   eqBands: defaultBands,
   preampGain: 0,
 

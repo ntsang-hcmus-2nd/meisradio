@@ -186,7 +186,7 @@ export function registerAudioPlaybackIpc(bassManager: BassManager): void {
   ipcMain.handle('music:getAudioDevices', async (_, type?: 'wasapi' | 'asio') => {
     try {
       const config = getConfig()
-      const targetType = type || (config.bitPerfectType as 'wasapi' | 'asio') || 'asio'
+      const targetType = type || (config.bitPerfectType as 'wasapi' | 'asio') || 'wasapi'
       const rawDevices = bassManager ? bassManager.getAudioDevices(targetType) : []
       const devices = rawDevices.map((d) => ({
         name: d.id,
