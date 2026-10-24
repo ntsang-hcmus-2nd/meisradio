@@ -184,6 +184,10 @@ export function isBlockedSsrfHost(hostname: string): boolean {
 const TRUSTED_DEV_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i
 
 function applyStreamCors(req: http.IncomingMessage, res: http.ServerResponse): void {
+  // Luôn Vary theo Origin: cùng URL ảnh được tải cả no-cors (<img>) lẫn cors
+  // (canvas extractThemeColors), thiếu Vary khiến cache dùng lại bản không-ACAO
+  // cho request cors → CORS fail + ERR_FAILED khi chuyển bài.
+  res.setHeader('Vary', 'Origin')
   const origin = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : ''
   if (!origin) return
   // Chỉ cho phép origin của ứng dụng trong môi trường dev; prod (file://) không gửi Origin.
@@ -195,7 +199,6 @@ function applyStreamCors(req: http.IncomingMessage, res: http.ServerResponse): v
       'Access-Control-Expose-Headers',
       'Content-Range, Accept-Ranges, Content-Length, Content-Type'
     )
-    res.setHeader('Vary', 'Origin')
   }
 }
 

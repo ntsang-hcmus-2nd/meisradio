@@ -78,6 +78,7 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
   const waveformRef = useRef<HTMLDivElement | null>(null)
   const isDraggingRef = useRef(false)
   const currentTimeRef = useRef(0)
+  const lastBassUiRef = useRef(0)
   const loopARef = useRef<number | null>(loopA)
   const loopBRef = useRef<number | null>(loopB)
 
@@ -176,7 +177,12 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
             return
           }
 
-          setCurrentTime(val)
+          // Seekbar 4Hz vẫn mượt mắt, khỏi render 140 bars ở 5Hz
+          const now = performance.now()
+          if (now - lastBassUiRef.current >= 250) {
+            lastBassUiRef.current = now
+            setCurrentTime(val)
+          }
         })
         return () => {
           if (typeof cleanup === 'function') cleanup()
@@ -234,20 +240,22 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
     let cleanupListeners = attachListeners()
 
-    // Backup polling timer
+    // Backup polling timer (thưa 1000ms: timeupdate native đã đủ 4Hz, interval chỉ để re-attach listener)
     if (isPlaying) {
       intervalId = setInterval(() => {
+        if (document.hidden) return
         if (!isDraggingRef.current && audioRef.current) {
-          const cur = audioRef.current.currentTime || 0
-          const rel = Math.max(0, cur - trackStart) + getReloadSeekOffset(currentTrack)
-          if (!checkAndLoop(rel)) {
-            setCurrentTime(rel)
-          }
           if (!cleanupListeners && audioRef.current) {
             cleanupListeners = attachListeners()
+          } else {
+            const cur = audioRef.current.currentTime || 0
+            const rel = Math.max(0, cur - trackStart) + getReloadSeekOffset(currentTrack)
+            if (!checkAndLoop(rel)) {
+              setCurrentTime(rel)
+            }
           }
         }
-      }, 200)
+      }, 1000)
     }
 
     return () => {

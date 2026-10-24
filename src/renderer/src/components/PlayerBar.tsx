@@ -135,7 +135,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               streamPort={streamPort}
               tier="md"
               isLite={isLite}
-              smartAspect={true}
+              smartAspect="auto"
               fallbackIconSize={24}
               className="w-full h-full"
             />

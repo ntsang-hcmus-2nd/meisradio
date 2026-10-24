@@ -33,6 +33,33 @@ export const getBrowserSinkId = (deviceId: string | null | undefined): string =>
   return deviceId
 }
 
+// Throttle đẩy currentTime vào Zustand (500ms): timeupdate/BASS bắn 4-5Hz,
+// store chỉ cần 2Hz cho tracker + highlight; seekbar mượt dùng state cục bộ riêng
+const shouldPushStoreTime = (ref: { current: number }, minGapMs = 500): boolean => {
+  const now = performance.now()
+  if (now - ref.current >= minGapMs) {
+    ref.current = now
+    return true
+  }
+  return false
+}
+// Binary search lyric index (O(log n) thay vì findIndex O(n) mỗi tick 5Hz)
+const findLyricIndex = (lyrics: Array<{ time: number }>, visualTime: number): number => {
+  let lo = 0
+  let hi = lyrics.length - 1
+  let ans = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (lyrics[mid].time <= visualTime) {
+      ans = mid
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  return ans
+}
+
 export function useAudioEngine() {
   const { t } = useTranslation()
   const { language } = useLanguage()
@@ -64,6 +91,10 @@ export function useAudioEngine() {
   const isGaplessTransitioningRef = useRef(false)
   const prevTrackModeRef = useRef<'bass' | 'webaudio'>('webaudio')
   const handleNextRef = useRef<() => void>(() => {})
+  // Gain setup đọc qua ref để effect graph không phải rebuild mỗi lần đổi bài
+  const gainTrackRef = useRef<any>(null)
+  // Mốc throttle đẩy currentTime vào Zustand (store 2Hz, tick gốc 4-5Hz)
+  const lastStoreTimeRef = useRef(0)
 
   // Stores
   const currentTrack = usePlayerStore((s) => s.currentTrack)
@@ -133,6 +164,10 @@ export function useAudioEngine() {
     crossfadeEnabledRef.current = crossfadeEnabled
     crossfadeDurationRef.current = crossfadeDuration
   }, [crossfadeEnabled, crossfadeDuration])
+
+  useEffect(() => {
+    gainTrackRef.current = currentTrack || null
+  }, [currentTrack])
 
   useEffect(() => {
     crossfadeArmedTrackRef.current = currentTrack || null
@@ -386,17 +421,16 @@ export function useAudioEngine() {
       filterNodesRef.current = []
       teardownCrossfeed()
 
+      // Đọc gain qua ref: effect này không còn phụ thuộc currentTrack nên đổi bài
+      // không rebuild graph; giá trị chuẩn do realtime-effect bên dưới chỉnh ngay sau.
+      const gainTrack = gainTrackRef.current
       let replayGainMultiplier = 1.0
-      if (!bitPerfectEnabled && replayGainMode !== 'off' && currentTrack) {
+      if (!bitPerfectEnabled && replayGainMode !== 'off' && gainTrack) {
         let rgDb = 0
-        if (
-          replayGainMode === 'track' &&
-          typeof (currentTrack as any).replayGainTrack === 'number'
-        ) {
-          rgDb = (currentTrack as any).replayGainTrack
+        if (replayGainMode === 'track' && typeof (gainTrack as any).replayGainTrack === 'number') {
+          rgDb = (gainTrack as any).replayGainTrack
         } else if (replayGainMode === 'album') {
-          rgDb =
-            (currentTrack as any)?.replayGainAlbum ?? (currentTrack as any)?.replayGainTrack ?? 0
+          rgDb = (gainTrack as any)?.replayGainAlbum ?? (gainTrack as any)?.replayGainTrack ?? 0
         }
         if (rgDb) {
           const linearRg = Math.pow(10, rgDb / 20)
@@ -404,7 +438,7 @@ export function useAudioEngine() {
         }
       }
 
-      const normGainDb = loudnessNormalization ? ((currentTrack as any)?.replayGain ?? -3.0) : 0
+      const normGainDb = loudnessNormalization ? ((gainTrack as any)?.replayGain ?? -3.0) : 0
       const linearPreamp =
         (isEqEnabled ? Math.pow(10, preampGain / 20) : 1.0) *
         Math.pow(10, normGainDb / 20) *
@@ -499,6 +533,8 @@ export function useAudioEngine() {
     }
     // Deps cố ý thu gọn: rebuild graph nặng chỉ khi thêm/bớt band (length),
     // đổi giá trị gain dùng realtime-effect bên dưới để không rè tiếng.
+    // currentSampleRate giữ lại để vẫn rebuild khi đổi tần số lấy mẫu;
+    // currentTrack bị loại: đổi bài không chạm graph, gain đọc qua ref + realtime-effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isEqEnabled,
@@ -507,7 +543,6 @@ export function useAudioEngine() {
     eqBands.length,
     loudnessNormalization,
     replayGainMode,
-    currentTrack,
     bitPerfectEnabled,
     audioRemountCount
   ])
@@ -591,14 +626,10 @@ export function useAudioEngine() {
             }
             if (!document.hidden && lyrics.length > 0 && !lyrics[0].unsynced) {
               const visualTime = val + 0.3 + (lyricOffset || 0)
-              const index = lyrics.findIndex((line, i) => {
-                const nextLine = lyrics[i + 1]
-                if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
-                return visualTime >= line.time
-              })
+              const index = findLyricIndex(lyrics, visualTime)
               if (index !== useLyricsStore.getState().currentLyricIndex) setCurrentLyricIndex(index)
             }
-            setCurrentTime(val)
+            if (shouldPushStoreTime(lastStoreTimeRef)) setCurrentTime(val)
           }
         })
       : undefined
@@ -1023,31 +1054,30 @@ export function useAudioEngine() {
       await audioCtxRef.current.resume().catch(() => {})
     }
 
-    // Recently Played
-    setRecentlyPlayed((prev) => {
-      const trackId = trackToPlay.id || trackToPlay.filePath
-      const filtered = prev.filter((trk) => (trk.id || trk.filePath) !== trackId)
-      const updated = [
-        {
-          id: trackId,
-          title: trackToPlay.title || 'Unknown Title',
-          artist: trackToPlay.artist || 'Unknown Artist',
-          album: trackToPlay.album || 'Unknown Album',
-          duration: trackToPlay.duration || 0,
-          filePath: trackToPlay.filePath,
-          coverArt: trackToPlay.coverArt,
-          genre: trackToPlay.genre,
-          isOnline: trackToPlay.isOnline,
-          platform: trackToPlay.platform,
-          playedAt: Date.now()
-        },
-        ...filtered
-      ].slice(0, 50)
-      try {
-        localStorage.setItem('meis_recent_played', JSON.stringify(updated))
-      } catch {}
-      return updated
-    })
+    // Recently Played: hoãn sau khi audio đã start, tránh JSON stringify chặn main thread lúc chuyển bài
+    const recentEntry = {
+      id: trackToPlay.id || trackToPlay.filePath,
+      title: trackToPlay.title || 'Unknown Title',
+      artist: trackToPlay.artist || 'Unknown Artist',
+      album: trackToPlay.album || 'Unknown Album',
+      duration: trackToPlay.duration || 0,
+      filePath: trackToPlay.filePath,
+      coverArt: trackToPlay.coverArt,
+      genre: trackToPlay.genre,
+      isOnline: trackToPlay.isOnline,
+      platform: trackToPlay.platform,
+      playedAt: Date.now()
+    }
+    setTimeout(() => {
+      setRecentlyPlayed((prev) => {
+        const filtered = prev.filter((trk) => (trk.id || trk.filePath) !== recentEntry.id)
+        const updated = [recentEntry, ...filtered].slice(0, 50)
+        try {
+          localStorage.setItem('meis_recent_played', JSON.stringify(updated))
+        } catch {}
+        return updated
+      })
+    }, 0)
 
     setTimeout(() => {
       isSwitchingTrackRef.current = false
@@ -1387,7 +1417,7 @@ export function useAudioEngine() {
     // Stream HLS reload (?seek=) đếm lại currentTime từ 0 -> cộng bù offset
     const hlsOffset = getReloadSeekOffset(currentTrack)
     const relTime = Math.max(0, audio.currentTime - trackStart) + hlsOffset
-    setCurrentTime(relTime)
+    if (shouldPushStoreTime(lastStoreTimeRef)) setCurrentTime(relTime)
 
     const trackEnd = currentTrack?.endTime || 0
     // Điểm kết thúc hiệu dụng: ranh giới CUE (endTime) nếu có, ngược lại là chu kỳ
@@ -1458,11 +1488,7 @@ export function useAudioEngine() {
       if (activeIdx !== -1) setCurrentLyricIndex(-1)
     } else if (!document.hidden && lyrics.length > 0) {
       const visualTime = relTime + 0.3 + (lyricOffset || 0)
-      const index = lyrics.findIndex((line, i) => {
-        const nextLine = lyrics[i + 1]
-        if (nextLine) return visualTime >= line.time && visualTime < nextLine.time
-        return visualTime >= line.time
-      })
+      const index = findLyricIndex(lyrics, visualTime)
       if (index !== activeIdx) setCurrentLyricIndex(index)
     }
   }

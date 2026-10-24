@@ -28,9 +28,10 @@ export function useTheming() {
 
   const [trackHighResCover, setTrackHighResCover] = useState<string | null>(null)
 
-  // Fetch track cover high-res
+  // Fetch track cover high-res (chỉ khi nền dùng cover bài hát — mặc định tắt,
+  // theme dùng thumbnail sẵn có để tránh 1 IPC + decode 480px mỗi bài)
   useEffect(() => {
-    if (isCore || !currentTrack) {
+    if (isCore || !currentTrack || !useTrackCoverAsBg) {
       setTrackHighResCover(null)
       return
     }
@@ -69,6 +70,7 @@ export function useTheming() {
     currentTrack?.coverArtHighRes,
     currentTrack?.isOnline,
     currentTrack?.isCloud,
+    useTrackCoverAsBg,
     isCore
   ])
 
@@ -126,9 +128,15 @@ export function useTheming() {
     if (resolvedBgImage.startsWith('http://') || resolvedBgImage.startsWith('https://')) {
       img.crossOrigin = 'anonymous'
     }
-    img.onload = applyTransition
-    img.onerror = applyTransition
-    img.src = resolvedBgImage
+    // Decode xong mới crossfade: tránh swap background giữa chừng gây double raster + giật
+    if (typeof img.decode === 'function') {
+      img.src = resolvedBgImage
+      img.decode().then(applyTransition).catch(applyTransition)
+    } else {
+      img.onload = applyTransition
+      img.onerror = applyTransition
+      img.src = resolvedBgImage
+    }
 
     return () => {
       isCancelled = true
@@ -200,15 +208,28 @@ export function useTheming() {
 
     const trackKey = currentTrack?.id || currentTrack?.filePath
 
-    if (currentTrack?.themeColors && !isCore && colorScheme === 'dark') {
+    if (currentTrack?.themeColors && !isCore) {
       document.documentElement.style.setProperty('--theme-60', currentTrack.themeColors.primary60)
       document.documentElement.style.setProperty('--theme-30', currentTrack.themeColors.secondary30)
       document.documentElement.style.setProperty('--theme-10', currentTrack.themeColors.accent10)
+      // shortcut: theme có sẵn từ scanner thì khỏi decode + K-means mỗi bài
+      return () => {
+        isCancelled = true
+      }
     }
 
     const trackCover = trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt
 
-    if (trackCover) {
+    // Trích màu lúc rảnh: canvas + K-means chạy sau khi audio đã start, khỏi tranh main thread
+    const runThemeExtract = () => {
+      if (!trackCover) {
+        if (!currentTrack?.themeColors) {
+          document.documentElement.style.setProperty('--theme-60', fallback60)
+          document.documentElement.style.setProperty('--theme-30', fallback30)
+          document.documentElement.style.setProperty('--theme-10', fallback10)
+        }
+        return
+      }
       const safeTrackCover = formatImageSource(trackCover, streamPort) || trackCover
       extractThemeColors(safeTrackCover, trackKey || safeTrackCover, colorScheme).then((colors) => {
         if (colors && !isCore && !isCancelled) {
@@ -217,13 +238,21 @@ export function useTheming() {
           document.documentElement.style.setProperty('--theme-10', colors.accent10)
         }
       })
-    } else if (!currentTrack?.themeColors) {
-      document.documentElement.style.setProperty('--theme-60', fallback60)
-      document.documentElement.style.setProperty('--theme-30', fallback30)
-      document.documentElement.style.setProperty('--theme-10', fallback10)
+    }
+
+    let idleHandle: number | null = null
+    const w = window as any
+    if (typeof w.requestIdleCallback === 'function') {
+      idleHandle = w.requestIdleCallback(runThemeExtract, { timeout: 1500 })
+    } else {
+      idleHandle = w.setTimeout(runThemeExtract, 0)
     }
     return () => {
       isCancelled = true
+      if (idleHandle !== null) {
+        if (typeof w.cancelIdleCallback === 'function') w.cancelIdleCallback(idleHandle)
+        else w.clearTimeout(idleHandle)
+      }
     }
   }, [
     accentColorMode,
@@ -248,10 +277,12 @@ export function useTheming() {
   }, [customBgOpacity])
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--bg-blur', `${customBgBlur}px`)
+    // shortcut: blur fullscreen >12px tốn GPU gấp bội mà mắt thường khó phân biệt — kẹp hiệu ứng, giữ nguyên giá trị user đã lưu
+    const cappedBlur = Math.min(customBgBlur, 12)
+    document.documentElement.style.setProperty('--bg-blur', `${cappedBlur}px`)
     document.documentElement.style.setProperty(
       '--bg-filter',
-      customBgBlur > 0 ? `blur(${customBgBlur}px)` : 'none'
+      cappedBlur > 0 ? `blur(${cappedBlur}px)` : 'none'
     )
   }, [customBgBlur])
 

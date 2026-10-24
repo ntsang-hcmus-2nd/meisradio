@@ -56,8 +56,8 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
   return (
     <motion.div
       className="flex-1 flex flex-col bg-transparent z-10 relative overflow-hidden"
-      style={{ willChange: 'opacity, transform', transformOrigin: '100% 50%' }}
-      initial={reduceMotion || isLite ? { opacity: 1, x: 0, scale: 1 } : lyricsMax.initial}
+      style={{ willChange: 'opacity, transform' }}
+      initial={reduceMotion || isLite ? { opacity: 1, y: 0 } : lyricsMax.initial}
       animate={lyricsMax.animate}
       exit={lyricsMax.exit}
       transition={reduceMotion || isLite ? { duration: 0 } : lyricsMax.transition}

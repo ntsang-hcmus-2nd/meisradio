@@ -351,6 +351,12 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
 
           // Phân tích từng cột dọc (Column-wise STFT)
           for (let x = 0; x < W; x++) {
+            // shortcut: nhường event loop mỗi 128 cột để không chiếm main thread (đỡ spike, tổng CPU như cũ)
+            if ((x & 127) === 0) {
+              // eslint-disable-next-line no-await-in-loop
+              await new Promise((r) => setTimeout(r, 0))
+              if (isCancelled) return
+            }
             const sampleCenter = Math.floor((x / W) * (totalSamples - fftSize))
             if (sampleCenter < 0 || sampleCenter + fftSize > totalSamples) continue
 

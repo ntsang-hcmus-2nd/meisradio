@@ -6,7 +6,7 @@ import { WebGLVisualizer } from './visualizers/WebGLVisualizer'
 import { usePlayerStore, useUIStore, useSettingsStore } from '../stores'
 import { useTranslation } from '../locales'
 import { isDsdTrack, getDsdRateLabel, formatAudioSampleRate } from '../utils/formatUtils'
-import { drawerSlide, useMotionReduced } from './motion'
+import { drawerEnterDelay, drawerSlide, useMotionReduced } from './motion'
 
 interface SideLyricsPanelProps {
   lyrics: LyricLine[]
@@ -41,7 +41,9 @@ export const SideLyricsPanel: React.FC<SideLyricsPanelProps> = ({
       initial={reduceMotion ? { opacity: 1, x: 0 } : drawerSlide.initial}
       animate={drawerSlide.animate}
       exit={drawerSlide.exit}
-      transition={reduceMotion ? { duration: 0 } : drawerSlide.transition}
+      transition={
+        reduceMotion ? { duration: 0 } : { ...drawerSlide.transition, delay: drawerEnterDelay }
+      }
     >
       <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
         <div className="flex items-center gap-2">
@@ -84,17 +86,15 @@ export const SideLyricsPanel: React.FC<SideLyricsPanelProps> = ({
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 text-center">
-        <div
-          key={currentTrack?.id || (currentTrack as any)?.filePath || 'no-track'}
-          className={`${!isLite ? 'animate-track-crossfade' : ''}`}
-        >
-          <SyncedLyricsList
-            lyrics={lyrics}
-            audioRef={audioRef}
-            noLyricsText={t('lyrics.noLyrics')}
-          />
-        </div>
+      <div
+        key={currentTrack?.id || (currentTrack as any)?.filePath || 'no-track'}
+        className={`flex-1 overflow-y-auto p-6 space-y-6 text-center ${!isLite ? 'animate-track-crossfade' : ''}`}
+      >
+        <SyncedLyricsList
+          lyrics={lyrics}
+          audioRef={audioRef}
+          noLyricsText={t('lyrics.noLyrics')}
+        />
       </div>
       <div className="p-3 border-t border-theme-30/50 bg-zinc-950/40 h-16 shrink-0 w-full overflow-hidden flex items-center justify-center">
         {bitPerfectEnabled || isDsdTrack(currentTrack) ? (

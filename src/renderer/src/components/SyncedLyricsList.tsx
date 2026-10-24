@@ -16,17 +16,45 @@ export interface SyncedLyricsListProps {
   noLyricsText: string
 }
 
+// Chỉ dòng active đăng ký currentTime: tick 2Hz render vài chục từ thay vì toàn bộ danh sách lời
+const SyncedActiveWords: React.FC<{ words: { time: number; text: string }[] }> = React.memo(
+  ({ words }) => {
+    const currentTime = usePlayerStore((s) => s.currentTime)
+    const lyricOffset = usePlayerStore((s) => s.lyricOffset)
+    return (
+      <span className="inline-flex flex-wrap items-center">
+        {words.map((w, wIdx) => {
+          const isWordPassed = w.time <= (currentTime ?? 0) + 0.25 + (lyricOffset || 0)
+          return (
+            <span
+              key={wIdx}
+              className={`transition-all duration-150 mr-1.5 inline-block ${
+                isWordPassed
+                  ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
+                  : 'text-white/40'
+              }`}
+            >
+              {w.text}
+            </span>
+          )
+        })}
+      </span>
+    )
+  }
+)
+
+SyncedActiveWords.displayName = 'SyncedActiveWords'
+
 export const SyncedLyricsList: React.FC<SyncedLyricsListProps> = React.memo(
   ({ lyrics, audioRef, isVinyl = false, noLyricsText }) => {
     const currentLyricIndex = useLyricsStore((s) => s.currentLyricIndex)
     const setCurrentLyricIndex = useLyricsStore((s) => s.setCurrentLyricIndex)
-    const currentTime = usePlayerStore((s) => s.currentTime)
-    const lyricOffset = usePlayerStore((s) => s.lyricOffset)
     const activeLyricRef = useRef<HTMLParagraphElement | null>(null)
 
     useEffect(() => {
       if (activeLyricRef.current) {
-        activeLyricRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // shortcut: instant scroll đủ dùng, smooth gây compositing mỗi dòng (CPU/GPU spike khi lời dày)
+        activeLyricRef.current.scrollIntoView({ block: 'nearest' })
       }
     }, [currentLyricIndex])
 
@@ -65,32 +93,16 @@ export const SyncedLyricsList: React.FC<SyncedLyricsListProps> = React.memo(
               }}
               className={`transition-all duration-300 font-bold ${
                 line.unsynced
-                  ? `text-zinc-300 ${isVinyl ? 'text-xl min-h-[1.75rem]' : 'text-sm min-h-[1.25rem]'}`
+                  ? `text-zinc-300 ${isVinyl ? 'text-xl min-h-[1.75rem]' : 'text-sm min-h-[1.25rem] py-1.5 leading-relaxed'}`
                   : `cursor-pointer ${
                       isActive
-                        ? `text-theme-10 ${isVinyl ? 'text-3xl scale-105' : 'text-xl'}`
-                        : `text-zinc-500 ${isVinyl ? 'text-xl opacity-50' : 'text-sm'} hover:text-zinc-300`
+                        ? `text-theme-10 ${isVinyl ? 'text-3xl scale-105' : 'text-xl py-1.5 leading-relaxed'}`
+                        : `text-zinc-500 ${isVinyl ? 'text-xl opacity-50' : 'text-sm py-1.5 leading-relaxed'} hover:text-zinc-300`
                     }`
               }`}
             >
               {isActive && line.words && line.words.length > 0 ? (
-                <span className="inline-flex flex-wrap items-center">
-                  {line.words.map((w, wIdx) => {
-                    const isWordPassed = w.time <= (currentTime ?? 0) + 0.25 + (lyricOffset || 0)
-                    return (
-                      <span
-                        key={wIdx}
-                        className={`transition-all duration-150 mr-1.5 inline-block ${
-                          isWordPassed
-                            ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]'
-                            : 'text-white/40'
-                        }`}
-                      >
-                        {w.text}
-                      </span>
-                    )
-                  })}
-                </span>
+                <SyncedActiveWords words={line.words} />
               ) : (
                 line.text
               )}

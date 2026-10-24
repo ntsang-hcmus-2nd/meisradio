@@ -143,6 +143,9 @@ app.commandLine.appendSwitch(
   'SpareRendererForSitePerProcess,VideoCaptureService'
 )
 app.commandLine.appendSwitch('renderer-process-limit', '1')
+// Offload raster/paint sang GPU cho crossfade + blur toàn màn hình khi chuyển bài
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
 
 // ==========================================
 // BIẾN TOÀN CỤC & SHUTDOWN HANDLER

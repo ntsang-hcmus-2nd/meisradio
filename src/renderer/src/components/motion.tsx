@@ -36,16 +36,29 @@ export const toastSlide = {
 }
 
 // Mirrors main.css lyricsSlideIn 0.34s / lyricsSlideOut+drawer-out 0.26s ease-out
+// shortcut: exit flips to absolute so the ghost leaves flex flow instantly —
+// the flex-1 content column (motion.div layout in App.tsx) expands concurrently
+// instead of waiting for the drawer to unmount.
+// Enter staggers via drawerEnterDelay: the drawer mounts in-flow but holds
+// still (invisible) while the content column resizes first, then slides in.
 export const drawerSlide = {
   initial: { opacity: 0, x: '100%' },
   animate: { opacity: 1, x: 0 },
   exit: {
     opacity: 0,
     x: '100%',
+    position: 'absolute' as const,
+    top: 0,
+    right: 0,
+    bottom: 0,
     transition: { duration: 0.26, ease: 'easeOut' as const }
   },
   transition: { duration: 0.34, ease: 'easeOut' as const }
 }
+
+// Enter stagger for side drawers: hold the invisible drawer in-flow while the
+// content column finishes its ~0.3s layout resize, then slide+fade in.
+export const drawerEnterDelay = 0.25
 
 // Mirrors main.css fadeInSlideUp 0.3s ease-out (view routing, key-remount enter only)
 export const viewFade = {
@@ -54,26 +67,24 @@ export const viewFade = {
   transition: { duration: 0.3, ease: 'easeOut' as const }
 }
 
-// Fullscreen lyrics zoom: scales up from the small side panel (origin right),
-// exits by shrinking back. 0.38s in / 0.28s out, ease-out.
+// Fullscreen lyrics: fade + slide-up, mirrors viewFade (tab switch 0.3s ease-out).
 // shortcut: exit flips to absolute so the ghost leaves flex flow instantly —
 // the main column + side drawer lay out correctly while it fades above them.
 // (MAIN SHELL in App.tsx must stay relative as its offset parent.)
 export const lyricsMax = {
-  initial: { opacity: 0, scale: 0.82, x: '8%' },
-  animate: { opacity: 1, scale: 1, x: 0 },
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
   exit: {
     opacity: 0,
-    scale: 0.88,
-    x: '6%',
+    y: 10,
     position: 'absolute' as const,
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    transition: { duration: 0.28, ease: 'easeOut' as const }
+    transition: { duration: 0.18, ease: 'easeOut' as const }
   },
-  transition: { duration: 0.38, ease: 'easeOut' as const }
+  transition: { duration: 0.3, ease: 'easeOut' as const }
 }
 
 // Horizontal view-mode switch (table/grid/compact). Direction comes from

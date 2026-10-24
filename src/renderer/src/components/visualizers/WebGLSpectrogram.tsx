@@ -151,11 +151,11 @@ export const WebGLSpectrogram: React.FC<WebGLSpectrogramProps> = React.memo(
       const offsetLoc = gl.getUniformLocation(program, 'u_offset')
 
       let lastDrawTime = performance.now()
-      const fpsInterval = 1000 / 40 // 40 FPS waterfall
+      const fpsInterval = 1000 / 20 // 20 FPS waterfall: đủ cho spectrogram, giảm ~50% CPU/GPU
       let currentColumn = 0
 
       const updateCanvasSize = (w: number, h: number) => {
-        const dpr = window.devicePixelRatio || 1
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
         const targetW = Math.floor(w * dpr)
         const targetH = Math.floor(h * dpr)
         if (targetW > 0 && targetH > 0 && (canvas.width !== targetW || canvas.height !== targetH)) {

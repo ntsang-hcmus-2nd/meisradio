@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { SortableQueueItem } from './TrackListComponents'
-import { drawerSlide, useMotionReduced } from './motion'
+import { drawerEnterDelay, drawerSlide, useMotionReduced } from './motion'
 import { usePlayerStore, useUIStore, useSettingsStore } from '../stores'
 import { useTranslation, useLanguage } from '../locales'
 import { isSameTrack } from '../utils/trackStateUtils'
@@ -60,7 +60,9 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
       initial={reduceMotion ? { opacity: 1, x: 0 } : drawerSlide.initial}
       animate={drawerSlide.animate}
       exit={drawerSlide.exit}
-      transition={reduceMotion ? { duration: 0 } : drawerSlide.transition}
+      transition={
+        reduceMotion ? { duration: 0 } : { ...drawerSlide.transition, delay: drawerEnterDelay }
+      }
     >
       <div className="p-4 flex items-center justify-between border-b border-theme-30/50">
         <div className="flex items-center gap-2">

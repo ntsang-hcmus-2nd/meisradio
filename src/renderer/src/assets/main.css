@@ -120,6 +120,9 @@ body {
   z-index: -1;
   pointer-events: none;
   overflow: hidden;
+  /* Blur 1 lần trên container (GPU composited), layer con chỉ crossfade opacity */
+  filter: var(--bg-filter, none);
+  transform: translateZ(0);
 }
 
 .custom-bg-layer {
@@ -128,10 +131,11 @@ body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: var(--bg-filter, none);
   transform: translateZ(0);
   image-rendering: -webkit-optimize-contrast;
   will-change: opacity;
+  backface-visibility: hidden;
+  contain: paint;
 }
 
 /* Chế độ Standard: Transition mượt mà 0.75s chống giật/stutter khi chuyển bài */
@@ -252,6 +256,8 @@ body {
 }
 .animate-track-crossfade {
   animation: trackCrossfade 0.32s ease-out forwards;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
 }
 @keyframes playerTrackIn {
   from {
@@ -265,6 +271,8 @@ body {
 }
 .animate-player-track-in {
   animation: playerTrackIn 0.28s ease-out forwards;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
 }
 @keyframes playerTrackOut {
   from {
@@ -278,6 +286,8 @@ body {
 }
 .animate-player-track-out {
   animation: playerTrackOut 0.15s ease-out forwards;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
 }
 [data-mode='lite'] .animate-track-crossfade,
 [data-mode='lite'] .animate-player-track-in,

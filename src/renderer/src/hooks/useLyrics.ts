@@ -218,60 +218,77 @@ export function useLyrics() {
       // 2. Lời nhúng trong metadata
       const parsedInternal = buildLyricLines(currentTrack.lyrics)
       if (parsedInternal.length > 0) {
-        setLyrics(parsedInternal)
+        if (!cancelled) setLyrics(parsedInternal)
         return
       }
 
-      // 3. Lời online
-      if (
-        currentTrack.title &&
-        currentTrack.artist &&
-        !currentTrack.artist.toLowerCase().includes('unknown')
-      ) {
-        try {
-          // @ts-ignore
-          const mmRes = await window.api?.fetchMusixmatchLyrics?.(
-            currentTrack.title,
-            currentTrack.artist,
-            currentTrack.album,
-            currentTrack.duration
-          )
-          if (cancelled) return
-          if (mmRes?.success && mmRes.lyrics) {
-            const parsedOnline = mmRes.isSynced ? parseLRC(mmRes.lyrics) : []
-            if (parsedOnline.length > 0) {
-              setLyrics(parsedOnline)
-              return
+      // 3. Lời online: fetch mạng + parse lúc rảnh, khỏi tranh main thread với audio start
+      const fetchOnline = async () => {
+        if (cancelled) return
+        if (
+          currentTrack.title &&
+          currentTrack.artist &&
+          !currentTrack.artist.toLowerCase().includes('unknown')
+        ) {
+          try {
+            // @ts-ignore
+            const mmRes = await window.api?.fetchMusixmatchLyrics?.(
+              currentTrack.title,
+              currentTrack.artist,
+              currentTrack.album,
+              currentTrack.duration
+            )
+            if (cancelled) return
+            if (mmRes?.success && mmRes.lyrics) {
+              const parsedOnline = mmRes.isSynced ? parseLRC(mmRes.lyrics) : []
+              if (parsedOnline.length > 0) {
+                setLyrics(parsedOnline)
+                return
+              }
+              const plainOnline = parsePlainLyrics(mmRes.lyrics)
+              if (plainOnline.length > 0) {
+                setLyrics([
+                  ...plainOnline,
+                  { time: 0, text: '', unsynced: true },
+                  {
+                    time: 0,
+                    text: `(${t('lyrics.sourceNote', {
+                      source:
+                        mmRes.source === 'lrclib'
+                          ? 'LRCLIB'
+                          : mmRes.source === 'netease'
+                            ? 'NetEase Cloud'
+                            : mmRes.source === 'kugou'
+                              ? 'Kugou Music'
+                              : 'Musixmatch'
+                    })})`,
+                    unsynced: true
+                  }
+                ])
+                return
+              }
             }
-            const plainOnline = parsePlainLyrics(mmRes.lyrics)
-            if (plainOnline.length > 0) {
-              setLyrics([
-                ...plainOnline,
-                { time: 0, text: '', unsynced: true },
-                {
-                  time: 0,
-                  text: `(${t('lyrics.sourceNote', {
-                    source:
-                      mmRes.source === 'lrclib'
-                        ? 'LRCLIB'
-                        : mmRes.source === 'netease'
-                          ? 'NetEase Cloud'
-                          : mmRes.source === 'kugou'
-                            ? 'Kugou Music'
-                            : 'Musixmatch'
-                  })})`,
-                  unsynced: true
-                }
-              ])
-              return
-            }
+          } catch (e) {
+            console.error('Lỗi lấy lời Musixmatch', e)
           }
-        } catch (e) {
-          console.error('Lỗi lấy lời Musixmatch', e)
         }
+
+        if (!cancelled) setLyrics([])
       }
 
-      if (!cancelled) setLyrics([])
+      const w = window as any
+      if (typeof w.requestIdleCallback === 'function') {
+        w.requestIdleCallback(
+          () => {
+            void fetchOnline()
+          },
+          { timeout: 2000 }
+        )
+      } else {
+        setTimeout(() => {
+          void fetchOnline()
+        }, 0)
+      }
     }
 
     loadLyrics()

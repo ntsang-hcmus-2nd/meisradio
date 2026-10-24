@@ -1544,7 +1544,7 @@ export default function App() {
       ) : (
         <div
           data-mode={appMode}
-          className={`flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative ${theming.isLite ? '' : 'transition-colors duration-1000'}`}
+          className="flex flex-col h-screen text-zinc-200 font-sans overflow-hidden relative"
           style={{
             backgroundColor: theming.effectiveBgImage
               ? 'transparent'

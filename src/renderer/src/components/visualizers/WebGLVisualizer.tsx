@@ -35,15 +35,17 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(
       const peakValues = new Float32Array(numBands).fill(0)
 
       let lastDrawTime = performance.now()
-      const fpsInterval = 1000 / 60 // 60 FPS
+      const fpsInterval = 1000 / 30 // 30 FPS: đủ mượt cho visualizer, giảm ~50% CPU
 
       let rawDataArray = new Uint8Array(1024)
 
       // Cache layout dimensions and color to avoid layout thrashing
       let cachedWidth = canvas.clientWidth || 300
       let cachedHeight = canvas.clientHeight || 80
-      let cachedDpr = window.devicePixelRatio || 1
+      let cachedDpr = Math.min(window.devicePixelRatio || 1, 1.5)
       let cachedThemeColor = '#10b981'
+      let cachedGradient: CanvasGradient | null = null
+      let cachedGradientKey = ''
 
       const updateThemeColor = () => {
         try {
@@ -154,10 +156,16 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(
         const totalGap = (numBands - 1) * gap
         const barWidth = Math.max(2, (width - totalGap) / numBands)
 
-        const gradient = ctx.createLinearGradient(0, height, 0, 0)
-        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.25)')
-        gradient.addColorStop(0.65, cachedThemeColor)
-        gradient.addColorStop(1, '#ffffff')
+        // shortcut: gradient đắt (~createLinearGradient mỗi frame) — cache theo height+color, chỉ tạo lại khi đổi
+        const gradientKey = `${height}|${cachedThemeColor}`
+        if (!cachedGradient || cachedGradientKey !== gradientKey) {
+          const gradient = ctx.createLinearGradient(0, height, 0, 0)
+          gradient.addColorStop(0, 'rgba(16, 185, 129, 0.25)')
+          gradient.addColorStop(0.65, cachedThemeColor)
+          gradient.addColorStop(1, '#ffffff')
+          cachedGradient = gradient
+          cachedGradientKey = gradientKey
+        }
 
         for (let i = 0; i < numBands; i++) {
           const val = smoothedValues[i]
@@ -166,25 +174,15 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(
           const x = i * (barWidth + gap)
           const y = height - barHeight - 2
 
-          ctx.fillStyle = gradient
+          ctx.fillStyle = cachedGradient
           ctx.beginPath()
-          if (typeof ctx.roundRect === 'function') {
-            ctx.roundRect(x, y, barWidth, barHeight, [2, 2, 0, 0])
-          } else {
-            ctx.rect(x, y, barWidth, barHeight)
-          }
+          ctx.rect(x, y, barWidth, barHeight)
           ctx.fill()
 
           if (peak > 0.05) {
             const peakY = Math.max(0, height - peak * (height - 6) - 4)
             ctx.fillStyle = '#ffffff'
-            ctx.beginPath()
-            if (typeof ctx.roundRect === 'function') {
-              ctx.roundRect(x, peakY, barWidth, 1.5, 1)
-            } else {
-              ctx.rect(x, peakY, barWidth, 1.5)
-            }
-            ctx.fill()
+            ctx.fillRect(x, peakY, barWidth, 1.5)
           }
         }
 
@@ -210,7 +208,7 @@ export const WebGLVisualizer: React.FC<WebGLVisualizerProps> = React.memo(
           if (entry.contentRect) {
             const w = Math.floor(entry.contentRect.width)
             const h = Math.floor(entry.contentRect.height)
-            cachedDpr = window.devicePixelRatio || 1
+            cachedDpr = Math.min(window.devicePixelRatio || 1, 1.5)
             if (w > 0 && h > 0) {
               if (cachedWidth === 0 || cachedHeight === 0 || !reqAnimRef.current) {
                 becameVisible = true
