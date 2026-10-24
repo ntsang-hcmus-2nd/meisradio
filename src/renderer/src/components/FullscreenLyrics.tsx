@@ -103,7 +103,7 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
       <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-12 overflow-hidden">
         <div
           key={currentTrack?.id || (currentTrack as any)?.filePath || 'vinyl'}
-          className={`w-1/2 flex flex-col items-center justify-center gap-6 ${!isLite ? 'animate-track-crossfade' : ''}`}
+          className={`w-1/2 flex flex-col items-center justify-center gap-6 ${!isLite ? 'animate-vinyl-crossfade' : ''}`}
         >
           <div className="w-[min(28vw,38vh)] max-w-[420px] min-w-[240px] aspect-square rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden relative border-8 border-theme-30 flex items-center justify-center bg-zinc-900 group">
             <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none z-10 rounded-full mix-blend-overlay"></div>
@@ -176,7 +176,7 @@ export const FullscreenLyrics: React.FC<FullscreenLyricsProps> = ({
 
         <div
           key={`lyrics-${currentTrack?.id || (currentTrack as any)?.filePath || 'none'}`}
-          className={`w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide ${!isLite ? 'animate-track-crossfade' : ''}`}
+          className={`w-1/2 h-[70vh] overflow-y-auto px-8 space-y-8 text-center scrollbar-hide ${!isLite ? 'animate-lyrics-crossfade' : ''}`}
         >
           <SyncedLyricsList
             lyrics={lyrics}

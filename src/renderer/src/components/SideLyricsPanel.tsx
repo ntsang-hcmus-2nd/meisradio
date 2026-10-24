@@ -88,7 +88,7 @@ export const SideLyricsPanel: React.FC<SideLyricsPanelProps> = ({
       </div>
       <div
         key={currentTrack?.id || (currentTrack as any)?.filePath || 'no-track'}
-        className={`flex-1 overflow-y-auto p-6 space-y-6 text-center ${!isLite ? 'animate-track-crossfade' : ''}`}
+        className={`flex-1 overflow-y-auto p-6 space-y-6 text-center ${!isLite ? 'animate-lyrics-crossfade' : ''}`}
       >
         <SyncedLyricsList
           lyrics={lyrics}

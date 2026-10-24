@@ -156,6 +156,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           animate={toastSlide.animate}
           exit={toastSlide.exit}
           transition={reduceMotion ? { duration: 0 } : toastSlide.transition}
+          whileTap={reduceMotion ? undefined : { scale: 0.98 }}
         >
           {/* Selected Count Indicator */}
           <div className="flex items-center gap-1.5 pr-2 border-r border-zinc-700/60 shrink-0">

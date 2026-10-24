@@ -233,7 +233,7 @@ export const UserPlaylistsView: React.FC<UserPlaylistsViewProps> = ({
         </button>
       </div>
 
-      <AnimatePresence mode="wait" initial={false} custom={viewModeDirection}>
+      <AnimatePresence mode="popLayout" initial={false} custom={viewModeDirection}>
         <motion.div
           key={viewMode}
           className="flex-1 overflow-y-auto pr-2"

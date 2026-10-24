@@ -23,7 +23,7 @@ import { useTranslation } from '../locales'
 import { useSettingsStore } from '../stores'
 import { useUIStore } from '../stores/uiStore'
 import { AnimatePresence, motion } from 'motion/react'
-import { overlayFade, useMotionReduced } from './motion'
+import { dialogScale, overlayFade, useMotionReduced } from './motion'
 
 interface EQPanelProps {
   showEQ: boolean
@@ -305,10 +305,10 @@ export const EQPanel: React.FC<EQPanelProps> = ({
         >
           <motion.div
             className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl relative"
-            initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
-            animate={overlayFade.animate}
-            exit={overlayFade.exit}
-            transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+            initial={reduceMotion ? { opacity: 1, scale: 1 } : dialogScale.initial}
+            animate={dialogScale.animate}
+            exit={dialogScale.exit}
+            transition={reduceMotion ? { duration: 0 } : dialogScale.transition}
           >
             {/* Hidden file input for Peace profile import */}
             <input

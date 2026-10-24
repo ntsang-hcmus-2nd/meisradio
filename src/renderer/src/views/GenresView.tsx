@@ -146,7 +146,7 @@ export const GenresView: React.FC<GenresViewProps> = ({
         </div>
       </div>
 
-      <AnimatePresence mode="wait" initial={false} custom={viewModeDirection}>
+      <AnimatePresence mode="popLayout" initial={false} custom={viewModeDirection}>
         <motion.div
           key={viewMode}
           className="flex-1 min-h-[300px] h-full w-full overflow-hidden"

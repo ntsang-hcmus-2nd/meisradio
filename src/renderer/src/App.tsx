@@ -1570,6 +1570,7 @@ export default function App() {
                 animate={toastSlide.animate}
                 exit={toastSlide.exit}
                 transition={reduceMotion ? { duration: 0 } : toastSlide.transition}
+                whileTap={reduceMotion ? undefined : { scale: 0.98 }}
               >
                 {toast.type === 'success' && (
                   <Sparkles size={18} className="text-theme-10 flex-shrink-0" />

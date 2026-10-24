@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { Plus, X, Check, Search } from 'lucide-react'
 import { useTranslation } from '../../locales'
 import { AnimatePresence, motion } from 'motion/react'
-import { overlayFade, useMotionReduced } from '../motion'
+import { dialogScale, overlayFade, useMotionReduced } from '../motion'
 
 interface AddSongsModalProps {
   isOpen: boolean
@@ -79,10 +79,10 @@ export const AddSongsModal: React.FC<AddSongsModalProps> = ({
         >
           <motion.div
             className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-[640px] max-h-[85vh] flex flex-col shadow-2xl"
-            initial={reduceMotion ? { opacity: 1 } : overlayFade.initial}
-            animate={overlayFade.animate}
-            exit={overlayFade.exit}
-            transition={reduceMotion ? { duration: 0 } : overlayFade.transition}
+            initial={reduceMotion ? { opacity: 1, scale: 1 } : dialogScale.initial}
+            animate={dialogScale.animate}
+            exit={dialogScale.exit}
+            transition={reduceMotion ? { duration: 0 } : dialogScale.transition}
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">

@@ -231,7 +231,7 @@ export const FolderPlaylistsView: React.FC<FolderPlaylistsViewProps> = ({
                 </h3>
               )}
 
-              <AnimatePresence mode="wait" initial={false} custom={viewModeDirection}>
+              <AnimatePresence mode="popLayout" initial={false} custom={viewModeDirection}>
                 <motion.div
                   key={viewMode}
                   custom={viewModeDirection}
