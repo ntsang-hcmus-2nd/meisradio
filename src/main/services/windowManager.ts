@@ -9,6 +9,8 @@ import {
   trimNativeMemory
 } from './sharedContext'
 import { clearStreamCoverCache } from './streamServer'
+import { logMemorySample } from './memoryMetrics'
+import { getDiscordRpcManager } from './discordService'
 import { soulseekManager } from '../SoulseekManager'
 import { isCloseToTray, isMinimizeToTray } from './trayService'
 
@@ -25,6 +27,7 @@ export const saveWindowState = () => {
 
 export const performDeepMemoryTrim = async () => {
   try {
+    if (getConfig()?.autoDeepCleanOnHide === false) return
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('app:onDeepClean')
     }
@@ -83,16 +86,40 @@ export function createMainWindow(options: WindowManagerOptions): BrowserWindow {
   mainWindow.on('unmaximize', saveWindowState)
 
   let idleTrimTimer: NodeJS.Timeout | null = null
+  let idleRetrimInterval: NodeJS.Timeout | null = null
+  const IDLE_TRIM_MS = 180000
+  const IDLE_RETRIM_MS = 600000
+
+  const clearIdleRetrim = (): void => {
+    if (idleRetrimInterval) {
+      clearInterval(idleRetrimInterval)
+      idleRetrimInterval = null
+    }
+  }
+
+  const doIdleTrimIfUnfocused = (): void => {
+    if (
+      mainWindow &&
+      (!mainWindow.isFocused() || mainWindow.isMinimized() || !mainWindow.isVisible())
+    ) {
+      try {
+        logMemorySample('idle-trim')
+      } catch {}
+      performDeepMemoryTrim()
+    }
+  }
+
   const resetIdleTrim = () => {
     if (idleTrimTimer) clearTimeout(idleTrimTimer)
+    clearIdleRetrim()
     idleTrimTimer = setTimeout(() => {
-      if (
-        mainWindow &&
-        (!mainWindow.isFocused() || mainWindow.isMinimized() || !mainWindow.isVisible())
-      ) {
-        performDeepMemoryTrim()
-      }
-    }, 180000)
+      doIdleTrimIfUnfocused()
+      // OOM fix: keep re-trimming periodically while idle instead of once.
+      idleRetrimInterval = setInterval(doIdleTrimIfUnfocused, IDLE_RETRIM_MS)
+      try {
+        ;(idleRetrimInterval as any)?.unref?.()
+      } catch {}
+    }, IDLE_TRIM_MS)
   }
 
   mainWindow.on('blur', resetIdleTrim)
@@ -101,6 +128,11 @@ export function createMainWindow(options: WindowManagerOptions): BrowserWindow {
       clearTimeout(idleTrimTimer)
       idleTrimTimer = null
     }
+    clearIdleRetrim()
+    // Give Discord RPC one user-driven retry chance after backoff gave up.
+    try {
+      getDiscordRpcManager()?.wakeup()
+    } catch {}
   })
 
   // @ts-ignore
@@ -109,10 +141,16 @@ export function createMainWindow(options: WindowManagerOptions): BrowserWindow {
       event.preventDefault()
       mainWindow?.hide()
     }
+    try {
+      logMemorySample('minimize')
+    } catch {}
     performDeepMemoryTrim()
   })
 
   mainWindow.on('hide', () => {
+    try {
+      logMemorySample('hide')
+    } catch {}
     performDeepMemoryTrim()
   })
 

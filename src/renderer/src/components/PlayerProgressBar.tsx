@@ -16,6 +16,14 @@ const formatDuration = (seconds: number) => {
 // In-memory cache for fetched waveform peaks so switching tracks doesn't re-query
 const waveformPeaksCache = new Map<string, number[]>()
 
+export function getWaveformPeaksCacheSize(): number {
+  try {
+    return waveformPeaksCache.size
+  } catch {
+    return -1
+  }
+}
+
 // Deterministic aesthetic fallback waveform based on track seed (title, id, or path)
 function generateFallbackPeaks(seedStr: string, count = 140): number[] {
   let hash = 0

@@ -338,7 +338,33 @@ export const vi: TranslationDictionary = {
     gaplessBitPerfectNotice: 'Bảo toàn tín hiệu nguyên bản tuyệt đối: Không nội suy tần số',
     waveformSeekbar: 'Thanh tiến trình dạng sóng âm',
     waveformSeekbarDesc:
-      'Hiển thị biểu đồ biên độ sóng âm trực tiếp trên thanh tiến trình phát nhạc'
+      'Hiển thị biểu đồ biên độ sóng âm trực tiếp trên thanh tiến trình phát nhạc',
+    cache: {
+      title: 'Bộ nhớ đệm & Dọn dẹp',
+      desc: 'Xóa các dữ liệu tạm để giải phóng dung lượng. Cache bị xóa sẽ tự tạo lại khi quét hoặc phát nhạc.',
+      refresh: 'Làm mới số liệu',
+      totalLabel: 'Tổng cache đĩa',
+      ram: 'Dọn RAM ngay',
+      ramDesc: 'Giải phóng ảnh bìa trong bộ nhớ và ép thu gom rác, không cần quét lại.',
+      images: 'Xóa ảnh bìa trên đĩa',
+      imagesDesc: 'Xóa ảnh cache (.image_cache, .thumbnails), tự tải lại khi duyệt nhạc.',
+      waveform: 'Xóa sóng âm đã lưu',
+      waveformDesc: 'Xóa waveform cache, tự vẽ lại khi phát bài hát.',
+      lyricsTheme: 'Xóa lời online & màu theme',
+      lyricsThemeDesc: 'Xóa lời bài hát online đã lưu và bảng màu giao diện theo bài.',
+      metadata: 'Xóa metadata & quét lại',
+      metadataDesc: 'Xóa toàn bộ metadata nhạc rồi quét lại thư viện (mất vài phút).',
+      metadataConfirm:
+        'Xóa toàn bộ metadata nhạc và quét lại thư viện? Quá trình này có thể mất vài phút.',
+      metadataRescan: 'Đang quét lại thư viện sau khi xóa metadata...',
+      autoDeepClean: 'Tự dọn RAM khi ẩn app',
+      autoDeepCleanDesc: 'Tự giải phóng bộ nhớ khi thu nhỏ hoặc ẩn cửa sổ (khuyên dùng).',
+      clearOnStartup: 'Xóa cache phiên khi mở app',
+      clearOnStartupDesc: 'Xóa ảnh bìa trong bộ nhớ mỗi khi khởi động ứng dụng.',
+      clearing: 'Đang dọn dẹp...',
+      cleared: 'Đã dọn dẹp xong',
+      clearFailed: 'Dọn dẹp thất bại'
+    }
   },
   player: {
     noTrack: 'Chưa có bài hát đang phát',

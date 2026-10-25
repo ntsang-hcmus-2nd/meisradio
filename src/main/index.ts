@@ -28,6 +28,8 @@ import {
   startStreamServer,
   stopStreamServer,
   registerStreamServerIpc,
+  clearStreamCoverCache,
+  streamUrlCache,
 
   // Library Scanner
   registerLibraryScannerIpc,
@@ -97,7 +99,12 @@ import {
   // Window Manager
   createMainWindow,
   getMainWindow,
-  registerWindowIpc
+  registerWindowIpc,
+
+  // Memory Metrics (soak-test trace)
+  startMemoryTrace,
+  stopMemoryTrace,
+  registerMemoryMetricsIpc
 } from './services'
 
 // Re-exports for backwards compatibility
@@ -155,6 +162,7 @@ let isQuitting = false
 
 function cleanShutdown(): void {
   isQuitting = true
+  stopMemoryTrace()
   stopLibraryWatchers()
   stopStreamServer()
   saveMetadataCache(true)
@@ -195,6 +203,14 @@ app.whenReady().then(async () => {
   // 2. Khởi động HTTP Stream Server nội bộ trước khi Renderer nạp
   await startStreamServer()
 
+  // 2b. Dọn cache phiên khi khởi động nếu người dùng bật trong Cài đặt
+  if (currentConfig.clearCacheOnStartup === true) {
+    try {
+      clearStreamCoverCache()
+      streamUrlCache.clear()
+    } catch {}
+  }
+
   // 3. Khởi tạo Discord RPC & Soulseek
   initDiscordRpc(currentConfig)
   initSoulseekService(currentConfig)
@@ -233,6 +249,7 @@ app.whenReady().then(async () => {
   registerSoulseekIpc()
   registerTrayIpc()
   registerWindowIpc({ onConfigSaved: () => updateTrayMenu() })
+  registerMemoryMetricsIpc()
 
   // 7. Khởi tạo cửa sổ chính
   createMainWindow({
@@ -246,6 +263,11 @@ app.whenReady().then(async () => {
 
   // 8. Đăng ký phím tắt toàn cục
   registerGlobalShortcuts(() => getMainWindow())
+
+  // 8b. Bắt đầu trace đo RAM (soak test pause+minimize)
+  try {
+    startMemoryTrace(60000)
+  } catch {}
 
   // 9. Khởi tạo khay hệ thống (System Tray)
   initTray({

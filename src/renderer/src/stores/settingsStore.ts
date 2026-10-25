@@ -18,6 +18,10 @@ export interface SettingsState {
   minimizeToTray: boolean
   closeToTray: boolean
 
+  // Chế độ dọn cache: tự dọn RAM khi ẩn app, xóa cache phiên khi khởi động
+  autoDeepCleanOnHide: boolean
+  clearCacheOnStartup: boolean
+
   // Discord Rich Presence States
   discordRpcEnabled: boolean
   discordClientId: string
@@ -76,6 +80,9 @@ export interface SettingsState {
 
   setMinimizeToTray: (minimize: boolean | ((prev: boolean) => boolean)) => void
   setCloseToTray: (close: boolean | ((prev: boolean) => boolean)) => void
+
+  setAutoDeepCleanOnHide: (enabled: boolean | ((prev: boolean) => boolean)) => void
+  setClearCacheOnStartup: (enabled: boolean | ((prev: boolean) => boolean)) => void
 
   setDiscordRpcEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void
   setDiscordClientId: (id: string | ((prev: string) => string)) => void
@@ -159,6 +166,24 @@ const getInitialWaveformSeekbarEnabled = (): boolean => {
     /* ignore */
   }
   return true
+}
+
+const getInitialAutoDeepCleanOnHide = (): boolean => {
+  try {
+    const saved = localStorage.getItem('meis_auto_deepclean_on_hide')
+    if (saved !== null) return saved === 'true'
+  } catch {
+    /* ignore */
+  }
+  return true
+}
+
+const getInitialClearCacheOnStartup = (): boolean => {
+  try {
+    return localStorage.getItem('meis_clear_cache_on_startup') === 'true'
+  } catch {
+    return false
+  }
 }
 
 const getInitialStreamPort = (): number => {
@@ -264,6 +289,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   minimizeToTray: false,
   closeToTray: false,
 
+  autoDeepCleanOnHide: getInitialAutoDeepCleanOnHide(),
+  clearCacheOnStartup: getInitialClearCacheOnStartup(),
+
   discordRpcEnabled: true,
   discordClientId: '1539993441851670589',
   discordShowDetails: true,
@@ -352,6 +380,27 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setMinimizeToTray: (valOrFn) =>
     set((s) => ({ minimizeToTray: resolveVal(valOrFn, s.minimizeToTray) })),
   setCloseToTray: (valOrFn) => set((s) => ({ closeToTray: resolveVal(valOrFn, s.closeToTray) })),
+
+  setAutoDeepCleanOnHide: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.autoDeepCleanOnHide)
+      try {
+        localStorage.setItem('meis_auto_deepclean_on_hide', String(next))
+      } catch {
+        /* ignore */
+      }
+      return { autoDeepCleanOnHide: next }
+    }),
+  setClearCacheOnStartup: (valOrFn) =>
+    set((s) => {
+      const next = resolveVal(valOrFn, s.clearCacheOnStartup)
+      try {
+        localStorage.setItem('meis_clear_cache_on_startup', String(next))
+      } catch {
+        /* ignore */
+      }
+      return { clearCacheOnStartup: next }
+    }),
 
   setDiscordRpcEnabled: (valOrFn) =>
     set((s) => ({ discordRpcEnabled: resolveVal(valOrFn, s.discordRpcEnabled) })),

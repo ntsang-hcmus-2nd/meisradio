@@ -321,6 +321,31 @@ export interface TranslationDictionary {
     gaplessBitPerfectNotice: string
     waveformSeekbar: string
     waveformSeekbarDesc: string
+    cache: {
+      title: string
+      desc: string
+      refresh: string
+      totalLabel: string
+      ram: string
+      ramDesc: string
+      images: string
+      imagesDesc: string
+      waveform: string
+      waveformDesc: string
+      lyricsTheme: string
+      lyricsThemeDesc: string
+      metadata: string
+      metadataDesc: string
+      metadataConfirm: string
+      metadataRescan: string
+      autoDeepClean: string
+      autoDeepCleanDesc: string
+      clearOnStartup: string
+      clearOnStartupDesc: string
+      clearing: string
+      cleared: string
+      clearFailed: string
+    }
   }
   player: {
     noTrack: string

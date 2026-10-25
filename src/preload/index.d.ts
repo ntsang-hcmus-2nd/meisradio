@@ -171,7 +171,7 @@ export interface MeisRadioApi {
   ) => () => void
 
   // Legacy aliases
-  mpvPlay?: (url: string, crossfade: number) => Promise<any>
+  mpvPlay?: (url: string, crossfade?: number) => Promise<any>
   mpvResume?: () => Promise<any>
   mpvPause?: () => Promise<any>
   mpvStop?: () => Promise<any>
@@ -188,8 +188,11 @@ export interface MeisRadioApi {
   getThemeColorsCache: () => Promise<any>
   cacheThemeColors: (trackPath: string, colors: any) => Promise<any>
   clearMemoryCache: () => Promise<any>
+  metricsAppendRenderer: (payload: any) => Promise<any>
+  metricsLogNow: (reason?: string) => Promise<any>
+  getCacheStats: () => Promise<any>
+  clearCache: (targets: string[]) => Promise<any>
   clearWebFrameCache: () => void
-  forceGC: () => Promise<any> | void
   forceRendererGC: () => void
   onDeepClean: (callback: () => void) => () => void
   onNavBack: (callback: () => void) => () => void

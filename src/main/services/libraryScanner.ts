@@ -9,6 +9,7 @@ import {
   getConfig,
   saveConfig,
   sqliteStorage,
+  DATA_FOLDER,
   IMAGE_CACHE_DIR,
   SUPPORTED_AUDIO_EXTS,
   sanitizeDirectoryName,
@@ -30,7 +31,7 @@ import {
 import { parseCueFile, resolveCueSheetDurations } from '../cueParser'
 import { fastReadMetadata, findFolderCoverImage, ID3V1_GENRES } from '../fastAudioParser'
 import { normalizePathKey } from '../sqliteStorage'
-import { clearStreamCoverCache } from './streamServer'
+import { clearStreamCoverCache, streamUrlCache } from './streamServer'
 import { getUserPlaylists } from './playlistManager'
 
 // ==========================================
@@ -1997,6 +1998,116 @@ export function registerLibraryScannerIpc(): void {
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e.message }
+    }
+  })
+
+  // Dung lượng thư mục đệm (bỏ qua file khóa/đang ghi dở)
+  function getDirSizeBytes(dir: string): number {
+    let total = 0
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      for (const e of entries) {
+        try {
+          const p = join(dir, e.name)
+          if (e.isDirectory()) total += getDirSizeBytes(p)
+          else if (e.isFile()) total += fs.statSync(p).size
+        } catch {}
+      }
+    } catch {}
+    return total
+  }
+
+  // Xóa toàn bộ nội dung trong thư mục đệm nhưng giữ lại chính thư mục
+  function clearDirFiles(dir: string): void {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      for (const e of entries) {
+        try {
+          const p = join(dir, e.name)
+          if (e.isDirectory()) fs.rmSync(p, { recursive: true, force: true })
+          else fs.unlinkSync(p)
+        } catch {}
+      }
+    } catch {}
+  }
+
+  function getThumbnailDirs(): string[] {
+    const dirs: string[] = []
+    try {
+      const cfg = getConfig()
+      const roots: string[] =
+        cfg.libraryPaths && cfg.libraryPaths.length > 0
+          ? cfg.libraryPaths
+          : cfg.libraryPath
+            ? [cfg.libraryPath]
+            : []
+      for (const r of roots) {
+        try {
+          const t = join(r, '.thumbnails')
+          if (fs.existsSync(t)) dirs.push(t)
+        } catch {}
+      }
+    } catch {}
+    return dirs
+  }
+
+  ipcMain.handle('cache:getStats', async () => {
+    try {
+      const counts = sqliteStorage
+        ? sqliteStorage.getCacheCounts()
+        : { metadata: 0, themeColors: 0, waveform: 0, onlineLyrics: 0 }
+      let dbBytes = 0
+      for (const f of ['library.db', 'library.db-wal', 'library.db-shm']) {
+        try {
+          dbBytes += fs.statSync(join(DATA_FOLDER, f)).size
+        } catch {}
+      }
+      const imageCacheBytes = getDirSizeBytes(IMAGE_CACHE_DIR)
+      let thumbnailsBytes = 0
+      for (const t of getThumbnailDirs()) thumbnailsBytes += getDirSizeBytes(t)
+      return { success: true, counts, dbBytes, imageCacheBytes, thumbnailsBytes }
+    } catch (e: any) {
+      return { success: false, error: e?.message }
+    }
+  })
+
+  ipcMain.handle('cache:clear', async (_, targets: string[]) => {
+    try {
+      const list = Array.isArray(targets) ? targets : []
+      if (list.includes('ram')) {
+        clearStreamCoverCache()
+        streamUrlCache.clear()
+        if (typeof (global as any).gc === 'function') {
+          ;(global as any).gc()
+        }
+        setTimeout(() => {
+          trimNativeMemory()
+        }, 200)
+      }
+      if (list.includes('images')) {
+        clearStreamCoverCache()
+        streamUrlCache.clear()
+        clearDirFiles(IMAGE_CACHE_DIR)
+        for (const t of getThumbnailDirs()) clearDirFiles(t)
+      }
+      if (list.includes('waveform')) sqliteStorage.clearWaveformCache()
+      if (list.includes('lyrics')) sqliteStorage.clearOnlineLyrics()
+      if (list.includes('theme')) {
+        sqliteStorage.clearThemeColors()
+        for (const k of Object.keys(themeColorsCache)) delete themeColorsCache[k]
+        dirtyThemeColorKeys.clear()
+      }
+      if (list.includes('metadata')) {
+        sqliteStorage.clearMetadataCache()
+        for (const k of Object.keys(metadataCache)) delete metadataCache[k]
+        dirtyMetadataKeys.clear()
+      }
+      try {
+        sqliteStorage.checkpoint('TRUNCATE')
+      } catch {}
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e?.message }
     }
   })
 

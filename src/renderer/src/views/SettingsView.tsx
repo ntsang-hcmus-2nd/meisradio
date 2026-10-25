@@ -16,7 +16,8 @@ import {
   Leaf,
   Download,
   BarChart2,
-  Shuffle
+  Shuffle,
+  Database
 } from 'lucide-react'
 import { CustomSelect } from '../components/CustomSelect'
 import { extractRawFilePath } from '../utils/urlUtils'
@@ -142,6 +143,83 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const replayGainMode = useSettingsStore((state) => state.replayGainMode)
   const setReplayGainMode = useSettingsStore((state) => state.setReplayGainMode)
   const isReloading = useSettingsStore((state) => state.isReloading)
+
+  // Bộ nhớ đệm & Dọn dẹp (nằm trong Island 9: Dữ liệu, Thống kê & Sao lưu)
+  const autoDeepCleanOnHide = useSettingsStore((state) => state.autoDeepCleanOnHide)
+  const setAutoDeepCleanOnHide = useSettingsStore((state) => state.setAutoDeepCleanOnHide)
+  const clearCacheOnStartup = useSettingsStore((state) => state.clearCacheOnStartup)
+  const setClearCacheOnStartup = useSettingsStore((state) => state.setClearCacheOnStartup)
+  const setCustomDialog = useUIStore((state) => state.setCustomDialog)
+  const [cacheStats, setCacheStats] = useState<any>(null)
+  const [clearingKey, setClearingKey] = useState<string | null>(null)
+
+  const loadCacheStats = async () => {
+    try {
+      // @ts-ignore
+      const res = await window.api?.getCacheStats?.()
+      if (res?.success) setCacheStats(res)
+    } catch {}
+  }
+
+  useEffect(() => {
+    loadCacheStats()
+  }, [])
+
+  const formatCacheBytes = (bytes: number): string => {
+    if (!bytes || bytes <= 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB']
+    const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
+    return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+  }
+
+  const runClearCache = async (key: string, targets: string[], rescanAfter = false) => {
+    if (clearingKey) return
+    setClearingKey(key)
+    try {
+      if (key === 'ram') {
+        // @ts-ignore
+        await window.api?.clearMemoryCache?.()
+        try {
+          // @ts-ignore
+          window.api?.clearWebFrameCache?.()
+        } catch {}
+        try {
+          // @ts-ignore
+          window.api?.forceRendererGC?.()
+        } catch {}
+      } else {
+        // @ts-ignore
+        const res = await window.api?.clearCache?.(targets)
+        if (!res?.success) throw new Error(res?.error || 'clear failed')
+      }
+      if (rescanAfter) {
+        showToast(t('settings.cache.metadataRescan'), 'info')
+        await handleReloadLibrary(true)
+      }
+      await loadCacheStats()
+      showToast(t('settings.cache.cleared'), 'success')
+    } catch (e: any) {
+      showToast(`${t('settings.cache.clearFailed')}: ${e?.message || e}`, 'error')
+    } finally {
+      setClearingKey(null)
+    }
+  }
+
+  const confirmClearMetadata = () => {
+    setCustomDialog({
+      isOpen: true,
+      type: 'danger',
+      title: t('settings.cache.metadata'),
+      message: t('settings.cache.metadataConfirm'),
+      onConfirm: () => {
+        setCustomDialog(null)
+        runClearCache('metadata', ['metadata'], true)
+      },
+      onCancel: () => {
+        setCustomDialog(null)
+      }
+    })
+  }
 
   // Audio Store
   const bitPerfectType = useAudioStore((state) => state.bitPerfectType)
@@ -1425,6 +1503,166 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               {language === 'vi' ? 'Xem thống kê nghe nhạc (Insights)' : 'View Music Insights'}
             </span>
           </button>
+        </div>
+
+        {/* KHỐI DỌN DẸP CACHE */}
+        <div className="pt-4 border-t border-theme-30/40 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <Database size={16} className="text-theme-10 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-zinc-200 text-sm font-medium">{t('settings.cache.title')}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{t('settings.cache.desc')}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={loadCacheStats}
+              className="sys-btn flex items-center gap-1.5 bg-theme-30 hover:bg-zinc-700 text-zinc-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer"
+            >
+              <RefreshCw size={13} />
+              <span className="btn-text">{t('settings.cache.refresh')}</span>
+            </button>
+          </div>
+
+          {cacheStats && (
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <span className="px-2.5 py-1 rounded-full bg-theme-10/10 text-theme-10 border border-theme-10/30 font-medium">
+                {t('settings.cache.totalLabel')}:{' '}
+                {formatCacheBytes(
+                  (cacheStats.dbBytes || 0) +
+                    (cacheStats.imageCacheBytes || 0) +
+                    (cacheStats.thumbnailsBytes || 0)
+                )}
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-zinc-950/70 text-zinc-400 border border-zinc-800">
+                DB: {formatCacheBytes(cacheStats.dbBytes || 0)}
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-zinc-950/70 text-zinc-400 border border-zinc-800">
+                metadata: {cacheStats.counts?.metadata ?? 0}
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-zinc-950/70 text-zinc-400 border border-zinc-800">
+                waveform: {cacheStats.counts?.waveform ?? 0}
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-zinc-950/70 text-zinc-400 border border-zinc-800">
+                online lyrics: {cacheStats.counts?.onlineLyrics ?? 0}
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-zinc-950/70 text-zinc-400 border border-zinc-800">
+                theme: {cacheStats.counts?.themeColors ?? 0}
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-zinc-950/70 text-zinc-400 border border-zinc-800">
+                {language === 'vi' ? 'ảnh đĩa' : 'disk images'}:{' '}
+                {formatCacheBytes(
+                  (cacheStats.imageCacheBytes || 0) + (cacheStats.thumbnailsBytes || 0)
+                )}
+              </span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {[
+              {
+                key: 'ram',
+                title: t('settings.cache.ram'),
+                desc: t('settings.cache.ramDesc'),
+                onClear: () => runClearCache('ram', ['ram'])
+              },
+              {
+                key: 'images',
+                title: t('settings.cache.images'),
+                desc: t('settings.cache.imagesDesc'),
+                onClear: () => runClearCache('images', ['images'])
+              },
+              {
+                key: 'waveform',
+                title: t('settings.cache.waveform'),
+                desc: t('settings.cache.waveformDesc'),
+                onClear: () => runClearCache('waveform', ['waveform'])
+              },
+              {
+                key: 'lyricsTheme',
+                title: t('settings.cache.lyricsTheme'),
+                desc: t('settings.cache.lyricsThemeDesc'),
+                onClear: () => runClearCache('lyricsTheme', ['lyrics', 'theme'])
+              }
+            ].map((item) => (
+              <div
+                key={item.key}
+                className="flex items-center justify-between gap-3 p-3 rounded-xl bg-zinc-950/40 border border-theme-30/40"
+              >
+                <div className="min-w-0">
+                  <p className="text-zinc-200 text-sm font-medium truncate">{item.title}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{item.desc}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={item.onClear}
+                  disabled={clearingKey !== null}
+                  className="sys-btn flex items-center gap-1.5 bg-theme-30 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 hover:text-white px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer shrink-0"
+                >
+                  <Trash2 size={13} className={clearingKey === item.key ? 'animate-pulse' : ''} />
+                  <span className="btn-text">
+                    {clearingKey === item.key ? t('settings.cache.clearing') : t('common.delete')}
+                  </span>
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Xóa metadata: nguy hiểm, cần xác nhận riêng + quét lại */}
+          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-red-500/5 border border-red-500/20">
+            <div className="min-w-0">
+              <p className="text-zinc-200 text-sm font-medium">{t('settings.cache.metadata')}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">{t('settings.cache.metadataDesc')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={confirmClearMetadata}
+              disabled={clearingKey !== null || isReloading}
+              className="sys-btn flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 text-red-400 px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer shrink-0"
+            >
+              <Trash2 size={13} className={clearingKey === 'metadata' ? 'animate-pulse' : ''} />
+              <span className="btn-text">
+                {clearingKey === 'metadata' ? t('settings.cache.clearing') : t('common.delete')}
+              </span>
+            </button>
+          </div>
+
+          {/* Chế độ tự động */}
+          <div className="flex flex-col gap-3 pt-1">
+            <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
+              <span className="min-w-0">
+                <span className="block text-zinc-200 text-sm font-medium">
+                  {t('settings.cache.autoDeepClean')}
+                </span>
+                <span className="block text-xs text-zinc-500 mt-0.5">
+                  {t('settings.cache.autoDeepCleanDesc')}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={autoDeepCleanOnHide}
+                onChange={(e) => setAutoDeepCleanOnHide(e.target.checked)}
+                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 cursor-pointer select-none pt-3 border-t border-theme-30/30">
+              <span className="min-w-0">
+                <span className="block text-zinc-200 text-sm font-medium">
+                  {t('settings.cache.clearOnStartup')}
+                </span>
+                <span className="block text-xs text-zinc-500 mt-0.5">
+                  {t('settings.cache.clearOnStartupDesc')}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={clearCacheOnStartup}
+                onChange={(e) => setClearCacheOnStartup(e.target.checked)}
+                className="w-4 h-4 text-theme-10 bg-theme-30 border-zinc-700 rounded focus:ring-theme-10 focus:ring-2 cursor-pointer shrink-0"
+              />
+            </label>
+          </div>
         </div>
       </div>
 

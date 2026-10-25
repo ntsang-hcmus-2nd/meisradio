@@ -255,6 +255,10 @@ const api = {
   cacheThemeColors: (trackPath: string, colors: any) =>
     ipcRenderer.invoke('music:cacheThemeColors', trackPath, colors),
   clearMemoryCache: () => ipcRenderer.invoke('app:clearMemoryCache'),
+  metricsAppendRenderer: (payload: any) => ipcRenderer.invoke('metrics:appendRenderer', payload),
+  metricsLogNow: (reason?: string) => ipcRenderer.invoke('metrics:logNow', reason),
+  getCacheStats: () => ipcRenderer.invoke('cache:getStats'),
+  clearCache: (targets: string[]) => ipcRenderer.invoke('cache:clear', targets),
   clearWebFrameCache: () => {
     try {
       webFrame.clearCache()

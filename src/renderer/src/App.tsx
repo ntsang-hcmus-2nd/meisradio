@@ -274,6 +274,10 @@ export default function App() {
     setMinimizeToTray,
     closeToTray,
     setCloseToTray,
+    autoDeepCleanOnHide,
+    setAutoDeepCleanOnHide,
+    clearCacheOnStartup,
+    setClearCacheOnStartup,
     loudnessNormalization,
     setLoudnessNormalization,
     replayGainMode,
@@ -1264,6 +1268,8 @@ export default function App() {
       }
       if (cfg.minimizeToTray !== undefined) setMinimizeToTray(cfg.minimizeToTray)
       if (cfg.closeToTray !== undefined) setCloseToTray(cfg.closeToTray)
+      if (cfg.autoDeepCleanOnHide !== undefined) setAutoDeepCleanOnHide(cfg.autoDeepCleanOnHide)
+      if (cfg.clearCacheOnStartup !== undefined) setClearCacheOnStartup(cfg.clearCacheOnStartup)
       if (cfg.loudnessNormalization !== undefined)
         setLoudnessNormalization(cfg.loudnessNormalization)
       if (cfg.replayGainMode !== undefined) setReplayGainMode(cfg.replayGainMode)
@@ -1376,6 +1382,8 @@ export default function App() {
       showVisualizer,
       minimizeToTray,
       closeToTray,
+      autoDeepCleanOnHide,
+      clearCacheOnStartup,
       appMode,
       uiStyle,
       customBgImage,
@@ -1409,6 +1417,8 @@ export default function App() {
     showVisualizer,
     minimizeToTray,
     closeToTray,
+    autoDeepCleanOnHide,
+    clearCacheOnStartup,
     appMode,
     uiStyle,
     customBgImage,

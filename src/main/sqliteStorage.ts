@@ -2586,6 +2586,58 @@ export class SqliteStorage {
     }
   }
 
+  // Dọn cache tái tạo được từ Cài đặt: xóa xong app tự dựng lại khi quét/phát.
+  // Không đụng library_tracks, favorites, playlists, play history.
+  public clearWaveformCache(): void {
+    try {
+      this.db?.exec('DELETE FROM waveform_cache;')
+    } catch (e) {
+      console.warn('[SqliteStorage.clearWaveformCache] Error:', e)
+    }
+  }
+
+  public clearThemeColors(): void {
+    try {
+      this.db?.exec('DELETE FROM theme_colors;')
+    } catch (e) {
+      console.warn('[SqliteStorage.clearThemeColors] Error:', e)
+    }
+  }
+
+  public clearMetadataCache(): void {
+    try {
+      this.db?.exec('DELETE FROM metadata_cache;')
+    } catch (e) {
+      console.warn('[SqliteStorage.clearMetadataCache] Error:', e)
+    }
+  }
+
+  public getCacheCounts(): {
+    metadata: number
+    themeColors: number
+    waveform: number
+    onlineLyrics: number
+  } {
+    const zero = { metadata: 0, themeColors: 0, waveform: 0, onlineLyrics: 0 }
+    if (!this.db) return zero
+    const count = (table: string): number => {
+      try {
+        const stmt = this.db!.prepare(`SELECT COUNT(*) AS c FROM ${table};`)
+        const row = stmt.get<{ c: number }>()
+        stmt.finalize()
+        return typeof row?.c === 'number' ? row.c : 0
+      } catch {
+        return 0
+      }
+    }
+    return {
+      metadata: count('metadata_cache'),
+      themeColors: count('theme_colors'),
+      waveform: count('waveform_cache'),
+      onlineLyrics: count('online_lyrics_cache')
+    }
+  }
+
   public recordPlayEvent(event: PlayEventInput): number {
     if (!this.db || !event || !event.filePath) return 0
     const playedAt = event.playedAt && event.playedAt > 0 ? event.playedAt : Date.now()
@@ -3425,6 +3477,18 @@ export function setOnlineLyric(
 
 export function clearOnlineLyrics(): void {
   activeSqliteStorage?.clearOnlineLyrics()
+}
+
+export function clearWaveformCache(): void {
+  activeSqliteStorage?.clearWaveformCache()
+}
+
+export function clearThemeColors(): void {
+  activeSqliteStorage?.clearThemeColors()
+}
+
+export function clearMetadataCache(): void {
+  activeSqliteStorage?.clearMetadataCache()
 }
 
 export function recordPlayEvent(event: PlayEventInput): number {

@@ -47,6 +47,13 @@ export class DiscordRpcManager {
   private isConnected = false
   private isConnecting = false
   private reconnectTimer: NodeJS.Timeout | null = null
+  // Soak-test OOM fix: bounded retry with exponential backoff instead of
+  // infinite 15s reconnect loop (each failed attempt allocates Client +
+  // TLS sockets for fetchAppInfo and was never given a chance to settle).
+  private consecutiveFailures = 0
+  private readonly MAX_CONSECUTIVE_FAILURES = 10
+  private readonly BASE_RETRY_MS = 15000
+  private readonly MAX_RETRY_MS = 300000
   private lastPayload: DiscordPresencePayload | null = null
   private updateThrottleTimer: NodeJS.Timeout | null = null
   private pendingUpdate = false
@@ -136,6 +143,13 @@ export class DiscordRpcManager {
     } catch {}
   }
 
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+  }
+
   private connect(): void {
     if (this.isConnected || this.isConnecting || !this.config.enabled) return
 
@@ -144,7 +158,8 @@ export class DiscordRpcManager {
         ? this.config.clientId.trim()
         : DEFAULT_DISCORD_CLIENT_ID
     this.isConnecting = true
-    this.fetchAppInfo(targetClientId)
+    // NOTE: no fetchAppInfo() before login succeeds — the pre-login HTTPS
+    // prefetch ran on EVERY failed attempt and leaked sockets/objects.
 
     try {
       if (this.client) {
@@ -159,10 +174,8 @@ export class DiscordRpcManager {
       this.client.on('ready', () => {
         this.isConnected = true
         this.isConnecting = false
-        if (this.reconnectTimer) {
-          clearInterval(this.reconnectTimer)
-          this.reconnectTimer = null
-        }
+        this.consecutiveFailures = 0
+        this.clearReconnectTimer()
         this.fetchAppInfo(targetClientId)
         this.refreshPresence()
       })
@@ -193,13 +206,42 @@ export class DiscordRpcManager {
       this.client = null
     }
 
-    if (this.config.enabled && !this.reconnectTimer) {
-      this.reconnectTimer = setInterval(() => {
+    if (!this.config.enabled) return
+    this.consecutiveFailures += 1
+    // Give up after N consecutive failures: stop the automatic loop until
+    // an explicit user-driven trigger (window focus, track change, toggle).
+    if (this.consecutiveFailures > this.MAX_CONSECUTIVE_FAILURES) {
+      this.clearReconnectTimer()
+      return
+    }
+
+    if (!this.reconnectTimer) {
+      const delay = Math.min(
+        this.BASE_RETRY_MS * 2 ** (this.consecutiveFailures - 1),
+        this.MAX_RETRY_MS
+      )
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null
         if (!this.isConnected && !this.isConnecting && this.config.enabled) {
           this.connect()
         }
-      }, 15000)
+      }, delay)
+      try {
+        ;(this.reconnectTimer as any)?.unref?.()
+      } catch {}
     }
+  }
+
+  /**
+   * User-driven retry trigger (e.g. window regains focus). Only fires when
+   * the automatic loop has previously given up, so normal alt-tabbing with
+   * Discord running/connected costs nothing.
+   */
+  public wakeup(): void {
+    if (!this.config.enabled || this.isConnected || this.isConnecting) return
+    if (this.consecutiveFailures < this.MAX_CONSECUTIVE_FAILURES) return
+    this.consecutiveFailures = 0
+    this.connect()
   }
 
   private reconnect(): void {
@@ -210,10 +252,8 @@ export class DiscordRpcManager {
   }
 
   public disconnect(): void {
-    if (this.reconnectTimer) {
-      clearInterval(this.reconnectTimer)
-      this.reconnectTimer = null
-    }
+    this.clearReconnectTimer()
+    this.consecutiveFailures = 0
     this.isConnected = false
     this.isConnecting = false
 

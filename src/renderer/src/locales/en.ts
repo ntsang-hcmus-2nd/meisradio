@@ -334,7 +334,35 @@ export const en: TranslationDictionary = {
       'Eliminate silence between consecutive tracks. In Bit-Perfect mode, only applies when consecutive tracks share identical sample rate and bit depth without resampling',
     gaplessBitPerfectNotice: 'Strict Bit-Perfect Guarantee: Zero resampling',
     waveformSeekbar: 'Waveform Progress Bar',
-    waveformSeekbarDesc: 'Display dynamic audio amplitude waveform directly on the playback seekbar'
+    waveformSeekbarDesc:
+      'Display dynamic audio amplitude waveform directly on the playback seekbar',
+    cache: {
+      title: 'Cache & Cleanup',
+      desc: 'Delete temporary data to free disk space. Cleared caches rebuild automatically when scanning or playing.',
+      refresh: 'Refresh stats',
+      totalLabel: 'Total disk cache',
+      ram: 'Free RAM now',
+      ramDesc: 'Release in-memory covers and force garbage collection, no rescan needed.',
+      images: 'Delete disk cover cache',
+      imagesDesc: 'Delete cached images (.image_cache, .thumbnails), reloaded while browsing.',
+      waveform: 'Delete saved waveforms',
+      waveformDesc: 'Delete waveform cache, redrawn when a track plays.',
+      lyricsTheme: 'Delete online lyrics & theme colors',
+      lyricsThemeDesc: 'Delete saved online lyrics and per-track theme color tables.',
+      metadata: 'Delete metadata & rescan',
+      metadataDesc: 'Delete all music metadata then rescan the library (takes a few minutes).',
+      metadataConfirm:
+        'Delete all music metadata and rescan the library? This may take a few minutes.',
+      metadataRescan: 'Rescanning library after metadata cleanup...',
+      clearOnStartup: 'Clear session cache on startup',
+      clearOnStartupDesc: 'Clear in-memory covers every time the app starts.',
+      autoDeepClean: 'Auto-clean RAM when hidden',
+      autoDeepCleanDesc:
+        'Automatically free memory when minimizing or hiding the window (recommended).',
+      clearing: 'Cleaning...',
+      cleared: 'Cleanup finished',
+      clearFailed: 'Cleanup failed'
+    }
   },
   player: {
     noTrack: 'No track playing',
