@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useSettingsStore, useLibraryStore, usePlayerStore } from '../stores'
 import { getWaveformPeaksCacheSize } from '../components/PlayerProgressBar'
 
@@ -29,6 +29,10 @@ function collectRendererSample(reason: string): any {
   try {
     waveformPeaks = getWaveformPeaksCacheSize()
   } catch {}
+  let audios = -1
+  try {
+    audios = document.querySelectorAll('audio').length
+  } catch {}
   return {
     reason,
     hidden: (typeof document !== 'undefined' ? document.hidden : null) as any,
@@ -38,33 +42,29 @@ function collectRendererSample(reason: string): any {
     libraryTracks,
     isPlaying,
     trackId,
-    waveformPeaks
+    waveformPeaks,
+    audios
   }
 }
 
-function pushRendererSample(reason: string): void {
+export function pushRendererSample(reason: string, extra?: Record<string, unknown>): void {
   try {
-    window.api?.metricsAppendRenderer?.(collectRendererSample(reason))
+    if (window.localStorage?.getItem('meis_mem_trace') === '1') {
+      window.api?.metricsAppendRenderer?.({ ...collectRendererSample(reason), ...(extra || {}) })
+    }
   } catch {}
 }
 
 export function useMemoryOptimization() {
+  const performLocalClean = useCallback(() => {
+    try {
+      window.api?.clearWebFrameCache?.()
+      window.api?.forceRendererGC?.()
+    } catch {}
+  }, [])
+
   // 2. Dọn dẹp sâu khi ứng dụng thu nhỏ hoặc nhận sự kiện onDeepClean từ Main Process
   useEffect(() => {
-    const triggerGC = () => {
-      try {
-        if (!useSettingsStore.getState().autoDeepCleanOnHide) return
-        window.api?.clearWebFrameCache?.()
-      } catch (_) {}
-      try {
-        window.api?.forceRendererGC?.()
-      } catch (_) {}
-      try {
-        window.api?.forceGC?.()
-      } catch (_) {}
-      window.api?.clearMemoryCache?.()
-    }
-
     // shortcut: auto-degrade chỉ khi appMode==='default' — Lite/Core đã tự xử lý.
     // Manual override = chuyển sang Lite/Core, auto không can thiệp.
     const setDegraded = (on: boolean) => {
@@ -80,14 +80,17 @@ export function useMemoryOptimization() {
     const handleVisibilityChange = () => {
       pushRendererSample('visibilitychange')
       if (document.hidden) {
-        triggerGC()
+        if (!useSettingsStore.getState().autoDeepCleanOnHide) return
+        performLocalClean()
         setDegraded(true)
       } else {
         setDegraded(false)
       }
     }
 
-    pushRendererSample('mount')
+    if (window.localStorage?.getItem('meis_mem_trace') === '1') {
+      pushRendererSample('mount')
+    }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
@@ -95,21 +98,23 @@ export function useMemoryOptimization() {
     if (window.api?.onDeepClean) {
       unlistenDeepClean = window.api.onDeepClean(() => {
         pushRendererSample('deepclean')
-        triggerGC()
+        performLocalClean()
         setDegraded(true)
       })
     }
 
-    // Trace soak-test: đẩy mẫu renderer mỗi 60s (kể cả khi hidden hay không,
-    // để kiểm chứng giả thuyết document.hidden khi minimize)
-    const metricsInterval = setInterval(() => {
-      pushRendererSample('interval')
-    }, 60000)
+    let metricsInterval: any = null
+    if (window.localStorage?.getItem('meis_mem_trace') === '1') {
+      metricsInterval = setInterval(() => {
+        pushRendererSample('interval')
+      }, 60000)
+    }
 
     // 3. Chu kỳ kiểm tra dọn dẹp nhàn rỗi (mỗi 3 phút khi chạy ngầm)
     const idleInterval = setInterval(() => {
       if (document.hidden) {
-        triggerGC()
+        if (!useSettingsStore.getState().autoDeepCleanOnHide) return
+        performLocalClean()
         setDegraded(true)
       }
     }, 180000)
@@ -120,10 +125,10 @@ export function useMemoryOptimization() {
         document.documentElement.removeAttribute('data-degraded')
       } catch {}
       clearInterval(idleInterval)
-      clearInterval(metricsInterval)
+      if (metricsInterval) clearInterval(metricsInterval)
       if (typeof unlistenDeepClean === 'function') {
         unlistenDeepClean()
       }
     }
-  }, [])
+  }, [performLocalClean])
 }

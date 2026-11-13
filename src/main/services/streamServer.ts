@@ -35,11 +35,29 @@ export const streamUrlCache = new Map<string, { url: string; expires: number }>(
 export const smallCoverCache = new Map<string, Buffer>()
 export const largeCoverCache = new Map<string, Buffer>()
 export const folderCoverCache = new Map<string, { buffer: Buffer; mime: string }>()
+export const coverPathToCacheKey = new Map<string, string>()
 
 export function clearStreamCoverCache(): void {
   smallCoverCache.clear()
   largeCoverCache.clear()
   folderCoverCache.clear()
+  coverPathToCacheKey.clear()
+}
+
+export function invalidateCoverCacheForPath(filePath: string): void {
+  const norm = normalizeLocalPath(filePath)
+  if (!norm) return
+  for (const [fastKey] of coverPathToCacheKey) {
+    if (fastKey.startsWith(norm + '_size_') || fastKey === norm) {
+      coverPathToCacheKey.delete(fastKey)
+    }
+  }
+  for (const [key] of smallCoverCache) {
+    if (key.includes(norm)) smallCoverCache.delete(key)
+  }
+  for (const [key] of largeCoverCache) {
+    if (key.includes(norm)) largeCoverCache.delete(key)
+  }
 }
 
 // Concurrency Limiter: Giới hạn tối đa 3 tác vụ đọc/trích xuất metadata file âm thanh đồng thời
@@ -74,7 +92,14 @@ export function getCoverFromCache(key: string): Buffer | undefined {
   return smallCoverCache.get(key) || largeCoverCache.get(key)
 }
 
-export function setCoverResizeCache(key: string, buf: Buffer, targetSize: number): void {
+export function setCoverResizeCache(key: string, buf: Buffer, targetSize: number, fastKey?: string): void {
+  if (fastKey) {
+    if (coverPathToCacheKey.size >= 700) {
+      const oldestFastKey = coverPathToCacheKey.keys().next().value
+      if (oldestFastKey) coverPathToCacheKey.delete(oldestFastKey)
+    }
+    coverPathToCacheKey.set(fastKey, key)
+  }
   if (targetSize > 0 && targetSize <= 128) {
     if (smallCoverCache.size >= 400) {
       const oldestKey = smallCoverCache.keys().next().value
@@ -521,6 +546,25 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         return
       }
 
+      const tParam = parsedUrl.searchParams.get('t') || ''
+      const fastKey = `${targetPath}_size_${targetSize}_${tParam}`
+
+      if (targetSize > 0) {
+        const mappedKey = coverPathToCacheKey.get(fastKey)
+        if (mappedKey) {
+          const cached = getCoverFromCache(mappedKey)
+          if (cached) {
+            res.writeHead(200, {
+              'Content-Type': 'image/jpeg',
+              'Cache-Control': tParam ? 'no-cache' : 'public, max-age=604800, immutable',
+              'Content-Length': cached.length
+            })
+            res.end(cached)
+            return
+          }
+        }
+      }
+
       if (!fs.existsSync(targetPath)) {
         res.writeHead(404).end('File không tồn tại')
         return
@@ -531,7 +575,6 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         mtimeMs = Math.round(fs.statSync(targetPath).mtimeMs)
       } catch (_) {}
 
-      const tParam = parsedUrl.searchParams.get('t') || ''
       const cacheKey = `${targetPath}_size_${targetSize}_${mtimeMs}_${tParam}`
       const cached = targetSize > 0 ? getCoverFromCache(cacheKey) : undefined
       if (cached) {
@@ -698,7 +741,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
           const extLower = path.extname(targetPath).toLowerCase()
           if (directImgMimes[extLower]) {
             try {
-              rawBuffer = fs.readFileSync(targetPath)
+              rawBuffer = await fs.promises.readFile(targetPath)
               mime = directImgMimes[extLower]
             } catch (_) {}
           }
@@ -748,9 +791,9 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
             if (targetSize > 0 && targetSize <= 256 && foundThumb) {
               try {
-                rawBuffer = fs.readFileSync(foundThumb)
+                rawBuffer = await fs.promises.readFile(foundThumb)
                 mime = 'image/jpeg'
-                setCoverResizeCache(cacheKey, rawBuffer, targetSize)
+                setCoverResizeCache(cacheKey, rawBuffer, targetSize, fastKey)
                 res.writeHead(200, {
                   'Content-Type': 'image/jpeg',
                   'Cache-Control': 'public, max-age=604800, immutable',
@@ -768,7 +811,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             const folderImgPath = findFolderCoverImage(trackDir)
             if (folderImgPath && fs.existsSync(folderImgPath)) {
               try {
-                rawBuffer = fs.readFileSync(folderImgPath)
+                rawBuffer = await fs.promises.readFile(folderImgPath)
                 const ext = path.extname(folderImgPath).toLowerCase()
                 mime = directImgMimes[ext] || 'image/jpeg'
               } catch (_) {}
@@ -801,7 +844,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
             if (!rawBuffer && foundThumb) {
               try {
-                rawBuffer = fs.readFileSync(foundThumb)
+                rawBuffer = await fs.promises.readFile(foundThumb)
                 mime = 'image/jpeg'
               } catch (_) {}
             }

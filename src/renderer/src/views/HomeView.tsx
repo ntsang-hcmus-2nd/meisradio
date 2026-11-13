@@ -40,6 +40,26 @@ export function HomeView({
   const appMode = useSettingsStore((s) => s.appMode)
   const isLite = appMode === 'lite' || appMode === 'core'
 
+  // Helper: O(k) random sample without copying the full array
+  const sampleRandomTracks = (tracks: any[], k: number): any[] => {
+    if (!tracks || tracks.length === 0) return []
+    const len = tracks.length
+    if (len <= k) return [...tracks]
+    if (len > k * 3) {
+      const indices = new Set<number>()
+      while (indices.size < k) {
+        indices.add(Math.floor(Math.random() * len))
+      }
+      return Array.from(indices).map((idx) => tracks[idx])
+    }
+    const copy = [...tracks]
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[copy[i], copy[j]] = [copy[j], copy[i]]
+    }
+    return copy.slice(0, k)
+  }
+
   // Thuật toán gợi ý bài hát cho Dashboard
   const dashboardRecommendations = useMemo(() => {
     if (!libraryTracks || libraryTracks.length === 0) return []
@@ -68,11 +88,13 @@ export function HomeView({
       .map((e) => e[0])
     const recentIds = new Set(recentSample.map((trk) => trk.id || trk.filePath))
 
-    if (topArtists.length === 0 && topGenres.length === 0) {
-      return [...(libraryTracks || [])].slice(0, 20)
+    const hasSignal = topArtists.length > 0 || topGenres.length > 0
+    if (!hasSignal) {
+      return sampleRandomTracks(libraryTracks, 24)
     }
 
-    const scoredTracks = libraryTracks.map((trk) => {
+    const filteredCandidates: { track: any; score: number }[] = []
+    for (const trk of libraryTracks) {
       let score = 0
       const tArtist = (trk.artist || '').toString().toLowerCase().trim()
       const tGenre = (trk.genre || '').toString().toLowerCase().trim()
@@ -94,20 +116,24 @@ export function HomeView({
         score -= 5
       }
 
-      return { track: trk, score }
-    })
+      if (score > 0) {
+        filteredCandidates.push({ track: trk, score })
+      }
+    }
 
-    scoredTracks.sort((a, b) => b.score - a.score)
-    return scoredTracks
-      .filter((st) => st.score > 0)
-      .slice(0, 24)
-      .map((st) => st.track)
+    filteredCandidates.sort((a, b) => b.score - a.score)
+    const result = filteredCandidates.slice(0, 24).map((st) => st.track)
+    if (result.length < 12) {
+      const fallback = sampleRandomTracks(libraryTracks, 24)
+      return fallback
+    }
+    return result
   }, [libraryTracks, recentlyPlayed])
 
   // Tuyển tập ngẫu nhiên "Khám phá từ thư mục nhạc"
   const randomDiscoverTracks = useMemo(() => {
     if (!libraryTracks || libraryTracks.length === 0) return []
-    return fisherYatesShuffle(libraryTracks || []).slice(0, 12)
+    return sampleRandomTracks(libraryTracks, 12)
   }, [libraryTracks])
 
   return (

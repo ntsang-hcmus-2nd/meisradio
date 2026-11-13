@@ -293,12 +293,12 @@ export function useLibraryOperations({
   const handleAddTracksToActivePlaylist = useCallback(
     async (tracksToAdd: any[]) => {
       if (!activePlaylist) return
-      for (const track of tracksToAdd) {
-        const rawTrackPath = track.id || track.filePath
-        if (rawTrackPath) {
-          // @ts-ignore
-          await window.api?.addTrackToPlaylist?.(activePlaylist.name, rawTrackPath)
-        }
+      const paths = tracksToAdd
+        .map((track) => track.id || track.filePath)
+        .filter(Boolean) as string[]
+      if (paths.length > 0) {
+        // @ts-ignore
+        await window.api?.addTrackToPlaylist?.(activePlaylist.name, paths)
       }
       showToast(t('toasts.tracksAddedToPlaylist', { count: tracksToAdd.length }), 'success')
       setShowAddSongsModal(false)
@@ -618,7 +618,6 @@ export function useLibraryOperations({
         })
       }
       setEditingTrack(null)
-      loadLibrary()
     } else {
       showToast('Error: ' + res?.error, 'error')
     }
@@ -630,8 +629,7 @@ export function useLibraryOperations({
     t,
     currentTrack,
     setLibraryTracks,
-    setCurrentTrack,
-    loadLibrary
+    setCurrentTrack
   ])
 
   // Context Menu Handlers

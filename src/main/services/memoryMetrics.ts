@@ -16,6 +16,8 @@ import {
   streamUrlCache
 } from './streamServer'
 
+const IS_MEM_TRACE_ENABLED = process.env.MEIS_MEM_TRACE === '1'
+
 export const MEM_TRACE_PATH = join(DATA_FOLDER, 'mem-trace.log')
 
 let traceTimer: NodeJS.Timeout | null = null
@@ -32,6 +34,7 @@ function safeAppMetrics(): Array<{ type: string; pid: number; memory: any }> {
 }
 
 export function logMemorySample(reason: string): void {
+  if (!IS_MEM_TRACE_ENABLED && reason !== 'manual') return
   try {
     const cfg: any = getConfig()
     const entry = {
@@ -61,6 +64,7 @@ export function logMemorySample(reason: string): void {
 }
 
 export function startMemoryTrace(intervalMs: number = 60000): void {
+  if (!IS_MEM_TRACE_ENABLED) return
   if (started) return
   started = true
   logMemorySample('startup')
@@ -80,6 +84,7 @@ export function stopMemoryTrace(): void {
 
 export function registerMemoryMetricsIpc(): void {
   ipcMain.handle('metrics:appendRenderer', (_, payload: any) => {
+    if (!IS_MEM_TRACE_ENABLED) return { success: true }
     try {
       const entry = { ts: new Date().toISOString(), source: 'renderer', ...(payload || {}) }
       fs.appendFileSync(MEM_TRACE_PATH, JSON.stringify(entry) + '\n')

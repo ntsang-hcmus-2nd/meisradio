@@ -135,15 +135,12 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
         if (ctx) {
           ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
         }
-        canvasRef.current.width = 1
-        canvasRef.current.height = 1
+        canvasRef.current.width = 0
+        canvasRef.current.height = 0
       }
-      if (typeof (window as any).api?.clearMemoryCache === 'function') {
-        ;(window as any).api.clearMemoryCache()
-      }
-      if (typeof (window as any).api?.forceGC === 'function') {
-        ;(window as any).api.forceGC()
-      }
+      try {
+        window.api?.forceRendererGC?.()
+      } catch {}
     }
 
     useEffect(() => {

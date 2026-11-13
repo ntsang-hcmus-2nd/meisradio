@@ -84,6 +84,9 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
   const [hoverPercent, setHoverPercent] = useState<number | null>(null)
 
   const waveformRef = useRef<HTMLDivElement | null>(null)
+  const hoverRafRef = useRef<number | null>(null)
+  const cachedRectRef = useRef<DOMRect | null>(null)
+  const lastHoverPercentRef = useRef<number | null>(null)
   const isDraggingRef = useRef(false)
   const currentTimeRef = useRef(0)
   const lastBassUiRef = useRef(0)
@@ -359,14 +362,43 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
 
   const handleWaveformMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!waveformRef.current || duration <= 0) return
-    const rect = waveformRef.current.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    setHoverPercent(ratio)
+    const clientX = e.clientX
+    if (hoverRafRef.current !== null) return
+
+    hoverRafRef.current = requestAnimationFrame(() => {
+      hoverRafRef.current = null
+      if (!waveformRef.current) return
+      const rect = cachedRectRef.current ?? waveformRef.current.getBoundingClientRect()
+      cachedRectRef.current = rect
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      const percent = ratio * 100
+      if (
+        lastHoverPercentRef.current === null ||
+        Math.abs(percent - lastHoverPercentRef.current) >= 0.2
+      ) {
+        lastHoverPercentRef.current = percent
+        setHoverPercent(ratio)
+      }
+    })
   }
 
   const handleWaveformMouseLeave = () => {
+    if (hoverRafRef.current !== null) {
+      cancelAnimationFrame(hoverRafRef.current)
+      hoverRafRef.current = null
+    }
+    cachedRectRef.current = null
+    lastHoverPercentRef.current = null
     setHoverPercent(null)
   }
+
+  useEffect(() => {
+    return () => {
+      if (hoverRafRef.current !== null) {
+        cancelAnimationFrame(hoverRafRef.current)
+      }
+    }
+  }, [])
 
   // --- Classic Range Slider Handlers ---
   const handleRangeChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -95,7 +95,7 @@ const api = {
   deleteTracks: (trackPaths: string[], deletePermanently?: boolean) =>
     ipcRenderer.invoke('music:deleteTrack', trackPaths, deletePermanently),
   showInFolder: (filePath: string) => ipcRenderer.invoke('music:showInFolder', filePath),
-  addTrackToPlaylist: (playlistName: string, trackPath: string) =>
+  addTrackToPlaylist: (playlistName: string, trackPath: string | string[]) =>
     ipcRenderer.invoke('music:addTrackToPlaylist', playlistName, trackPath),
   forceGC: () => ipcRenderer.invoke('music:forceGC'),
   searchOnline: (query: string) => ipcRenderer.invoke('music:searchOnline', query),
@@ -196,7 +196,7 @@ const api = {
     targetFormat: 'flac' | 'mp3' | 'wav'
   ) => ipcRenderer.invoke('music:convertAudioTrack', track, targetFormat),
   getFavorites: () => ipcRenderer.invoke('music:getFavorites'),
-  toggleFavorite: (filePath: string, isFavorite?: boolean) =>
+  toggleFavorite: (filePath: string | string[], isFavorite?: boolean) =>
     ipcRenderer.invoke('music:toggleFavorite', filePath, isFavorite),
   getLyricOffsets: () => ipcRenderer.invoke('music:getLyricOffsets'),
   setLyricOffset: (filePath: string, offsetSec: number) =>

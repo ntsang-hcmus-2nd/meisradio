@@ -25,20 +25,40 @@ export const saveWindowState = () => {
   saveConfig({ windowState: { ...bounds, isMaximized } })
 }
 
-export const performDeepMemoryTrim = async () => {
+let saveWindowStateTimer: ReturnType<typeof setTimeout> | null = null
+const scheduleSaveWindowState = () => {
+  if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer)
+  saveWindowStateTimer = setTimeout(() => {
+    saveWindowStateTimer = null
+    saveWindowState()
+  }, 400)
+}
+
+let isTrimmingMemory = false
+let lastDeepTrimAt = 0
+
+export const performDeepMemoryTrim = async (options?: { wipeCoverCache?: boolean; notifyRenderer?: boolean }) => {
+  const now = Date.now()
+  if (isTrimmingMemory || (now - lastDeepTrimAt < 15000 && !options?.wipeCoverCache)) return
+  isTrimmingMemory = true
+  lastDeepTrimAt = now
   try {
-    if (getConfig()?.autoDeepCleanOnHide === false) return
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (getConfig()?.autoDeepCleanOnHide === false && !options?.wipeCoverCache) return
+    if (options?.notifyRenderer !== false && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('app:onDeepClean')
     }
-    clearStreamCoverCache()
+    if (options?.wipeCoverCache === true) {
+      clearStreamCoverCache()
+    }
     if (typeof (global as any).gc === 'function') {
       ;(global as any).gc()
     }
     setTimeout(() => {
       trimNativeMemory()
     }, 300)
-  } catch {}
+  } catch {} finally {
+    isTrimmingMemory = false
+  }
 }
 
 export interface WindowManagerOptions {
@@ -80,10 +100,10 @@ export function createMainWindow(options: WindowManagerOptions): BrowserWindow {
   setSharedMainWindow(mainWindow)
   soulseekManager.setMainWindow(mainWindow)
 
-  mainWindow.on('resized', saveWindowState)
-  mainWindow.on('moved', saveWindowState)
-  mainWindow.on('maximize', saveWindowState)
-  mainWindow.on('unmaximize', saveWindowState)
+  mainWindow.on('resized', scheduleSaveWindowState)
+  mainWindow.on('moved', scheduleSaveWindowState)
+  mainWindow.on('maximize', scheduleSaveWindowState)
+  mainWindow.on('unmaximize', scheduleSaveWindowState)
 
   let idleTrimTimer: NodeJS.Timeout | null = null
   let idleRetrimInterval: NodeJS.Timeout | null = null
@@ -144,17 +164,22 @@ export function createMainWindow(options: WindowManagerOptions): BrowserWindow {
     try {
       logMemorySample('minimize')
     } catch {}
-    performDeepMemoryTrim()
+    performDeepMemoryTrim({ wipeCoverCache: false, notifyRenderer: true })
   })
 
   mainWindow.on('hide', () => {
     try {
       logMemorySample('hide')
     } catch {}
-    performDeepMemoryTrim()
+    performDeepMemoryTrim({ wipeCoverCache: false, notifyRenderer: true })
   })
 
   mainWindow.on('close', (event: Electron.Event) => {
+    if (saveWindowStateTimer) {
+      clearTimeout(saveWindowStateTimer)
+      saveWindowStateTimer = null
+      saveWindowState()
+    }
     if (!options.isQuitting() && isCloseToTray()) {
       event.preventDefault()
       mainWindow?.hide()

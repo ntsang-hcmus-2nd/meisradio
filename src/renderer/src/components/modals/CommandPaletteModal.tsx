@@ -215,7 +215,6 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const setIsPlaying = usePlayerStore((s) => s.setIsPlaying)
   const currentTrack = usePlayerStore((s) => s.currentTrack)
-  const volume = usePlayerStore((s) => s.volume)
   const isShuffle = usePlayerStore((s) => s.isShuffle)
   const repeatMode = usePlayerStore((s) => s.repeatMode)
   const bitPerfectEnabled = usePlayerStore((s) => s.bitPerfectEnabled)
@@ -274,6 +273,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
   // Extract memoized unique artists list
   const allArtists = useMemo(() => {
+    if (!show) return []
     if (preAggregatedData?.artistsList && preAggregatedData.artistsList.length > 0) {
       return preAggregatedData.artistsList
     }
@@ -300,10 +300,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       }
     }
     return Array.from(map.values()).sort((a, b) => b.trackCount - a.trackCount)
-  }, [preAggregatedData, libraryTracks])
+  }, [preAggregatedData, libraryTracks, show])
 
   // Extract memoized albums list
   const allAlbums = useMemo(() => {
+    if (!show) return []
     const map = new Map<
       string,
       { title: string; artist: string; trackCount: number; coverArt?: string; tracks: TrackItem[] }
@@ -328,7 +329,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       }
     }
     return Array.from(map.values()).sort((a, b) => b.trackCount - a.trackCount)
-  }, [libraryTracks])
+  }, [libraryTracks, show])
 
   // Add track to queue helper
   const handleAddToQueue = useCallback(
@@ -393,6 +394,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
   // Built-in commands list
   const builtInCommands: CommandItem[] = useMemo(() => {
+    if (!show) return []
     const list: CommandItem[] = [
       // PLAYBACK COMMANDS
       {
@@ -595,7 +597,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           try {
             const api = getElectronApi()
             if (api?.setBitPerfect) {
-              await api.setBitPerfect(nextVal, volume, bitPerfectType)
+              await api.setBitPerfect(nextVal, usePlayerStore.getState().volume, bitPerfectType)
             }
           } catch {
             // Ignore hardware lock toggle error
@@ -1108,8 +1110,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     handleSetAccentColor,
     onToggleBitPerfect,
     onToggleMiniPlayer,
-    volume,
     bitPerfectType,
+    show,
     setShow,
     setIsPlaying,
     setBitPerfectEnabled,
@@ -1134,6 +1136,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
   // Filter items based on activeTab and query
   const filteredItems: CommandItem[] = useMemo(() => {
+    if (!show) return []
     let rawQuery = query.trim()
     let effectiveTab: TabCategory = activeTab
 
@@ -1526,7 +1529,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     setSlskSearchResults,
     setSlskSearchError,
     showToast,
-    setShow
+    setShow,
+    show
   ])
 
   const safeSelectedIndex = selectedIndex >= filteredItems.length ? 0 : selectedIndex

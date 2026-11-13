@@ -62,6 +62,16 @@ const SENSITIVE_CONFIG_KEYS = [
   'soulseekPassword'
 ]
 
+let cachedDecryptedConfig: Record<string, any> | null = null
+let cachedConfigPath: string | null = null
+const cachedEncryptedValues = new Map<string, string>()
+
+export function invalidateConfigCache(): void {
+  cachedDecryptedConfig = null
+  cachedConfigPath = null
+  cachedSystemRoots = null
+}
+
 // Khởi tạo SQLite Storage Engine (koffi C-FFI) thay thế toàn bộ cache JSON
 export const sqliteStorage = new SqliteStorage(DATA_FOLDER)
 
@@ -69,6 +79,9 @@ export const sqliteStorage = new SqliteStorage(DATA_FOLDER)
 // CẤU HÌNH ỨNG DỤNG (CONFIG)
 // ==========================================
 export function getConfig() {
+  if (cachedDecryptedConfig !== null && cachedConfigPath === CONFIG_PATH) {
+    return { ...cachedDecryptedConfig }
+  }
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
@@ -78,9 +91,11 @@ export function getConfig() {
           const value = config[key]
           if (typeof value === 'string' && value.startsWith('ENC:')) {
             try {
-              config[key] = safeStorage.decryptString(
+              const decrypted = safeStorage.decryptString(
                 Buffer.from(value.replace('ENC:', ''), 'base64')
               )
+              config[key] = decrypted
+              cachedEncryptedValues.set(decrypted, value)
             } catch {}
           }
         }
@@ -107,10 +122,12 @@ export function getConfig() {
         }
       }
 
-      return config
+      cachedDecryptedConfig = { ...config }
+      cachedConfigPath = CONFIG_PATH
+      return { ...config }
     }
   } catch {}
-  return {
+  const fallbackConfig = {
     libraryPath: null,
     libraryPaths: [],
     crossfadeEnabled: false,
@@ -129,10 +146,13 @@ export function getConfig() {
       showIdle: true
     }
   }
+  cachedDecryptedConfig = { ...fallbackConfig }
+  cachedConfigPath = CONFIG_PATH
+  return { ...fallbackConfig }
 }
 
 export function saveConfig(data: any) {
-  const currentConfig = getConfig()
+  const currentConfig = cachedDecryptedConfig ? { ...cachedDecryptedConfig } : getConfig()
   const newConfig = { ...currentConfig, ...data }
 
   if (data.libraryPaths && Array.isArray(data.libraryPaths)) {
@@ -140,6 +160,7 @@ export function saveConfig(data: any) {
       (p: any) => typeof p === 'string' && p.trim() !== ''
     )
     newConfig.libraryPath = newConfig.libraryPaths[0] || null
+    cachedSystemRoots = null
   } else if (data.libraryPath !== undefined) {
     if (data.libraryPath) {
       if (!newConfig.libraryPaths) newConfig.libraryPaths = []
@@ -148,7 +169,14 @@ export function saveConfig(data: any) {
       }
       newConfig.libraryPath = data.libraryPath
     }
+    cachedSystemRoots = null
   }
+  if (data.soulseekDownloadFolder !== undefined) {
+    cachedSystemRoots = null
+  }
+
+  cachedDecryptedConfig = { ...newConfig }
+  cachedConfigPath = CONFIG_PATH
 
   if (data.customBgImage && typeof data.customBgImage === 'string') {
     registerAllowedDroppedFile(data.customBgImage)
@@ -162,8 +190,13 @@ export function saveConfig(data: any) {
       const value = newConfig[key]
       if (typeof value === 'string' && !value.startsWith('ENC:')) {
         try {
-          const encryptedBuffer = safeStorage.encryptString(value)
-          newConfig[key] = `ENC:${encryptedBuffer.toString('base64')}`
+          let encVal = cachedEncryptedValues.get(value)
+          if (!encVal) {
+            const encryptedBuffer = safeStorage.encryptString(value)
+            encVal = `ENC:${encryptedBuffer.toString('base64')}`
+            cachedEncryptedValues.set(value, encVal)
+          }
+          newConfig[key] = encVal
         } catch (e) {
           console.error(`Lỗi mã hóa ${key}`, e)
         }
@@ -229,6 +262,23 @@ export const ytdlp = is.dev
 // SECURITY & ALLOWED LOCAL PATHS
 // ==========================================
 export const allowedDroppedFiles = new Set<string>()
+
+let cachedSystemRoots: string[] | null = null
+const realpathCache = new Map<string, string>()
+
+function cachedRealpath(p: string): string {
+  if (realpathCache.has(p)) return realpathCache.get(p)!
+  try {
+    const real = fs.realpathSync(p)
+    if (realpathCache.size > 5000) realpathCache.clear()
+    realpathCache.set(p, real)
+    return real
+  } catch {
+    if (realpathCache.size > 5000) realpathCache.clear()
+    realpathCache.set(p, p)
+    return p
+  }
+}
 
 export function normalizeLocalPath(filePath: string): string {
   if (!filePath || typeof filePath !== 'string') return ''
@@ -423,35 +473,62 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
       }
     }
 
-    const allowedDirs: (string | null | undefined)[] = [
-      IMAGE_CACHE_DIR,
-      ...(config.libraryPaths || []),
-      config.libraryPath,
-      config.soulseekDownloadFolder,
-      (() => {
-        try {
-          const d = safeGetPath('downloads')
-          return d ? path.join(d, "Mei's Radio", 'Soulseek') : null
-        } catch {
-          return null
+    if (cachedSystemRoots === null && app.isReady()) {
+      const config = getConfig()
+      const rawDirs: (string | null | undefined)[] = [
+        IMAGE_CACHE_DIR,
+        ...(config.libraryPaths || []),
+        config.libraryPath,
+        config.soulseekDownloadFolder,
+        (() => {
+          try {
+            const d = safeGetPath('downloads')
+            return d ? path.join(d, "Mei's Radio", 'Soulseek') : null
+          } catch {
+            return null
+          }
+        })(),
+        safeGetPath('userData'),
+        safeGetPath('music'),
+        safeGetPath('downloads'),
+        safeGetPath('desktop'),
+        safeGetPath('documents'),
+        safeGetPath('pictures'),
+        safeGetPath('temp'),
+        os.tmpdir()
+      ]
+      const roots: string[] = []
+      for (const rd of rawDirs) {
+        if (rd && typeof rd === 'string') {
+          try {
+            if (fs.existsSync(rd)) {
+              roots.push(cachedRealpath(rd))
+            } else {
+              roots.push(path.normalize(rd))
+            }
+          } catch {
+            roots.push(path.normalize(rd))
+          }
         }
-      })(),
-      safeGetPath('userData'),
-      safeGetPath('music'),
-      safeGetPath('downloads'),
-      safeGetPath('desktop'),
-      safeGetPath('documents'),
-      safeGetPath('pictures'),
-      safeGetPath('temp'),
-      os.tmpdir()
-    ]
+      }
+      cachedSystemRoots = roots
+    }
 
-    for (const rawDir of allowedDirs) {
+    const currentSystemRoots = cachedSystemRoots || [
+      IMAGE_CACHE_DIR,
+      safeGetPath('userData') || '',
+      os.tmpdir()
+    ].filter(Boolean)
+
+    const targetReal = cachedRealpath(norm)
+    const targetRealLower = isWin ? targetReal.toLowerCase() : targetReal
+
+    for (const rawDir of currentSystemRoots) {
       if (!rawDir || typeof rawDir !== 'string') continue
-      let dir = path.normalize(rawDir)
+      let dir = cachedRealpath(rawDir)
       if (isWin) dir = dir.toLowerCase()
       const dirWithSep = dir.endsWith(path.sep) ? dir : dir + path.sep
-      if (normLower === dir || normLower.startsWith(dirWithSep)) {
+      if (targetRealLower === dir || targetRealLower.startsWith(dirWithSep)) {
         return true
       }
     }

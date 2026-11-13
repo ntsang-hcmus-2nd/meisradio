@@ -64,6 +64,7 @@ export interface LibraryState {
   favoriteTrackIds: string[]
   quickFilter: 'all' | 'lossless' | 'hires' | 'dsd' | 'favorites' | 'cue'
   selectedTrackIds: string[]
+  selectedTrackIdSet: Set<string>
   smartPlaylists: any[]
   trackLyricOffsets: Record<string, number>
 
@@ -201,6 +202,7 @@ export const useLibraryStore = create<LibraryState>((set) => ({
   favoriteTrackIds: getInitialFavoriteTrackIds(),
   quickFilter: 'all',
   selectedTrackIds: [],
+  selectedTrackIdSet: new Set<string>(),
   smartPlaylists: getInitialSmartPlaylists(),
   trackLyricOffsets: getInitialTrackLyricOffsets(),
 
@@ -272,16 +274,29 @@ export const useLibraryStore = create<LibraryState>((set) => ({
     }),
   setQuickFilter: (valOrFn) => set((s) => ({ quickFilter: resolveVal(valOrFn, s.quickFilter) })),
   setSelectedTrackIds: (valOrFn) =>
-    set((s) => ({ selectedTrackIds: resolveVal(valOrFn, s.selectedTrackIds) })),
+    set((s) => {
+      const nextIds = resolveVal(valOrFn, s.selectedTrackIds)
+      return {
+        selectedTrackIds: nextIds,
+        selectedTrackIdSet: new Set(nextIds)
+      }
+    }),
   toggleSelectTrackId: (id: string) =>
     set((s) => {
       const exists = s.selectedTrackIds.includes(id)
       const next = exists
         ? s.selectedTrackIds.filter((item) => item !== id)
         : [...s.selectedTrackIds, id]
-      return { selectedTrackIds: next }
+      return {
+        selectedTrackIds: next,
+        selectedTrackIdSet: new Set(next)
+      }
     }),
-  clearSelectedTracks: () => set({ selectedTrackIds: [] }),
+  clearSelectedTracks: () =>
+    set({
+      selectedTrackIds: [],
+      selectedTrackIdSet: new Set<string>()
+    }),
   setSmartPlaylists: (valOrFn) =>
     set((s) => {
       const next = resolveVal(valOrFn, s.smartPlaylists)

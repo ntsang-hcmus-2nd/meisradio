@@ -168,10 +168,10 @@ export const TrackRow = React.memo(
     onArtistClick
   }: any) => {
     const { t } = useTranslation()
-    const selectedTrackIds = useLibraryStore((s) => s.selectedTrackIds)
     const toggleSelectTrackId = useLibraryStore((s) => s.toggleSelectTrackId)
     const trackKey = track.id || track.filePath
-    const isSelected = !!trackKey && selectedTrackIds.includes(trackKey)
+    const isSelected = useLibraryStore((s) => Boolean(trackKey && s.selectedTrackIdSet.has(trackKey)))
+    const hasSelection = useLibraryStore((s) => s.selectedTrackIds.length > 0)
 
     const handleRowSelectOrPlay = (e: React.MouseEvent) => {
       if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -206,12 +206,12 @@ export const TrackRow = React.memo(
               <div className="w-2.5 h-2.5 bg-theme-10 rounded-full animate-pulse mx-auto" />
             ) : (
               <>
-                <span className={selectedTrackIds.length > 0 ? 'hidden' : 'group-hover:hidden'}>
+                <span className={hasSelection ? 'hidden' : 'group-hover:hidden'}>
                   {index + 1}
                 </span>
                 <Square
                   size={14}
-                  className={`${selectedTrackIds.length > 0 ? 'inline' : 'hidden group-hover:inline'} text-zinc-500 hover:text-zinc-300`}
+                  className={`${hasSelection ? 'inline' : 'hidden group-hover:inline'} text-zinc-500 hover:text-zinc-300`}
                 />
               </>
             )}

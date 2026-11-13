@@ -242,11 +242,11 @@ export function useListeningTracker(): void {
         if (session.listenedSec >= threshold && !session.eventId && !session.syncing) {
           void flushSession(session)
         }
-        // TH2: Đã có bản ghi DB -> đồng bộ định kỳ mỗi khi nghe thêm >= 5 giây
+        // TH2: Đã có bản ghi DB -> đồng bộ định kỳ mỗi khi nghe thêm >= 15 giây
         else if (
           session.eventId &&
           !session.syncing &&
-          session.listenedSec - session.savedSec >= 5
+          session.listenedSec - session.savedSec >= 15
         ) {
           void flushSession(session)
         }

@@ -523,6 +523,8 @@ export class SqliteStorage {
   private stmtIncrementPlayStat: KoffiPreparedStatement | null = null
   private stmtUpdatePlayStatDuration: KoffiPreparedStatement | null = null
 
+  private lastWalCheckTime = 0
+
   constructor(dataFolder: string) {
     this.dataFolder = dataFolder
     const dbPath = path.join(dataFolder, 'library.db')
@@ -552,6 +554,10 @@ export class SqliteStorage {
   public checkpointIfNeeded(maxWalBytes: number = 8 * 1024 * 1024): boolean {
     if (!this.db || !this.dataFolder) return false
     try {
+      const now = Date.now()
+      if (now - this.lastWalCheckTime < 60000) return true
+      this.lastWalCheckTime = now
+
       const walPath = path.join(this.dataFolder, 'library.db-wal')
       let size = 0
       try {
@@ -560,12 +566,7 @@ export class SqliteStorage {
         return true
       }
       if (size < maxWalBytes) return true
-      this.checkpoint('TRUNCATE')
-      try {
-        if (fs.statSync(walPath).size >= maxWalBytes) {
-          this.checkpoint('RESTART')
-        }
-      } catch {}
+      this.checkpoint('PASSIVE')
       return true
     } catch {
       return false
@@ -1456,12 +1457,33 @@ export class SqliteStorage {
     try {
       const row = this.stmtGetLibraryCache.get<any>('current_library')
       if (row && row.tracks_json) {
+        let tracks: any[] = []
+        if (row.tracks_json === '__DEFERRED__' && this.db) {
+          const stmt = this.db.prepare('SELECT track_json FROM library_tracks;')
+          try {
+            const rows = stmt.all<{ track_json: string }>()
+            tracks = rows
+              .map((r) => {
+                try {
+                  return JSON.parse(r.track_json)
+                } catch {
+                  return null
+                }
+              })
+              .filter(Boolean)
+          } finally {
+            stmt.finalize()
+          }
+        } else {
+          tracks = JSON.parse(row.tracks_json || '[]')
+        }
+
         return {
           libraryPath: row.library_path || '',
           libraryPaths: JSON.parse(row.library_paths_json || '[]'),
           multiArtistVersion: row.multi_artist_version || 2,
           dsdVersion: row.dsd_version || 1,
-          tracks: JSON.parse(row.tracks_json || '[]'),
+          tracks,
           playlists: JSON.parse(row.playlists_json || '[]'),
           preAggregated: row.pre_aggregated_json ? JSON.parse(row.pre_aggregated_json) : null
         }
@@ -1726,38 +1748,43 @@ export class SqliteStorage {
         // 4. Cập nhật library_cache nhẹ nhàng mà không xóa & nạp lại toàn bộ library_tracks
         const cacheRow = this.stmtGetLibraryCache?.get<any>('current_library')
         if (cacheRow && cacheRow.tracks_json) {
-          let tracks: any[] = []
-          try {
-            tracks = JSON.parse(cacheRow.tracks_json || '[]')
-          } catch {
-            /* ignore */
-          }
-
-          if (Array.isArray(tracks)) {
-            const idx = tracks.findIndex(
-              (t: any) =>
-                candidateKeys.has(t.id) ||
-                candidateKeys.has(t.filePath) ||
-                normalizePathKey(t.id) === normTarget ||
-                normalizePathKey(t.filePath) === normTarget
-            )
-            if (idx !== -1) {
-              tracks[idx] = mergedTrack
-            } else {
-              tracks.push(mergedTrack)
+          if (cacheRow.tracks_json !== '__DEFERRED__' && cacheRow.tracks_json.length < 500_000) {
+            let tracks: any[] = []
+            try {
+              tracks = JSON.parse(cacheRow.tracks_json || '[]')
+            } catch {
+              /* ignore */
             }
 
-            let preAggregatedJson = cacheRow.pre_aggregated_json || null
-            if (rebuildPreAggregatedFn) {
-              try {
-                const pre = rebuildPreAggregatedFn(tracks)
-                preAggregatedJson = JSON.stringify(pre)
-              } catch (e) {
-                console.warn('[SqliteStorage.updateSingleTrack] rebuildPreAggregatedFn error:', e)
+            if (Array.isArray(tracks)) {
+              const idx = tracks.findIndex(
+                (t: any) =>
+                  candidateKeys.has(t.id) ||
+                  candidateKeys.has(t.filePath) ||
+                  normalizePathKey(t.id) === normTarget ||
+                  normalizePathKey(t.filePath) === normTarget
+              )
+              if (idx !== -1) {
+                tracks[idx] = mergedTrack
+              } else {
+                tracks.push(mergedTrack)
               }
-            }
 
-            this.stmtUpdateLibraryCacheTracks?.run(JSON.stringify(tracks), preAggregatedJson, now)
+              let preAggregatedJson = cacheRow.pre_aggregated_json || null
+              if (rebuildPreAggregatedFn) {
+                try {
+                  const pre = rebuildPreAggregatedFn(tracks)
+                  preAggregatedJson = JSON.stringify(pre)
+                } catch (e) {
+                  console.warn('[SqliteStorage.updateSingleTrack] rebuildPreAggregatedFn error:', e)
+                }
+              }
+
+              this.stmtUpdateLibraryCacheTracks?.run(JSON.stringify(tracks), preAggregatedJson, now)
+            }
+          } else {
+            // shortcut: defer full tracks_json/preAggregated rebuild on >500KB libraries until next scan/load
+            this.stmtUpdateLibraryCacheTracks?.run('__DEFERRED__', null, now)
           }
         }
 
@@ -1839,29 +1866,34 @@ export class SqliteStorage {
         // Cập nhật library_cache
         const row = this.stmtGetLibraryCache?.get<any>('current_library')
         if (row && row.tracks_json) {
-          let tracks: any[] = []
-          try {
-            tracks = JSON.parse(row.tracks_json || '[]')
-          } catch {
-            /* ignore */
-          }
+          if (row.tracks_json !== '__DEFERRED__' && row.tracks_json.length < 500_000) {
+            let tracks: any[] = []
+            try {
+              tracks = JSON.parse(row.tracks_json || '[]')
+            } catch {
+              /* ignore */
+            }
 
-          const remainingTracks = tracks.filter((t: any) => {
-            if (!t) return false
-            if (keysToRemove.has(t.id) || keysToRemove.has(t.filePath)) return false
-            if (
-              normalizedKeysToRemove.has(normalizePathKey(t.id)) ||
-              normalizedKeysToRemove.has(normalizePathKey(t.filePath))
+            const remainingTracks = tracks.filter((t: any) => {
+              if (!t) return false
+              if (keysToRemove.has(t.id) || keysToRemove.has(t.filePath)) return false
+              if (
+                normalizedKeysToRemove.has(normalizePathKey(t.id)) ||
+                normalizedKeysToRemove.has(normalizePathKey(t.filePath))
+              )
+                return false
+              return true
+            })
+
+            this.stmtUpdateLibraryCacheTracks?.run(
+              JSON.stringify(remainingTracks),
+              row.pre_aggregated_json,
+              now
             )
-              return false
-            return true
-          })
-
-          this.stmtUpdateLibraryCacheTracks?.run(
-            JSON.stringify(remainingTracks),
-            row.pre_aggregated_json,
-            now
-          )
+          } else {
+            // shortcut: defer full tracks_json/preAggregated rebuild on >500KB libraries until next scan/load
+            this.stmtUpdateLibraryCacheTracks?.run('__DEFERRED__', null, now)
+          }
         }
       })
     } catch (e) {
@@ -2293,9 +2325,37 @@ export class SqliteStorage {
     }
   }
 
-  public toggleFavoriteTrack(filePath: string, isFavorite?: boolean): boolean {
+  public toggleFavoriteTrack(filePath: string | string[], isFavorite?: boolean): boolean {
     if (!this.db || !filePath) return false
     try {
+      if (Array.isArray(filePath)) {
+        this.db.transaction(() => {
+          const targetStatus = isFavorite !== undefined ? isFavorite : true
+          const now = Date.now()
+          for (const p of filePath) {
+            if (!p) continue
+            const candidateKeys = getCandidatePathKeys(p)
+            let foundKey: string | null = null
+            for (const k of candidateKeys) {
+              const row = this.stmtIsFavorite?.get<{ file_path: string }>(k)
+              if (row) {
+                foundKey = k
+                break
+              }
+            }
+            if (targetStatus) {
+              this.stmtAddFavorite?.run(p, now)
+            } else {
+              if (foundKey) {
+                this.stmtRemoveFavorite?.run(foundKey)
+              }
+              this.stmtRemoveFavorite?.run(p)
+            }
+          }
+        })
+        return isFavorite !== undefined ? isFavorite : true
+      }
+
       const candidateKeys = getCandidatePathKeys(filePath)
       let foundKey: string | null = null
       for (const k of candidateKeys) {
@@ -2681,27 +2741,29 @@ export class SqliteStorage {
     const dur =
       typeof durationSec === 'number' && !isNaN(durationSec) ? Math.max(0, durationSec) : 0
     try {
-      let prevDur = 0
-      let fPath = filePath
-      const row = this.stmtGetPlayEventById?.get<{
-        id: number
-        file_path: string
-        duration_sec: number
-      }>(eventId)
-      if (row) {
-        prevDur =
-          typeof row.duration_sec === 'number' && !isNaN(row.duration_sec) ? row.duration_sec : 0
-        if (!fPath) fPath = row.file_path
-      }
-
-      this.stmtUpdatePlayEventDuration?.run(dur, eventId)
-
-      if (fPath) {
-        const delta = dur - prevDur
-        if (delta !== 0) {
-          this.stmtUpdatePlayStatDuration?.run(delta, Date.now(), fPath)
+      this.db.transaction(() => {
+        let prevDur = 0
+        let fPath = filePath
+        const row = this.stmtGetPlayEventById?.get<{
+          id: number
+          file_path: string
+          duration_sec: number
+        }>(eventId)
+        if (row) {
+          prevDur =
+            typeof row.duration_sec === 'number' && !isNaN(row.duration_sec) ? row.duration_sec : 0
+          if (!fPath) fPath = row.file_path
         }
-      }
+
+        this.stmtUpdatePlayEventDuration?.run(dur, eventId)
+
+        if (fPath) {
+          const delta = dur - prevDur
+          if (delta !== 0) {
+            this.stmtUpdatePlayStatDuration?.run(delta, Date.now(), fPath)
+          }
+        }
+      })
       // Ghi định kỳ mỗi 5s khi đang phát: chỉ stat file WAL, checkpoint khi vượt ngưỡng
       this.checkpointIfNeeded()
     } catch (err) {
@@ -3392,7 +3454,7 @@ export function getFavoriteTracks(): string[] {
   return activeSqliteStorage ? activeSqliteStorage.getFavoriteTracks() : []
 }
 
-export function toggleFavoriteTrack(filePath: string, isFavorite?: boolean): boolean {
+export function toggleFavoriteTrack(filePath: string | string[], isFavorite?: boolean): boolean {
   return activeSqliteStorage ? activeSqliteStorage.toggleFavoriteTrack(filePath, isFavorite) : false
 }
 

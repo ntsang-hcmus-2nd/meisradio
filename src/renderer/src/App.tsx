@@ -771,23 +771,6 @@ export default function App() {
     }
   }, [showQueuePanel, setShowQueuePanel, setShowLyricsPanel, setIsLyricsMaximized])
 
-  // 5. MEMOS: AGGREGATED ARTISTS & GENRES
-  const uniqueArtistsCount = useMemo(() => {
-    const set = new Set<string>()
-    for (const track of libraryTracks) {
-      const trackArtists =
-        Array.isArray(track.artists) && track.artists.length > 0
-          ? track.artists
-          : splitArtistString(track.artist || '')
-      for (const a of trackArtists) {
-        if (a && a.trim() && a.toLowerCase() !== 'unknown') {
-          set.add(a.trim().toLowerCase())
-        }
-      }
-    }
-    return set.size
-  }, [libraryTracks])
-
   const artistsData = useMemo(() => {
     const unknownArtistLabel = language === 'vi' ? 'Nghệ sĩ chưa rõ' : 'Unknown Artist'
 
@@ -945,6 +928,8 @@ export default function App() {
 
     return { artistsList, alphabetGroups }
   }, [preAggregatedData, libraryTracks, libraryOps.libraryTrackMap, language])
+
+  const uniqueArtistsCount = useMemo(() => artistsData.artistsList.length, [artistsData])
 
   const genresData = useMemo(() => {
     const unknownGenreLabel = language === 'vi' ? 'Chưa phân loại' : 'Unknown'
@@ -1359,45 +1344,53 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Auto-save Config & Update Tray
+  // Separate Tray Config Sync
   useEffect(() => {
     if (!isConfigLoaded) return
     // @ts-ignore
-    window.api?.saveConfig?.({
-      volume,
-      crossfadeEnabled,
-      crossfadeDuration,
-      bitPerfectEnabled,
-      bitPerfectType,
-      eqBands,
-      isEqEnabled,
-      loudnessNormalization,
-      replayGainMode,
-      crossfeedEnabled,
-      gaplessEnabled,
-      waveformSeekbarEnabled,
-      googleDriveApiKey,
-      driveLink,
-      selectedDeviceId,
-      showVisualizer,
-      minimizeToTray,
-      closeToTray,
-      autoDeepCleanOnHide,
-      clearCacheOnStartup,
-      appMode,
-      uiStyle,
-      customBgImage,
-      customBgOpacity,
-      customBgBlur,
-      useTrackCoverAsBg,
-      accentColorMode,
-      customAccentColor,
-      colorScheme,
-      sidebarBgEnabled,
-      sidebarBgOpacity
-    })
-    // @ts-ignore
     window.api?.updateTrayConfig?.({ minimizeToTray, closeToTray })
+  }, [minimizeToTray, closeToTray, isConfigLoaded])
+
+  // Auto-save Config with 400ms debounce
+  useEffect(() => {
+    if (!isConfigLoaded) return
+    const timer = setTimeout(() => {
+      // @ts-ignore
+      window.api?.saveConfig?.({
+        volume,
+        crossfadeEnabled,
+        crossfadeDuration,
+        bitPerfectEnabled,
+        bitPerfectType,
+        eqBands,
+        isEqEnabled,
+        loudnessNormalization,
+        replayGainMode,
+        crossfeedEnabled,
+        gaplessEnabled,
+        waveformSeekbarEnabled,
+        googleDriveApiKey,
+        driveLink,
+        selectedDeviceId,
+        showVisualizer,
+        minimizeToTray,
+        closeToTray,
+        autoDeepCleanOnHide,
+        clearCacheOnStartup,
+        appMode,
+        uiStyle,
+        customBgImage,
+        customBgOpacity,
+        customBgBlur,
+        useTrackCoverAsBg,
+        accentColorMode,
+        customAccentColor,
+        colorScheme,
+        sidebarBgEnabled,
+        sidebarBgOpacity
+      })
+    }, 400)
+    return () => clearTimeout(timer)
   }, [
     volume,
     crossfadeEnabled,
@@ -1513,7 +1506,10 @@ export default function App() {
           }
         }}
         crossOrigin="anonymous"
-        preload="auto"
+        // OOM fix: "auto" khiến Chromium prefetch + giữ toàn bộ file nhạc của
+        // mọi bài đã phát trong tiến trình renderer (~500MB/giờ khi nghe liên
+        // tục). "metadata" chỉ lấy header + stream theo Range khi phát.
+        preload="metadata"
         autoPlay={!bitPerfectEnabled && !isDsdTrack(currentTrack) && isPlaying}
         src={
           currentTrack && !isDsdTrack(currentTrack)
@@ -1636,8 +1632,9 @@ export default function App() {
               const nextFavs = Array.from(new Set([...favoriteTrackIds, ...ids]))
               setFavoriteTrackIds(nextFavs)
               if (window.api?.toggleFavorite) {
-                for (const id of ids) {
-                  await window.api.toggleFavorite(id, true).catch(() => {})
+                const updated = await window.api.toggleFavorite(ids, true).catch(() => null)
+                if (updated && Array.isArray(updated)) {
+                  setFavoriteTrackIds(updated)
                 }
               }
               showToast(

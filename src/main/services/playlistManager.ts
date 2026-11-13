@@ -38,23 +38,28 @@ export interface UserPlaylist {
 // ==========================================
 // QUẢN LÝ USER PLAYLISTS (VIRTUAL PLAYLISTS)
 // ==========================================
+let legacyUserPlaylistsChecked = false
+
 export function getUserPlaylists(): UserPlaylist[] {
   try {
-    if (fs.existsSync(USER_PLAYLISTS_PATH)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(USER_PLAYLISTS_PATH, 'utf-8'))
-        if (Array.isArray(data)) {
-          for (const pl of data) {
-            sqliteStorage.saveUserPlaylist(pl)
-          }
-        }
-      } catch {}
-      try {
-        fs.renameSync(USER_PLAYLISTS_PATH, `${USER_PLAYLISTS_PATH}.migrated`)
-      } catch {
+    if (!legacyUserPlaylistsChecked) {
+      legacyUserPlaylistsChecked = true
+      if (fs.existsSync(USER_PLAYLISTS_PATH)) {
         try {
-          fs.unlinkSync(USER_PLAYLISTS_PATH)
+          const data = JSON.parse(fs.readFileSync(USER_PLAYLISTS_PATH, 'utf-8'))
+          if (Array.isArray(data)) {
+            for (const pl of data) {
+              sqliteStorage.saveUserPlaylist(pl)
+            }
+          }
         } catch {}
+        try {
+          fs.renameSync(USER_PLAYLISTS_PATH, `${USER_PLAYLISTS_PATH}.migrated`)
+        } catch {
+          try {
+            fs.unlinkSync(USER_PLAYLISTS_PATH)
+          } catch {}
+        }
       }
     }
     const sqliteLists = sqliteStorage.getUserPlaylists()
@@ -98,7 +103,7 @@ export function createUserPlaylist(
   ;(newPlaylist as any).tracks = []
   ;(newPlaylist as any).coverArt = thumbnail || null
   playlists.unshift(newPlaylist)
-  saveUserPlaylists(playlists)
+  sqliteStorage.saveUserPlaylist(newPlaylist)
   return { success: true, playlist: newPlaylist, playlists }
 }
 
@@ -124,7 +129,7 @@ export function renameUserPlaylist(
   if (target) {
     target.name = trimmed
     target.updatedAt = Date.now()
-    saveUserPlaylists(playlists)
+    sqliteStorage.saveUserPlaylist(target)
     return { success: true, playlists, playlist: target }
   }
   return { success: false, error: 'Không tìm thấy playlist' }
@@ -206,7 +211,7 @@ export function updateUserPlaylist(
   }
 
   target.updatedAt = Date.now()
-  saveUserPlaylists(playlists)
+  sqliteStorage.saveUserPlaylist(target)
   return { success: true, playlist: target, playlists }
 }
 
@@ -237,7 +242,7 @@ export function addTracksToUserPlaylist(
     target.trackIds = newTrackIds
     ;(target as any).tracks = newTrackIds
     target.updatedAt = Date.now()
-    saveUserPlaylists(playlists)
+    sqliteStorage.saveUserPlaylist(target)
     return { success: true, playlist: target, playlists }
   }
   return { success: false, error: 'Không tìm thấy playlist' }
@@ -259,7 +264,7 @@ export function removeTrackFromUserPlaylist(
     target.trackIds = updatedIds
     ;(target as any).tracks = updatedIds
     target.updatedAt = Date.now()
-    saveUserPlaylists(playlists)
+    sqliteStorage.saveUserPlaylist(target)
     return { success: true, playlist: target, playlists }
   }
   return { success: false, error: 'Không tìm thấy playlist' }
@@ -275,7 +280,7 @@ export function reorderUserPlaylistTracks(
     target.trackIds = trackIds
     ;(target as any).tracks = trackIds
     target.updatedAt = Date.now()
-    saveUserPlaylists(playlists)
+    sqliteStorage.saveUserPlaylist(target)
     return { success: true, playlist: target, playlists }
   }
   return { success: false, error: 'Không tìm thấy playlist' }
@@ -374,11 +379,14 @@ export function createPlaylist(playlistName: string): { success: boolean; error?
 
 export function addTrackToPlaylist(
   playlistName: string,
-  trackPath: string
+  trackPath: string | string[]
 ): { success: boolean; note?: string; error?: string } {
   if (!isValidPlaylistName(playlistName)) {
     return { success: false, error: 'Tên playlist không hợp lệ!' }
   }
+
+  const paths = Array.isArray(trackPath) ? trackPath : [trackPath]
+  if (paths.length === 0) return { success: true }
 
   let playlistDir: string
   const existing = findExistingPlaylistFolder(playlistName)
@@ -409,45 +417,60 @@ export function addTrackToPlaylist(
     }
   }
 
-  let rawPath = trackPath.replace(/^file:\/\/\/?/, '')
-  if (process.platform === 'win32') {
-    rawPath = decodeURIComponent(rawPath)
-    if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
-    rawPath = rawPath.replace(/\//g, '\\')
-  }
+  let lastNote: string | undefined = undefined
+  let handledCount = 0
+  for (const tp of paths) {
+    if (!tp) continue
+    let rawPath = tp.replace(/^file:\/\/\/?/, '')
+    if (process.platform === 'win32') {
+      rawPath = decodeURIComponent(rawPath)
+      if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
+      rawPath = rawPath.replace(/\//g, '\\')
+    }
 
-  if (!fs.existsSync(rawPath)) return { success: false, error: 'File nguồn không tồn tại!' }
+    if (!fs.existsSync(rawPath)) {
+      if (!Array.isArray(trackPath)) {
+        return { success: false, error: 'File nguồn không tồn tại!' }
+      }
+      continue
+    }
 
-  const fileName = path.basename(rawPath)
-  const destPath = join(playlistDir, fileName)
+    const fileName = path.basename(rawPath)
+    const destPath = join(playlistDir, fileName)
 
-  if (fs.existsSync(destPath)) {
-    return { success: true, note: 'Bài hát đã có trong playlist này rồi!' }
-  }
+    if (fs.existsSync(destPath)) {
+      lastNote = 'Bài hát đã có trong playlist này rồi!'
+      handledCount++
+      continue
+    }
 
-  try {
     try {
-      fs.linkSync(rawPath, destPath)
-    } catch {
-      fs.copyFileSync(rawPath, destPath)
-    }
-
-    const lrcSource = rawPath.replace(/\.[^/.]+$/, '.lrc')
-    const lrcDest = destPath.replace(/\.[^/.]+$/, '.lrc')
-    if (fs.existsSync(lrcSource) && !fs.existsSync(lrcDest)) {
       try {
-        try {
-          fs.linkSync(lrcSource, lrcDest)
-        } catch {
-          fs.copyFileSync(lrcSource, lrcDest)
-        }
-      } catch {}
-    }
+        fs.linkSync(rawPath, destPath)
+      } catch {
+        fs.copyFileSync(rawPath, destPath)
+      }
+      handledCount++
 
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
+      const lrcSource = rawPath.replace(/\.[^/.]+$/, '.lrc')
+      const lrcDest = destPath.replace(/\.[^/.]+$/, '.lrc')
+      if (fs.existsSync(lrcSource) && !fs.existsSync(lrcDest)) {
+        try {
+          try {
+            fs.linkSync(lrcSource, lrcDest)
+          } catch {
+            fs.copyFileSync(lrcSource, lrcDest)
+          }
+        } catch {}
+      }
+    } catch (e: any) {
+      if (!Array.isArray(trackPath)) {
+        return { success: false, error: e.message }
+      }
+    }
   }
+
+  return { success: handledCount > 0 || Array.isArray(trackPath), note: lastNote }
 }
 
 export function renamePlaylist(
@@ -1101,7 +1124,7 @@ export function registerPlaylistManagerIpc(): void {
           ;(target as any).coverArt = target.thumbnail
         }
         target.updatedAt = Date.now()
-        saveUserPlaylists(playlists)
+        sqliteStorage.saveUserPlaylist(target)
         return { success: true, thumbnail: target.thumbnail, playlists, playlist: target }
       }
       return { success: false, error: 'Không tìm thấy playlist' }
@@ -1149,9 +1172,12 @@ export function registerPlaylistManagerIpc(): void {
     return createPlaylist(playlistName)
   })
 
-  ipcMain.handle('music:addTrackToPlaylist', async (_, playlistName, trackPath) => {
-    return addTrackToPlaylist(playlistName, trackPath)
-  })
+  ipcMain.handle(
+    'music:addTrackToPlaylist',
+    async (_, playlistName: string, trackPath: string | string[]) => {
+      return addTrackToPlaylist(playlistName, trackPath)
+    }
+  )
 
   ipcMain.handle('music:autoGeneratePlaylists', async () => {
     return await autoGeneratePlaylists()
@@ -1200,9 +1226,10 @@ export function registerPlaylistManagerIpc(): void {
     }
   })
   ipcMain.handle('music:getFavorites', () => sqliteStorage.getFavoriteTracks())
-  ipcMain.handle('music:toggleFavorite', (_, filePath: string, isFavorite?: boolean) =>
-    sqliteStorage.toggleFavoriteTrack(filePath, isFavorite)
-  )
+  ipcMain.handle('music:toggleFavorite', (_, filePath: string | string[], isFavorite?: boolean) => {
+    const res = sqliteStorage.toggleFavoriteTrack(filePath, isFavorite)
+    return Array.isArray(filePath) ? sqliteStorage.getFavoriteTracks() : res
+  })
   ipcMain.handle('music:getLyricOffsets', () => sqliteStorage.getAllTrackLyricOffsets())
   ipcMain.handle('music:setLyricOffset', (_, filePath: string, offsetSec: number) => {
     sqliteStorage.setTrackLyricOffset(filePath, offsetSec)

@@ -20,6 +20,8 @@ import {
 import { splitArtistString, buildPreAggregatedData, extractEmbeddedLyrics } from './libraryScanner'
 import { updateFlacTags, FlacTagUpdate } from '../flacMetadata'
 import { updateDsdTags, DsdTagUpdate } from '../dsdMetadata'
+import { fastExtractCover } from '../fastAudioParser'
+import { invalidateCoverCacheForPath } from './streamServer'
 
 // ==========================================
 // CẬP NHẬT TAG METADATA CHO CÁC ĐỊNH DẠNG
@@ -340,9 +342,19 @@ export async function updateTags(
       } catch {}
     } else {
       try {
-        const freshMeta = await mm.parseFile(rawPath)
-        if (freshMeta.common.picture && freshMeta.common.picture.length > 0) {
-          const img = nativeImage.createFromBuffer(Buffer.from(freshMeta.common.picture[0].data))
+        let picData: Buffer | null = null
+        const existingMeta = metadataCache[rawPath] || sqliteStorage.getMetadata(rawPath)
+        const cachedCoverPath = (existingMeta as any)?.cover || existingMeta?.data?.cover
+        if (typeof cachedCoverPath === 'string' && fs.existsSync(cachedCoverPath)) {
+          picData = fs.readFileSync(cachedCoverPath)
+        } else {
+          const extracted = await fastExtractCover(rawPath)
+          if (extracted && extracted.data) {
+            picData = extracted.data
+          }
+        }
+        if (picData && picData.length > 0) {
+          const img = nativeImage.createFromBuffer(picData)
           const resized = img.resize({ width: 128, height: 128, quality: 'good' })
           const jpegBuf = resized.toJPEG(80)
           try {
@@ -441,6 +453,7 @@ export async function updateTags(
       sqliteStorage.deleteThemeColor(rawPath)
       sqliteStorage.deleteThemeColor(pathToFileURL(rawPath).href)
       saveThemeColorsCache()
+      invalidateCoverCacheForPath(rawPath)
     }
 
     return { success: true, coverUrl }

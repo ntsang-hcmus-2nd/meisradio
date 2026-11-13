@@ -1645,16 +1645,23 @@ export function registerLibraryScannerIpc(): void {
         }
         if (!isAllowedLocalPath(rawPath)) throw new Error('Access denied')
         if (fs.existsSync(rawPath)) {
-          const stat = fs.statSync(rawPath)
+          const fileStat = await fs.promises.stat(rawPath)
           let sampleRate: number | undefined = undefined
           let bitDepth: number | undefined = undefined
           try {
-            const metadata = await mm.parseFile(rawPath)
+            const metadata = await mm.parseFile(rawPath, { duration: true, skipCovers: true })
             sampleRate = metadata?.format?.sampleRate
             bitDepth = metadata?.format?.bitsPerSample
           } catch {}
 
-          if (stat.size > 150 * 1024 * 1024) {
+          const hasValidSegment = (typeof startTime === 'number' && startTime > 0) || (typeof endTime === 'number' && endTime > 0) || audioFilePath.includes('#track-')
+          const CUE_SEGMENT_THRESHOLD = 15 * 1024 * 1024 // 15MB
+          const MAX_FULL_READ = 150 * 1024 * 1024
+          const needSegment =
+            (hasValidSegment && fileStat.size > CUE_SEGMENT_THRESHOLD) ||
+            (!hasValidSegment && fileStat.size > MAX_FULL_READ)
+
+          if (needSegment) {
             const ffmpegExe = getFfmpegPath()
             const chunks: Buffer[] = []
             // CUE Sheet: cắt đúng đoạn [startTime, endTime] của track thay vì
@@ -1696,7 +1703,7 @@ export function registerLibraryScannerIpc(): void {
             }
           }
 
-          const fileBuffer = fs.readFileSync(rawPath)
+          const fileBuffer = await fs.promises.readFile(rawPath)
           return {
             success: true,
             buffer: fileBuffer.buffer.slice(
@@ -2127,7 +2134,6 @@ export function registerLibraryScannerIpc(): void {
   })
 
   ipcMain.handle('music:forceGC', () => {
-    clearStreamCoverCache()
     if (typeof (global as any).gc === 'function') {
       ;(global as any).gc()
     }

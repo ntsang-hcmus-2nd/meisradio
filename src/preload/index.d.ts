@@ -80,7 +80,7 @@ export interface MeisRadioApi {
   deleteTrack: (trackPath: string | string[], deletePermanently?: boolean) => Promise<any>
   deleteTracks: (trackPaths: string[], deletePermanently?: boolean) => Promise<any>
   showInFolder: (filePath: string) => Promise<any>
-  addTrackToPlaylist: (playlistName: string, trackPath: string) => Promise<any>
+  addTrackToPlaylist: (playlistName: string, trackPath: string | string[]) => Promise<any>
   forceGC: () => Promise<any>
   searchOnline: (query: string) => Promise<any>
   getStreamUrl: (track: any) => Promise<{ success: boolean; url?: string; error?: string }>
@@ -159,7 +159,7 @@ export interface MeisRadioApi {
     targetFormat: 'flac' | 'mp3' | 'wav'
   ) => Promise<{ success: boolean; outputPath?: string; canceled?: boolean; error?: string }>
   getFavorites: () => Promise<string[]>
-  toggleFavorite: (filePath: string, isFavorite?: boolean) => Promise<boolean>
+  toggleFavorite: (filePath: string | string[], isFavorite?: boolean) => Promise<any>
   getLyricOffsets: () => Promise<Record<string, number>>
   setLyricOffset: (filePath: string, offsetSec: number) => Promise<any>
   getSmartPlaylists: () => Promise<any[]>
