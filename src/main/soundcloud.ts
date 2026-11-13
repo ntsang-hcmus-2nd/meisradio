@@ -2,6 +2,7 @@ import axios from 'axios'
 
 // SoundCloud API v2 Base URL
 const SC_API_V2 = 'https://api-v2.soundcloud.com'
+const SC_HTTP_TIMEOUT_MS = 8000
 
 // Fallback client ID (SoundCloud public client ID)
 let cachedClientId: string | null = null
@@ -118,7 +119,8 @@ export async function getScUserProfile(oauthToken: string) {
   const clientId = await getSoundCloudClientId()
   const res = await axios.get(`${SC_API_V2}/me`, {
     params: { client_id: clientId },
-    headers: getScHeaders(oauthToken)
+    headers: getScHeaders(oauthToken),
+    timeout: SC_HTTP_TIMEOUT_MS
   })
   const user = res.data
   return {
@@ -289,7 +291,8 @@ export async function getScUserStream(oauthToken: string, limit: number = 30) {
       limit,
       client_id: clientId
     },
-    headers: getScHeaders(oauthToken)
+    headers: getScHeaders(oauthToken),
+    timeout: SC_HTTP_TIMEOUT_MS
   })
 
   const collection = res.data.collection || []
@@ -310,7 +313,8 @@ export async function getScUserLikes(
       limit,
       client_id: clientId
     },
-    headers: getScHeaders(oauthToken)
+    headers: getScHeaders(oauthToken),
+    timeout: SC_HTTP_TIMEOUT_MS
   })
 
   const collection = res.data.collection || []
@@ -326,7 +330,8 @@ export async function getScUserPlaylists(userId: number | string, oauthToken: st
     params: {
       client_id: clientId
     },
-    headers: getScHeaders(oauthToken)
+    headers: getScHeaders(oauthToken),
+    timeout: SC_HTTP_TIMEOUT_MS
   })
 
   const collection = res.data || []
@@ -353,7 +358,8 @@ export async function searchSoundCloud(query: string, limit: number = 25, oauthT
       limit,
       client_id: clientId
     },
-    headers: getScHeaders(oauthToken)
+    headers: getScHeaders(oauthToken),
+    timeout: SC_HTTP_TIMEOUT_MS
   })
 
   const collection = res.data.collection || []
@@ -388,7 +394,8 @@ export async function getScPlaylistTracks(playlistId: string, oauthToken?: strin
   const clientId = await getSoundCloudClientId()
   const res = await axios.get(`${SC_API_V2}/playlists/${playlistId}`, {
     params: { client_id: clientId },
-    headers: getScHeaders(oauthToken)
+    headers: getScHeaders(oauthToken),
+    timeout: SC_HTTP_TIMEOUT_MS
   })
 
   const playlist = res.data
@@ -423,7 +430,8 @@ export async function resolveScStreamUrl(
     // 1. Lấy thông tin track để duyệt qua danh sách transcodings
     const res = await axios.get(`${SC_API_V2}/tracks/${trackId}`, {
       params: { client_id: clientId },
-      headers: getScHeaders(oauthToken)
+      headers: getScHeaders(oauthToken),
+      timeout: SC_HTTP_TIMEOUT_MS
     })
 
     const transcodings = res.data.media?.transcodings || []
@@ -451,7 +459,8 @@ export async function resolveScStreamUrl(
       // 2. Gọi endpoint stream URL để nhận link âm thanh CDN cuối cùng
       const streamRes = await axios.get(selectedTranscoding.url, {
         params: { client_id: clientId },
-        headers: getScHeaders(oauthToken)
+        headers: getScHeaders(oauthToken),
+        timeout: SC_HTTP_TIMEOUT_MS
       })
 
       if (streamRes.data.url) {

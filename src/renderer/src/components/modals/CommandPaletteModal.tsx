@@ -221,6 +221,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const setBitPerfectEnabled = usePlayerStore((s) => s.setBitPerfectEnabled)
   const setSleepTimerMode = usePlayerStore((s) => s.setSleepTimerMode)
   const setPlayQueue = usePlayerStore((s) => s.setPlayQueue)
+  const addToQueue = usePlayerStore((s) => s.addToQueue)
 
   // Settings Store
   const loudnessNormalization = useSettingsStore((s) => s.loudnessNormalization)
@@ -334,10 +335,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   // Add track to queue helper
   const handleAddToQueue = useCallback(
     (track: TrackItem): void => {
-      setPlayQueue((prev) => [...prev, track])
+      addToQueue(track)
       showToast(t('spotlight.addedToQueue', { title: track.title || 'bài hát' }), 'success')
     },
-    [setPlayQueue, showToast, t]
+    [addToQueue, showToast, t]
   )
 
   // Navigate to Artist helper
@@ -1610,7 +1611,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           onClick={() => setShow(false)}
         >
           <motion.div
-            className="w-[680px] max-w-full bg-zinc-900/95 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-2xl"
+            className="w-[680px] max-w-full bg-zinc-900/95 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             initial={reduceMotion ? { opacity: 1, scale: 1 } : dialogScale.initial}
             animate={dialogScale.animate}
             exit={dialogScale.exit}

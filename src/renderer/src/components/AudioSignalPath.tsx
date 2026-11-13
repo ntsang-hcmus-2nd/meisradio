@@ -1,5 +1,4 @@
 import React from 'react'
-import { FileAudio, Cpu, Sliders, Zap, Speaker, ArrowRight, Layers } from 'lucide-react'
 import { useAudioStore } from '../stores/audioStore'
 import { usePlayerStore } from '../stores/playerStore'
 import { useTranslation } from '../locales'
@@ -32,15 +31,14 @@ interface AudioSignalPathProps {
 export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
   ({ currentTrack, activeSampleRate = 44100, detectedBitDepth, isPlaying = false }) => {
     const { t } = useTranslation()
-    const {
-      isEqEnabled,
-      eqBands,
-      preampGain,
-      selectedDeviceId,
-      availableAudioDevices,
-      bitPerfectType
-    } = useAudioStore()
-    const { bitPerfectEnabled, bassOutParams } = usePlayerStore()
+    const isEqEnabled = useAudioStore((s) => s.isEqEnabled)
+    const eqBands = useAudioStore((s) => s.eqBands)
+    const preampGain = useAudioStore((s) => s.preampGain)
+    const selectedDeviceId = useAudioStore((s) => s.selectedDeviceId)
+    const availableAudioDevices = useAudioStore((s) => s.availableAudioDevices)
+    const bitPerfectType = useAudioStore((s) => s.bitPerfectType)
+    const bitPerfectEnabled = usePlayerStore((s) => s.bitPerfectEnabled)
+    const bassOutParams = usePlayerStore((s) => s.bassOutParams)
     const audioOutParams = bassOutParams
 
     // Format Helper
@@ -68,12 +66,6 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
 
     // Bit depth calculation
     const effectiveBitDepth = detectedBitDepth || currentTrack?.bitDepth || (isDsd ? 1 : 16)
-    const isHiRes = isDsd || activeSampleRate >= 88200 || effectiveBitDepth >= 24
-    const isLossless = Boolean(
-      currentTrack?.lossless ||
-      isDsd ||
-      ['FLAC', 'WAV', 'ALAC', 'AIFF', 'APE'].includes(currentTrack?.format?.toUpperCase() || '')
-    )
 
     // Is using BASS Audio engine (Audiophile pipeline: Bit-Perfect or DSD Native)
     const isBASS = Boolean(bitPerfectEnabled || isDsd)
@@ -142,7 +134,6 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
         {/* SECTION HEADER & QUALITY BADGE */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Layers size={14} className="text-theme-10" />
             <h3 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
               {t('modals.spectrogram.signalPathTitle')}
             </h3>
@@ -154,17 +145,6 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
           {/* STAGE 1: NGUỒN PHÁT (SOURCE) */}
           <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
             <div className="flex items-center gap-2 mb-1">
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
-                  isDsd
-                    ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
-                    : isLossless
-                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                }`}
-              >
-                <FileAudio size={12} />
-              </div>
               <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
                 {t('modals.spectrogram.sourceStage')}
               </span>
@@ -189,33 +169,18 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
                 )}
               </div>
             </div>
-
-            <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
-              <span className="truncate">
-                {currentTrack?.bitrate
-                  ? `${Math.round(currentTrack.bitrate / 1000)} kbps`
-                  : isHiRes
-                    ? 'Hi-Res'
-                    : 'CD Quality'}
-              </span>
-              <span className="text-zinc-400">2.0 Ch</span>
-            </div>
           </div>
 
           {/* CONNECTOR 1 -> 2 */}
           <div className="flex items-center justify-center text-zinc-600 shrink-0 pt-4 px-0.5">
-            <ArrowRight
-              size={13}
-              className={isPlaying ? 'text-theme-10 animate-pulse' : 'text-zinc-600'}
-            />
+            <span className={isPlaying ? 'text-theme-10 animate-pulse text-xs' : 'text-zinc-600 text-xs'}>
+              →
+            </span>
           </div>
 
           {/* STAGE 2: GIẢI MÃ TÍN HIỆU (DECODER) */}
           <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 rounded-full bg-indigo-500/10 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0">
-                <Cpu size={12} />
-              </div>
               <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
                 {t('modals.spectrogram.decodeStage')}
               </span>
@@ -241,37 +206,18 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
                   : 'WebAudio Native Decoder'}
               </div>
             </div>
-
-            <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
-              <span className="truncate">
-                {isBASS ? (isDsd ? 'Raw bitstream' : 'Bit-for-bit') : 'IEEE Float32'}
-              </span>
-              <span className="text-zinc-400">Stereo</span>
-            </div>
           </div>
 
           {/* CONNECTOR 2 -> 3 */}
           <div className="flex items-center justify-center text-zinc-600 shrink-0 pt-4 px-0.5">
-            <ArrowRight
-              size={13}
-              className={isPlaying ? 'text-theme-10 animate-pulse' : 'text-zinc-600'}
-            />
+            <span className={isPlaying ? 'text-theme-10 animate-pulse text-xs' : 'text-zinc-600 text-xs'}>
+              →
+            </span>
           </div>
 
           {/* STAGE 3: XỬ LÝ DSP (DSP / EQ) */}
           <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
             <div className="flex items-center gap-2 mb-1">
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
-                  isBASS
-                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
-                    : isEqEnabled
-                      ? 'bg-sky-500/10 border-sky-500/40 text-sky-400'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                }`}
-              >
-                <Sliders size={12} />
-              </div>
               <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
                 {t('modals.spectrogram.dspStage')}
               </span>
@@ -301,39 +247,18 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
                 )}
               </div>
             </div>
-
-            <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
-              <span className="truncate">
-                {isBASS ? 'Unity Gain' : isEqEnabled ? 'Compressor' : 'Flat'}
-              </span>
-              <span className="text-zinc-400">
-                {isBASS ? '0 dB' : isEqEnabled ? `${eqBands.length}B` : 'Direct'}
-              </span>
-            </div>
           </div>
 
           {/* CONNECTOR 3 -> 4 */}
           <div className="flex items-center justify-center text-zinc-600 shrink-0 pt-4 px-0.5">
-            <ArrowRight
-              size={13}
-              className={isPlaying ? 'text-theme-10 animate-pulse' : 'text-zinc-600'}
-            />
+            <span className={isPlaying ? 'text-theme-10 animate-pulse text-xs' : 'text-zinc-600 text-xs'}>
+              →
+            </span>
           </div>
 
           {/* STAGE 4: GIAO THỨC XUẤT (DRIVER / OUTPUT) */}
           <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
             <div className="flex items-center gap-2 mb-1">
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
-                  isBASS
-                    ? actualDriverMode === 'asio'
-                      ? 'bg-purple-500/10 border-purple-500/40 text-purple-400'
-                      : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                }`}
-              >
-                <Zap size={12} />
-              </div>
               <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
                 {t('modals.spectrogram.driverStage')}
               </span>
@@ -355,29 +280,18 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
                   : 'Windows Audio Session'}
               </div>
             </div>
-
-            <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
-              <span className="truncate">{isBASS ? 'Lock Exclusive' : 'Shared Session'}</span>
-              <span className="text-zinc-400">
-                {isBASS ? (actualDriverMode === 'asio' ? 'ASIO' : 'WASAPI') : 'Mixer'}
-              </span>
-            </div>
           </div>
 
           {/* CONNECTOR 4 -> 5 */}
           <div className="flex items-center justify-center text-zinc-600 shrink-0 pt-4 px-0.5">
-            <ArrowRight
-              size={13}
-              className={isPlaying ? 'text-theme-10 animate-pulse' : 'text-zinc-600'}
-            />
+            <span className={isPlaying ? 'text-theme-10 animate-pulse text-xs' : 'text-zinc-600 text-xs'}>
+              →
+            </span>
           </div>
 
           {/* STAGE 5: THIẾT BỊ ĐẦU RA (OUTPUT DEVICE / DAC) */}
           <div className="flex-1 min-w-0 bg-zinc-900/40 hover:bg-zinc-900/70 border border-zinc-800/50 rounded-xl p-2.5 flex flex-col justify-between transition-colors">
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 rounded-full bg-teal-500/10 border border-teal-500/40 text-teal-400 flex items-center justify-center shrink-0">
-                <Speaker size={12} />
-              </div>
               <span className="text-[11px] font-semibold text-zinc-300 underline decoration-zinc-700 underline-offset-4 truncate">
                 {t('modals.spectrogram.outputStage')}
               </span>
@@ -392,11 +306,6 @@ export const AudioSignalPath: React.FC<AudioSignalPathProps> = React.memo(
                 <span className="text-zinc-600 mx-1">•</span>
                 <span className="text-emerald-400 font-bold">{outputFormatString}</span>
               </div>
-            </div>
-
-            <div className="mt-1 pt-1 border-t border-zinc-800/40 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
-              <span className="truncate">{isBASS ? 'DAC Hardware' : 'Default Endpoint'}</span>
-              <span className="text-zinc-400">L / R</span>
             </div>
           </div>
         </div>

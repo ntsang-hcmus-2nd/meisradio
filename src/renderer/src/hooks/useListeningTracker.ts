@@ -52,8 +52,6 @@ export function useListeningTracker(): void {
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const bitPerfectEnabled = usePlayerStore((s) => s.bitPerfectEnabled)
   const bitPerfectType = useAudioStore((s) => s.bitPerfectType)
-  const currentTime = usePlayerStore((s) => s.currentTime)
-  const repeatMode = usePlayerStore((s) => s.repeatMode)
 
   const sessionRef = useRef<ActiveListeningSession | null>(null)
   const prevTimeRef = useRef<number>(0)
@@ -176,31 +174,37 @@ export function useListeningTracker(): void {
     }
   }, [currentTrack, bitPerfectEnabled, bitPerfectType, flushSession])
 
-  // 2. Phát hiện lặp lại bài hát ở chế độ Repeat One (repeatMode === 2)
+  // 2. Phát hiện lặp lại bài hát ở chế độ Repeat One (subscribe trực tiếp để App không re-render 2Hz theo currentTime)
   useEffect(() => {
-    const session = sessionRef.current
-    if (session && repeatMode === 2 && session.track) {
-      const dur = session.track.duration || 0
-      // Nếu thời gian chạy từ gần cuối bài (> dur - 4s) đột ngột quay về đầu (< 1.5s):
-      if (dur > 8 && prevTimeRef.current > dur - 4 && currentTime < 1.5) {
-        // Hoàn tất lượt nghe trước và bắt đầu lượt nghe mới
-        flushSession(session)
-        sessionRef.current = {
-          track: currentTrack,
-          audioMode:
-            bitPerfectEnabled || isDsdTrack(currentTrack) ? bitPerfectType || 'bass' : 'webaudio',
-          playedAt: Date.now(),
-          listenedSec: 0,
-          savedSec: 0,
-          eventId: null,
-          lastTick: Date.now(),
-          syncQueue: Promise.resolve(),
-          syncing: false
+    return usePlayerStore.subscribe((state, prevState) => {
+      if (state.currentTime === prevState.currentTime) return
+      const session = sessionRef.current
+      const curTime = state.currentTime
+      if (session && state.repeatMode === 2 && session.track) {
+        const dur = session.track.duration || 0
+        // Nếu thời gian chạy từ gần cuối bài (> dur - 4s) đột ngột quay về đầu (< 1.5s):
+        if (dur > 8 && prevTimeRef.current > dur - 4 && curTime < 1.5) {
+          // Hoàn tất lượt nghe trước và bắt đầu lượt nghe mới
+          flushSession(session)
+          sessionRef.current = {
+            track: state.currentTrack,
+            audioMode:
+              bitPerfectEnabled || isDsdTrack(state.currentTrack)
+                ? bitPerfectType || 'bass'
+                : 'webaudio',
+            playedAt: Date.now(),
+            listenedSec: 0,
+            savedSec: 0,
+            eventId: null,
+            lastTick: Date.now(),
+            syncQueue: Promise.resolve(),
+            syncing: false
+          }
         }
       }
-    }
-    prevTimeRef.current = currentTime
-  }, [currentTime, repeatMode, currentTrack, bitPerfectEnabled, bitPerfectType, flushSession])
+      prevTimeRef.current = curTime
+    })
+  }, [bitPerfectEnabled, bitPerfectType, flushSession])
 
   // 3. Đồng bộ khi tạm dừng phát nhạc (Pause)
   useEffect(() => {

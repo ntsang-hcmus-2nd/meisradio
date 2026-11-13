@@ -327,15 +327,17 @@ export function extractThemeColorsFromImage(img: Electron.NativeImage): {
       { ...pixels[Math.min(pixels.length - 1, step * 2)] }
     ]
 
+    let clusterSizes = [0, 0, 0]
     for (let iter = 0; iter < 5; iter++) {
       const clusters: { r: number; g: number; b: number }[][] = [[], [], []]
       for (const p of pixels) {
         let minDist = Infinity
         let minIdx = 0
         for (let i = 0; i < 3; i++) {
-          const dist = Math.sqrt(
-            (p.r - centroids[i].r) ** 2 + (p.g - centroids[i].g) ** 2 + (p.b - centroids[i].b) ** 2
-          )
+          const dr = p.r - centroids[i].r
+          const dg = p.g - centroids[i].g
+          const db = p.b - centroids[i].b
+          const dist = dr * dr + dg * dg + db * db
           if (dist < minDist) {
             minDist = dist
             minIdx = i
@@ -343,6 +345,7 @@ export function extractThemeColorsFromImage(img: Electron.NativeImage): {
         }
         clusters[minIdx].push(p)
       }
+      clusterSizes = [clusters[0].length, clusters[1].length, clusters[2].length]
       for (let i = 0; i < 3; i++) {
         if (clusters[i].length === 0) continue
         let r = 0,
@@ -361,10 +364,9 @@ export function extractThemeColorsFromImage(img: Electron.NativeImage): {
       }
     }
 
-    const counts = centroids.map((c) => ({
-      c,
-      count: pixels.filter((p) => Math.abs(p.r - c.r) < 35).length
-    }))
+    const counts = centroids
+      .map((c, i) => ({ c, count: clusterSizes[i] }))
+      .filter((x) => x.count > 0)
     counts.sort((a, b) => b.count - a.count)
 
     const dom = counts[0]?.c || pixels[0]
@@ -764,9 +766,10 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
     } catch {}
   }
 
-  // Lazy-load metadata vào RAM chỉ khi thực sự quét đĩa (tránh đọc toàn bảng lúc boot)
+  // Lazy-load metadata & theme colors vào RAM chỉ khi thực sự quét đĩa (tránh giữ thường trú trong Main)
   try {
     Object.assign(metadataCache, sqliteStorage.getAllMetadata())
+    Object.assign(themeColorsCache, sqliteStorage.getAllThemeColors())
   } catch {}
 
   // 2. LÀM MỚI GIA TĂNG (INCREMENTAL REFRESH)
@@ -806,14 +809,20 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
     let calculatedColors =
       themeColorsCache[trackPath] || themeColorsCache[pathToFileURL(trackPath).href] || null
 
+    const fileExistsAsync = (p: string) =>
+      fs.promises.access(p).then(
+        () => true,
+        () => false
+      )
+
     if (folderCoverUrl) {
       coverUrl = folderCoverUrl
       if (!calculatedColors && folderCoverColors) {
         calculatedColors = folderCoverColors
       }
-    } else if (fs.existsSync(thumbPath)) {
+    } else if (await fileExistsAsync(thumbPath)) {
       coverUrl = pathToFileURL(thumbPath).href
-    } else if (fs.existsSync(centralThumbPath)) {
+    } else if (await fileExistsAsync(centralThumbPath)) {
       coverUrl = pathToFileURL(centralThumbPath).href
     }
 
@@ -831,10 +840,6 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
         const albKey = `${cached.data.album.trim().toLowerCase()}:::${(cached.data.artist || '').trim().toLowerCase()}`
         if (!albumCoverMap.has(albKey) && finalCover) {
           albumCoverMap.set(albKey, { coverUrl: finalCover, themeColors: finalColors })
-        }
-        const dirKey = path.dirname(trackPath)
-        if (!albumCoverMap.has(dirKey) && finalCover) {
-          albumCoverMap.set(dirKey, { coverUrl: finalCover, themeColors: finalColors })
         }
       }
 
@@ -872,10 +877,9 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
     }
 
     try {
-      const trackDir = path.dirname(trackPath)
-      let knownAlbumCover = albumCoverMap ? albumCoverMap.get(trackDir) : undefined
-      const hasKnownCover = Boolean(coverUrl || (knownAlbumCover && knownAlbumCover.coverUrl))
-      const shouldSkipCovers = hasKnownCover
+      // Only skip parsing embedded pictures if this track already has its own resolved cover.
+      // Sharing by folder path causes different songs in the same directory to inherit wrong art.
+      const shouldSkipCovers = Boolean(coverUrl)
 
       const metadata = await fastReadMetadata(trackPath, { skipCovers: shouldSkipCovers })
 
@@ -889,10 +893,12 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
         .trim()
         .toLowerCase()
       const albumKey = rawAlbum && rawAlbum !== 'unknown' ? `${rawAlbum}:::${rawArtist}` : null
+      const hasEmbeddedPicture = Boolean(metadata.common.picture && metadata.common.picture.length > 0)
 
-      if (albumCoverMap && albumKey && !knownAlbumCover && albumCoverMap.has(albumKey)) {
-        knownAlbumCover = albumCoverMap.get(albumKey)
-      }
+      const knownAlbumCover =
+        !coverUrl && !hasEmbeddedPicture && albumCoverMap && albumKey
+          ? albumCoverMap.get(albumKey)
+          : undefined
 
       if (!coverUrl && knownAlbumCover) {
         coverUrl = knownAlbumCover.coverUrl
@@ -901,7 +907,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
         }
       }
 
-      if (!coverUrl && metadata.common.picture && metadata.common.picture.length > 0) {
+      if (!coverUrl && hasEmbeddedPicture && metadata.common.picture) {
         try {
           const rawBuf = Buffer.from(metadata.common.picture[0].data)
           const img = nativeImage.createFromBuffer(rawBuf)
@@ -909,17 +915,14 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
           const thumbBuf = resized.toJPEG(80)
 
           try {
-            fs.writeFileSync(thumbPath, thumbBuf)
+            await fs.promises.writeFile(thumbPath, thumbBuf)
             coverUrl = pathToFileURL(thumbPath).href
-          } catch {}
-          try {
-            if (!fs.existsSync(centralThumbPath)) {
-              fs.writeFileSync(centralThumbPath, thumbBuf)
-            }
-            if (!coverUrl) {
+          } catch {
+            try {
+              await fs.promises.writeFile(centralThumbPath, thumbBuf)
               coverUrl = pathToFileURL(centralThumbPath).href
-            }
-          } catch {}
+            } catch {}
+          }
 
           if (!calculatedColors) {
             calculatedColors = extractThemeColorsFromImage(img)
@@ -930,23 +933,8 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
             cacheModified = true
           }
 
-          if (albumCoverMap) {
-            const entry = { coverUrl: coverUrl!, themeColors: calculatedColors }
-            if (albumKey) albumCoverMap.set(albumKey, entry)
-            albumCoverMap.set(trackDir, entry)
-
-            if (albumKey) {
-              const albumHash = crypto
-                .createHash('md5')
-                .update('album_' + albumKey)
-                .digest('hex')
-              const albumThumbPath = join(IMAGE_CACHE_DIR, `alb_${albumHash}.jpg`)
-              try {
-                if (!fs.existsSync(albumThumbPath)) {
-                  fs.writeFileSync(albumThumbPath, thumbBuf)
-                }
-              } catch {}
-            }
+          if (albumCoverMap && albumKey) {
+            albumCoverMap.set(albumKey, { coverUrl: coverUrl!, themeColors: calculatedColors })
           }
         } catch {}
       }
@@ -1096,55 +1084,60 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
   }
 
   const albumCoverMap = new Map<string, { coverUrl: string; themeColors?: any }>()
-  const dirFolderCoverMap = new Map<string, { coverUrl: string; themeColors?: any } | null>()
+  const dirFolderCoverMap = new Map<
+    string,
+    Promise<{ coverUrl: string; themeColors?: any } | null>
+  >()
 
   const getOrResolveFolderCover = (
     dirPath: string
-  ): { coverUrl: string; themeColors?: any } | null => {
-    if (dirFolderCoverMap.has(dirPath)) {
-      return dirFolderCoverMap.get(dirPath)!
-    }
+  ): Promise<{ coverUrl: string; themeColors?: any } | null> => {
+    const existing = dirFolderCoverMap.get(dirPath)
+    if (existing) return existing
 
-    const folderImg = findFolderCoverImage(dirPath)
-    if (!folderImg) {
-      dirFolderCoverMap.set(dirPath, null)
-      return null
-    }
+    const promise = (async () => {
+      const folderImg = findFolderCoverImage(dirPath)
+      if (!folderImg) return null
 
-    try {
-      const folderHash = crypto
-        .createHash('md5')
-        .update('dir_cover_' + folderImg)
-        .digest('hex')
-      const centralThumbPath = join(IMAGE_CACHE_DIR, `fld_${folderHash}.jpg`)
-      let coverUrl: string | null = null
-      let colors: any = themeColorsCache[folderImg] || null
+      try {
+        const folderHash = crypto
+          .createHash('md5')
+          .update('dir_cover_' + folderImg)
+          .digest('hex')
+        const centralThumbPath = join(IMAGE_CACHE_DIR, `fld_${folderHash}.jpg`)
+        let coverUrl: string | null = null
+        let colors: any = themeColorsCache[folderImg] || null
 
-      if (fs.existsSync(centralThumbPath)) {
-        coverUrl = pathToFileURL(centralThumbPath).href
-      } else {
-        const img = nativeImage.createFromPath(folderImg)
-        const resized = img.resize({ width: 128, height: 128, quality: 'good' })
-        const jpegBuf = resized.toJPEG(80)
-        try {
-          fs.writeFileSync(centralThumbPath, jpegBuf)
-        } catch {}
-        coverUrl = pathToFileURL(centralThumbPath).href
-        if (!colors) {
-          colors = extractThemeColorsFromImage(img)
-          themeColorsCache[folderImg] = colors
-          markThemeColorDirty(folderImg)
-          cacheModified = true
+        const exists = await fs.promises.access(centralThumbPath).then(
+          () => true,
+          () => false
+        )
+        if (exists) {
+          coverUrl = pathToFileURL(centralThumbPath).href
+        } else {
+          const img = nativeImage.createFromPath(folderImg)
+          const resized = img.resize({ width: 128, height: 128, quality: 'good' })
+          const jpegBuf = resized.toJPEG(80)
+          try {
+            await fs.promises.writeFile(centralThumbPath, jpegBuf)
+          } catch {}
+          coverUrl = pathToFileURL(centralThumbPath).href
+          if (!colors) {
+            colors = extractThemeColorsFromImage(img)
+            themeColorsCache[folderImg] = colors
+            markThemeColorDirty(folderImg)
+            cacheModified = true
+          }
         }
-      }
 
-      const res = coverUrl ? { coverUrl, themeColors: colors } : null
-      dirFolderCoverMap.set(dirPath, res)
-      return res
-    } catch {
-      dirFolderCoverMap.set(dirPath, null)
-      return null
-    }
+        return coverUrl ? { coverUrl, themeColors: colors } : null
+      } catch {
+        return null
+      }
+    })()
+
+    dirFolderCoverMap.set(dirPath, promise)
+    return promise
   }
 
   const discoveredCueFiles: { cuePath: string; playlistTracks?: any[]; folderCover?: any }[] = []
@@ -1177,7 +1170,7 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
             const allTrackPaths = allFiles.filter((f) => !f.toLowerCase().endsWith('.cue'))
             const subCuePaths = allFiles.filter((f) => f.toLowerCase().endsWith('.cue'))
 
-            const itemFolderCover = getOrResolveFolderCover(itemPath)
+            const itemFolderCover = await getOrResolveFolderCover(itemPath)
 
             for (const cp of subCuePaths) {
               discoveredCueFiles.push({
@@ -1187,34 +1180,47 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
               })
             }
 
-            let trackIndex = 0
-            for (const trackPath of allTrackPaths) {
-              try {
-                if (++trackIndex % 10 === 0) {
-                  await new Promise<void>((resolve) => setImmediate(resolve))
-                }
+            const SCAN_CONCURRENCY = 4
+            const batchResults = new Array<any>(allTrackPaths.length)
+            let cursor = 0
+            const worker = async () => {
+              while (cursor < allTrackPaths.length) {
+                const idx = cursor++
+                const trackPath = allTrackPaths[idx]
+                try {
+                  const subStat = await fs.promises.stat(trackPath)
+                  const fileName = path.basename(trackPath)
+                  const trackDir = path.dirname(trackPath)
 
-                const subStat = await fs.promises.stat(trackPath)
-                const fileName = path.basename(trackPath)
-                const trackDir = path.dirname(trackPath)
+                  const trackFolderCover =
+                    trackDir === itemPath
+                      ? itemFolderCover
+                      : (await getOrResolveFolderCover(trackDir)) || itemFolderCover
 
-                const trackFolderCover =
-                  trackDir === itemPath
-                    ? itemFolderCover
-                    : getOrResolveFolderCover(trackDir) || itemFolderCover
-
-                const trackData = await parseOrGetTrack(
-                  trackPath,
-                  fileName,
-                  subStat,
-                  thumbDir,
-                  trackFolderCover?.coverUrl || null,
-                  trackFolderCover?.themeColors || null,
-                  albumCoverMap
+                  batchResults[idx] = await parseOrGetTrack(
+                    trackPath,
+                    fileName,
+                    subStat,
+                    thumbDir,
+                    trackFolderCover?.coverUrl || null,
+                    trackFolderCover?.themeColors || null,
+                    albumCoverMap
+                  )
+                } catch {}
+              }
+            }
+            if (allTrackPaths.length > 0) {
+              await Promise.all(
+                Array.from({ length: Math.min(SCAN_CONCURRENCY, allTrackPaths.length) }, () =>
+                  worker()
                 )
-                playlistTracks.push(trackData)
-                tracks.push(trackData)
-              } catch {}
+              )
+              for (const trackData of batchResults) {
+                if (trackData) {
+                  playlistTracks.push(trackData)
+                  tracks.push(trackData)
+                }
+              }
             }
 
             let thumbnailUrl = itemFolderCover?.coverUrl || null
@@ -1230,14 +1236,14 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
               thumbnail: thumbnailUrl
             })
           } else if (!isDir && item.toLowerCase().endsWith('.cue')) {
-            const rootFolderCover = getOrResolveFolderCover(folderRoot)
+            const rootFolderCover = await getOrResolveFolderCover(folderRoot)
             discoveredCueFiles.push({
               cuePath: itemPath,
               folderCover: rootFolderCover
             })
           } else if (!isDir && supportedExts.some((ext) => item.toLowerCase().endsWith(ext))) {
             const stat = await fs.promises.stat(itemPath)
-            const rootFolderCover = getOrResolveFolderCover(folderRoot)
+            const rootFolderCover = await getOrResolveFolderCover(folderRoot)
             const trackData = await parseOrGetTrack(
               itemPath,
               item,
@@ -1384,8 +1390,9 @@ export async function scanLibrary(forceRefresh: boolean = false, hardRescan: boo
     saveMetadataCache(true)
     saveThemeColorsCache(true)
   }
-  // Giải phóng metadata khỏi RAM sau khi quét xong (chỉ giữ trong lúc quét)
+  // Giải phóng metadata & themeColors khỏi RAM sau khi quét xong (chỉ giữ trong lúc quét)
   for (const k of Object.keys(metadataCache)) delete metadataCache[k]
+  for (const k of Object.keys(themeColorsCache)) delete themeColorsCache[k]
 
   const userPlaylists = getUserPlaylists()
   const preAggregated = buildPreAggregatedData(tracks)
@@ -1678,7 +1685,7 @@ export function registerLibraryScannerIpc(): void {
             } else {
               args.push('-t', '60')
             }
-            args.push('-i', rawPath, '-ar', '44100', '-ac', '2', '-f', 'wav', '-')
+            args.push('-i', rawPath, '-ar', '44100', '-ac', '1', '-f', 'wav', '-')
             await new Promise<void>((resolve, reject) => {
               const ff = spawn(ffmpegExe, args)
               ff.stdout.on('data', (c: Buffer) => chunks.push(c))
@@ -1689,13 +1696,18 @@ export function registerLibraryScannerIpc(): void {
               ff.on('error', reject)
             })
 
-            const transcodedBuf = Buffer.concat(chunks)
+            const transcodedBuf = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks)
+            const transcodedAb =
+              transcodedBuf.byteOffset === 0 &&
+              transcodedBuf.byteLength === transcodedBuf.buffer.byteLength
+                ? transcodedBuf.buffer
+                : transcodedBuf.buffer.slice(
+                    transcodedBuf.byteOffset,
+                    transcodedBuf.byteOffset + transcodedBuf.byteLength
+                  )
             return {
               success: true,
-              buffer: transcodedBuf.buffer.slice(
-                transcodedBuf.byteOffset,
-                transcodedBuf.byteOffset + transcodedBuf.byteLength
-              ),
+              buffer: transcodedAb,
               sampleRate: 44100,
               bitDepth: 16,
               segmented: segStart > 0 || segEnd > 0,
@@ -1704,12 +1716,16 @@ export function registerLibraryScannerIpc(): void {
           }
 
           const fileBuffer = await fs.promises.readFile(rawPath)
+          const fileAb =
+            fileBuffer.byteOffset === 0 && fileBuffer.byteLength === fileBuffer.buffer.byteLength
+              ? fileBuffer.buffer
+              : fileBuffer.buffer.slice(
+                  fileBuffer.byteOffset,
+                  fileBuffer.byteOffset + fileBuffer.byteLength
+                )
           return {
             success: true,
-            buffer: fileBuffer.buffer.slice(
-              fileBuffer.byteOffset,
-              fileBuffer.byteOffset + fileBuffer.byteLength
-            ),
+            buffer: fileAb,
             sampleRate,
             bitDepth
           }
@@ -1720,6 +1736,9 @@ export function registerLibraryScannerIpc(): void {
       }
     }
   )
+
+  // Serialize waveform FFmpeg decoding so skipping tracks never spawns parallel FFmpeg CPU storms.
+  let waveformExtractTail: Promise<void> = Promise.resolve()
 
   ipcMain.handle(
     'music:getWaveformPeaks',
@@ -1766,73 +1785,85 @@ export function registerLibraryScannerIpc(): void {
           return cachedPeaks
         }
 
-        const ffmpegExe = getFfmpegPath()
-        const args: string[] = ['-hide_banner', '-loglevel', 'error']
-        if (startTime !== undefined && startTime > 0) {
-          args.push('-ss', startTime.toString())
-        }
-        if (endTime !== undefined && endTime > 0) {
+        const runExtraction = async (): Promise<number[]> => {
+          const again = sqliteStorage.getWaveformCache(cacheKey, stat.mtimeMs)
+          if (again && again.length > 0) return again
+
+          const ffmpegExe = getFfmpegPath()
+          const args: string[] = ['-hide_banner', '-loglevel', 'error']
           if (startTime !== undefined && startTime > 0) {
-            // -to đặt trước -i là mốc thời gian TUYỆT ĐỐI (sẽ báo lỗi
-            // "to value smaller than -ss" nếu nhỏ hơn startTime).
-            // Khi kết hợp với -ss, dùng -t (độ dài) thay thế.
-            args.push('-t', Math.max(0.1, endTime - startTime).toString())
-          } else {
-            // Không có -ss: -to vẫn phải là mốc tuyệt đối.
-            args.push('-to', endTime.toString())
+            args.push('-ss', startTime.toString())
           }
-        }
-        if (rawPath.toLowerCase().endsWith('.bin')) {
-          args.push('-f', 's16le', '-ar', '44100', '-ac', '2')
-        }
-        args.push('-i', rawPath, '-vn', '-ac', '1', '-ar', '1000', '-f', 's16le', '-')
+          if (endTime !== undefined && endTime > 0) {
+            if (startTime !== undefined && startTime > 0) {
+              // -to đặt trước -i là mốc thời gian TUYỆT ĐỐI (sẽ báo lỗi
+              // "to value smaller than -ss" nếu nhỏ hơn startTime).
+              // Khi kết hợp với -ss, dùng -t (độ dài) thay thế.
+              args.push('-t', Math.max(0.1, endTime - startTime).toString())
+            } else {
+              // Không có -ss: -to vẫn phải là mốc tuyệt đối.
+              args.push('-to', endTime.toString())
+            }
+          }
+          if (rawPath.toLowerCase().endsWith('.bin')) {
+            args.push('-f', 's16le', '-ar', '44100', '-ac', '2')
+          }
+          args.push('-i', rawPath, '-vn', '-ac', '1', '-ar', '1000', '-f', 's16le', '-')
 
-        const chunks: Buffer[] = []
-        await new Promise<void>((resolve, reject) => {
-          const ff = spawn(ffmpegExe, args)
-          ff.stdout.on('data', (c: Buffer) => chunks.push(c))
-          ff.on('close', (code) => {
-            if (code === 0 || chunks.length > 0) resolve()
-            else reject(new Error(`ffmpeg exited with code ${code}`))
+          const chunks: Buffer[] = []
+          await new Promise<void>((resolve, reject) => {
+            const ff = spawn(ffmpegExe, args)
+            ff.stdout.on('data', (c: Buffer) => chunks.push(c))
+            ff.on('close', (code) => {
+              if (code === 0 || chunks.length > 0) resolve()
+              else reject(new Error(`ffmpeg exited with code ${code}`))
+            })
+            ff.on('error', reject)
           })
-          ff.on('error', reject)
-        })
 
-        const pcmData = Buffer.concat(chunks)
-        const totalSamples = Math.floor(pcmData.length / 2)
-        if (totalSamples === 0) return []
+          const pcmData = Buffer.concat(chunks)
+          const totalSamples = Math.floor(pcmData.length / 2)
+          if (totalSamples === 0) return []
 
-        const samples = new Int16Array(pcmData.buffer, pcmData.byteOffset, totalSamples)
-        const targetPeaks = numPeaks > 0 ? numPeaks : 180
-        const bucketSize = Math.max(1, Math.floor(totalSamples / targetPeaks))
-        const rawPeaks: number[] = []
+          const samples = new Int16Array(pcmData.buffer, pcmData.byteOffset, totalSamples)
+          const targetPeaks = numPeaks > 0 ? numPeaks : 180
+          const bucketSize = Math.max(1, Math.floor(totalSamples / targetPeaks))
+          const rawPeaks: number[] = []
 
-        for (let i = 0; i < targetPeaks; i++) {
-          const start = i * bucketSize
-          const end = Math.min(start + bucketSize, totalSamples)
-          if (start >= totalSamples) {
-            rawPeaks.push(0)
-            continue
+          for (let i = 0; i < targetPeaks; i++) {
+            const start = i * bucketSize
+            const end = Math.min(start + bucketSize, totalSamples)
+            if (start >= totalSamples) {
+              rawPeaks.push(0)
+              continue
+            }
+            let sumSq = 0
+            let maxAmp = 0
+            for (let j = start; j < end; j++) {
+              const val = Math.abs(samples[j])
+              if (val > maxAmp) maxAmp = val
+              sumSq += val * val
+            }
+            const rms = Math.sqrt(sumSq / (end - start))
+            rawPeaks.push(rms * 0.7 + maxAmp * 0.3)
           }
-          let sumSq = 0
-          let maxAmp = 0
-          for (let j = start; j < end; j++) {
-            const val = Math.abs(samples[j])
-            if (val > maxAmp) maxAmp = val
-            sumSq += val * val
-          }
-          const rms = Math.sqrt(sumSq / (end - start))
-          rawPeaks.push(rms * 0.7 + maxAmp * 0.3)
+
+          const maxPeak = Math.max(...rawPeaks, 1)
+          const normalizedPeaks = rawPeaks.map((p) => {
+            const norm = p / maxPeak
+            return parseFloat(Math.min(1.0, Math.max(0.08, norm)).toFixed(3))
+          })
+
+          sqliteStorage.setWaveformCache(cacheKey, stat.mtimeMs, normalizedPeaks)
+          return normalizedPeaks
         }
 
-        const maxPeak = Math.max(...rawPeaks, 1)
-        const normalizedPeaks = rawPeaks.map((p) => {
-          const norm = p / maxPeak
-          return parseFloat(Math.min(1.0, Math.max(0.08, norm)).toFixed(3))
-        })
-
-        sqliteStorage.setWaveformCache(cacheKey, stat.mtimeMs, normalizedPeaks)
-        return normalizedPeaks
+        const task = waveformExtractTail.then(runExtraction, runExtraction)
+        waveformExtractTail = task.then(
+          () => undefined,
+          () => undefined
+        )
+        return await task
       } catch (err) {
         console.warn('[WaveformPeaks] Error computing peaks:', err)
         return []
@@ -1974,8 +2005,11 @@ export function registerLibraryScannerIpc(): void {
     }
   )
 
-  ipcMain.handle('music:getThemeColorsCache', () => {
-    return themeColorsCache
+  ipcMain.handle('music:getThemeColorsCache', (_, key?: string) => {
+    if (typeof key === 'string' && key) {
+      return themeColorsCache[key] || sqliteStorage.getThemeColor(key) || null
+    }
+    return {}
   })
 
   ipcMain.handle('music:cacheThemeColors', async (_, trackPath: string, colors: any) => {
@@ -1987,13 +2021,8 @@ export function registerLibraryScannerIpc(): void {
         if (/^\/[a-zA-Z]:/.test(rawPath)) rawPath = rawPath.slice(1)
         rawPath = rawPath.replace(/\//g, '\\')
       }
-      themeColorsCache[rawPath] = colors
-      markThemeColorDirty(rawPath)
-      themeColorsCache[trackPath] = colors
-      markThemeColorDirty(trackPath)
       sqliteStorage.setThemeColor(rawPath, colors)
       sqliteStorage.setThemeColor(trackPath, colors)
-      saveThemeColorsCache()
 
       const existingMeta = metadataCache[rawPath] || sqliteStorage.getMetadata(rawPath)
       if (existingMeta && existingMeta.data) {

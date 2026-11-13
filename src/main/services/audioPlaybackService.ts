@@ -159,7 +159,7 @@ export function registerAudioPlaybackIpc(bassManager: BassManager): void {
       config.audioDevice,
       val,
       effectiveGain,
-      (config.bitPerfectType as 'wasapi' | 'asio') || 'asio'
+      (config.bitPerfectType as 'wasapi' | 'asio') || 'wasapi'
     )
     return { success: true }
   }

@@ -104,7 +104,7 @@ export const AudioFormatBadge = React.memo(
       const dsdRate = getDsdRateLabel(track.sampleRate)
       if (variant === 'grid') {
         return (
-          <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/80 backdrop-blur-md text-amber-950 uppercase shadow-sm">
+          <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/90 text-amber-950 uppercase shadow-sm">
             {dsdRate}
           </span>
         )
@@ -129,7 +129,7 @@ export const AudioFormatBadge = React.memo(
 
     if (variant === 'grid') {
       return track.format ? (
-        <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-black/60 backdrop-blur-md text-zinc-300 uppercase">
+        <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-black/75 text-zinc-300 uppercase">
           {track.format}
         </span>
       ) : null
@@ -321,7 +321,6 @@ export const TrackGridItem = React.memo(
             tier="md"
             size={getDprAwareCoverSize()}
             isLite={isLite}
-            smartAspect="auto"
             fallbackIcon={<Music size={32} />}
             className="w-full h-full group-hover:scale-105 transition duration-300"
           />

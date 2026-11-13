@@ -1,22 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import {
-  BarChart3,
-  Clock,
-  PlayCircle,
-  Sparkles,
-  Zap,
-  Award,
-  Disc3,
-  Mic2,
-  Tag,
-  RefreshCw,
-  Flame,
-  Play,
-  Calendar,
-  Layers,
-  TrendingUp,
-  Headphones
-} from 'lucide-react'
 import { useTranslation } from '../locales'
 import { useLibraryStore } from '../stores/libraryStore'
 
@@ -206,11 +188,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-24 text-zinc-100 select-none no-scrollbar">
       {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-theme-60/80 via-theme-60/50 to-theme-10/10 border border-theme-30/40 backdrop-blur-xl shadow-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-theme-60/80 via-theme-60/50 to-theme-10/10 border border-theme-30/40 shadow-lg">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-theme-10/20 border border-theme-10/40 text-theme-10 flex items-center justify-center shadow-lg shadow-theme-10/20 shrink-0">
-            <BarChart3 size={28} className="animate-pulse" />
-          </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
               <span>{t('analytics.title')}</span>
@@ -248,11 +227,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
           <button
             onClick={fetchStats}
             disabled={loading}
-            className="p-2 sm:px-3 sm:py-2 rounded-xl bg-theme-60/80 hover:bg-theme-10/20 text-zinc-300 hover:text-theme-10 border border-theme-30/60 transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5 text-xs font-medium"
+            className="px-3 py-2 rounded-xl bg-theme-60/80 hover:bg-theme-10/20 text-zinc-300 hover:text-theme-10 border border-theme-30/60 transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5 text-xs font-medium"
             title={t('analytics.refresh')}
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin text-theme-10' : ''} />
-            <span className="hidden sm:inline">{t('analytics.refresh')}</span>
+            <span>{t('analytics.refresh')}</span>
           </button>
         </div>
       </div>
@@ -260,15 +238,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
       {/* KPI METRIC CARDS ROW */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* CARD 1: TOTAL LISTENING TIME */}
-        <div className="p-5 rounded-2xl bg-theme-60/50 border border-theme-30/40 backdrop-blur-md hover:border-theme-30/80 transition shadow-md relative overflow-hidden group">
+        <div className="p-5 rounded-2xl bg-theme-60/50 border border-theme-30/40 hover:border-theme-30/80 transition shadow-md relative overflow-hidden group">
           <div className="absolute -right-3 -top-3 w-20 h-20 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-all pointer-events-none" />
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
               {t('analytics.totalListeningTime')}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
-              <Clock size={16} />
-            </div>
           </div>
           <div className="text-2xl font-black text-white tracking-tight">
             {stats ? formatDurationText(stats.overview.totalListenSeconds) : '0h 00m'}
@@ -284,15 +259,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
         </div>
 
         {/* CARD 2: TOTAL PLAYS & UNIQUE TRACKS */}
-        <div className="p-5 rounded-2xl bg-theme-60/50 border border-theme-30/40 backdrop-blur-md hover:border-theme-30/80 transition shadow-md relative overflow-hidden group">
+        <div className="p-5 rounded-2xl bg-theme-60/50 border border-theme-30/40 hover:border-theme-30/80 transition shadow-md relative overflow-hidden group">
           <div className="absolute -right-3 -top-3 w-20 h-20 bg-sky-500/10 rounded-full blur-xl group-hover:bg-sky-500/20 transition-all pointer-events-none" />
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
               {t('analytics.totalPlays')}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 flex items-center justify-center">
-              <PlayCircle size={16} />
-            </div>
           </div>
           <div className="text-2xl font-black text-white tracking-tight">
             {stats ? stats.overview.totalPlays.toLocaleString() : '0'}{' '}
@@ -309,15 +281,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
         </div>
 
         {/* CARD 3: AUDIOPHILE QUALITY SCORE */}
-        <div className="p-5 rounded-2xl bg-theme-60/50 border border-theme-30/40 backdrop-blur-md hover:border-theme-30/80 transition shadow-md relative overflow-hidden group">
+        <div className="p-5 rounded-2xl bg-theme-60/50 border border-theme-30/40 hover:border-theme-30/80 transition shadow-md relative overflow-hidden group">
           <div className="absolute -right-3 -top-3 w-20 h-20 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-all pointer-events-none" />
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
               {t('analytics.audiophileQuality')}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center">
-              <Sparkles size={16} />
-            </div>
           </div>
           <div className="text-2xl font-black text-amber-300 tracking-tight flex items-baseline gap-2">
             <span>{stats ? `${Math.round(stats.overview.losslessRatio * 100)}%` : '0%'}</span>
@@ -338,15 +307,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
         </div>
 
         {/* CARD 4: BIT-PERFECT RATIO */}
-        <div className="p-5 rounded-2xl bg-theme-60/50 border border-theme-30/40 backdrop-blur-md hover:border-theme-30/80 transition shadow-md relative overflow-hidden group">
+        <div className="p-5 rounded-2xl bg-theme-60/50 border border-theme-30/40 hover:border-theme-30/80 transition shadow-md relative overflow-hidden group">
           <div className="absolute -right-3 -top-3 w-20 h-20 bg-purple-500/10 rounded-full blur-xl group-hover:bg-purple-500/20 transition-all pointer-events-none" />
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
               {t('analytics.bitPerfectRatio')}
             </span>
-            <div className="w-8 h-8 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center">
-              <Zap size={16} />
-            </div>
           </div>
           <div className="text-2xl font-black text-purple-300 tracking-tight">
             {stats ? `${Math.round(stats.overview.bitPerfectRatio * 100)}%` : '0%'}
@@ -358,9 +324,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
       {/* EMPTY DATA NOTICE IF NO PLAYS RECORDED */}
       {!loading && stats && stats.overview.totalPlays === 0 && (
         <div className="p-8 rounded-2xl bg-theme-60/40 border border-theme-30/40 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-theme-10/10 border border-theme-10/20 text-theme-10 flex items-center justify-center mx-auto">
-            <Headphones size={24} />
-          </div>
           <h3 className="text-base font-bold text-white">{t('analytics.noData')}</h3>
           <p className="text-xs text-zinc-400 max-w-md mx-auto">{t('analytics.noDataDesc')}</p>
         </div>
@@ -369,17 +332,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
       {/* VISUAL CHARTS SECTION 1: 24-HOUR RHYTHM & 7-DAY WEEKDAY ACTIVITY */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* CHART 1: 24-HOUR LISTENING RHYTHM (2 COLS) */}
-        <div className="lg:col-span-2 p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 backdrop-blur-md space-y-4">
+        <div className="lg:col-span-2 p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Clock size={18} className="text-theme-10" />
                 <span>{t('analytics.hourlyRhythm')}</span>
               </h2>
             </div>
             {maxHourCount > 0 && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-theme-10/15 border border-theme-10/30 text-theme-10 text-xs font-semibold">
-                <Flame size={13} className="text-theme-10" />
                 <span>
                   {t('analytics.peakHour')}: {peakHourIndex}:00 - {peakHourIndex + 1}:00
                 </span>
@@ -434,10 +395,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
         </div>
 
         {/* CHART 2: WEEKDAY DISTRIBUTION (1 COL) */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 backdrop-blur-md space-y-4 flex flex-col justify-between">
+        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 space-y-4 flex flex-col justify-between">
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Calendar size={18} className="text-sky-400" />
               <span>{t('analytics.weekdayActivity')}</span>
             </h2>
           </div>
@@ -484,10 +444,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
       {/* VISUAL CHARTS SECTION 2: FORMAT BREAKDOWN & DAILY ACTIVITY TREND */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* FORMAT BREAKDOWN LIST (1 COL) */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 backdrop-blur-md space-y-4">
+        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Layers size={18} className="text-amber-400" />
               <span>{t('analytics.formatBreakdown')}</span>
             </h2>
           </div>
@@ -526,11 +485,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
         </div>
 
         {/* DAILY ACTIVITY TREND (2 COLS) */}
-        <div className="lg:col-span-2 p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 backdrop-blur-md space-y-4">
+        <div className="lg:col-span-2 p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <TrendingUp size={18} className="text-emerald-400" />
                 <span>{t('analytics.dailyTrend')}</span>
               </h2>
             </div>
@@ -582,10 +540,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
       {/* LEADERBOARDS ROW: TOP ARTISTS & TOP ALBUMS & TOP GENRES */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* TOP 10 ARTISTS */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 backdrop-blur-md space-y-4">
+        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Mic2 size={18} className="text-theme-10" />
               <span>{t('analytics.topArtists')}</span>
             </h2>
           </div>
@@ -636,10 +593,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
         </div>
 
         {/* TOP 10 ALBUMS */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 backdrop-blur-md space-y-4">
+        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Disc3 size={18} className="text-sky-400" />
               <span>{t('analytics.topAlbums')}</span>
             </h2>
           </div>
@@ -692,10 +648,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
         </div>
 
         {/* TOP 8 GENRES */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 backdrop-blur-md space-y-4">
+        <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Tag size={18} className="text-purple-400" />
               <span>{t('analytics.topGenres')}</span>
             </h2>
           </div>
@@ -729,10 +684,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
       </div>
 
       {/* TOP 15 MOST PLAYED TRACKS LEADERBOARD */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 backdrop-blur-md space-y-4">
+      <div className="p-5 sm:p-6 rounded-2xl bg-theme-60/40 border border-theme-30/40 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Award size={18} className="text-amber-400" />
             <span>{t('analytics.mostPlayedTracks')}</span>
           </h2>
           <span className="text-xs text-zinc-400">
@@ -801,10 +755,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onPlayTrack }) => 
                           e.stopPropagation()
                           handleTrackClick(track)
                         }}
-                        className="w-7 h-7 rounded-full bg-theme-10/20 text-theme-10 hover:bg-theme-10 hover:text-white flex items-center justify-center transition shadow-sm cursor-pointer ml-auto"
+                        className="px-2.5 py-1 rounded-lg bg-theme-10/20 text-theme-10 hover:bg-theme-10 hover:text-white text-[11px] font-semibold transition shadow-sm cursor-pointer ml-auto"
                         title="Phát bài này"
                       >
-                        <Play size={12} className="fill-current translate-x-0.5" />
+                        {language === 'vi' ? 'Phát' : 'Play'}
                       </button>
                     </td>
                   </tr>

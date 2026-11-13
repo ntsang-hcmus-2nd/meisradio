@@ -258,6 +258,11 @@ app.whenReady().then(async () => {
     onQuit: () => {
       cleanShutdown()
       app.quit()
+    },
+    isAudioPlaying: () => {
+      if (bassManager?.isPlaying) return true
+      const win = getMainWindow()
+      return Boolean(win && !win.isDestroyed() && win.webContents.isCurrentlyAudible())
     }
   })
 

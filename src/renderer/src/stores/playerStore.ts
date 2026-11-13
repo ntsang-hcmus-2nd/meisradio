@@ -39,6 +39,7 @@ export interface PlayerState {
   setIsShuffle: (shuffle: boolean | ((prev: boolean) => boolean)) => void
   setOriginalQueue: (queue: any[] | ((prev: any[]) => any[])) => void
   setPlayQueue: (queue: any[] | ((prev: any[]) => any[])) => void
+  addToQueue: (tracks: any | any[]) => number
   setRepeatMode: (mode: 0 | 1 | 2 | ((prev: 0 | 1 | 2) => 0 | 1 | 2)) => void
   setVolume: (volume: number | ((prev: number) => number)) => void
   setPrevVolume: (vol: number | ((prev: number) => number)) => void
@@ -105,19 +106,36 @@ const getInitialSmartAutoplay = (): boolean => {
   }
 }
 
+const PLAYBACK_SESSION_KEY = 'meis_playback_session'
+const PLAYBACK_QUEUES_KEY = 'meis_playback_queues'
+let lastSavedPlayQueue: any[] | null = null
+let lastSavedOriginalQueue: any[] | null = null
+
 export const savePlaybackSession = (): void => {
   try {
     const state = usePlayerStore.getState()
-    const session: PlaybackSession = {
+    const playQueue = state.playQueue || []
+    const originalQueue = state.originalQueue || []
+
+    // Persist large queue arrays separately only when their references change so track switches don't re-stringify thousands of tracks.
+    if (
+      lastSavedPlayQueue !== playQueue ||
+      lastSavedOriginalQueue !== originalQueue ||
+      !localStorage.getItem(PLAYBACK_QUEUES_KEY)
+    ) {
+      localStorage.setItem(PLAYBACK_QUEUES_KEY, JSON.stringify({ playQueue, originalQueue }))
+      lastSavedPlayQueue = playQueue
+      lastSavedOriginalQueue = originalQueue
+    }
+
+    const sessionMeta = {
       currentTrack: state.currentTrack,
       currentTime: state.currentTime || 0,
-      playQueue: state.playQueue || [],
-      originalQueue: state.originalQueue || [],
       queueIndex: state.queueIndex || 0,
       isShuffle: state.isShuffle || false,
       repeatMode: state.repeatMode || 0
     }
-    localStorage.setItem('meis_playback_session', JSON.stringify(session))
+    localStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify(sessionMeta))
   } catch {
     /* ignore */
   }
@@ -125,20 +143,46 @@ export const savePlaybackSession = (): void => {
 
 export const loadPlaybackSession = (): PlaybackSession | null => {
   try {
-    const saved = localStorage.getItem('meis_playback_session')
+    const saved = localStorage.getItem(PLAYBACK_SESSION_KEY)
     if (!saved) return null
     const session = JSON.parse(saved)
     if (session && typeof session === 'object') {
-      usePlayerStore.setState({
+      let playQueue: any[] = Array.isArray(session.playQueue) ? session.playQueue : []
+      let originalQueue: any[] = Array.isArray(session.originalQueue) ? session.originalQueue : []
+      const savedQueues = localStorage.getItem(PLAYBACK_QUEUES_KEY)
+      if (savedQueues) {
+        try {
+          const parsedQueues = JSON.parse(savedQueues)
+          if (parsedQueues && typeof parsedQueues === 'object') {
+            if (Array.isArray(parsedQueues.playQueue)) playQueue = parsedQueues.playQueue
+            if (Array.isArray(parsedQueues.originalQueue))
+              originalQueue = parsedQueues.originalQueue
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const fullSession: PlaybackSession = {
         currentTrack: session.currentTrack ?? null,
         currentTime: typeof session.currentTime === 'number' ? session.currentTime : 0,
-        playQueue: Array.isArray(session.playQueue) ? session.playQueue : [],
-        originalQueue: Array.isArray(session.originalQueue) ? session.originalQueue : [],
+        playQueue,
+        originalQueue,
         queueIndex: typeof session.queueIndex === 'number' ? session.queueIndex : 0,
         isShuffle: !!session.isShuffle,
         repeatMode: session.repeatMode === 1 || session.repeatMode === 2 ? session.repeatMode : 0
+      }
+
+      usePlayerStore.setState({
+        currentTrack: fullSession.currentTrack,
+        currentTime: fullSession.currentTime,
+        playQueue: fullSession.playQueue,
+        originalQueue: fullSession.originalQueue,
+        queueIndex: fullSession.queueIndex,
+        isShuffle: fullSession.isShuffle,
+        repeatMode: fullSession.repeatMode
       })
-      return session
+      return fullSession
     }
   } catch {
     /* ignore */
@@ -191,6 +235,16 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setOriginalQueue: (valOrFn) =>
     set((s) => ({ originalQueue: resolveVal(valOrFn, s.originalQueue) })),
   setPlayQueue: (valOrFn) => set((s) => ({ playQueue: resolveVal(valOrFn, s.playQueue) })),
+  addToQueue: (tracks) => {
+    const items = (Array.isArray(tracks) ? tracks : [tracks]).filter(Boolean)
+    if (items.length === 0) return 0
+    set((s) => ({
+      playQueue: [...(s.playQueue || []), ...items],
+      originalQueue: [...(s.originalQueue || []), ...items]
+    }))
+    scheduleSavePlaybackSession()
+    return items.length
+  },
   setRepeatMode: (valOrFn) => set((s) => ({ repeatMode: resolveVal(valOrFn, s.repeatMode) })),
   setVolume: (valOrFn) => set((s) => ({ volume: resolveVal(valOrFn, s.volume) })),
   setPrevVolume: (valOrFn) => set((s) => ({ prevVolume: resolveVal(valOrFn, s.prevVolume) })),

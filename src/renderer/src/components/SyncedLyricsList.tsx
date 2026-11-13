@@ -53,10 +53,16 @@ export const SyncedLyricsList: React.FC<SyncedLyricsListProps> = React.memo(
 
     useEffect(() => {
       if (activeLyricRef.current) {
-        // shortcut: instant scroll đủ dùng, smooth gây compositing mỗi dòng (CPU/GPU spike khi lời dày)
-        activeLyricRef.current.scrollIntoView({ block: 'nearest' })
+        const prefersReduced =
+          typeof window !== 'undefined' &&
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        activeLyricRef.current.scrollIntoView({
+          behavior: prefersReduced ? 'auto' : 'smooth',
+          block: 'center'
+        })
       }
-    }, [currentLyricIndex])
+    }, [currentLyricIndex, lyrics])
 
     if (lyrics.length === 0) {
       return (

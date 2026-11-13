@@ -287,7 +287,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 1: CÁ NHÂN HÓA (PERSONALIZATION) */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-5">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <h3 className="text-base sm:text-lg font-bold text-white truncate">
@@ -809,7 +809,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 2: NGÔN NGỮ (LANGUAGE) */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {t('settings.language.title')}
@@ -828,7 +828,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 3: THƯ VIỆN NHẠC (MUSIC LIBRARY) */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <h3 className="text-base sm:text-lg font-bold text-white truncate">
@@ -910,7 +910,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 4: ĐỘNG CƠ ÂM THANH & BIT-PERFECT */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <h3 className="text-base sm:text-lg font-bold text-white truncate">
@@ -1193,7 +1193,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 5: HIỆU NĂNG & CHẾ ĐỘ HOẠT ĐỘNG (APP MODE) */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {t('settings.appMode.title')}
@@ -1282,7 +1282,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 6: HÀNH VI CỬA SỔ (WINDOW BEHAVIOR) */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {t('settings.windowBehavior.title')}
@@ -1331,7 +1331,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 7: DISCORD RICH PRESENCE */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2.5">
@@ -1449,7 +1449,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 8: GOOGLE DRIVE */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {t('settings.googleDrive.title')}
@@ -1467,7 +1467,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 9: DỮ LIỆU, THỐNG KÊ & SAO LƯU */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center gap-3 min-w-0">
           <h3 className="text-base sm:text-lg font-bold text-white truncate">
             {language === 'vi' ? 'Dữ liệu, Thống kê & Sao lưu' : 'Data, Insights & Backup'}
@@ -1667,7 +1667,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* ISLAND 10: CẬP NHẬT PHẦN MỀM (AUTO-UPDATER) */}
-      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm backdrop-blur-md transition-all hover:border-theme-30 space-y-4">
+      <div className="bg-theme-60/40 border border-theme-30/70 p-5 sm:p-6 rounded-2xl shadow-sm transition-all hover:border-theme-30 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <div>

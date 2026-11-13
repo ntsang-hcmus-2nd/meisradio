@@ -13,8 +13,19 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`
 }
 
-// In-memory cache for fetched waveform peaks so switching tracks doesn't re-query
+// In-memory cache for fetched waveform peaks so switching tracks doesn't re-query (LRU bounded)
+const MAX_WAVEFORM_PEAKS_CACHE = 100
 const waveformPeaksCache = new Map<string, number[]>()
+
+function setWaveformPeaksCache(key: string, peaks: number[]): void {
+  if (waveformPeaksCache.has(key)) {
+    waveformPeaksCache.delete(key)
+  } else if (waveformPeaksCache.size >= MAX_WAVEFORM_PEAKS_CACHE) {
+    const oldest = waveformPeaksCache.keys().next().value
+    if (oldest !== undefined) waveformPeaksCache.delete(oldest)
+  }
+  waveformPeaksCache.set(key, peaks)
+}
 
 export function getWaveformPeaksCacheSize(): number {
   try {
@@ -127,7 +138,10 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
     const end = currentTrack.endTime || 0
     const cacheKey = `${currentTrack.filePath || currentTrack.id || currentTrack.title || 'default'}#${start}-${end}`
     if (waveformPeaksCache.has(cacheKey)) {
-      setPeaks(waveformPeaksCache.get(cacheKey)!)
+      const cached = waveformPeaksCache.get(cacheKey)!
+      waveformPeaksCache.delete(cacheKey)
+      waveformPeaksCache.set(cacheKey, cached)
+      setPeaks(cached)
       return
     }
 
@@ -136,29 +150,39 @@ export const PlayerProgressBar: React.FC<PlayerProgressBarProps> = ({
     setPeaks(fallback)
 
     let isMounted = true
+    let fetchTimer: ReturnType<typeof setTimeout> | null = null
 
-    // If local track with filePath, fetch accurate peaks via API
+    // If local track with filePath, fetch accurate peaks via API (debounced so rapid skips don't spawn FFmpeg)
     const isLocal =
       currentTrack.filePath &&
       !currentTrack.filePath.startsWith('http://') &&
       !currentTrack.filePath.startsWith('https://')
 
     if (waveformSeekbarEnabled && isLocal && window.api?.getWaveformPeaks) {
-      window.api
-        .getWaveformPeaks(currentTrack.filePath, 140, currentTrack.startTime, currentTrack.endTime)
-        .then((fetchedPeaks: number[]) => {
-          if (isMounted && Array.isArray(fetchedPeaks) && fetchedPeaks.length > 0) {
-            waveformPeaksCache.set(cacheKey, fetchedPeaks)
-            setPeaks(fetchedPeaks)
-          }
-        })
-        .catch(() => {
-          /* keep fallback */
-        })
+      fetchTimer = setTimeout(() => {
+        if (!isMounted) return
+        window.api
+          .getWaveformPeaks(
+            currentTrack.filePath,
+            140,
+            currentTrack.startTime,
+            currentTrack.endTime
+          )
+          .then((fetchedPeaks: number[]) => {
+            if (isMounted && Array.isArray(fetchedPeaks) && fetchedPeaks.length > 0) {
+              setWaveformPeaksCache(cacheKey, fetchedPeaks)
+              setPeaks(fetchedPeaks)
+            }
+          })
+          .catch(() => {
+            /* keep fallback */
+          })
+      }, 250)
     }
 
     return () => {
       isMounted = false
+      if (fetchTimer) clearTimeout(fetchTimer)
     }
   }, [
     currentTrack,

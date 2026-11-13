@@ -73,17 +73,16 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   const setSmartAutoplay = usePlayerStore((s) => s.setSmartAutoplay)
   const playQueue = usePlayerStore((s) => s.playQueue)
 
-  const { favoriteTrackIds, toggleFavoriteId } = useLibraryStore()
+  const favoriteTrackIds = useLibraryStore((s) => s.favoriteTrackIds)
+  const toggleFavoriteId = useLibraryStore((s) => s.toggleFavoriteId)
 
-  const {
-    showLyricsPanel,
-    showQueuePanel,
-    showEQ,
-    setShowEQ,
-    showSpectrogramModal,
-    setShowSpectrogramModal,
-    showToast
-  } = useUIStore()
+  const showLyricsPanel = useUIStore((s) => s.showLyricsPanel)
+  const showQueuePanel = useUIStore((s) => s.showQueuePanel)
+  const showEQ = useUIStore((s) => s.showEQ)
+  const setShowEQ = useUIStore((s) => s.setShowEQ)
+  const showSpectrogramModal = useUIStore((s) => s.showSpectrogramModal)
+  const setShowSpectrogramModal = useUIStore((s) => s.setShowSpectrogramModal)
+  const showToast = useUIStore((s) => s.showToast)
 
   const appMode = useSettingsStore((s) => s.appMode)
   const streamPort = useSettingsStore((s) => s.streamPort)

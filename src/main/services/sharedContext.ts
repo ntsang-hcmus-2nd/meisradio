@@ -134,6 +134,8 @@ export function getConfig() {
     crossfadeDuration: 3,
     volume: 1,
     eqBands: null,
+    bitPerfectEnabled: false,
+    bitPerfectType: 'wasapi' as const,
     appMode: 'default',
     discordRpc: {
       enabled: true,
@@ -262,22 +264,29 @@ export const ytdlp = is.dev
 // SECURITY & ALLOWED LOCAL PATHS
 // ==========================================
 export const allowedDroppedFiles = new Set<string>()
+const MAX_DROPPED_FILES = 500
 
 let cachedSystemRoots: string[] | null = null
+const MAX_REALPATH_CACHE = 5000
 const realpathCache = new Map<string, string>()
 
 function cachedRealpath(p: string): string {
-  if (realpathCache.has(p)) return realpathCache.get(p)!
-  try {
-    const real = fs.realpathSync(p)
-    if (realpathCache.size > 5000) realpathCache.clear()
-    realpathCache.set(p, real)
-    return real
-  } catch {
-    if (realpathCache.size > 5000) realpathCache.clear()
-    realpathCache.set(p, p)
-    return p
+  if (realpathCache.has(p)) {
+    const val = realpathCache.get(p)!
+    realpathCache.delete(p)
+    realpathCache.set(p, val)
+    return val
   }
+  let real = p
+  try {
+    real = fs.realpathSync(p)
+  } catch {}
+  if (realpathCache.size >= MAX_REALPATH_CACHE) {
+    const oldest = realpathCache.keys().next().value
+    if (oldest !== undefined) realpathCache.delete(oldest)
+  }
+  realpathCache.set(p, real)
+  return real
 }
 
 export function normalizeLocalPath(filePath: string): string {
@@ -327,6 +336,12 @@ export function registerAllowedDroppedFile(filePath: string): void {
   if (filePath && typeof filePath === 'string') {
     const norm = normalizeLocalPath(filePath)
     if (norm) {
+      if (allowedDroppedFiles.has(norm)) {
+        allowedDroppedFiles.delete(norm)
+      } else if (allowedDroppedFiles.size >= MAX_DROPPED_FILES) {
+        const oldest = allowedDroppedFiles.values().next().value
+        if (oldest !== undefined) allowedDroppedFiles.delete(oldest)
+      }
       allowedDroppedFiles.add(norm)
     }
   }
@@ -460,7 +475,7 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
 
   // Allowed directories
   try {
-    const config = getConfig()
+    const config = cachedDecryptedConfig ?? getConfig()
 
     // Cho phép hình nền tùy chọn customBgImage đã lưu trong cấu hình
     if (config.customBgImage && typeof config.customBgImage === 'string') {
@@ -474,7 +489,6 @@ export function isAllowedLocalPath(filePath: string, allowCoverOrFolder: boolean
     }
 
     if (cachedSystemRoots === null && app.isReady()) {
-      const config = getConfig()
       const rawDirs: (string | null | undefined)[] = [
         IMAGE_CACHE_DIR,
         ...(config.libraryPaths || []),
@@ -589,7 +603,7 @@ export function saveMetadataCache(immediate: boolean = false) {
 export const themeColorsCache: Record<
   string,
   { primary60: string; secondary30: string; accent10: string }
-> = sqliteStorage.getAllThemeColors()
+> = {}
 export const dirtyThemeColorKeys = new Set<string>()
 
 export function markThemeColorDirty(key: string): void {

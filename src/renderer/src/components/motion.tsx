@@ -31,9 +31,10 @@ export const overlayFade = {
   transition: { duration: 0.22, ease: EASE_ENTER }
 }
 
+// shortcut: drop per-frame CSS filter:blur animation to save GPU raster fill-rate; keep opacity+transform on compositor
 export const dialogScale = {
-  initial: { opacity: 0, scale: 0.95, y: 8, filter: 'blur(6px)' },
-  animate: { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' },
+  initial: { opacity: 0, scale: 0.95, y: 8 },
+  animate: { opacity: 1, scale: 1, y: 0 },
   exit: { opacity: 0, scale: 0.97, y: 6, transition: { duration: 0.15, ease: EASE_EXIT } },
   transition: { duration: 0.32, ease: EASE_ENTER }
 }
@@ -72,10 +73,10 @@ export const drawerSlide = {
 export const drawerEnterDelay = 0.13
 
 // Mirrors main.css fadeInSlideUp 0.38s EASE_ENTER (view routing, key-remount enter only)
-// Depth: fade + rise + settle scale + blur release instead of flat y-only slide.
+// Depth: fade + rise + settle scale instead of flat y-only slide.
 export const viewFade = {
-  initial: { opacity: 0, y: 12, scale: 0.985, filter: 'blur(6px)' },
-  animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+  initial: { opacity: 0, y: 12, scale: 0.985 },
+  animate: { opacity: 1, y: 0, scale: 1 },
   transition: { duration: 0.38, ease: EASE_ENTER }
 }
 
@@ -84,8 +85,8 @@ export const viewFade = {
 // the main column + side drawer lay out correctly while it fades above them.
 // (MAIN SHELL in App.tsx must stay relative as its offset parent.)
 export const lyricsMax = {
-  initial: { opacity: 0, y: 12, scale: 0.985, filter: 'blur(6px)' },
-  animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+  initial: { opacity: 0, y: 12, scale: 0.985 },
+  animate: { opacity: 1, y: 0, scale: 1 },
   exit: {
     opacity: 0,
     y: 10,

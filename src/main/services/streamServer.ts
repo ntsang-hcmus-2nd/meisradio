@@ -26,7 +26,22 @@ import { fastExtractCover, findFolderCoverImage } from '../fastAudioParser'
 let streamServerInstance: http.Server | null = null
 let currentStreamPort = 0
 
+const MAX_STREAM_URL_CACHE = 200
 export const streamUrlCache = new Map<string, { url: string; expires: number }>()
+
+export function setStreamUrlCache(id: string, url: string, ttlMs: number = 3600000): void {
+  const now = Date.now()
+  for (const [k, entry] of streamUrlCache.entries()) {
+    if (entry.expires <= now) streamUrlCache.delete(k)
+  }
+  if (streamUrlCache.has(id)) {
+    streamUrlCache.delete(id)
+  } else if (streamUrlCache.size >= MAX_STREAM_URL_CACHE) {
+    const oldest = streamUrlCache.keys().next().value
+    if (oldest !== undefined) streamUrlCache.delete(oldest)
+  }
+  streamUrlCache.set(id, { url, expires: now + ttlMs })
+}
 
 // BỘ NHỚ ĐỆM RAM PHÂN TẦNG (Tối ưu giới hạn tránh tích tụ heap):
 // - smallCoverCache: Lưu trữ tới 400 ảnh nhỏ (<=128px) ~1MB RAM cho cuộn danh sách.
@@ -88,31 +103,50 @@ class TaskQueue {
 
 export const audioCoverExtractionQueue = new TaskQueue(3)
 
+const pathExists = (p: string): Promise<boolean> =>
+  fs.promises.access(p).then(
+    () => true,
+    () => false
+  )
+
 export function getCoverFromCache(key: string): Buffer | undefined {
-  return smallCoverCache.get(key) || largeCoverCache.get(key)
+  let hit = smallCoverCache.get(key)
+  if (hit) {
+    smallCoverCache.delete(key)
+    smallCoverCache.set(key, hit)
+    return hit
+  }
+  hit = largeCoverCache.get(key)
+  if (hit) {
+    largeCoverCache.delete(key)
+    largeCoverCache.set(key, hit)
+    return hit
+  }
+  return undefined
 }
 
-export function setCoverResizeCache(key: string, buf: Buffer, targetSize: number, fastKey?: string): void {
+export function setCoverResizeCache(
+  key: string,
+  buf: Buffer,
+  targetSize: number,
+  fastKey?: string
+): void {
   if (fastKey) {
-    if (coverPathToCacheKey.size >= 700) {
+    if (coverPathToCacheKey.has(fastKey)) coverPathToCacheKey.delete(fastKey)
+    else if (coverPathToCacheKey.size >= 700) {
       const oldestFastKey = coverPathToCacheKey.keys().next().value
       if (oldestFastKey) coverPathToCacheKey.delete(oldestFastKey)
     }
     coverPathToCacheKey.set(fastKey, key)
   }
-  if (targetSize > 0 && targetSize <= 128) {
-    if (smallCoverCache.size >= 400) {
-      const oldestKey = smallCoverCache.keys().next().value
-      if (oldestKey) smallCoverCache.delete(oldestKey)
-    }
-    smallCoverCache.set(key, buf)
-  } else {
-    if (largeCoverCache.size >= 300) {
-      const oldestKey = largeCoverCache.keys().next().value
-      if (oldestKey) largeCoverCache.delete(oldestKey)
-    }
-    largeCoverCache.set(key, buf)
+  const cache = targetSize > 0 && targetSize <= 128 ? smallCoverCache : largeCoverCache
+  const limit = cache === smallCoverCache ? 400 : 300
+  if (cache.has(key)) cache.delete(key)
+  else if (cache.size >= limit) {
+    const oldestKey = cache.keys().next().value
+    if (oldestKey) cache.delete(oldestKey)
   }
+  cache.set(key, buf)
 }
 
 export function getProxyImageUrl(url: string | null | undefined, id: string): string | null {
@@ -270,7 +304,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             const permalink = parsedUrl.searchParams.get('url') || undefined
             const rawScId = targetId.replace(/^sc-/, '')
             directUrl = await resolveScStreamUrl(rawScId, permalink, config.scOAuthToken)
-            streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 })
+            setStreamUrlCache(targetId, directUrl)
           } else {
             const ytOptions: any = {
               dumpSingleJson: true,
@@ -282,7 +316,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
             const info = (await ytdlp(targetId, ytOptions as any)) as any
             directUrl = info.url
-            streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 })
+            setStreamUrlCache(targetId, directUrl)
           }
         }
 
@@ -359,7 +393,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
               const permalink = parsedUrl.searchParams.get('url') || undefined
               const rawScId = targetId.replace(/^sc-/, '')
               directUrl = await resolveScStreamUrl(rawScId, permalink, config.scOAuthToken)
-              streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 })
+              setStreamUrlCache(targetId, directUrl)
             } else {
               const ytOptions: any = {
                 dumpSingleJson: true,
@@ -371,7 +405,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
               const newInfo = (await ytdlp(targetId, ytOptions as any)) as any
               directUrl = newInfo.url
-              streamUrlCache.set(targetId, { url: directUrl, expires: Date.now() + 3600000 })
+              setStreamUrlCache(targetId, directUrl)
             }
 
             proxyRes = await axios({
@@ -554,6 +588,8 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         if (mappedKey) {
           const cached = getCoverFromCache(mappedKey)
           if (cached) {
+            coverPathToCacheKey.delete(fastKey)
+            coverPathToCacheKey.set(fastKey, mappedKey)
             res.writeHead(200, {
               'Content-Type': 'image/jpeg',
               'Cache-Control': tParam ? 'no-cache' : 'public, max-age=604800, immutable',
@@ -565,19 +601,21 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
         }
       }
 
-      if (!fs.existsSync(targetPath)) {
+      let mtimeMs = 0
+      let isDir = false
+      try {
+        const st = await fs.promises.stat(targetPath)
+        mtimeMs = Math.round(st.mtimeMs)
+        isDir = st.isDirectory()
+      } catch {
         res.writeHead(404).end('File không tồn tại')
         return
       }
 
-      let mtimeMs = 0
-      try {
-        mtimeMs = Math.round(fs.statSync(targetPath).mtimeMs)
-      } catch (_) {}
-
       const cacheKey = `${targetPath}_size_${targetSize}_${mtimeMs}_${tParam}`
       const cached = targetSize > 0 ? getCoverFromCache(cacheKey) : undefined
       if (cached) {
+        setCoverResizeCache(cacheKey, cached, targetSize, fastKey)
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
           'Cache-Control': tParam ? 'no-cache' : 'public, max-age=604800',
@@ -590,6 +628,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
       try {
         let rawBuffer: Buffer | null = null
         let mime = 'image/jpeg'
+        let loadedNativeImg: Electron.NativeImage | null = null
         const directImgMimes: Record<string, string> = {
           '.jpg': 'image/jpeg',
           '.jpeg': 'image/jpeg',
@@ -599,11 +638,6 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
           '.bmp': 'image/bmp',
           '.svg': 'image/svg+xml'
         }
-
-        let isDir = false
-        try {
-          isDir = fs.statSync(targetPath).isDirectory()
-        } catch (_) {}
 
         if (isDir) {
           const cachedFolder = folderCoverCache.get(targetPath)
@@ -626,9 +660,9 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
             const candidateThumbs = [dirThumb, parentThumb, centralPlThumb, centralUserPlThumb]
             for (const c of candidateThumbs) {
-              if (fs.existsSync(c)) {
+              if (await pathExists(c)) {
                 try {
-                  rawBuffer = fs.readFileSync(c)
+                  rawBuffer = await fs.promises.readFile(c)
                   mime = 'image/jpeg'
                   break
                 } catch (_) {}
@@ -651,9 +685,9 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
               for (const name of commonCoverNames) {
                 for (const ext of possibleExts) {
                   const candidate = join(targetPath, `${name}${ext}`)
-                  if (fs.existsSync(candidate)) {
+                  if (await pathExists(candidate)) {
                     try {
-                      rawBuffer = fs.readFileSync(candidate)
+                      rawBuffer = await fs.promises.readFile(candidate)
                       mime = directImgMimes[ext] || 'image/jpeg'
                       break
                     } catch (_) {}
@@ -666,13 +700,13 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             // Fallback 2: Quét bất kỳ file ảnh nào trong thư mục
             if (!rawBuffer) {
               try {
-                const files = fs.readdirSync(targetPath)
+                const files = await fs.promises.readdir(targetPath)
                 for (const file of files) {
                   const ext = path.extname(file).toLowerCase()
                   if (directImgMimes[ext]) {
                     const candidate = join(targetPath, file)
                     try {
-                      rawBuffer = fs.readFileSync(candidate)
+                      rawBuffer = await fs.promises.readFile(candidate)
                       mime = directImgMimes[ext]
                       break
                     } catch (_) {}
@@ -684,7 +718,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             // Fallback 3: Lấy cover từ bài hát đầu tiên trong thư mục (KHÔNG gọi mm.parseFile trên thư mục!)
             if (!rawBuffer) {
               try {
-                const files = fs.readdirSync(targetPath)
+                const files = await fs.promises.readdir(targetPath)
                 const supportedAudioExts = SUPPORTED_AUDIO_EXTS
                 for (const file of files) {
                   const ext = path.extname(file).toLowerCase()
@@ -693,15 +727,15 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
                     const trackHash = crypto.createHash('md5').update(audioPath).digest('hex')
                     const audioThumb1 = join(targetPath, '.thumbnails', `${trackHash}.jpg`)
                     const audioThumb2 = join(IMAGE_CACHE_DIR, `${trackHash}.jpg`)
-                    if (fs.existsSync(audioThumb1)) {
+                    if (await pathExists(audioThumb1)) {
                       try {
-                        rawBuffer = fs.readFileSync(audioThumb1)
+                        rawBuffer = await fs.promises.readFile(audioThumb1)
                         mime = 'image/jpeg'
                         break
                       } catch (_) {}
-                    } else if (fs.existsSync(audioThumb2)) {
+                    } else if (await pathExists(audioThumb2)) {
                       try {
-                        rawBuffer = fs.readFileSync(audioThumb2)
+                        rawBuffer = await fs.promises.readFile(audioThumb2)
                         mime = 'image/jpeg'
                         break
                       } catch (_) {}
@@ -752,11 +786,11 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
           // 1. Kiểm tra thumbnail có sẵn trên đĩa trước (Áp dụng đa tầng tra cứu)
           if (!rawBuffer) {
-            if (fs.existsSync(centralThumbPath)) {
+            if (await pathExists(centralThumbPath)) {
               foundThumb = centralThumbPath
             } else {
               const localThumbPath = join(dirname(targetPath), '.thumbnails', `${trackHash}.jpg`)
-              if (fs.existsSync(localThumbPath)) {
+              if (await pathExists(localThumbPath)) {
                 foundThumb = localThumbPath
               } else {
                 const config = getConfig()
@@ -768,7 +802,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
                       : []
                 for (const r of roots) {
                   const candidate = join(r, '.thumbnails', `${trackHash}.jpg`)
-                  if (fs.existsSync(candidate)) {
+                  if (await pathExists(candidate)) {
                     foundThumb = candidate
                     break
                   }
@@ -778,7 +812,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
                   let prevDir = ''
                   while (currDir && currDir !== prevDir && currDir !== path.parse(currDir).root) {
                     const candidate = join(currDir, '.thumbnails', `${trackHash}.jpg`)
-                    if (fs.existsSync(candidate)) {
+                    if (await pathExists(candidate)) {
                       foundThumb = candidate
                       break
                     }
@@ -807,38 +841,39 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
           // 2. Nếu targetSize > 256 HOẶC chưa có thumbnail nào:
           if (!rawBuffer) {
-            const trackDir = dirname(targetPath)
-            const folderImgPath = findFolderCoverImage(trackDir)
-            if (folderImgPath && fs.existsSync(folderImgPath)) {
-              try {
-                rawBuffer = await fs.promises.readFile(folderImgPath)
-                const ext = path.extname(folderImgPath).toLowerCase()
-                mime = directImgMimes[ext] || 'image/jpeg'
-              } catch (_) {}
+            // Ưu tiên ảnh nhúng trong chính file nhạc trước; chỉ fallback ảnh thư mục nếu file không có ảnh nhúng.
+            let extractedPic: { data: Buffer | Uint8Array; format?: string } | null = null
+            extractedPic = await audioCoverExtractionQueue.run(async () => {
+              return await fastExtractCover(targetPath)
+            })
+
+            if (extractedPic) {
+              mime = extractedPic.format || 'image/jpeg'
+              if (!mime.includes('/')) mime = `image/${mime}`
+              rawBuffer = Buffer.from(extractedPic.data)
+
+              if (!(await pathExists(centralThumbPath))) {
+                try {
+                  loadedNativeImg = nativeImage.createFromBuffer(rawBuffer)
+                  const resizedThumb = loadedNativeImg.resize({
+                    width: 128,
+                    height: 128,
+                    quality: 'good'
+                  })
+                  fs.promises.writeFile(centralThumbPath, resizedThumb.toJPEG(80)).catch(() => {})
+                } catch (_) {}
+              }
             }
 
             if (!rawBuffer) {
-              let extractedPic: { data: Buffer | Uint8Array; format?: string } | null = null
-              extractedPic = await audioCoverExtractionQueue.run(async () => {
-                return await fastExtractCover(targetPath)
-              })
-
-              if (extractedPic) {
-                mime = extractedPic.format || 'image/jpeg'
-                if (!mime.includes('/')) mime = `image/${mime}`
-                rawBuffer = Buffer.from(extractedPic.data)
-
-                if (!fs.existsSync(centralThumbPath)) {
-                  try {
-                    const nativeThumb = nativeImage.createFromBuffer(rawBuffer)
-                    const resizedThumb = nativeThumb.resize({
-                      width: 128,
-                      height: 128,
-                      quality: 'good'
-                    })
-                    fs.promises.writeFile(centralThumbPath, resizedThumb.toJPEG(80)).catch(() => {})
-                  } catch (_) {}
-                }
+              const trackDir = dirname(targetPath)
+              const folderImgPath = findFolderCoverImage(trackDir)
+              if (folderImgPath && (await pathExists(folderImgPath))) {
+                try {
+                  rawBuffer = await fs.promises.readFile(folderImgPath)
+                  const ext = path.extname(folderImgPath).toLowerCase()
+                  mime = directImgMimes[ext] || 'image/jpeg'
+                } catch (_) {}
               }
             }
 
@@ -858,7 +893,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
 
         if (targetSize > 0) {
           try {
-            const nativeImg = nativeImage.createFromBuffer(rawBuffer)
+            const nativeImg = loadedNativeImg || nativeImage.createFromBuffer(rawBuffer)
             const curSize = nativeImg.getSize()
             if (curSize.width > 0 && curSize.height > 0) {
               if (curSize.width > targetSize || curSize.height > targetSize) {
@@ -871,7 +906,7 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
                 }
                 const resized = nativeImg.resize({ width: newW, height: newH, quality: 'good' })
                 const jpegBuf = resized.toJPEG(85)
-                setCoverResizeCache(cacheKey, jpegBuf, targetSize)
+                setCoverResizeCache(cacheKey, jpegBuf, targetSize, fastKey)
                 res.writeHead(200, {
                   'Content-Type': 'image/jpeg',
                   'Cache-Control': 'public, max-age=604800, immutable',
@@ -883,6 +918,12 @@ export async function startStreamServer(preferredPort: number = 49876): Promise<
             }
           } catch (resizeErr) {
             console.warn('[Cover Stream] Resize thất bại, trả về ảnh gốc:', resizeErr)
+          }
+          if (
+            (mime === 'image/jpeg' || mime === 'image/jpg') &&
+            rawBuffer.length <= 2 * 1024 * 1024
+          ) {
+            setCoverResizeCache(cacheKey, rawBuffer, targetSize, fastKey)
           }
         }
 

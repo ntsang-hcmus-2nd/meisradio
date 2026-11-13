@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   Sparkles,
   Play,
@@ -33,10 +34,17 @@ export function HomeView({
   formatDuration
 }: HomeViewProps) {
   const { t } = useTranslation()
-  const { libraryTracks, playlists, userPlaylists, recentlyPlayed } = useLibraryStore()
+  const { libraryTracks, playlists, userPlaylists, recentlyPlayed } = useLibraryStore(
+    useShallow((s) => ({
+      libraryTracks: s.libraryTracks,
+      playlists: s.playlists,
+      userPlaylists: s.userPlaylists,
+      recentlyPlayed: s.recentlyPlayed
+    }))
+  )
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
-  const { setActiveView } = useUIStore()
+  const setActiveView = useUIStore((s) => s.setActiveView)
   const appMode = useSettingsStore((s) => s.appMode)
   const isLite = appMode === 'lite' || appMode === 'core'
 
@@ -370,7 +378,6 @@ export function HomeView({
                       track={track}
                       tier="md"
                       isLite={isLite}
-                      smartAspect={true}
                       fallbackIcon={<Music size={28} className="text-zinc-600" />}
                       className="w-full h-full group-hover:scale-105 transition duration-300"
                     />

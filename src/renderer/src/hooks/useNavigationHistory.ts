@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useUIStore, useLibraryStore } from '../stores'
 
 interface UseNavigationHistoryProps {
@@ -10,7 +11,12 @@ export function useNavigationHistory({
   fetchDashboard,
   fetchScDashboard
 }: UseNavigationHistoryProps = {}) {
-  const { activeView, setActiveView } = useUIStore()
+  const { activeView, setActiveView } = useUIStore(
+    useShallow((s) => ({
+      activeView: s.activeView,
+      setActiveView: s.setActiveView
+    }))
+  )
   const {
     activeAlbum,
     setActiveAlbum,
@@ -26,7 +32,24 @@ export function useNavigationHistory({
     setSearchQuery,
     searchInput,
     setSearchInput
-  } = useLibraryStore()
+  } = useLibraryStore(
+    useShallow((s) => ({
+      activeAlbum: s.activeAlbum,
+      setActiveAlbum: s.setActiveAlbum,
+      activeArtist: s.activeArtist,
+      setActiveArtist: s.setActiveArtist,
+      activeGenre: s.activeGenre,
+      setActiveGenre: s.setActiveGenre,
+      activePlaylist: s.activePlaylist,
+      setActivePlaylist: s.setActivePlaylist,
+      activeUserPlaylist: s.activeUserPlaylist,
+      setActiveUserPlaylist: s.setActiveUserPlaylist,
+      searchQuery: s.searchQuery,
+      setSearchQuery: s.setSearchQuery,
+      searchInput: s.searchInput,
+      setSearchInput: s.setSearchInput
+    }))
+  )
 
   const navHistoryRef = useRef<any[]>([])
   const navForwardRef = useRef<any[]>([])

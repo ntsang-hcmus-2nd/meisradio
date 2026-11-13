@@ -91,7 +91,7 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
   handleScItemClick,
   handleDashboardItemDownload,
   setContextMenu,
-  setPlayQueue,
+  setPlayQueue: _setPlayQueue,
   handleTrackContextMenu,
   openTagEditor,
   openTrackInfo,
@@ -310,50 +310,52 @@ export const SoundCloudView: React.FC<SoundCloudViewProps> = ({
                               onClick={() => handleScItemClick(item)}
                               onContextMenu={(e) => {
                                 e.preventDefault()
+                                const queueTrack = normalizeScQueueItem(item)
+                                const menuItems: any[] = [
+                                  {
+                                    id: 'sc-play',
+                                    label: t('contextMenu.play'),
+                                    onClick: () => handleScItemClick(item)
+                                  }
+                                ]
+                                if (queueTrack) {
+                                  menuItems.push({
+                                    id: 'sc-queue',
+                                    label: t('contextMenu.addQueue'),
+                                    onClick: () => {
+                                      const queueKey = queueTrack.originalId || queueTrack.id
+                                      const existingQueue =
+                                        usePlayerStore.getState().playQueue || []
+                                      if (
+                                        existingQueue.some(
+                                          (p) => (p.originalId || p.id) === queueKey
+                                        )
+                                      ) {
+                                        showToast(
+                                          t('toasts.alreadyInQueue', {
+                                            title: queueTrack.title
+                                          }),
+                                          'info'
+                                        )
+                                        return
+                                      }
+                                      usePlayerStore.getState().addToQueue(queueTrack)
+                                      showToast(
+                                        t('toasts.addedToQueue', { title: queueTrack.title }),
+                                        'success'
+                                      )
+                                    }
+                                  })
+                                }
+                                menuItems.push({
+                                  id: 'sc-dl',
+                                  label: t('contextMenu.downloadToLib'),
+                                  onClick: () => handleDashboardItemDownload(item)
+                                })
                                 setContextMenu({
                                   x: e.clientX,
                                   y: e.clientY,
-                                  items: [
-                                    {
-                                      id: 'sc-play',
-                                      label: t('contextMenu.play'),
-                                      onClick: () => handleScItemClick(item)
-                                    },
-                                    {
-                                      id: 'sc-queue',
-                                      label: t('contextMenu.addQueue'),
-                                      onClick: () => {
-                                        const track = normalizeScQueueItem(item)
-                                        if (!track) return
-                                        const queueKey = track.originalId || track.id
-                                        const existingQueue =
-                                          usePlayerStore.getState().playQueue || []
-                                        if (
-                                          existingQueue.some(
-                                            (p) => (p.originalId || p.id) === queueKey
-                                          )
-                                        ) {
-                                          showToast(
-                                            t('toasts.alreadyInQueue', {
-                                              title: track.title
-                                            }),
-                                            'info'
-                                          )
-                                          return
-                                        }
-                                        setPlayQueue((prev: any[]) => [...(prev || []), track])
-                                        showToast(
-                                          t('toasts.addedToQueue', { title: track.title }),
-                                          'success'
-                                        )
-                                      }
-                                    },
-                                    {
-                                      id: 'sc-dl',
-                                      label: t('contextMenu.downloadToLib'),
-                                      onClick: () => handleDashboardItemDownload(item)
-                                    }
-                                  ]
+                                  items: menuItems
                                 })
                               }}
                             >

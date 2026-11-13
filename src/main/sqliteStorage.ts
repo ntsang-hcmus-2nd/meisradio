@@ -1508,20 +1508,21 @@ export class SqliteStorage {
     try {
       const now = Date.now()
       this.db.transaction(() => {
-        // 1. Lưu snapshot chính vào library_cache
+        // 1. Lưu metadata tổng quan vào library_cache (tracks đọc từ library_tracks để tránh nhân đôi JSON)
         this.stmtSetLibraryCache?.run(
           'current_library',
           data.libraryPath,
           JSON.stringify(data.libraryPaths || []),
           data.multiArtistVersion ?? 2,
           data.dsdVersion ?? 1,
-          JSON.stringify(data.tracks || []),
+          '__DEFERRED__',
           JSON.stringify(data.playlists || []),
           JSON.stringify(data.preAggregated || null),
           now
         )
 
-        // 2. Lưu từng bài hát vào bảng library_tracks để hỗ trợ query/index
+        // 2. Đồng bộ bảng library_tracks (xóa bài cũ trước khi chèn lại toàn bộ)
+        this.db?.exec('DELETE FROM library_tracks;')
         if (this.stmtUpsertTrack && Array.isArray(data.tracks)) {
           for (const t of data.tracks) {
             const trackId = t.id || t.filePath
@@ -1977,25 +1978,29 @@ export class SqliteStorage {
         // KHÔNG lọc theo file_path dùng chung -> các track anh em vẫn giữ nguyên trong snapshot.
         const row = this.stmtGetLibraryCache?.get<any>('current_library')
         if (row && row.tracks_json) {
-          let tracks: any[] = []
-          try {
-            tracks = JSON.parse(row.tracks_json || '[]')
-          } catch {
-            /* ignore */
+          if (row.tracks_json === '__DEFERRED__') {
+            this.stmtUpdateLibraryCacheTracks?.run('__DEFERRED__', null, now)
+          } else {
+            let tracks: any[] = []
+            try {
+              tracks = JSON.parse(row.tracks_json || '[]')
+            } catch {
+              /* ignore */
+            }
+
+            const remainingTracks = tracks.filter((t: any) => {
+              if (!t) return false
+              if (normalizedToRemove.has(normalizeVirtualPathKey(t.id))) return false
+              if (normalizedToRemove.has(normalizeVirtualPathKey(t.filePath))) return false
+              return true
+            })
+
+            this.stmtUpdateLibraryCacheTracks?.run(
+              JSON.stringify(remainingTracks),
+              row.pre_aggregated_json,
+              now
+            )
           }
-
-          const remainingTracks = tracks.filter((t: any) => {
-            if (!t) return false
-            if (normalizedToRemove.has(normalizeVirtualPathKey(t.id))) return false
-            if (normalizedToRemove.has(normalizeVirtualPathKey(t.filePath))) return false
-            return true
-          })
-
-          this.stmtUpdateLibraryCacheTracks?.run(
-            JSON.stringify(remainingTracks),
-            row.pre_aggregated_json,
-            now
-          )
         }
       })
     } catch (e) {
@@ -2042,7 +2047,7 @@ export class SqliteStorage {
       // Nguồn 2 (fallback): snapshot library_cache
       try {
         const row = this.stmtGetLibraryCache?.get<any>('current_library')
-        if (row && row.tracks_json) {
+        if (row && row.tracks_json && row.tracks_json !== '__DEFERRED__') {
           let tracks: any[] = []
           try {
             tracks = JSON.parse(row.tracks_json || '[]')
@@ -2121,7 +2126,7 @@ export class SqliteStorage {
       // Nguồn 2 (fallback): snapshot library_cache
       try {
         const row = this.stmtGetLibraryCache?.get<any>('current_library')
-        if (row && row.tracks_json) {
+        if (row && row.tracks_json && row.tracks_json !== '__DEFERRED__') {
           let tracks: any[] = []
           try {
             tracks = JSON.parse(row.tracks_json || '[]')
@@ -2242,33 +2247,37 @@ export class SqliteStorage {
         // Cập nhật library_cache
         const row = this.stmtGetLibraryCache?.get<any>('current_library')
         if (row && row.tracks_json) {
-          let tracks: any[] = []
-          try {
-            tracks = JSON.parse(row.tracks_json || '[]')
-          } catch {
-            /* ignore */
+          if (row.tracks_json === '__DEFERRED__') {
+            this.stmtUpdateLibraryCacheTracks?.run('__DEFERRED__', null, now)
+          } else {
+            let tracks: any[] = []
+            try {
+              tracks = JSON.parse(row.tracks_json || '[]')
+            } catch {
+              /* ignore */
+            }
+
+            const isUnderDir = (p: string) => {
+              if (!p) return false
+              if (p === cleanDir) return true
+              const normP = p.replace(/\\/g, '/')
+              if (normP.startsWith(prefixSlash)) return true
+              if (prefixUrl && p.startsWith(prefixUrl)) return true
+              return false
+            }
+
+            const remainingTracks = tracks.filter((t: any) => {
+              if (!t) return false
+              if (isUnderDir(t.id) || isUnderDir(t.filePath)) return false
+              return true
+            })
+
+            this.stmtUpdateLibraryCacheTracks?.run(
+              JSON.stringify(remainingTracks),
+              row.pre_aggregated_json,
+              now
+            )
           }
-
-          const isUnderDir = (p: string) => {
-            if (!p) return false
-            if (p === cleanDir) return true
-            const normP = p.replace(/\\/g, '/')
-            if (normP.startsWith(prefixSlash)) return true
-            if (prefixUrl && p.startsWith(prefixUrl)) return true
-            return false
-          }
-
-          const remainingTracks = tracks.filter((t: any) => {
-            if (!t) return false
-            if (isUnderDir(t.id) || isUnderDir(t.filePath)) return false
-            return true
-          })
-
-          this.stmtUpdateLibraryCacheTracks?.run(
-            JSON.stringify(remainingTracks),
-            row.pre_aggregated_json,
-            now
-          )
         }
       })
     } catch (e) {

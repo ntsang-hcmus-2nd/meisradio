@@ -1,24 +1,18 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSettingsStore, usePlayerStore, useUIStore } from '../stores'
 import { formatImageSource } from '../utils/urlUtils'
-import {
-  extractThemeColors,
-  initThemeColorCache,
-  generateThemeFromColor
-} from '../utils/colorUtils'
+import { extractThemeColors, generateThemeFromColor } from '../utils/colorUtils'
 
 export function useTheming() {
-  const {
-    appMode,
-    customBgImage,
-    useTrackCoverAsBg,
-    accentColorMode,
-    customAccentColor,
-    customBgOpacity,
-    customBgBlur,
-    streamPort,
-    colorScheme
-  } = useSettingsStore()
+  const appMode = useSettingsStore((s) => s.appMode)
+  const customBgImage = useSettingsStore((s) => s.customBgImage)
+  const useTrackCoverAsBg = useSettingsStore((s) => s.useTrackCoverAsBg)
+  const accentColorMode = useSettingsStore((s) => s.accentColorMode)
+  const customAccentColor = useSettingsStore((s) => s.customAccentColor)
+  const customBgOpacity = useSettingsStore((s) => s.customBgOpacity)
+  const customBgBlur = useSettingsStore((s) => s.customBgBlur)
+  const streamPort = useSettingsStore((s) => s.streamPort)
+  const colorScheme = useSettingsStore((s) => s.colorScheme)
 
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const setThemeColor = useUIStore((s) => s.setThemeColor)
@@ -26,59 +20,75 @@ export function useTheming() {
   const isLite = appMode === 'lite' || appMode === 'core'
   const isCore = appMode === 'core'
 
-  const [trackHighResCover, setTrackHighResCover] = useState<string | null>(null)
+  const currentTrackKey = currentTrack?.id || currentTrack?.filePath || ''
+  const bgCoverSize = customBgBlur > 0.5 ? 256 : 480
+  const [trackCoverState, setTrackCoverState] = useState<{ key: string; url: string | null }>({
+    key: '',
+    url: null
+  })
 
-  // Fetch track cover high-res (chỉ khi nền dùng cover bài hát — mặc định tắt,
-  // theme dùng thumbnail sẵn có để tránh 1 IPC + decode 480px mỗi bài)
+  // Fetch track cover high-res (chỉ khi nền dùng cover bài hát — mặc định tắt).
+  // Giữ URL cũ trong lúc chờ IPC để không decode/crossfade 2 lần (128px -> 480px) mỗi bài.
   useEffect(() => {
     if (isCore || !currentTrack || !useTrackCoverAsBg) {
-      setTrackHighResCover(null)
+      setTrackCoverState({ key: '', url: null })
       return
     }
 
+    const key = currentTrack.id || currentTrack.filePath || ''
     if (currentTrack.isOnline) {
-      setTrackHighResCover(currentTrack.coverArtHighRes || currentTrack.coverArt || null)
+      setTrackCoverState({
+        key,
+        url: currentTrack.coverArtHighRes || currentTrack.coverArt || null
+      })
       return
     }
 
     let cleanup: (() => void) | undefined
-    if (!currentTrack.isCloud && (currentTrack.id || currentTrack.filePath)) {
+    if (!currentTrack.isCloud && key) {
       let isCurrent = true
       // @ts-ignore
       window.api
-        ?.getOriginalTrackCover?.(currentTrack.id || currentTrack.filePath, 480)
+        ?.getOriginalTrackCover?.(key, bgCoverSize)
         ?.then((cover: string | null) => {
           if (isCurrent) {
-            setTrackHighResCover(cover || currentTrack.coverArt || null)
+            setTrackCoverState({ key, url: cover || currentTrack.coverArt || null })
           }
         })
         ?.catch(() => {
-          if (isCurrent) setTrackHighResCover(currentTrack.coverArt || null)
+          if (isCurrent) setTrackCoverState({ key, url: currentTrack.coverArt || null })
         })
       cleanup = () => {
         isCurrent = false
       }
     } else {
-      setTrackHighResCover(currentTrack.coverArt || null)
+      setTrackCoverState({ key, url: currentTrack.coverArt || null })
     }
     return cleanup
   }, [
     currentTrack,
-    currentTrack?.id,
-    currentTrack?.filePath,
+    currentTrackKey,
     currentTrack?.coverArt,
     currentTrack?.coverArtHighRes,
     currentTrack?.isOnline,
     currentTrack?.isCloud,
     useTrackCoverAsBg,
+    bgCoverSize,
     isCore
   ])
+
+  const trackHighResCover =
+    trackCoverState.key === currentTrackKey
+      ? trackCoverState.url
+      : currentTrack?.coverArtHighRes || currentTrack?.coverArt || null
 
   // Determine effective background image
   const effectiveBgImage = isCore
     ? null
     : useTrackCoverAsBg
-      ? trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt || null
+      ? currentTrack
+        ? trackHighResCover
+        : null
       : customBgImage
 
   // Chuẩn hóa ảnh nền thành URL an toàn
@@ -86,79 +96,14 @@ export function useTheming() {
     return effectiveBgImage ? formatImageSource(effectiveBgImage, streamPort) : null
   }, [effectiveBgImage, streamPort])
 
-  // Dual-layer Background Crossfade cho chế độ Standard
-  const [bgLayerA, setBgLayerA] = useState<string | null>(null)
-  const [bgLayerB, setBgLayerB] = useState<string | null>(null)
-  const [activeBgLayer, setActiveBgLayer] = useState<'A' | 'B'>('A')
+  // Theme Colors Cache: trích xuất và lưu LRU on-demand trong extractThemeColors thay vì nạp toàn bảng lúc boot
 
-  useEffect(() => {
-    if (isCore) {
-      setBgLayerA(null)
-      setBgLayerB(null)
-      return
-    }
-
-    if (!resolvedBgImage) {
-      setBgLayerA(null)
-      setBgLayerB(null)
-      return
-    }
-
-    if (isLite) {
-      setBgLayerA(resolvedBgImage)
-      setActiveBgLayer('A')
-      return
-    }
-
-    let isCancelled = false
-    const targetLayer = activeBgLayer === 'A' ? 'B' : 'A'
-
-    const applyTransition = () => {
-      if (isCancelled) return
-      if (targetLayer === 'B') {
-        setBgLayerB(resolvedBgImage)
-        setActiveBgLayer('B')
-      } else {
-        setBgLayerA(resolvedBgImage)
-        setActiveBgLayer('A')
-      }
-    }
-
-    const img = new Image()
-    if (resolvedBgImage.startsWith('http://') || resolvedBgImage.startsWith('https://')) {
-      img.crossOrigin = 'anonymous'
-    }
-    // Decode xong mới crossfade: tránh swap background giữa chừng gây double raster + giật
-    if (typeof img.decode === 'function') {
-      img.src = resolvedBgImage
-      img.decode().then(applyTransition).catch(applyTransition)
-    } else {
-      img.onload = applyTransition
-      img.onerror = applyTransition
-      img.src = resolvedBgImage
-    }
-
-    return () => {
-      isCancelled = true
-    }
-    // activeBgLayer cố ý loại trừ: thêm vào sẽ gây ping-pong A→B→A vô hạn
-    // vì effect vừa đọc vừa lật layer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedBgImage, isLite, isCore])
-
-  // Theme Colors Cache
-  useEffect(() => {
-    if ((window as any).api?.getThemeColorsCache) {
-      ;(window as any).api
-        .getThemeColorsCache()
-        .then((cachedColors: any) => {
-          if (cachedColors) {
-            initThemeColorCache(cachedColors)
-          }
-        })
-        .catch(() => {})
-    }
-  }, [])
+  const fallbackCover =
+    !currentTrack?.coverArtHighRes &&
+    !currentTrack?.coverArt &&
+    trackCoverState.key === currentTrackKey
+      ? trackCoverState.url
+      : null
 
   // Apply Background & Extract Theme Colors (60/30/10)
   useEffect(() => {
@@ -169,19 +114,10 @@ export function useTheming() {
     const fallback30 = lightFallback ? '#e2e8f0' : '#27272a'
     const fallback10 = lightFallback ? '#059669' : '#10b981'
     if (isCore) {
-      document.documentElement.style.setProperty('--bg-image', 'none')
       document.documentElement.style.setProperty('--theme-60', fallback60)
       document.documentElement.style.setProperty('--theme-30', fallback30)
       document.documentElement.style.setProperty('--theme-10', fallback10)
       return
-    }
-
-    const bgUrlToUse = resolvedBgImage || effectiveBgImage
-    if (bgUrlToUse) {
-      const sanitizedUrl = bgUrlToUse.replace(/"/g, '\\"')
-      document.documentElement.style.setProperty('--bg-image', `url("${sanitizedUrl}")`)
-    } else {
-      document.documentElement.style.setProperty('--bg-image', 'none')
     }
 
     if (accentColorMode === 'custom') {
@@ -218,7 +154,7 @@ export function useTheming() {
       }
     }
 
-    const trackCover = trackHighResCover || currentTrack?.coverArtHighRes || currentTrack?.coverArt
+    const trackCover = currentTrack?.coverArtHighRes || currentTrack?.coverArt || fallbackCover
 
     // Trích màu lúc rảnh: canvas + K-means chạy sau khi audio đã start, khỏi tranh main thread
     const runThemeExtract = () => {
@@ -259,9 +195,7 @@ export function useTheming() {
     customAccentColor,
     customBgImage,
     useTrackCoverAsBg,
-    effectiveBgImage,
-    resolvedBgImage,
-    trackHighResCover,
+    fallbackCover,
     currentTrack?.id,
     currentTrack?.filePath,
     currentTrack?.themeColors,
@@ -277,12 +211,11 @@ export function useTheming() {
   }, [customBgOpacity])
 
   useEffect(() => {
-    // shortcut: blur fullscreen >12px tốn GPU gấp bội mà mắt thường khó phân biệt — kẹp hiệu ứng, giữ nguyên giá trị user đã lưu
-    const cappedBlur = Math.min(customBgBlur, 12)
-    document.documentElement.style.setProperty('--bg-blur', `${cappedBlur}px`)
+    const blurPx = Math.max(0, customBgBlur)
+    document.documentElement.style.setProperty('--bg-blur', `${blurPx}px`)
     document.documentElement.style.setProperty(
       '--bg-filter',
-      cappedBlur > 0 ? `blur(${cappedBlur}px)` : 'none'
+      blurPx > 0 ? `blur(${blurPx}px)` : 'none'
     )
   }, [customBgBlur])
 
@@ -297,9 +230,6 @@ export function useTheming() {
   }, [isLite, isCore, effectiveBgImage, setThemeColor])
 
   return {
-    bgLayerA,
-    bgLayerB,
-    activeBgLayer,
     resolvedBgImage,
     effectiveBgImage,
     trackHighResCover,

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { ArrowLeft, Search, X, Sparkles, Cloud } from 'lucide-react'
 
 // Modals & Panels (Lazy loaded for optimized bundle size & fast startup)
@@ -84,6 +85,7 @@ import { FullscreenLyrics } from './components/FullscreenLyrics'
 import { PlayerBar } from './components/PlayerBar'
 import { GlobalTooltip } from './components/GlobalTooltip'
 import { ViewModeSlider } from './components/ViewModeSlider'
+import { WebGLBackground } from './components/visualizers/WebGLBackground'
 import { AnimatePresence, motion } from 'motion/react'
 import { toastSlide, useMotionReduced, viewFade } from './components/motion'
 
@@ -114,7 +116,7 @@ import {
 } from './stores'
 import { useTranslation, useLanguage } from './locales'
 import { formatAudioSource, extractRawFilePath } from './utils/urlUtils'
-import { sliderToGain } from './utils/audioUtils'
+import { sliderToGain, shouldUseBassEngine } from './utils/audioUtils'
 import { isDsdTrack, formatDuration } from './utils/formatUtils'
 import { splitArtistString, removeAccents, matchesQuery } from './utils/textUtils'
 import {
@@ -142,6 +144,7 @@ export default function App() {
   const bitPerfectEnabled = usePlayerStore((s) => s.bitPerfectEnabled)
   const setPlayQueue = usePlayerStore((s) => s.setPlayQueue)
   const setOriginalQueue = usePlayerStore((s) => s.setOriginalQueue)
+  const addToQueue = usePlayerStore((s) => s.addToQueue)
   const volume = usePlayerStore((s) => s.volume)
   const setVolume = usePlayerStore((s) => s.setVolume)
   const crossfadeEnabled = usePlayerStore((s) => s.crossfadeEnabled)
@@ -194,7 +197,50 @@ export default function App() {
     showToast,
     showVisualizer,
     setShowVisualizer
-  } = useUIStore()
+  } = useUIStore(
+    useShallow((s) => ({
+      activeView: s.activeView,
+      setActiveView: s.setActiveView,
+      viewMode: s.viewMode,
+      setViewMode: s.setViewMode,
+      themeColor: s.themeColor,
+      toast: s.toast,
+      hideToast: s.hideToast,
+      customDialog: s.customDialog,
+      setCustomDialog: s.setCustomDialog,
+      showQueuePanel: s.showQueuePanel,
+      setShowQueuePanel: s.setShowQueuePanel,
+      showLyricsPanel: s.showLyricsPanel,
+      setShowLyricsPanel: s.setShowLyricsPanel,
+      isLyricsMaximized: s.isLyricsMaximized,
+      setIsLyricsMaximized: s.setIsLyricsMaximized,
+      isMiniPlayer: s.isMiniPlayer,
+      setIsMiniPlayer: s.setIsMiniPlayer,
+      showCreateUserPlaylistModal: s.showCreateUserPlaylistModal,
+      setShowCreateUserPlaylistModal: s.setShowCreateUserPlaylistModal,
+      showAddSongsToUserPlaylistModal: s.showAddSongsToUserPlaylistModal,
+      setShowAddSongsToUserPlaylistModal: s.setShowAddSongsToUserPlaylistModal,
+      editingUserPlaylist: s.editingUserPlaylist,
+      setEditingUserPlaylist: s.setEditingUserPlaylist,
+      showEditUserPlaylistModal: s.showEditUserPlaylistModal,
+      setShowEditUserPlaylistModal: s.setShowEditUserPlaylistModal,
+      showCreateModal: s.showCreateModal,
+      setShowCreateModal: s.setShowCreateModal,
+      showAddSongsModal: s.showAddSongsModal,
+      setShowAddSongsModal: s.setShowAddSongsModal,
+      playlistRename: s.playlistRename,
+      setPlaylistRename: s.setPlaylistRename,
+      showEQ: s.showEQ,
+      setShowEQ: s.setShowEQ,
+      showSpectrogramModal: s.showSpectrogramModal,
+      setShowSpectrogramModal: s.setShowSpectrogramModal,
+      setShowBackupModal: s.setShowBackupModal,
+      setShowInsightsModal: s.setShowInsightsModal,
+      showToast: s.showToast,
+      showVisualizer: s.showVisualizer,
+      setShowVisualizer: s.setShowVisualizer
+    }))
+  )
 
   const {
     libraryPath,
@@ -240,7 +286,53 @@ export default function App() {
     clearSelectedTracks,
     setTrackLyricOffsets,
     setSmartPlaylists
-  } = useLibraryStore()
+  } = useLibraryStore(
+    useShallow((s) => ({
+      libraryPath: s.libraryPath,
+      libraryTracks: s.libraryTracks,
+      playlists: s.playlists,
+      userPlaylists: s.userPlaylists,
+      favoriteTrackIds: s.favoriteTrackIds,
+      setFavoriteTrackIds: s.setFavoriteTrackIds,
+      activeAlbum: s.activeAlbum,
+      setActiveAlbum: s.setActiveAlbum,
+      activeArtist: s.activeArtist,
+      setActiveArtist: s.setActiveArtist,
+      activeGenre: s.activeGenre,
+      setActiveGenre: s.setActiveGenre,
+      activePlaylist: s.activePlaylist,
+      setActivePlaylist: s.setActivePlaylist,
+      activeUserPlaylist: s.activeUserPlaylist,
+      setActiveUserPlaylist: s.setActiveUserPlaylist,
+      searchQuery: s.searchQuery,
+      setSearchQuery: s.setSearchQuery,
+      searchInput: s.searchInput,
+      setSearchInput: s.setSearchInput,
+      quickFilter: s.quickFilter,
+      sortField: s.sortField,
+      sortOrder: s.sortOrder,
+      playlistsRenderLimit: s.playlistsRenderLimit,
+      setPlaylistsRenderLimit: s.setPlaylistsRenderLimit,
+      preAggregatedData: s.preAggregatedData,
+      dashboardData: s.dashboardData,
+      setDashboardData: s.setDashboardData,
+      isAlbumLoading: s.isAlbumLoading,
+      setIsAlbumLoading: s.setIsAlbumLoading,
+      scDashboardData: s.scDashboardData,
+      setScDashboardData: s.setScDashboardData,
+      isScLoading: s.isScLoading,
+      setIsScLoading: s.setIsScLoading,
+      scUser: s.scUser,
+      setScUser: s.setScUser,
+      selectedScGenre: s.selectedScGenre,
+      setSelectedScGenre: s.setSelectedScGenre,
+      isYtmLoggedIn: s.isYtmLoggedIn,
+      setIsYtmLoggedIn: s.setIsYtmLoggedIn,
+      clearSelectedTracks: s.clearSelectedTracks,
+      setTrackLyricOffsets: s.setTrackLyricOffsets,
+      setSmartPlaylists: s.setSmartPlaylists
+    }))
+  )
 
   const {
     appMode,
@@ -302,7 +394,69 @@ export default function App() {
     setDiscordShowQuality,
     setDiscordShowButtons,
     setDiscordShowIdle
-  } = useSettingsStore()
+  } = useSettingsStore(
+    useShallow((s) => ({
+      appMode: s.appMode,
+      setAppMode: s.setAppMode,
+      uiStyle: s.uiStyle,
+      setUiStyle: s.setUiStyle,
+      customBgImage: s.customBgImage,
+      setCustomBgImage: s.setCustomBgImage,
+      customBgOpacity: s.customBgOpacity,
+      setCustomBgOpacity: s.setCustomBgOpacity,
+      customBgBlur: s.customBgBlur,
+      setCustomBgBlur: s.setCustomBgBlur,
+      useTrackCoverAsBg: s.useTrackCoverAsBg,
+      setUseTrackCoverAsBg: s.setUseTrackCoverAsBg,
+      accentColorMode: s.accentColorMode,
+      setAccentColorMode: s.setAccentColorMode,
+      customAccentColor: s.customAccentColor,
+      setCustomAccentColor: s.setCustomAccentColor,
+      streamPort: s.streamPort,
+      setStreamPort: s.setStreamPort,
+      cloudActionTrack: s.cloudActionTrack,
+      setCloudActionTrack: s.setCloudActionTrack,
+      isDownloading: s.isDownloading,
+      setIsDownloading: s.setIsDownloading,
+      setDownloadProgress: s.setDownloadProgress,
+      googleDriveApiKey: s.googleDriveApiKey,
+      setGoogleDriveApiKey: s.setGoogleDriveApiKey,
+      driveLink: s.driveLink,
+      setDriveLink: s.setDriveLink,
+      minimizeToTray: s.minimizeToTray,
+      setMinimizeToTray: s.setMinimizeToTray,
+      closeToTray: s.closeToTray,
+      setCloseToTray: s.setCloseToTray,
+      autoDeepCleanOnHide: s.autoDeepCleanOnHide,
+      setAutoDeepCleanOnHide: s.setAutoDeepCleanOnHide,
+      clearCacheOnStartup: s.clearCacheOnStartup,
+      setClearCacheOnStartup: s.setClearCacheOnStartup,
+      loudnessNormalization: s.loudnessNormalization,
+      setLoudnessNormalization: s.setLoudnessNormalization,
+      replayGainMode: s.replayGainMode,
+      setReplayGainMode: s.setReplayGainMode,
+      crossfeedEnabled: s.crossfeedEnabled,
+      setCrossfeedEnabled: s.setCrossfeedEnabled,
+      gaplessEnabled: s.gaplessEnabled,
+      setGaplessEnabled: s.setGaplessEnabled,
+      waveformSeekbarEnabled: s.waveformSeekbarEnabled,
+      setWaveformSeekbarEnabled: s.setWaveformSeekbarEnabled,
+      colorScheme: s.colorScheme,
+      setColorScheme: s.setColorScheme,
+      sidebarBgEnabled: s.sidebarBgEnabled,
+      setSidebarBgEnabled: s.setSidebarBgEnabled,
+      sidebarBgOpacity: s.sidebarBgOpacity,
+      setSidebarBgOpacity: s.setSidebarBgOpacity,
+      setDiscordRpcEnabled: s.setDiscordRpcEnabled,
+      setDiscordClientId: s.setDiscordClientId,
+      setDiscordShowDetails: s.setDiscordShowDetails,
+      setDiscordShowTime: s.setDiscordShowTime,
+      setDiscordShowCover: s.setDiscordShowCover,
+      setDiscordShowQuality: s.setDiscordShowQuality,
+      setDiscordShowButtons: s.setDiscordShowButtons,
+      setDiscordShowIdle: s.setDiscordShowIdle
+    }))
+  )
 
   const {
     isEqEnabled,
@@ -315,7 +469,20 @@ export default function App() {
     setSelectedDeviceId,
     bitPerfectType,
     setBitPerfectType
-  } = useAudioStore()
+  } = useAudioStore(
+    useShallow((s) => ({
+      isEqEnabled: s.isEqEnabled,
+      setIsEqEnabled: s.setIsEqEnabled,
+      eqBands: s.eqBands,
+      setEqBands: s.setEqBands,
+      preampGain: s.preampGain,
+      setPreampGain: s.setPreampGain,
+      selectedDeviceId: s.selectedDeviceId,
+      setSelectedDeviceId: s.setSelectedDeviceId,
+      bitPerfectType: s.bitPerfectType,
+      setBitPerfectType: s.setBitPerfectType
+    }))
+  )
 
   const deferredSearchQuery = useDeferredValue(searchQuery)
 
@@ -1179,7 +1346,7 @@ export default function App() {
         }
       })
 
-      setPlayQueue((prev) => [...prev, ...newTracks])
+      addToQueue(newTracks)
       showToast(
         language === 'vi'
           ? `Đã thêm ${newTracks.length} bài hát vào hàng đợi`
@@ -1187,7 +1354,7 @@ export default function App() {
         'success'
       )
     },
-    [language, showToast, setPlayQueue]
+    [language, showToast, addToQueue]
   )
 
   const { isDraggingFile } = useAppShortcuts({
@@ -1473,28 +1640,13 @@ export default function App() {
   return (
     <>
       <GlobalTooltip />
-      {!theming.isCore && (
-        <div className="custom-bg-container">
-          <div
-            className={`custom-bg-layer ${!theming.isLite ? 'transition-all' : ''}`}
-            style={{
-              backgroundImage: theming.bgLayerA
-                ? `url("${theming.bgLayerA.replace(/"/g, '\\"')}")`
-                : 'none',
-              opacity: theming.activeBgLayer === 'A' && theming.bgLayerA ? customBgOpacity : 0
-            }}
-          />
-          <div
-            className={`custom-bg-layer ${!theming.isLite ? 'transition-all' : ''}`}
-            style={{
-              backgroundImage: theming.bgLayerB
-                ? `url("${theming.bgLayerB.replace(/"/g, '\\"')}")`
-                : 'none',
-              opacity: theming.activeBgLayer === 'B' && theming.bgLayerB ? customBgOpacity : 0
-            }}
-          />
-        </div>
-      )}
+      <WebGLBackground
+        imageUrl={theming.resolvedBgImage}
+        opacity={customBgOpacity}
+        blur={customBgBlur}
+        isLite={theming.isLite}
+        isCore={theming.isCore}
+      />
 
       {/* AUDIO ELEMENT */}
       <audio
@@ -1510,9 +1662,9 @@ export default function App() {
         // mọi bài đã phát trong tiến trình renderer (~500MB/giờ khi nghe liên
         // tục). "metadata" chỉ lấy header + stream theo Range khi phát.
         preload="metadata"
-        autoPlay={!bitPerfectEnabled && !isDsdTrack(currentTrack) && isPlaying}
+        autoPlay={!shouldUseBassEngine(currentTrack, bitPerfectEnabled) && isPlaying}
         src={
-          currentTrack && !isDsdTrack(currentTrack)
+          currentTrack && !shouldUseBassEngine(currentTrack, bitPerfectEnabled)
             ? formatAudioSource(currentTrack.filePath, streamPort)
             : undefined
         }
@@ -1606,20 +1758,52 @@ export default function App() {
           <BatchActionBar
             onPlaySelected={(ids) => {
               const idSet = new Set(ids)
-              const selectedTracks = libraryTracks.filter(
-                (trk) => idSet.has(trk.id) || (trk.filePath && idSet.has(trk.filePath))
-              )
+              const pools = [
+                ...libraryTracks,
+                ...(activeAlbum?.tracks || []),
+                ...(activePlaylist?.tracks || []),
+                ...(activeArtist?.tracks || []),
+                ...(activeGenre?.tracks || []),
+                ...(activeUserPlaylist?.tracks || []),
+                ...(usePlayerStore.getState().playQueue || [])
+              ]
+              const seen = new Set<string>()
+              const selectedTracks = pools.filter((trk) => {
+                if (!trk) return false
+                const matches = idSet.has(trk.id) || (trk.filePath && idSet.has(trk.filePath))
+                if (!matches) return false
+                const dedupKey = String(trk.id || trk.filePath || '')
+                if (!dedupKey || seen.has(dedupKey)) return false
+                seen.add(dedupKey)
+                return true
+              })
               if (selectedTracks.length > 0) {
                 audioEngine.handleRowClick(selectedTracks[0], selectedTracks)
               }
             }}
             onAddToQueue={(ids) => {
               const idSet = new Set(ids)
-              const selectedTracks = libraryTracks.filter(
-                (trk) => idSet.has(trk.id) || (trk.filePath && idSet.has(trk.filePath))
-              )
+              const pools = [
+                ...libraryTracks,
+                ...(activeAlbum?.tracks || []),
+                ...(activePlaylist?.tracks || []),
+                ...(activeArtist?.tracks || []),
+                ...(activeGenre?.tracks || []),
+                ...(activeUserPlaylist?.tracks || []),
+                ...(usePlayerStore.getState().playQueue || [])
+              ]
+              const seen = new Set<string>()
+              const selectedTracks = pools.filter((trk) => {
+                if (!trk) return false
+                const matches = idSet.has(trk.id) || (trk.filePath && idSet.has(trk.filePath))
+                if (!matches) return false
+                const dedupKey = String(trk.id || trk.filePath || '')
+                if (!dedupKey || seen.has(dedupKey)) return false
+                seen.add(dedupKey)
+                return true
+              })
               if (selectedTracks.length > 0) {
-                setPlayQueue((prev) => [...prev, ...selectedTracks])
+                addToQueue(selectedTracks)
                 showToast(
                   t('toasts.addedToQueue', {
                     title: `${selectedTracks.length} ${t('common.tracks')}`
@@ -2005,7 +2189,6 @@ export default function App() {
               {/* CONTENT VIEW ROUTING */}
               <div className="flex flex-1 overflow-hidden relative">
                 <motion.div
-                  layout
                   key={`${activeView}-${activeAlbum ? (activeAlbum as any).browseId || activeAlbum.title || 'album' : ''}-${activeArtist?.name || ''}-${activeGenre?.name || ''}-${activePlaylist?.id || activePlaylist?.name || ''}-${activeUserPlaylist?.id || activeUserPlaylist?.name || ''}`}
                   className={`flex-1 flex flex-col p-4 sm:p-6 lg:p-8 relative ${
                     activeView === 'analytics'

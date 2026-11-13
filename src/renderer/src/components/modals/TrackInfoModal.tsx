@@ -318,7 +318,7 @@ export const TrackInfoModal: React.FC<TrackInfoModalProps> = ({
           <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 shadow-2xl relative group">
             <DynamicCoverArt track={track} tier="lg" className="w-full h-full object-cover" />
             {merged.isDsd && (
-              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/80 backdrop-blur-md text-amber-950 uppercase shadow">
+              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/90 text-amber-950 uppercase shadow">
                 {formatDisplay.dsdRateLabel}
               </div>
             )}

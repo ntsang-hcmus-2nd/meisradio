@@ -79,12 +79,10 @@ samp {
   from {
     opacity: 0;
     transform: translateY(12px) scale(0.99);
-    filter: blur(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-    filter: blur(0px);
   }
 }
 
@@ -115,10 +113,10 @@ body {
 /* Lớp phủ background container & layers */
 .custom-bg-container {
   position: fixed;
-  top: -50px;
-  left: -50px;
-  width: calc(100vw + 100px);
-  height: calc(100vh + 100px);
+  top: -100px;
+  left: -100px;
+  width: calc(100vw + 200px);
+  height: calc(100vh + 200px);
   z-index: -1;
   pointer-events: none;
   overflow: hidden;
@@ -136,31 +134,9 @@ body {
   transform: translateZ(0);
   image-rendering: -webkit-optimize-contrast;
   will-change: opacity;
+  transition: opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1);
   backface-visibility: hidden;
   contain: paint;
-}
-
-/* Chế độ Standard: Transition mượt mà 0.75s chống giật/stutter khi chuyển bài */
-.custom-bg-layer.transition-all {
-  transition: opacity 0.75s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.custom-bg {
-  position: fixed;
-  top: -50px;
-  left: -50px;
-  width: calc(100vw + 100px);
-  height: calc(100vh + 100px);
-  background-image: var(--bg-image);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  opacity: var(--bg-opacity);
-  filter: blur(var(--bg-blur));
-  z-index: -1;
-  pointer-events: none;
-  transform: translateZ(0);
-  image-rendering: -webkit-optimize-contrast;
 }
 
 /* ==========================================================================
@@ -257,51 +233,45 @@ body {
   from {
     opacity: 0;
     transform: scale(0.96);
-    filter: blur(8px);
   }
   to {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0px);
   }
 }
 .animate-track-crossfade {
   animation: trackCrossfade 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  will-change: opacity, transform, filter;
+  will-change: opacity, transform;
   backface-visibility: hidden;
 }
 @keyframes vinylCrossfade {
   from {
     opacity: 0;
     transform: scale(0.94);
-    filter: blur(8px);
   }
   to {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0px);
   }
 }
 .animate-vinyl-crossfade {
   animation: vinylCrossfade 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  will-change: opacity, transform, filter;
+  will-change: opacity, transform;
   backface-visibility: hidden;
 }
 @keyframes lyricsCrossfade {
   from {
     opacity: 0;
     transform: translateY(14px) scale(0.99);
-    filter: blur(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-    filter: blur(0px);
   }
 }
 .animate-lyrics-crossfade {
   animation: lyricsCrossfade 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  will-change: opacity, transform, filter;
+  will-change: opacity, transform;
   backface-visibility: hidden;
 }
 @keyframes playerTrackIn {
@@ -372,6 +342,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
   background: var(--theme-10);
 }
 html[data-theme='light'] .bg-theme-60\/40,
+html[data-theme='light'] .bg-theme-60\/50,
 html[data-theme='light'] .bg-theme-60,
 html[data-theme='light'] .bg-zinc-900,
 html[data-theme='light'] .bg-zinc-900\/80,

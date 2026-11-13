@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Radio, X, Loader2 } from 'lucide-react'
 import { useTranslation } from '../locales'
 import { usePlayerStore } from '../stores'
 import { AnimatePresence, motion } from 'motion/react'
@@ -292,11 +291,12 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
             const OfflineCtxClass =
               window.OfflineAudioContext || (window as any).webkitOfflineAudioContext
             const decodeCtx = new OfflineCtxClass(1, 1, fileSampleRate)
-            audioBuffer = await decodeCtx.decodeAudioData(audioData.buffer.slice(0))
+            audioBuffer = await decodeCtx.decodeAudioData(audioData.buffer)
           } catch (_offlineErr) {
+            if (audioData.buffer.byteLength === 0) throw _offlineErr
             const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext
             const tempCtx = new AudioCtxClass()
-            audioBuffer = await tempCtx.decodeAudioData(audioData.buffer.slice(0))
+            audioBuffer = await tempCtx.decodeAudioData(audioData.buffer)
             try {
               tempCtx.close()
             } catch (_c) {}
@@ -506,9 +506,6 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
               {/* MODAL HEADER */}
               <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70 shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-theme-10/10 text-theme-10 rounded-xl">
-                    <Radio size={22} />
-                  </div>
                   <div>
                     <div className="flex items-center gap-3">
                       <h2 className="text-lg font-bold text-white">
@@ -552,10 +549,10 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
 
                 <button
                   onClick={handleModalClose}
-                  className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition"
+                  className="px-2.5 py-1 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition text-xl leading-none font-light"
                   title={t('modals.spectrogram.closeWindow')}
                 >
-                  <X size={20} />
+                  ×
                 </button>
               </div>
 
@@ -582,7 +579,6 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
                   {/* LOADING SPINNER */}
                   {loading && (
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
-                      <Loader2 size={36} className="text-theme-10 animate-spin" />
                       <span className="text-zinc-300 text-sm font-medium">
                         {t('modals.spectrogram.generating')}
                       </span>
@@ -632,7 +628,7 @@ export const SpectrogramModal: React.FC<SpectrogramModalProps> = React.memo(
                           top: Math.max(hoverInfo.y - 30, 10)
                         }}
                       >
-                        ⏱ {hoverInfo.time} | ⚡ {hoverInfo.freq}
+                        {hoverInfo.time} | {hoverInfo.freq}
                       </div>
                     </>
                   )}

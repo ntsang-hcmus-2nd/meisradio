@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useLibraryStore, usePlayerStore, useUIStore, useSettingsStore } from '../stores'
 import { useTranslation, useLanguage } from '../locales'
 import { splitArtistString } from '../utils/textUtils'
@@ -48,11 +49,28 @@ export function useLibraryOperations({
     activeUserPlaylist,
     setActiveUserPlaylist,
     setPreAggregatedData
-  } = useLibraryStore()
+  } = useLibraryStore(
+    useShallow((s) => ({
+      setLibraryPath: s.setLibraryPath,
+      libraryPaths: s.libraryPaths,
+      setLibraryPaths: s.setLibraryPaths,
+      libraryTracks: s.libraryTracks,
+      setLibraryTracks: s.setLibraryTracks,
+      playlists: s.playlists,
+      setPlaylists: s.setPlaylists,
+      userPlaylists: s.userPlaylists,
+      setUserPlaylists: s.setUserPlaylists,
+      activePlaylist: s.activePlaylist,
+      setActivePlaylist: s.setActivePlaylist,
+      activeUserPlaylist: s.activeUserPlaylist,
+      setActiveUserPlaylist: s.setActiveUserPlaylist,
+      setPreAggregatedData: s.setPreAggregatedData
+    }))
+  )
 
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const setCurrentTrack = usePlayerStore((s) => s.setCurrentTrack)
-  const setPlayQueue = usePlayerStore((s) => s.setPlayQueue)
+  const addToQueue = usePlayerStore((s) => s.addToQueue)
 
   const {
     activeView,
@@ -67,7 +85,22 @@ export function useLibraryOperations({
     setShowEditUserPlaylistModal,
     playlistRename,
     setPlaylistRename
-  } = useUIStore()
+  } = useUIStore(
+    useShallow((s) => ({
+      activeView: s.activeView,
+      setActiveView: s.setActiveView,
+      showToast: s.showToast,
+      setCustomDialog: s.setCustomDialog,
+      setShowCreateModal: s.setShowCreateModal,
+      setShowAddSongsModal: s.setShowAddSongsModal,
+      setShowCreateUserPlaylistModal: s.setShowCreateUserPlaylistModal,
+      setShowAddSongsToUserPlaylistModal: s.setShowAddSongsToUserPlaylistModal,
+      setEditingUserPlaylist: s.setEditingUserPlaylist,
+      setShowEditUserPlaylistModal: s.setShowEditUserPlaylistModal,
+      playlistRename: s.playlistRename,
+      setPlaylistRename: s.setPlaylistRename
+    }))
+  )
 
   const setIsReloading = useSettingsStore((s) => s.setIsReloading)
 
@@ -756,7 +789,7 @@ export function useLibraryOperations({
           label: t('contextMenu.addQueue'),
           icon: <ListPlus size={14} />,
           onClick: () => {
-            setPlayQueue((prev) => [...prev, track])
+            addToQueue(track)
             showToast(t('toasts.addedToQueue', { title: track.title }), 'success')
           }
         },
@@ -1055,7 +1088,7 @@ export function useLibraryOperations({
       t,
       language,
       loadLibrary,
-      setPlayQueue,
+      addToQueue,
       setUserPlaylists,
       setActiveUserPlaylist,
       setShowCreateUserPlaylistModal

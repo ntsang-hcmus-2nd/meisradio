@@ -114,7 +114,7 @@ export const GlobalTooltip: React.FC = () => {
   if (!tip.visible) return null
   return (
     <div
-      className="fixed z-[100001] px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap pointer-events-none shadow-xl backdrop-blur-md transition-all duration-150"
+      className="fixed z-[100001] px-2.5 py-1 bg-zinc-950/95 border border-zinc-700/80 text-[11px] font-medium text-white rounded-lg whitespace-nowrap pointer-events-none shadow-xl transition-all duration-150"
       style={{ left: tip.left, top: tip.top, transform: tip.transform }}
     >
       {tip.text}

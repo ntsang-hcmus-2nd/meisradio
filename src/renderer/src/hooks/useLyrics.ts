@@ -156,6 +156,7 @@ export function useLyrics() {
     }
 
     let isCurrent = true
+    setOriginalCover(currentTrack.coverArt || null)
     if (!currentTrack.isCloud && (currentTrack.id || currentTrack.filePath)) {
       window.api
         ?.getOriginalTrackCover?.(currentTrack.id || currentTrack.filePath)

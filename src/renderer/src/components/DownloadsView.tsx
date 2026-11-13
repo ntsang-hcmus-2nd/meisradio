@@ -531,7 +531,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
         <div className="flex items-center gap-3 shrink-0">
           {connected ? (
             <div
-              className="flex items-center gap-2.5 bg-zinc-900/70 border border-emerald-500/30 px-3 py-2 rounded-xl backdrop-blur-md"
+              className="flex items-center gap-2.5 bg-zinc-900/70 border border-emerald-500/30 px-3 py-2 rounded-xl"
               title={t('downloads.connectedAs').replace('{username}', username || 'User')}
             >
               <span className="relative flex h-2.5 w-2.5">
@@ -566,7 +566,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
       </div>
 
       {/* 2. DOWNLOAD FOLDER SELECTION BAR */}
-      <div className="bg-zinc-900/60 border border-theme-30/40 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 backdrop-blur-md shrink-0">
+      <div className="bg-zinc-900/60 border border-theme-30/40 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 sm:gap-4 shrink-0">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
             <FolderOpen size={18} />
@@ -605,7 +605,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({ onPlayTrack }) => 
 
       {/* 3. NOT CONNECTED CALLOUT / LOGIN HERO (IF NOT LOGGED IN) */}
       {!connected && (
-        <div className="bg-gradient-to-br from-theme-10/10 via-zinc-900/80 to-zinc-950 border border-theme-10/30 rounded-3xl p-6 lg:p-8 backdrop-blur-xl relative overflow-hidden shrink-0">
+        <div className="bg-gradient-to-br from-theme-10/10 via-zinc-900/80 to-zinc-950 border border-theme-10/30 rounded-3xl p-6 lg:p-8 relative overflow-hidden shrink-0">
           <div className="max-w-2xl space-y-4">
             <h2 className="text-2xl font-bold text-white">{t('downloads.loginOrRegister')}</h2>
 

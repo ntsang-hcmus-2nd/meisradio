@@ -6,7 +6,9 @@ import { BrowserWindow, session, dialog, ipcMain } from 'electron'
 import axios from 'axios'
 import { getConfig, saveConfig, ytdlp, getBinaryDir, getMainWindow } from './sharedContext'
 import { sanitizeDirectoryName, sanitizeFileName } from './libraryScanner'
-import { streamUrlCache, getStreamPort, extractCovers } from './streamServer'
+import { streamUrlCache, setStreamUrlCache, getStreamPort, extractCovers } from './streamServer'
+
+const YTM_HTTP_TIMEOUT_MS = 8000
 
 // ==========================================
 // BÓC TÁCH NỘI DUNG YOUTUBE MUSIC & SAPISID
@@ -171,7 +173,7 @@ export async function searchOnline(query: string) {
         const authHash = generateSapisidHash(config.ytCookie)
         if (authHash) headers['Authorization'] = authHash
       }
-      const ytmPromise = axios.post(url, payload, { headers })
+      const ytmPromise = axios.post(url, payload, { headers, timeout: YTM_HTTP_TIMEOUT_MS })
 
       const [ytdlpResponse, ytmResponse] = await Promise.allSettled([ytdlpPromise, ytmPromise])
 
@@ -460,7 +462,7 @@ export async function getHomeDashboard(): Promise<{
       if (authHash) headers['Authorization'] = authHash
     }
 
-    const response = await axios.post(url, payload, { headers })
+    const response = await axios.post(url, payload, { headers, timeout: YTM_HTTP_TIMEOUT_MS })
     const data = response.data
 
     const sections: any[] = []
@@ -539,7 +541,7 @@ export async function getYtmPlaylist(
       if (authHash) headers['Authorization'] = authHash
     }
 
-    const response = await axios.post(url, payload, { headers })
+    const response = await axios.post(url, payload, { headers, timeout: YTM_HTTP_TIMEOUT_MS })
     const data = response.data
 
     const tracks: any[] = []
@@ -625,7 +627,7 @@ export async function preloadStream(targetId: string): Promise<{ success: boolea
     if (config.ytCookie) ytOptions.addHeader = [`Cookie: ${config.ytCookie}`]
 
     const info = (await ytdlp(targetId, ytOptions as any)) as any
-    streamUrlCache.set(targetId, { url: info.url, expires: Date.now() + 3600000 })
+    setStreamUrlCache(targetId, info.url)
     return { success: true }
   } catch {
     return { success: false }
@@ -659,7 +661,7 @@ export async function logWatchHistory(
       if (authHash) headers['Authorization'] = authHash
     }
 
-    await axios.post(url, payload, { headers })
+    await axios.post(url, payload, { headers, timeout: YTM_HTTP_TIMEOUT_MS })
     return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }
@@ -693,7 +695,7 @@ export async function getUpNext(
       if (authHash) headers['Authorization'] = authHash
     }
 
-    const response = await axios.post(url, payload, { headers })
+    const response = await axios.post(url, payload, { headers, timeout: YTM_HTTP_TIMEOUT_MS })
     const data = response.data
 
     const tracks: any[] = []
@@ -764,7 +766,7 @@ export async function getYtmArtist(
       if (authHash) headers['Authorization'] = authHash
     }
 
-    const response = await axios.post(url, payload, { headers })
+    const response = await axios.post(url, payload, { headers, timeout: YTM_HTTP_TIMEOUT_MS })
     const data = response.data
 
     const tracks: any[] = []

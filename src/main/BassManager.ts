@@ -32,6 +32,9 @@ const BASS_WASAPI_EXCLUSIVE = 1
 const BASS_WASAPI_AUTOFORMAT = 2
 const BASS_WASAPI_BUFFER = 4
 const BASS_WASAPI_CURVE_LINEAR = 0
+// Native C BASSWASAPI callback constant: BASSWASAPI pulls from BASS stream handle `user` directly
+// on the audio thread without invoking a Koffi JS callback (prevents thread-marshaling deadlocks/crashes).
+const WASAPIPROC_BASS = -1
 
 // Locate BASS DLLs directory
 export function getBassDllPath(dllName: string): string {
@@ -132,7 +135,6 @@ export class BassManager extends EventEmitter {
   private BASS_ChannelGetInfo: any
   private BASS_ChannelGetAttribute: any
   private BASS_ChannelSetAttribute: any
-  private BASS_ChannelGetData: any
   private BASS_ErrorGetCode: any
 
   // DSD
@@ -156,13 +158,10 @@ export class BassManager extends EventEmitter {
   private BASS_ASIO_Stop: any
   private BASS_ASIO_SetDSD: any
   private BASS_ASIO_ChannelReset: any
-  private BASS_ASIO_ChannelEnable: any
-  private BASS_ASIO_ChannelJoin: any
   private BASS_ASIO_ChannelEnableBASS: any
   private BASS_ASIO_ChannelEnableMirror: any
   private BASS_ASIO_ChannelPause: any
   private BASS_ASIO_ChannelSetVolume: any
-  private BASS_ASIO_ChannelSetFormat: any
   private BASS_ASIO_ErrorGetCode: any
 
   // WASAPI
@@ -173,14 +172,11 @@ export class BassManager extends EventEmitter {
   private BASS_WASAPI_Start: any
   private BASS_WASAPI_Stop: any
   private BASS_WASAPI_SetVolume: any
-  private wasapiCallback: any = null
-  private wasapiProcPtr: any = null
-  private asioDsdCallback: any = null
-  private asioCallback: any = null
 
   // Runtime State
   private currentStream = 0
   private currentMode: 'wasapi' | 'asio' = 'wasapi'
+  private activeOutputMode: 'wasapi' | 'asio' = 'wasapi'
   private currentDeviceId = 'auto'
   private currentVolume = 1.0
   public isPlaying = false
@@ -203,7 +199,7 @@ export class BassManager extends EventEmitter {
   // thread đang GetData trên chính handle đó -> park lại, xả ở lần stop() sau.
   private parkedStreams: number[] = []
   private lastKnownWasapiDevices: BassAudioDevice[] = []
-  private wasapiInitKey: string | null = null
+  private wasapiDeviceIndex = -1
 
   private parkStreamForDeferredFree(handle: number): void {
     if (handle) this.parkedStreams.push(handle)
@@ -224,7 +220,7 @@ export class BassManager extends EventEmitter {
 
   // Liệt kê thiết bị WASAPI có chịu lỗi thoáng qua: USB DAC khi churn
   // Free/Init exclusive liên tục có thể biến mất khỏi danh sách vài chục ms.
-  private getWasapiDevicesResilient(): BassAudioDevice[] {
+  private async getWasapiDevicesResilient(expectedEpoch: number): Promise<BassAudioDevice[]> {
     let devs: BassAudioDevice[] = []
     try {
       devs = this.getAudioDevices('wasapi')
@@ -234,10 +230,8 @@ export class BassManager extends EventEmitter {
       return devs
     }
     for (let attempt = 0; attempt < 3 && devs.length === 0; attempt++) {
-      const start = Date.now()
-      while (Date.now() - start < 50) {
-        // Chờ ngắn đồng bộ, chỉ đi vào nhánh lỗi hiếm này
-      }
+      await new Promise((r) => setTimeout(r, 50))
+      if (this.streamEpoch !== expectedEpoch) return []
       try {
         devs = this.getAudioDevices('wasapi')
       } catch {}
@@ -266,7 +260,6 @@ export class BassManager extends EventEmitter {
   private preloadedInfo: PreloadTrackInfo | null = null
   private currentStartTime: number = 0
   private currentEndTime: number = 0
-  private currentEndByte: bigint | number = 0
   private currentFilePath: string | null = null
   private currentIsDsd: boolean = false
   private currentTrackInfo: {
@@ -361,9 +354,6 @@ export class BassManager extends EventEmitter {
       )
       this.BASS_ChannelSetAttribute = this.bassLib.func(
         'bool BASS_ChannelSetAttribute(uint32_t handle, uint32_t attrib, float value)'
-      )
-      this.BASS_ChannelGetData = this.bassLib.func(
-        'uint32_t BASS_ChannelGetData(uint32_t handle, void *buffer, uint32_t length)'
       )
       this.BASS_ErrorGetCode = this.bassLib.func('int BASS_ErrorGetCode()')
 
@@ -509,15 +499,6 @@ export class BassManager extends EventEmitter {
         this.BASS_ASIO_ChannelReset = this.asioLib.func(
           'bool BASS_ASIO_ChannelReset(bool input, int channel, uint32_t flags)'
         )
-        const ASIOPROC = koffi.proto(
-          'uint32_t __stdcall ASIOPROC(bool input, uint32_t channel, void *buffer, uint32_t length, void *user)'
-        )
-        this.BASS_ASIO_ChannelEnable = this.asioLib.func(
-          'bool BASS_ASIO_ChannelEnable(bool input, uint32_t channel, ASIOPROC *proc, void *user)'
-        )
-        this.BASS_ASIO_ChannelJoin = this.asioLib.func(
-          'bool BASS_ASIO_ChannelJoin(bool input, uint32_t channel, int channel2)'
-        )
         this.BASS_ASIO_ChannelEnableBASS = this.asioLib.func(
           'bool BASS_ASIO_ChannelEnableBASS(bool input, uint32_t channel, uint32_t handle, bool join)'
         )
@@ -530,23 +511,7 @@ export class BassManager extends EventEmitter {
         this.BASS_ASIO_ChannelSetVolume = this.asioLib.func(
           'bool BASS_ASIO_ChannelSetVolume(bool input, int channel, float volume)'
         )
-        this.BASS_ASIO_ChannelSetFormat = this.asioLib.func(
-          'bool BASS_ASIO_ChannelSetFormat(bool input, uint32_t channel, uint32_t format)'
-        )
         this.BASS_ASIO_ErrorGetCode = this.asioLib.func('uint32_t BASS_ASIO_ErrorGetCode()')
-
-        // Persistent ASIO callback supporting gapless Bit-Perfect playback
-        this.asioCallback = koffi.register(
-          (_input: boolean, _channel: number, buffer: any, length: number) => {
-            try {
-              return this.processAudioData(buffer, length)
-            } catch {
-              return 0
-            }
-          },
-          koffi.pointer(ASIOPROC)
-        )
-        this.asioDsdCallback = this.asioCallback
       }
 
       // WASAPI bindings
@@ -579,11 +544,8 @@ export class BassManager extends EventEmitter {
           'bool BASS_WASAPI_GetInfo(_Out_ BASS_WASAPI_INFO *info)'
         )
 
-        const WASAPIPROC = koffi.proto(
-          'uint32_t __stdcall WASAPIPROC(void *buffer, uint32_t length, void *user)'
-        )
         this.BASS_WASAPI_Init = this.wasapiLib.func(
-          'bool BASS_WASAPI_Init(int device, uint32_t freq, uint32_t chans, uint32_t flags, float buffer, float period, WASAPIPROC *proc, void *user)'
+          'bool BASS_WASAPI_Init(int device, uint32_t freq, uint32_t chans, uint32_t flags, float buffer, float period, intptr_t proc, uintptr_t user)'
         )
         this.BASS_WASAPI_Free = this.wasapiLib.func('bool BASS_WASAPI_Free()')
         this.BASS_WASAPI_Start = this.wasapiLib.func('bool BASS_WASAPI_Start()')
@@ -591,12 +553,6 @@ export class BassManager extends EventEmitter {
         this.BASS_WASAPI_SetVolume = this.wasapiLib.func(
           'bool BASS_WASAPI_SetVolume(uint32_t mode, float volume)'
         )
-
-        // Persistent WASAPI callback supporting gapless Bit-Perfect playback
-        this.wasapiCallback = koffi.register((buffer: any, length: number) => {
-          return this.processAudioData(buffer, length)
-        }, koffi.pointer(WASAPIPROC))
-        this.wasapiProcPtr = this.wasapiCallback
       }
 
       this.isInitialized = true
@@ -607,117 +563,84 @@ export class BassManager extends EventEmitter {
     }
   }
 
-  private isValidBytesRead(bytes: number, maxLength: number): boolean {
-    return (
-      typeof bytes === 'number' &&
-      bytes > 0 &&
-      bytes !== 0xffffffff &&
-      bytes !== 4294967295 &&
-      bytes <= maxLength
-    )
-  }
-
   /**
-   * Bộ xử lý buffer âm thanh thời gian thực (WASAPI & ASIO) hỗ trợ Gapless Bit-Perfect
+   * Khởi tạo thiết bị WASAPI với WASAPIPROC_BASS (chạy hoàn toàn trong C, không dùng JS callback)
    */
-  private processAudioData(buffer: any, length: number): number {
-    if (!this.currentStream || !this.isPlaying) return 0
-
-    try {
-      // 1. Giới hạn CUE sheet ảo (currentEndTime)
-      if (this.currentEndTime > 0 && this.currentEndByte > 0) {
-        const curBytePos = this.BASS_ChannelGetPosition(this.currentStream, BASS_POS_BYTE)
-        if (curBytePos >= this.currentEndByte) {
-          // Track ảo trong CUE đã đến điểm kết thúc
-          if (this.gaplessEnabled && this.preloadedStream) {
-            this.transitionToPreloadedStream()
-            const got = this.BASS_ChannelGetData(this.currentStream, buffer, length)
-            return this.isValidBytesRead(got, length) ? got : 0
-          }
-          return 0
-        }
-
-        // Chưa đến điểm kết thúc, nhưng buffer này có thể chạm currentEndByte
-        const bytesLeft = Number(BigInt(this.currentEndByte) - BigInt(curBytePos))
-        const toRead = Math.min(length, Math.max(0, bytesLeft))
-        const got = this.BASS_ChannelGetData(this.currentStream, buffer, toRead)
-
-        if (!this.isValidBytesRead(got, toRead)) {
-          // Stream kết thúc sớm hơn dự kiến
-          if (this.gaplessEnabled && this.preloadedStream) {
-            this.transitionToPreloadedStream()
-            const secondRead = this.BASS_ChannelGetData(this.currentStream, buffer, length)
-            return this.isValidBytesRead(secondRead, length) ? secondRead : 0
-          }
-          return 0
-        }
-
-        // Đã đọc đến đúng ranh giới CUE track ảo và buffer DAC còn trống
-        if (got === toRead && toRead < length) {
-          if (this.gaplessEnabled && this.preloadedStream) {
-            this.transitionToPreloadedStream()
-            const remaining = length - got
-            try {
-              const baseAddr = koffi.address(buffer)
-              if (baseAddr) {
-                const offsetPtr = koffi.as(baseAddr + BigInt(got), 'void *')
-                const secondRead = this.BASS_ChannelGetData(
-                  this.currentStream,
-                  offsetPtr,
-                  remaining
-                )
-                if (this.isValidBytesRead(secondRead, remaining)) {
-                  return got + secondRead
-                }
-              }
-            } catch {}
-          }
-          return got
-        }
-
-        return got
-      }
-
-      // 2. Track vật lý thông thường
-      const got = this.BASS_ChannelGetData(this.currentStream, buffer, length)
-
-      // Stream đã đọc hết (EOF hoặc lỗi)
-      if (!this.isValidBytesRead(got, length)) {
-        if (this.gaplessEnabled && this.preloadedStream) {
-          this.transitionToPreloadedStream()
-          const nextRead = this.BASS_ChannelGetData(this.currentStream, buffer, length)
-          return this.isValidBytesRead(nextRead, length) ? nextRead : 0
-        }
-        return 0
-      }
-
-      // Stream đọc được nhưng ít hơn số byte yêu cầu (chạm EOF ở giữa buffer)
-      if (got < length) {
-        if (this.gaplessEnabled && this.preloadedStream) {
-          this.transitionToPreloadedStream()
-          const remaining = length - got
-          try {
-            const baseAddr = koffi.address(buffer)
-            if (baseAddr) {
-              const offsetPtr = koffi.as(baseAddr + BigInt(got), 'void *')
-              const secondRead = this.BASS_ChannelGetData(this.currentStream, offsetPtr, remaining)
-              if (this.isValidBytesRead(secondRead, remaining)) {
-                return got + secondRead
-              }
-            }
-          } catch {}
-        }
-        return got
-      }
-
-      return got
-    } catch {
-      return 0
+  private initWasapiStream(
+    devIndex: number,
+    streamFreq: number,
+    chans: number,
+    chan: number
+  ): { ok: boolean; isExclusive: boolean; activeFreq: number } {
+    if (this.BASS_WASAPI_Stop) {
+      try {
+        this.BASS_WASAPI_Stop(true)
+      } catch {}
     }
+    if (this.BASS_WASAPI_Free) {
+      try {
+        this.BASS_WASAPI_Free()
+      } catch {}
+    }
+
+    let ok = this.BASS_WASAPI_Init(
+      devIndex,
+      streamFreq,
+      chans,
+      BASS_WASAPI_EXCLUSIVE | BASS_WASAPI_BUFFER,
+      0.4,
+      0.05,
+      WASAPIPROC_BASS,
+      chan
+    )
+    let isExclusive = true
+
+    if (!ok) {
+      console.warn('WASAPI Exclusive failed, falling back to Shared mode...')
+      ok = this.BASS_WASAPI_Init(
+        devIndex,
+        0,
+        0,
+        BASS_WASAPI_BUFFER | BASS_WASAPI_AUTOFORMAT,
+        0.4,
+        0.05,
+        WASAPIPROC_BASS,
+        chan
+      )
+      isExclusive = false
+    }
+
+    if (!ok) {
+      this.wasapiDeviceIndex = -1
+      return { ok: false, isExclusive, activeFreq: streamFreq }
+    }
+
+    this.wasapiDeviceIndex = devIndex
+    let activeFreq = streamFreq
+    if (this.BASS_WASAPI_GetInfo) {
+      const wi: any = {}
+      if (this.BASS_WASAPI_GetInfo(wi) && wi.freq) {
+        activeFreq = wi.freq
+        if (isExclusive) {
+          if (wi.freq !== streamFreq || (wi.chans && wi.chans !== chans)) {
+            console.warn(
+              `WASAPI Exclusive hardware format mismatch: device is ${wi.freq}Hz ${wi.chans || chans}ch, stream is ${streamFreq}Hz ${chans}ch. Strict Bit-Perfect prevents software tampering!`
+            )
+          }
+        } else if (wi.freq !== streamFreq || (wi.chans && wi.chans !== chans)) {
+          console.log(
+            `WASAPI Shared rate mismatch: mixer is ${wi.freq}Hz, stream is ${streamFreq}Hz. Resampling for Shared mode.`
+          )
+          this.createResamplerMixer(chan, wi.freq, wi.chans || chans)
+        }
+      }
+    }
+
+    return { ok: true, isExclusive, activeFreq }
   }
 
   /**
-   * Chuyển đổi luồng không khoảng lặng (Seamless Gapless Stream Transition)
+   * Chuyển đổi luồng sang bài đã preload trước (Gapless Stream Transition)
    */
   private transitionToPreloadedStream(): boolean {
     if (this.isTransitioningStream || !this.nextActiveStream || !this.bassLib) return false
@@ -730,10 +653,9 @@ export class BassManager extends EventEmitter {
       const nextPath = this.preloadedFilePath
       const nextInfo = this.preloadedInfo
 
-      // Bài khác đã stop()/play trong lúc chờ -> bỏ transition lỗi thời
       if (!nextStream) return false
 
-      this.activeStream = this.nextActiveStream
+      this.activeStream = nextStream
       this.nextActiveStream = 0
       this.activeWasapiStream = nextStream
       this.activeAsioStream = nextStream
@@ -743,11 +665,6 @@ export class BassManager extends EventEmitter {
 
       this.currentStartTime = nextInfo?.startTime || 0
       this.currentEndTime = nextInfo?.endTime || 0
-      if (this.currentEndTime > 0 && this.BASS_ChannelSeconds2Bytes) {
-        this.currentEndByte = this.BASS_ChannelSeconds2Bytes(this.activeStream, this.currentEndTime)
-      } else {
-        this.currentEndByte = 0
-      }
 
       if (nextInfo) {
         this.currentTrackInfo = {
@@ -763,64 +680,65 @@ export class BassManager extends EventEmitter {
       }
       this.currentFilePath = nextPath
 
-      // Phần nặng (ASIO re-enable, volume thiết bị, emit) KHÔNG chạy trên audio
-      // thread: BASS cấm gọi device API trong callback, dễ deadlock/crash.
-      // Chỉ swap handle + mốc thời gian ở đây, phần còn lại dời xuống setImmediate.
-      const mode = this.currentMode
-      const isNativeDsd = this.currentTrackInfo?.isNativeDsd
+      if (this.streamEpoch !== epoch || !nextStream) return false
       const vol = this.currentVolume
-      setImmediate(() => {
-        // Bài đã đổi trong lúc chờ -> stream hiện tại không còn là của transition này
-        if (this.streamEpoch !== epoch || !nextStream) return
-        if (mode === 'asio') {
-          try {
-            if (this.BASS_ASIO_ChannelReset) {
-              this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
-            }
-            let en = false
-            if (this.BASS_ASIO_ChannelEnableBASS) {
-              en = this.BASS_ASIO_ChannelEnableBASS(false, 0, nextStream, true)
-            }
-            if (!en && this.BASS_ASIO_ChannelEnable) {
-              if (this.BASS_ASIO_ChannelSetFormat && !isNativeDsd) {
-                this.BASS_ASIO_ChannelSetFormat(false, 0, 19)
-              }
-              this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-              if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
-            }
-          } catch (err) {
-            console.error('Error re-enabling ASIO channel on gapless transition:', err)
+
+      if (this.activeOutputMode === 'asio') {
+        try {
+          if (this.BASS_ASIO_ChannelReset) {
+            this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
           }
+          const en = this.BASS_ASIO_ChannelEnableBASS
+            ? this.BASS_ASIO_ChannelEnableBASS(false, 0, nextStream, true)
+            : false
+          if (!en) {
+            return false
+          }
+        } catch (err) {
+          console.error('Error re-enabling ASIO channel on gapless transition:', err)
+          return false
         }
-
-        // Defer freeing oldStream: chỉ giải phóng khi handle đó không còn là
-        // stream đang phát/preload (BASS tái chế số handle, free nhầm = crash/mất tiếng).
-        if (oldStream && oldStream !== this.currentStream && oldStream !== this.preloadedStream) {
-          try {
-            this.BASS_StreamFree(oldStream)
-          } catch {}
+      } else {
+        const devIdx = this.wasapiDeviceIndex >= 0 ? this.wasapiDeviceIndex : -1
+        const initRes = this.initWasapiStream(
+          devIdx,
+          nextInfo?.freq || 44100,
+          nextInfo?.chans || 2,
+          nextStream
+        )
+        if (!initRes.ok) {
+          return false
         }
-
-        // Áp dụng âm lượng cho stream mới
         this.setVolume(vol)
+        const started = this.BASS_WASAPI_Start ? this.BASS_WASAPI_Start() : false
+        if (!started) {
+          return false
+        }
+      }
 
-        // Thông báo cho Main process & Renderer qua callback và event mà không làm nghẽn audio thread
-        if (nextPath) {
-          if (this.onGaplessTransitionCallback) {
-            try {
-              this.onGaplessTransitionCallback(nextPath, nextInfo)
-            } catch (e) {
-              console.error('Error in onGaplessTransitionCallback:', e)
-            }
+      if (oldStream && oldStream !== this.currentStream && oldStream !== this.preloadedStream) {
+        try {
+          this.BASS_StreamFree(oldStream)
+        } catch {}
+      }
+
+      this.setVolume(vol)
+
+      if (nextPath) {
+        if (this.onGaplessTransitionCallback) {
+          try {
+            this.onGaplessTransitionCallback(nextPath, nextInfo)
+          } catch (e) {
+            console.error('Error in onGaplessTransitionCallback:', e)
           }
-          this.emit('gapless-transition', nextPath, nextInfo)
-          this.emit('track-transition', nextPath, nextInfo)
         }
-        const dur = this.getDuration()
-        if (dur > 0) {
-          this.emit('duration', dur)
-        }
-      })
+        this.emit('gapless-transition', nextPath, nextInfo)
+        this.emit('track-transition', nextPath, nextInfo)
+      }
+      const dur = this.getDuration()
+      if (dur > 0) {
+        this.emit('duration', dur)
+      }
 
       return true
     } finally {
@@ -911,7 +829,7 @@ export class BassManager extends EventEmitter {
 
     let nextChan = 0
     if (nextIsDsd && this.BASS_DSD_StreamCreateFile) {
-      if (this.currentMode === 'asio' && this.currentTrackInfo?.isNativeDsd) {
+      if (this.activeOutputMode === 'asio' && this.currentTrackInfo?.isNativeDsd) {
         nextChan = this.BASS_DSD_StreamCreateFile(
           false,
           resolvedPath,
@@ -920,7 +838,7 @@ export class BassManager extends EventEmitter {
           BASS_DSD_RAW | BASS_STREAM_DECODE | BASS_UNICODE,
           0
         )
-      } else if (this.currentMode === 'asio' && this.currentTrackInfo?.isDoP) {
+      } else if (this.activeOutputMode === 'asio' && this.currentTrackInfo?.isDoP) {
         nextChan = this.BASS_DSD_StreamCreateFile(
           false,
           resolvedPath,
@@ -1084,11 +1002,12 @@ export class BassManager extends EventEmitter {
     audioDevice?: string,
     bitPerfect: boolean = false,
     initialVolume?: number,
-    outputType: 'wasapi' | 'asio' = 'asio'
+    outputType: 'wasapi' | 'asio' = 'wasapi'
   ) {
     if (!this.ensureLoaded()) return
 
     this.currentMode = outputType
+    this.activeOutputMode = outputType
     if (audioDevice && audioDevice !== 'auto' && audioDevice !== 'default') {
       this.currentDeviceId = audioDevice
     } else {
@@ -1111,6 +1030,7 @@ export class BassManager extends EventEmitter {
       this.stop()
       this.releaseDevices()
       this.currentMode = type
+      this.activeOutputMode = type
     }
   }
 
@@ -1130,7 +1050,7 @@ export class BassManager extends EventEmitter {
    */
   private releaseDevices() {
     this.currentAsioDevice = -1
-    this.wasapiInitKey = null
+    this.wasapiDeviceIndex = -1
     try {
       if (this.BASS_ASIO_Stop) this.BASS_ASIO_Stop()
       if (this.BASS_ASIO_ChannelReset)
@@ -1147,12 +1067,12 @@ export class BassManager extends EventEmitter {
   /**
    * Phát một bài hát cục bộ với chất lượng Bit-Perfect nguyên bản
    */
-  public playTrack(
+  public async playTrack(
     urlOrPath: string,
     _crossfadeDuration: number = 0,
     startTime?: number,
     endTime?: number
-  ): boolean {
+  ): Promise<boolean> {
     return this.playFile(
       urlOrPath,
       this.currentDeviceId,
@@ -1165,13 +1085,13 @@ export class BassManager extends EventEmitter {
   /**
    * Phát file âm thanh với hỗ trợ thiết bị, chế độ độc quyền, và ranh giới CUE sheet ảo
    */
-  public playFile(
+  public async playFile(
     filePath: string,
     deviceId?: number | string,
     _exclusive?: boolean,
     startTime?: number,
     endTime?: number
-  ): boolean {
+  ): Promise<boolean> {
     if (!this.ensureLoaded()) return false
 
     this.stop()
@@ -1320,12 +1240,12 @@ export class BassManager extends EventEmitter {
   /**
    * Xử lý phát qua ASIO (bao gồm DSD Native, DoP, và PCM Bit-Perfect)
    */
-  private playAsio(
+  private async playAsio(
     filePath: string,
     isDsd: boolean,
     startTime: number = 0,
     endTime: number = 0
-  ): boolean {
+  ): Promise<boolean> {
     try {
       let devIndex = 0
       const asioDevs = this.getAudioDevices('asio')
@@ -1394,14 +1314,9 @@ export class BassManager extends EventEmitter {
             this.BASS_ASIO_SetRate(dsdRate)
             this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
             this.activeAsioStream = chan
-            let en0 = false
-            if (this.BASS_ASIO_ChannelEnableBASS) {
-              en0 = this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
-            }
-            if (!en0 && this.BASS_ASIO_ChannelEnable) {
-              en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioDsdCallback, null)
-              if (this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
-            }
+            const en0 = this.BASS_ASIO_ChannelEnableBASS
+              ? this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+              : false
             if (en0) {
               outSampleRate = dsdRate
               const dsdFactor = Math.round(dsdRate / 44100)
@@ -1418,7 +1333,7 @@ export class BassManager extends EventEmitter {
           }
         }
 
-        // 2. Không hỗ trợ DSD RAW hoặc lỗi ChannelEnable, thử DoP (DSD over PCM)
+        // 2. Không hỗ trợ DSD RAW hoặc lỗi ChannelEnableBASS, thử DoP (DSD over PCM)
         if (!chan) {
           chan = this.BASS_DSD_StreamCreateFile(
             false,
@@ -1435,21 +1350,18 @@ export class BassManager extends EventEmitter {
             this.BASS_ASIO_SetRate(ci.freq)
             this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
             this.activeAsioStream = chan
-            let en0 = false
-            if (this.BASS_ASIO_ChannelEnableBASS) {
-              en0 = this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+            const en0 = this.BASS_ASIO_ChannelEnableBASS
+              ? this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+              : false
+            if (en0) {
+              outSampleRate = ci.freq
+              outFormat = 'DSD (DoP)'
+              isDoP = true
+            } else {
+              this.activeAsioStream = 0
+              this.BASS_StreamFree(chan)
+              chan = 0
             }
-            if (!en0 && this.BASS_ASIO_ChannelEnable) {
-              if (this.BASS_ASIO_ChannelSetFormat) {
-                this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
-              }
-              en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-              if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin)
-                this.BASS_ASIO_ChannelJoin(false, 1, 0)
-            }
-            outSampleRate = ci.freq
-            outFormat = 'DSD (DoP)'
-            isDoP = true
           }
         }
 
@@ -1464,26 +1376,21 @@ export class BassManager extends EventEmitter {
             176400
           )
           if (chan) {
-            const ci: any = {}
-            this.BASS_ChannelGetInfo(chan, ci)
             this.BASS_ASIO_SetDSD(false)
             this.BASS_ASIO_SetRate(176400)
             this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
             this.activeAsioStream = chan
-            let en0 = false
-            if (this.BASS_ASIO_ChannelEnableBASS) {
-              en0 = this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+            const en0 = this.BASS_ASIO_ChannelEnableBASS
+              ? this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+              : false
+            if (en0) {
+              outSampleRate = 176400
+              outFormat = 'DSD-to-PCM (176.4kHz)'
+            } else {
+              this.activeAsioStream = 0
+              this.BASS_StreamFree(chan)
+              chan = 0
             }
-            if (!en0 && this.BASS_ASIO_ChannelEnable) {
-              if (this.BASS_ASIO_ChannelSetFormat) {
-                this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
-              }
-              en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-              if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin)
-                this.BASS_ASIO_ChannelJoin(false, 1, 0)
-            }
-            outSampleRate = 176400
-            outFormat = 'DSD-to-PCM (176.4kHz)'
           }
         }
       } else {
@@ -1506,22 +1413,20 @@ export class BassManager extends EventEmitter {
           this.BASS_ASIO_SetRate(ci.freq)
           this.BASS_ASIO_ChannelReset(false, -1, BASS_ASIO_RESET_ENABLE | BASS_ASIO_RESET_JOIN)
           this.activeAsioStream = chan
-          let en0 = false
-          if (this.BASS_ASIO_ChannelEnableBASS) {
-            en0 = this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
-          }
-          if (!en0 && this.BASS_ASIO_ChannelEnable) {
-            if (this.BASS_ASIO_ChannelSetFormat) {
-              this.BASS_ASIO_ChannelSetFormat(false, 0, 19) // BASS_ASIO_FORMAT_FLOAT
+          const en0 = this.BASS_ASIO_ChannelEnableBASS
+            ? this.BASS_ASIO_ChannelEnableBASS(false, 0, chan, true)
+            : false
+          if (en0) {
+            if (ci.chans === 1 && this.BASS_ASIO_ChannelEnableMirror) {
+              this.BASS_ASIO_ChannelEnableMirror(1, false, 0)
             }
-            en0 = this.BASS_ASIO_ChannelEnable(false, 0, this.asioCallback, null)
-            if (ci.chans > 1 && this.BASS_ASIO_ChannelJoin) this.BASS_ASIO_ChannelJoin(false, 1, 0)
+            outSampleRate = ci.freq
+            outFormat = `PCM Bit-Perfect (${ci.origres ? `${ci.origres}-bit` : 'Float'})`
+          } else {
+            this.activeAsioStream = 0
+            this.BASS_StreamFree(chan)
+            chan = 0
           }
-          if (ci.chans === 1 && this.BASS_ASIO_ChannelEnableMirror) {
-            this.BASS_ASIO_ChannelEnableMirror(1, false, 0)
-          }
-          outSampleRate = ci.freq
-          outFormat = `PCM Bit-Perfect (${ci.origres ? `${ci.origres}-bit` : 'Float'})`
         }
       }
 
@@ -1536,15 +1441,9 @@ export class BassManager extends EventEmitter {
         this.BASS_ChannelSetPosition(chan, startBytes, BASS_POS_BYTE)
       }
 
-      // Tính toán byte kết thúc cho CUE sheet ảo
-      if (endTime > 0 && this.BASS_ChannelSeconds2Bytes) {
-        this.currentEndByte = this.BASS_ChannelSeconds2Bytes(chan, endTime)
-      } else {
-        this.currentEndByte = 0
-      }
-
       const ci: any = {}
       this.BASS_ChannelGetInfo(chan, ci)
+      this.activeOutputMode = 'asio'
       this.currentStream = chan
       this.currentIsDsd = isDsd || isNativeDsd
       this.currentFilePath = filePath
@@ -1560,17 +1459,17 @@ export class BassManager extends EventEmitter {
 
       this.setVolume(this.currentVolume)
 
-      // Bắt đầu phát ASIO
+      // Đánh dấu đang phát trước BASS_ASIO_Start để callback prime buffer không nhận 0
+      this.isPlaying = true
+      this.isPaused = false
       const started = this.BASS_ASIO_Start(0, 0)
       if (!started) {
+        this.isPlaying = false
         const err = this.BASS_ASIO_ErrorGetCode ? this.BASS_ASIO_ErrorGetCode() : 0
         console.warn(`BASS_ASIO_Start failed (code ${err}), falling back to WASAPI...`)
         this.stop()
         return this.playWasapi(filePath, isDsd, startTime, endTime)
       }
-
-      this.isPlaying = true
-      this.isPaused = false
 
       // Gửi thông số phần cứng audio ra giao diện
       this.emit('audio-out-params', {
@@ -1592,12 +1491,12 @@ export class BassManager extends EventEmitter {
   /**
    * Xử lý phát qua WASAPI Exclusive (Bit-Perfect PCM)
    */
-  private playWasapi(
+  private async playWasapi(
     filePath: string,
     isDsd: boolean,
     startTime: number = 0,
     endTime: number = 0
-  ): boolean {
+  ): Promise<boolean> {
     try {
       let chan = 0
       let outSampleRate = 44100
@@ -1643,36 +1542,24 @@ export class BassManager extends EventEmitter {
         this.BASS_ChannelSetPosition(chan, startBytes, BASS_POS_BYTE)
       }
 
-      // Tính toán byte kết thúc cho CUE sheet ảo
-      if (endTime > 0 && this.BASS_ChannelSeconds2Bytes) {
-        this.currentEndByte = this.BASS_ChannelSeconds2Bytes(chan, endTime)
-      } else {
-        this.currentEndByte = 0
-      }
-
       const ci: any = {}
       this.BASS_ChannelGetInfo(chan, ci)
       const chans = ci.chans || 2
       const streamFreq = ci.freq || outSampleRate
 
-      this.activeWasapiStream = chan
-      this.currentStream = chan
-      this.currentIsDsd = isDsd
-      this.currentFilePath = filePath
-      this.currentTrackInfo = {
-        freq: streamFreq,
-        chans,
-        origres: ci.origres || 0,
-        isDsd,
-        dsdRate: 0,
-        isNativeDsd: false,
-        isDoP: false
-      }
-
       let devIndex = -1
       // Liệt kê TRƯỚC khi Free: Free có thể làm enumerator của BASS trả về
       // rỗng thoáng qua trên USB DAC khi churn exclusive nhanh -> dialog sai.
-      const devs = this.getWasapiDevicesResilient()
+      const expectedEpoch = this.streamEpoch
+      const devs = await this.getWasapiDevicesResilient(expectedEpoch)
+      if (this.streamEpoch !== expectedEpoch) {
+        if (chan) {
+          try {
+            this.BASS_StreamFree(chan)
+          } catch {}
+        }
+        return false
+      }
       if (devs.length === 0) {
         if (chan) {
           try {
@@ -1687,6 +1574,23 @@ export class BassManager extends EventEmitter {
           'Không tìm thấy thiết bị xuất âm thanh khả dụng (DAC/Loa/Tai nghe chưa được kết nối hoặc đã bị ngắt).'
         )
         return false
+      }
+
+      this.activeOutputMode = 'wasapi'
+      this.activeWasapiStream = chan
+      this.currentStream = chan
+      this.currentStartTime = startTime > 0 ? startTime : 0
+      this.currentEndTime = endTime > 0 ? endTime : 0
+      this.currentIsDsd = isDsd
+      this.currentFilePath = filePath
+      this.currentTrackInfo = {
+        freq: streamFreq,
+        chans,
+        origres: ci.origres || 0,
+        isDsd,
+        dsdRate: 0,
+        isNativeDsd: false,
+        isDoP: false
       }
 
       if (
@@ -1707,67 +1611,12 @@ export class BassManager extends EventEmitter {
         if (def) devIndex = parseInt(def.id, 10)
       }
 
-      // Tái dùng thiết bị đang init nếu cùng device + format + exclusive:
-      // bỏ qua Free/Init mỗi bài -> hết churn làm DAC rớt/USB reset khi chuyển nhanh.
-      const desiredKey = `${devIndex}|${streamFreq}|${chans}|ex`
-      if (this.wasapiInitKey === desiredKey) {
-        let devAlive = true
-        if (this.BASS_WASAPI_GetDeviceInfo) {
-          const probe: any = {}
-          try {
-            devAlive = !!this.BASS_WASAPI_GetDeviceInfo(devIndex, probe)
-          } catch {
-            devAlive = false
-          }
-        }
-        if (devAlive) {
-          this.setVolume(this.currentVolume)
-          if (this.BASS_WASAPI_Start) this.BASS_WASAPI_Start()
-          this.isPlaying = true
-          this.isPaused = false
-          this.emit('audio-out-params', {
-            samplerate: streamFreq,
-            format: isDsd ? 'DSD-to-PCM (176.4kHz)' : 'WASAPI Exclusive',
-            channels: `${chans} ch`,
-            mode: 'WASAPI',
-            isDsd: isDsd
-          })
-          this.startProgressTimer()
-          return true
-        }
-        this.wasapiInitKey = null
-      }
-
-      if (this.BASS_WASAPI_Free) this.BASS_WASAPI_Free()
-
-      // Thử Exclusive mode trước (0.4s buffer, 0.05s period, KHÔNG AUTOFORMAT để đảm bảo Bit-Perfect)
-      let ok = this.BASS_WASAPI_Init(
+      const { ok, isExclusive, activeFreq } = this.initWasapiStream(
         devIndex,
         streamFreq,
         chans,
-        BASS_WASAPI_EXCLUSIVE | BASS_WASAPI_BUFFER,
-        0.4,
-        0.05,
-        this.wasapiProcPtr || this.wasapiCallback,
-        null
+        chan
       )
-      let isExclusive = true
-
-      // Nếu thiết bị đang bận hoặc không hỗ trợ Exclusive, fallback sang Shared
-      if (!ok) {
-        console.warn('WASAPI Exclusive failed, falling back to Shared mode...')
-        ok = this.BASS_WASAPI_Init(
-          devIndex,
-          0,
-          0,
-          BASS_WASAPI_BUFFER | BASS_WASAPI_AUTOFORMAT,
-          0.4,
-          0.05,
-          this.wasapiProcPtr || this.wasapiCallback,
-          null
-        )
-        isExclusive = false
-      }
 
       if (!ok) {
         if (chan) {
@@ -1778,42 +1627,23 @@ export class BassManager extends EventEmitter {
           this.currentStream = 0
         }
         this.isPlaying = false
-        this.wasapiInitKey = null
         const err = this.BASS_ErrorGetCode ? this.BASS_ErrorGetCode() : 0
         this.emit('error', this.formatBassErrorMessage(err, 'wasapi'))
         return false
       }
-      this.wasapiInitKey = `${devIndex}|${streamFreq}|${chans}|${isExclusive ? 'ex' : 'sh'}`
-
-      // Kiểm tra tần số thực tế của WASAPI device
-      let activeFreq = streamFreq
-      if (this.BASS_WASAPI_GetInfo) {
-        const wi: any = {}
-        if (this.BASS_WASAPI_GetInfo(wi) && wi.freq) {
-          activeFreq = wi.freq
-          if (isExclusive) {
-            if (wi.freq !== streamFreq || (wi.chans && wi.chans !== chans)) {
-              console.warn(
-                `WASAPI Exclusive hardware format mismatch: device is ${wi.freq}Hz ${wi.chans || chans}ch, stream is ${streamFreq}Hz ${chans}ch. Strict Bit-Perfect prevents software tampering!`
-              )
-            }
-          } else {
-            // Chế độ Shared: cho phép resample để khớp với mixer của Windows
-            if (wi.freq !== streamFreq || (wi.chans && wi.chans !== chans)) {
-              console.log(
-                `WASAPI Shared rate mismatch: mixer is ${wi.freq}Hz, stream is ${streamFreq}Hz. Resampling for Shared mode.`
-              )
-              this.createResamplerMixer(chan, wi.freq, wi.chans || chans)
-            }
-          }
-        }
-      }
 
       this.setVolume(this.currentVolume)
-      this.BASS_WASAPI_Start()
-
       this.isPlaying = true
       this.isPaused = false
+      const wasapiStarted = this.BASS_WASAPI_Start ? this.BASS_WASAPI_Start() : false
+      if (!wasapiStarted) {
+        this.stop()
+        this.wasapiDeviceIndex = -1
+        if (this.BASS_WASAPI_Free) this.BASS_WASAPI_Free()
+        const err = this.BASS_ErrorGetCode ? this.BASS_ErrorGetCode() : 0
+        this.emit('error', this.formatBassErrorMessage(err, 'wasapi'))
+        return false
+      }
 
       this.emit('audio-out-params', {
         samplerate: activeFreq,
@@ -1949,12 +1779,11 @@ export class BassManager extends EventEmitter {
 
         // Kiểm tra giới hạn CUE sheet ảo (currentEndTime)
         if (this.currentEndTime > 0 && rawPos >= this.currentEndTime) {
-          if (this.gaplessEnabled && this.preloadedStream) {
-            this.transitionToPreloadedStream()
-          } else {
-            this.emit('ended')
-            this.stop()
+          if (this.gaplessEnabled && this.preloadedStream && this.transitionToPreloadedStream()) {
+            return
           }
+          this.emit('ended')
+          this.stop()
           return
         }
 
@@ -1966,12 +1795,11 @@ export class BassManager extends EventEmitter {
           isActive === BASS_ACTIVE_STOPPED ||
           (endCondition > 0 && rawPos >= endCondition - 0.1)
         ) {
-          if (this.gaplessEnabled && this.preloadedStream) {
-            this.transitionToPreloadedStream()
-          } else {
-            this.emit('ended')
-            this.stop()
+          if (this.gaplessEnabled && this.preloadedStream && this.transitionToPreloadedStream()) {
+            return
           }
+          this.emit('ended')
+          this.stop()
         }
       } catch {}
     }, 200)
@@ -1986,19 +1814,28 @@ export class BassManager extends EventEmitter {
 
   public play() {
     if (!this.currentStream) return
-    if (this.currentMode === 'asio' && this.BASS_ASIO_ChannelReset) {
-      this.BASS_ASIO_ChannelReset(false, 0, BASS_ASIO_RESET_PAUSE)
-    } else if (this.BASS_WASAPI_Start) {
-      this.BASS_WASAPI_Start()
-    }
     this.isPlaying = true
     this.isPaused = false
+    let started = true
+    if (this.activeOutputMode === 'asio') {
+      if (this.BASS_ASIO_ChannelReset) {
+        started = !!this.BASS_ASIO_ChannelReset(false, 0, BASS_ASIO_RESET_PAUSE)
+      }
+    } else if (this.BASS_WASAPI_Start) {
+      started = !!this.BASS_WASAPI_Start()
+    }
+    if (!started) {
+      this.isPlaying = false
+      this.isPaused = true
+      this.emit('paused', true)
+      return
+    }
     this.emit('paused', false)
   }
 
   public pause() {
     if (!this.currentStream) return
-    if (this.currentMode === 'asio' && this.BASS_ASIO_ChannelPause) {
+    if (this.activeOutputMode === 'asio' && this.BASS_ASIO_ChannelPause) {
       this.BASS_ASIO_ChannelPause(false, 0)
     } else if (this.BASS_WASAPI_Stop) {
       this.BASS_WASAPI_Stop(false)
@@ -2026,10 +1863,9 @@ export class BassManager extends EventEmitter {
 
     this.currentStartTime = 0
     this.currentEndTime = 0
-    this.currentEndByte = 0
     this.currentTrackInfo = null
 
-    if (this.currentMode === 'asio') {
+    if (this.activeOutputMode === 'asio') {
       try {
         if (this.BASS_ASIO_Stop) this.BASS_ASIO_Stop()
         if (this.BASS_ASIO_ChannelReset)
@@ -2071,13 +1907,13 @@ export class BassManager extends EventEmitter {
     if (this.currentStream && this.BASS_ChannelSetAttribute) {
       try {
         this.BASS_ChannelSetAttribute(this.currentStream, BASS_ATTRIB_VOL, safeVol)
-        if (this.currentMode === 'wasapi') {
+        if (this.activeOutputMode === 'wasapi') {
           this.BASS_ChannelSetAttribute(this.currentStream, BASS_ATTRIB_VOLDSP, safeVol)
         }
       } catch {}
     }
 
-    if (this.currentMode === 'asio' && this.BASS_ASIO_ChannelSetVolume) {
+    if (this.activeOutputMode === 'asio' && this.BASS_ASIO_ChannelSetVolume) {
       try {
         // Cân bằng âm lượng 2 kênh stereo: master (-1), kênh trái (0), kênh phải (1)
         this.BASS_ASIO_ChannelSetVolume(false, -1, safeVol)

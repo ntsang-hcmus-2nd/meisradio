@@ -1,3 +1,25 @@
+import { isDsdTrack } from './formatUtils'
+
+/**
+ * Xác định track có phát trực tuyến (YouTube Music / SoundCloud / Cloud / HTTP URL) hay không.
+ * Stream online luôn phát qua WebAudio/<audio> vì BASS WASAPI/ASIO chỉ giải mã tệp cục bộ.
+ */
+export function isOnlineStreamingTrack(track: any): boolean {
+  if (!track) return false
+  if (track.isOnline || track.isCloud) return true
+  if (track.platform === 'youtube' || track.platform === 'soundcloud') return true
+  const fp = typeof track.filePath === 'string' ? track.filePath.trim().toLowerCase() : ''
+  return fp.startsWith('http://') || fp.startsWith('https://')
+}
+
+/**
+ * Quyết định track hiện tại dùng BASS Bit-Perfect/DSD hay WebAudio.
+ */
+export function shouldUseBassEngine(track: any, bitPerfectEnabled: boolean): boolean {
+  if (!track || isOnlineStreamingTrack(track)) return false
+  return Boolean(bitPerfectEnabled) || isDsdTrack(track)
+}
+
 /**
  * Tiện ích xử lý âm thanh & chuyển đổi đường cong âm lượng thính giác (Perceptual Volume Curve)
  *

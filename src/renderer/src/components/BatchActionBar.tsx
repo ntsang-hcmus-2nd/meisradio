@@ -84,8 +84,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
     const matched = getMatchedTracks()
     if (matched.length > 0) {
-      const currentQueue = usePlayerStore.getState().playQueue || []
-      usePlayerStore.getState().setPlayQueue([...currentQueue, ...matched])
+      usePlayerStore.getState().addToQueue(matched)
       showToast(
         t('toasts.addedToQueue', { title: `${matched.length} ${t('common.tracks')}` }),
         'success'

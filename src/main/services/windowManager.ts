@@ -36,6 +36,7 @@ const scheduleSaveWindowState = () => {
 
 let isTrimmingMemory = false
 let lastDeepTrimAt = 0
+let activeAudioPlayingCheck: (() => boolean) | undefined
 
 export const performDeepMemoryTrim = async (options?: { wipeCoverCache?: boolean; notifyRenderer?: boolean }) => {
   const now = Date.now()
@@ -54,7 +55,10 @@ export const performDeepMemoryTrim = async (options?: { wipeCoverCache?: boolean
       ;(global as any).gc()
     }
     setTimeout(() => {
-      trimNativeMemory()
+      // Không page-out working set khi đang phát nhạc nền để tránh giật DAC/WebAudio
+      if (!activeAudioPlayingCheck?.()) {
+        trimNativeMemory()
+      }
     }, 300)
   } catch {} finally {
     isTrimmingMemory = false
@@ -65,9 +69,11 @@ export interface WindowManagerOptions {
   icon?: any
   isQuitting: () => boolean
   onQuit: () => void
+  isAudioPlaying?: () => boolean
 }
 
 export function createMainWindow(options: WindowManagerOptions): BrowserWindow {
+  activeAudioPlayingCheck = options.isAudioPlaying
   const config = getConfig()
   const windowState = config.windowState || { width: 1200, height: 800, isMaximized: false }
 
@@ -118,6 +124,7 @@ export function createMainWindow(options: WindowManagerOptions): BrowserWindow {
   }
 
   const doIdleTrimIfUnfocused = (): void => {
+    if (activeAudioPlayingCheck?.()) return
     if (
       mainWindow &&
       (!mainWindow.isFocused() || mainWindow.isMinimized() || !mainWindow.isVisible())
@@ -160,6 +167,7 @@ export function createMainWindow(options: WindowManagerOptions): BrowserWindow {
     if (isMinimizeToTray()) {
       event.preventDefault()
       mainWindow?.hide()
+      return
     }
     try {
       logMemorySample('minimize')

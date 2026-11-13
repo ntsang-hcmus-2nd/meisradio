@@ -64,11 +64,13 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
     onClick,
     style
   }) => {
-    const [hasError, setHasError] = useState(false)
-    const [isLoaded, setIsLoaded] = useState(false)
-    // auto mode: art vuông (≈1:1) thì fill; chỉ art dẹt/dọc mới dùng ambient.
-    // Ngưỡng 0.85–1.18 bao phủ cover vuông kể cả sai số crop/resize.
-    const [isNonSquareArt, setIsNonSquareArt] = useState(false)
+    // Key trạng thái ảnh theo resolvedUrl để tránh hiển thị nhầm ảnh/lỗi bài cũ trong frame chuyển tiếp
+    const [imgState, setImgState] = useState<{
+      url: string | null
+      hasError: boolean
+      isLoaded: boolean
+      isNonSquareArt: boolean
+    }>({ url: null, hasError: false, isLoaded: false, isNonSquareArt: false })
     const [currentPort, setCurrentPort] = useState<number>(() => {
       return streamPort && streamPort > 0 ? streamPort : getGlobalStreamPort()
     })
@@ -101,12 +103,24 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
       })
     }, [isLite, track, src, highResSrc, trackPath, currentPort, tier, size])
 
-    // Reset error state khi URL thay đổi
-    useEffect(() => {
-      setHasError(false)
-      setIsLoaded(false)
-      setIsNonSquareArt(false)
-    }, [resolvedUrl])
+    const activeState =
+      imgState.url === resolvedUrl
+        ? imgState
+        : { url: resolvedUrl, hasError: false, isLoaded: false, isNonSquareArt: false }
+    const hasError = activeState.hasError
+    const isLoaded = activeState.isLoaded
+    // auto mode: art vuông (≈1:1) thì fill; chỉ art dẹt/dọc mới dùng ambient.
+    // Ngưỡng 0.85–1.18 bao phủ cover vuông kể cả sai số crop/resize.
+    const isNonSquareArt = activeState.isNonSquareArt
+
+    const updateImgState = (patch: Partial<Omit<typeof activeState, 'url'>>) => {
+      setImgState((prev) => ({
+        ...(prev.url === resolvedUrl
+          ? prev
+          : { url: resolvedUrl, hasError: false, isLoaded: false, isNonSquareArt: false }),
+        ...patch
+      }))
+    }
 
     // Khi ở chế độ Lite hoặc không có ảnh / bị lỗi tải ảnh
     if (isLite || !resolvedUrl || hasError) {
@@ -155,7 +169,7 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
       const h = el.naturalHeight
       if (w > 0 && h > 0) {
         const ratio = w / h
-        if (ratio < 0.85 || ratio > 1.18) setIsNonSquareArt(true)
+        if (ratio < 0.85 || ratio > 1.18) updateImgState({ isNonSquareArt: true })
       }
     }
     if (useAmbientLayout) {
@@ -167,6 +181,7 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
         >
           {/* Ambient blurred backdrop lấp đầy khung hình */}
           <img
+            key={`${resolvedUrl}-backdrop`}
             src={resolvedUrl}
             aria-hidden="true"
             loading={loading}
@@ -175,12 +190,13 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
           />
           {/* Ảnh chính trọn vẹn không bị cắt xén hay méo tỉ lệ */}
           <img
+            key={resolvedUrl}
             src={resolvedUrl}
             alt={alt}
             loading={loading}
             decoding={decoding}
-            onLoad={() => setIsLoaded(true)}
-            onError={() => setHasError(true)}
+            onLoad={() => updateImgState({ isLoaded: true })}
+            onError={() => updateImgState({ hasError: true })}
             className={`relative z-10 max-w-full max-h-full object-contain pointer-events-none drop-shadow-sm transition-opacity duration-300 ${
               isLoaded ? 'opacity-100' : 'opacity-0'
             } ${animateSpin ? 'animate-spin-slow' : ''} ${imageClassName}`}
@@ -202,15 +218,23 @@ export const DynamicCoverArt: React.FC<DynamicCoverArtProps> = React.memo(
         style={style}
       >
         <img
+          key={resolvedUrl}
           src={resolvedUrl}
           alt={alt}
           loading={loading}
           decoding={decoding}
           onLoad={(e) => {
-            setIsLoaded(true)
+            if (smartAspect === 'auto') {
+              const w = e.currentTarget.naturalWidth
+              const h = e.currentTarget.naturalHeight
+              const nonSquare = w > 0 && h > 0 && (w / h < 0.85 || w / h > 1.18)
+              updateImgState({ isLoaded: true, ...(nonSquare ? { isNonSquareArt: true } : {}) })
+              return
+            }
+            updateImgState({ isLoaded: true })
             detectArtAspect(e.currentTarget)
           }}
-          onError={() => setHasError(true)}
+          onError={() => updateImgState({ hasError: true })}
           className={`w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${
             isLoaded ? 'opacity-100' : 'opacity-40'
           } ${animateSpin ? 'animate-spin-slow' : ''} ${imageClassName}`}

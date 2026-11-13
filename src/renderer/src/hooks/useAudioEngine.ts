@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   usePlayerStore,
   useAudioStore,
@@ -8,7 +9,7 @@ import {
   useLyricsStore
 } from '../stores'
 import { useTranslation, useLanguage } from '../locales'
-import { sliderToGain } from '../utils/audioUtils'
+import { sliderToGain, isOnlineStreamingTrack, shouldUseBassEngine } from '../utils/audioUtils'
 import { isDsdTrack, getTrackSeekRange, clampSeekRange } from '../utils/formatUtils'
 import { isSameTrack } from '../utils/trackStateUtils'
 import { extractRawFilePath } from '../utils/urlUtils'
@@ -133,7 +134,18 @@ export function useAudioEngine() {
     eqBands,
     preampGain,
     bitPerfectType
-  } = useAudioStore()
+  } = useAudioStore(
+    useShallow((s) => ({
+      isEqEnabled: s.isEqEnabled,
+      availableAudioDevices: s.availableAudioDevices,
+      setAvailableAudioDevices: s.setAvailableAudioDevices,
+      selectedDeviceId: s.selectedDeviceId,
+      setSelectedDeviceId: s.setSelectedDeviceId,
+      eqBands: s.eqBands,
+      preampGain: s.preampGain,
+      bitPerfectType: s.bitPerfectType
+    }))
+  )
 
   const {
     appMode,
@@ -142,12 +154,36 @@ export function useAudioEngine() {
     crossfeedEnabled: crossfeedSetting,
     gaplessEnabled,
     setCloudActionTrack
-  } = useSettingsStore()
+  } = useSettingsStore(
+    useShallow((s) => ({
+      appMode: s.appMode,
+      loudnessNormalization: s.loudnessNormalization,
+      replayGainMode: s.replayGainMode,
+      crossfeedEnabled: s.crossfeedEnabled,
+      gaplessEnabled: s.gaplessEnabled,
+      setCloudActionTrack: s.setCloudActionTrack
+    }))
+  )
 
-  const { libraryTracks, setRecentlyPlayed } = useLibraryStore()
+  const { libraryTracks, setRecentlyPlayed } = useLibraryStore(
+    useShallow((s) => ({
+      libraryTracks: s.libraryTracks,
+      setRecentlyPlayed: s.setRecentlyPlayed
+    }))
+  )
 
-  const { showToast, setCustomDialog } = useUIStore()
-  const { lyrics, setCurrentLyricIndex } = useLyricsStore()
+  const { showToast, setCustomDialog } = useUIStore(
+    useShallow((s) => ({
+      showToast: s.showToast,
+      setCustomDialog: s.setCustomDialog
+    }))
+  )
+  const { lyrics, setCurrentLyricIndex } = useLyricsStore(
+    useShallow((s) => ({
+      lyrics: s.lyrics,
+      setCurrentLyricIndex: s.setCurrentLyricIndex
+    }))
+  )
 
   const isCore = appMode === 'core'
 
@@ -293,7 +329,7 @@ export function useAudioEngine() {
 
   // Preload next track for BASS gapless playback
   useEffect(() => {
-    if (!gaplessEnabled || (!bitPerfectEnabled && !isDsdTrack(currentTrack))) {
+    if (!gaplessEnabled || !shouldUseBassEngine(currentTrack, bitPerfectEnabled)) {
       return
     }
     if (!currentTrack || !playQueue || playQueue.length === 0) return
@@ -318,7 +354,13 @@ export function useAudioEngine() {
     const preloadKey = nextTrack?.filePath
       ? `${nextTrack.filePath}#${nextTrack.startTime || 0}-${nextTrack.endTime || 0}`
       : null
-    if (nextTrack && nextTrack.filePath && preloadKey && preloadedRef.current !== preloadKey) {
+    if (
+      nextTrack &&
+      nextTrack.filePath &&
+      !isOnlineStreamingTrack(nextTrack) &&
+      preloadKey &&
+      preloadedRef.current !== preloadKey
+    ) {
       preloadedRef.current = preloadKey
       window.api?.bassPreloadNext?.(nextTrack.filePath, nextTrack.startTime, nextTrack.endTime)
     }
@@ -624,7 +666,7 @@ export function useAudioEngine() {
   useEffect(() => {
     const unTime = window.api?.onBassTime
       ? window.api.onBassTime((val) => {
-          const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
+          const useBass = shouldUseBassEngine(currentTrack, bitPerfectEnabled)
           if (useBass && audioRef.current) {
             ;(audioRef.current as any)._currentTime = val
             const dur = (audioRef.current as any)._duration || currentTrack?.duration || 0
@@ -656,7 +698,7 @@ export function useAudioEngine() {
 
     const unDuration = window.api?.onBassDuration
       ? window.api.onBassDuration((val) => {
-          const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
+          const useBass = shouldUseBassEngine(currentTrack, bitPerfectEnabled)
           if (useBass && audioRef.current) {
             ;(audioRef.current as any)._duration = val
           }
@@ -665,7 +707,7 @@ export function useAudioEngine() {
 
     const unPaused = window.api?.onBassPaused
       ? window.api.onBassPaused((val) => {
-          const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
+          const useBass = shouldUseBassEngine(currentTrack, bitPerfectEnabled)
           if (useBass) {
             setIsPlaying(!val)
           }
@@ -682,7 +724,7 @@ export function useAudioEngine() {
             showToast(t('player.sleepTimerStoppedToast'), 'info')
             return
           }
-          const useBass = bitPerfectEnabled || isDsdTrack(currentTrack)
+          const useBass = shouldUseBassEngine(currentTrack, bitPerfectEnabled)
           if (useBass) {
             if (!hasTriggeredCrossfadeRef.current) {
               handleNextRef.current()
@@ -733,6 +775,7 @@ export function useAudioEngine() {
 
     const unError = window.api?.onBassError
       ? window.api.onBassError((msg) => {
+          isSwitchingTrackRef.current = false
           setIsPlaying(false)
           showAlert({
             title: t('common.error'),
@@ -783,6 +826,7 @@ export function useAudioEngine() {
 
   // Watch BASS Play / Stop
   useEffect(() => {
+    let cancelled = false
     if (isGaplessTransitioningRef.current) {
       isGaplessTransitioningRef.current = false
       return
@@ -800,17 +844,24 @@ export function useAudioEngine() {
         )
         return
       }
-      if (bitPerfectEnabled) {
+      if (shouldUseBassEngine(currentTrack, bitPerfectEnabled)) {
         // Chỉ mở stream & phát khi thực sự đang phát (isPlaying).
         // Khi khôi phục phiên nghe khi mở app, isPlaying = false nên KHÔNG tự phát nhạc.
         if (isPlaying) {
-          window.api?.bassPlay?.(
-            currentTrack.filePath,
-            crossfadeEnabledRef.current ? crossfadeDurationRef.current : 0,
-            bitPerfectEnabled,
-            currentTrack.startTime,
-            currentTrack.endTime
-          )
+          window.api
+            ?.bassPlay?.(
+              currentTrack.filePath,
+              crossfadeEnabledRef.current ? crossfadeDurationRef.current : 0,
+              bitPerfectEnabled,
+              currentTrack.startTime,
+              currentTrack.endTime
+            )
+            ?.then((ok: any) => {
+              if (!cancelled && ok === false) setIsPlaying(false)
+            })
+            ?.catch(() => {
+              if (!cancelled) setIsPlaying(false)
+            })
           if (audioRef.current) audioRef.current.pause()
         } else {
           // Khôi phục phiên nghe ở trạng thái tạm dừng:
@@ -820,7 +871,9 @@ export function useAudioEngine() {
             try {
               // Chờ qua vòng flush hiện tại để IPC setVolume từ effect khác chạy trước
               await new Promise((r) => setTimeout(r, 0))
+              if (cancelled) return
               await window.api?.bassSetVolume?.(0)
+              if (cancelled) return
               await window.api?.bassPlay?.(
                 currentTrack.filePath,
                 crossfadeEnabledRef.current ? crossfadeDurationRef.current : 0,
@@ -828,16 +881,17 @@ export function useAudioEngine() {
                 currentTrack.startTime,
                 currentTrack.endTime
               )
+              if (cancelled) return
               window.api?.bassPause?.()
             } catch {}
-            window.api?.bassSetVolume?.(sliderToGain(volume))
+            if (!cancelled) window.api?.bassSetVolume?.(sliderToGain(volume))
           })()
         }
         if (pendingSeekTimeRef.current !== null && pendingSeekTimeRef.current > 0) {
           const seekTo = pendingSeekTimeRef.current
           pendingSeekTimeRef.current = null
           setTimeout(() => {
-            window.api?.bassSeek?.(seekTo, 'absolute')
+            if (!cancelled) window.api?.bassSeek?.(seekTo, 'absolute')
           }, 150)
         }
       } else {
@@ -855,6 +909,9 @@ export function useAudioEngine() {
         }
       }
     }
+    return () => {
+      cancelled = true
+    }
     // Deps cố ý thu gọn: isPlaying bị loại trừ để pause/resume đi qua
     // bassResume/bassPause thay vì mở lại stream BASS từ đầu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -862,7 +919,7 @@ export function useAudioEngine() {
 
   // Watch EQ & Preamp for BASS
   useEffect(() => {
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
+    if (shouldUseBassEngine(currentTrack, bitPerfectEnabled)) {
       window.api?.bassSetEqualizer?.([], 0)
       return
     }
@@ -876,7 +933,7 @@ export function useAudioEngine() {
   // Watch Volume
   useEffect(() => {
     const effectiveGain = sliderToGain(volume)
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
+    if (shouldUseBassEngine(currentTrack, bitPerfectEnabled)) {
       window.api?.bassSetVolume?.(effectiveGain)
     } else if (audioRef.current) {
       audioRef.current.volume = Math.max(0, Math.min(1, effectiveGain))
@@ -965,6 +1022,7 @@ export function useAudioEngine() {
         if (window.api?.logWatchHistory && trackToPlay.platform === 'youtube')
           window.api.logWatchHistory(trackToPlay.originalId)
       } else {
+        isSwitchingTrackRef.current = false
         showAlert({
           title: t('common.error'),
           message: 'Stream error: ' + (res?.error || 'Unknown')
@@ -995,7 +1053,7 @@ export function useAudioEngine() {
       }
     }
 
-    const nextMode = bitPerfectEnabled || isDsdTrack(trackToPlay) ? 'bass' : 'webaudio'
+    const nextMode = shouldUseBassEngine(trackToPlay, bitPerfectEnabled) ? 'bass' : 'webaudio'
     if (prevTrackModeRef.current === 'bass' && nextMode === 'webaudio') {
       await window.api?.bassStop?.().catch(() => {})
       await resetWebAudioPipeline()
@@ -1155,13 +1213,14 @@ export function useAudioEngine() {
           return
         } else {
           setIsPlaying(false)
-          if (bitPerfectEnabled || isDsdTrack(currentTrack))
+          if (shouldUseBassEngine(currentTrack, bitPerfectEnabled))
             window.api?.bassStop?.().catch(() => {})
           return
         }
       } else {
         setIsPlaying(false)
-        if (bitPerfectEnabled || isDsdTrack(currentTrack)) window.api?.bassStop?.().catch(() => {})
+        if (shouldUseBassEngine(currentTrack, bitPerfectEnabled))
+          window.api?.bassStop?.().catch(() => {})
         return
       }
     }
@@ -1211,8 +1270,7 @@ export function useAudioEngine() {
       isSwitchingTrackRef.current = false
     }, 500)
     if (!currentTrack) return
-    const isDsd = isDsdTrack(currentTrack)
-    const useBass = bitPerfectEnabled || isDsd
+    const useBass = shouldUseBassEngine(currentTrack, bitPerfectEnabled)
     const curTime = useBass
       ? (audioRef.current as any)?._currentTime || 0
       : audioRef.current?.currentTime || 0
@@ -1273,7 +1331,9 @@ export function useAudioEngine() {
 
   const handlePlayPause = () => {
     if (!currentTrack) {
-      if (libraryTracks.length > 0) {
+      if (playQueue.length > 0) {
+        handlePlayTrack(playQueue[0])
+      } else if (libraryTracks.length > 0) {
         handleRowClick(libraryTracks[0], libraryTracks)
       }
       return
@@ -1291,8 +1351,7 @@ export function useAudioEngine() {
       return
     }
 
-    const isDsd = isDsdTrack(currentTrack)
-    const useBass = bitPerfectEnabled || isDsd
+    const useBass = shouldUseBassEngine(currentTrack, bitPerfectEnabled)
     if (useBass) {
       if (isPlaying) {
         window.api?.bassPause?.()
@@ -1375,7 +1434,7 @@ export function useAudioEngine() {
   }
 
   const handleSeekForward = (seconds: number = 10) => {
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
+    if (shouldUseBassEngine(currentTrack, bitPerfectEnabled)) {
       window.api?.bassSeek?.(seconds, 'relative')
     } else if (audioRef.current) {
       // Kẹp phạm vi theo [startTime, endTime] của track CUE thay vì [0, duration]
@@ -1390,7 +1449,7 @@ export function useAudioEngine() {
   }
 
   const handleSeekBackward = (seconds: number = 10) => {
-    if (bitPerfectEnabled || isDsdTrack(currentTrack)) {
+    if (shouldUseBassEngine(currentTrack, bitPerfectEnabled)) {
       window.api?.bassSeek?.(-seconds, 'relative')
     } else if (audioRef.current) {
       const range = getTrackSeekRange(currentTrack, audioRef.current.duration)
